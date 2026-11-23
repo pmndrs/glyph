@@ -5586,41 +5586,34 @@ impl ParagraphState {
         Ok(true)
     }
 
-    /// Edits in several source runs: each edited run is reshaped whole, one shaping call per
-    /// run, and every other run keeps its glyphs, moved by the edited runs before it. Only runs
-    /// whose topology the edits kept, with one first-font fallback span and one shaped run
-    /// each, qualify; a run that needs a fallback font declines the whole request.
-    fn try_prepare_multi_run_shape(
-        &mut self,
-        shaper: &mut ShaperRegistry,
-    ) -> Result<bool, EngineError> {
+    /// The source run each edit lies in, ascending and deduplicated, when every edit lies
+    /// in one run and they span at least two.
+    fn edited_source_runs(&self) -> Result<Option<Vec<u32>>, EngineError> {
         let old_runs = self.shaping_runs.committed().runs();
         let new_runs = self.shaping_runs.active().runs();
-        if self.text_edit_parts.len() < 2 || old_runs.len() != new_runs.len() || old_runs.is_empty()
-        {
-            return Ok(false);
-        }
-        // The run each edit lies in, before and after it.
         let mut edited: Vec<u32> = Vec::new();
         edited
             .try_reserve(self.text_edit_parts.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         for edit in self.text_edit_parts.iter().copied() {
             let Some(run) = edit_run(old_runs, new_runs, edit) else {
-                return Ok(false);
+                return Ok(None);
             };
             let run = u32::try_from(run).map_err(|_| EngineError::ResultTooLarge)?;
             match edited.last() {
                 Some(last) if *last == run => {}
-                Some(last) if *last > run => return Ok(false),
+                Some(last) if *last > run => return Ok(None),
                 _ => edited.push(run),
             }
         }
-        if edited.len() < 2 {
-            return Ok(false);
-        }
-        // Every run keeps its shaping properties and moves by the edited runs before it; only
-        // an edited run changes length.
+        Ok((edited.len() >= 2).then_some(edited))
+    }
+
+    /// How far each run moved in text, when every run keeps its shaping properties and moves
+    /// by the edited runs before it, and only an edited run changes length.
+    fn kept_run_shifts(&self, edited: &[u32]) -> Result<Option<Vec<i64>>, EngineError> {
+        let old_runs = self.shaping_runs.committed().runs();
+        let new_runs = self.shaping_runs.active().runs();
         let languages = self
             .style_invalidation
             .shaping
@@ -5643,38 +5636,151 @@ impl ParagraphState {
                 || i64::from(new.text_start) != i64::from(old.text_start) + delta
                 || (grown != 0 && edited.binary_search(&(index as u32)).is_err())
             {
-                return Ok(false);
+                return Ok(None);
             }
             shifts.push(delta);
             delta += grown;
         }
-        // One first-font fallback span and one shaped run per edited run.
-        for run in edited.iter().copied() {
+        Ok(Some(shifts))
+    }
+
+    /// Whether each edited run had one first-font fallback span covering it and one shaped run.
+    fn edited_runs_have_one_first_font_run(&self, edited: &[u32]) -> bool {
+        let old_runs = self.shaping_runs.committed().runs();
+        edited.iter().copied().all(|run| {
             let old = old_runs[run as usize];
             let mut spans = self
                 .fallback_spans
                 .iter()
                 .filter(|span| span.source_run == run);
             let (Some(span), None) = (spans.next(), spans.next()) else {
-                return Ok(false);
+                return false;
             };
-            if span.font_index != 0
-                || span.text_start != old.text_start
-                || span.text_end != old.text_end
-            {
-                return Ok(false);
-            }
-            if self
-                .shape
-                .committed()
-                .runs
-                .iter()
-                .filter(|shaped| shaped.source_run == run)
-                .count()
-                != 1
-            {
-                return Ok(false);
-            }
+            span.font_index == 0
+                && span.text_start == old.text_start
+                && span.text_end == old.text_end
+                && self
+                    .shape
+                    .committed()
+                    .runs
+                    .iter()
+                    .filter(|shaped| shaped.source_run == run)
+                    .count()
+                    == 1
+        })
+    }
+
+    /// The fallback spans of this shape: an edited run's covers the run, every other moves
+    /// with its run.
+    fn move_fallback_spans(&mut self, edited: &[u32], shifts: &[i64]) -> Result<(), EngineError> {
+        self.pending_fallback_spans.clear();
+        for span in self.fallback_spans.iter().copied() {
+            let shift = *shifts
+                .get(span.source_run as usize)
+                .ok_or(EngineError::InvalidRequest)?;
+            let (text_start, text_end) = if edited.binary_search(&span.source_run).is_ok() {
+                let run = self.shaping_runs.active().runs()[span.source_run as usize];
+                (run.text_start, run.text_end)
+            } else {
+                (
+                    shifted_text_offset(span.text_start, shift)?,
+                    shifted_text_offset(span.text_end, shift)?,
+                )
+            };
+            self.pending_fallback_spans.push(FallbackSpan {
+                text_start,
+                text_end,
+                ..span
+            });
+        }
+        Ok(())
+    }
+
+    /// Shapes `run` whole with one font into the boundary scratch and appends it to the
+    /// pending shape as source run `source`. `false`, with the scratch holding the attempt,
+    /// when a glyph is missing: the run needs a fallback font and the full shape decides it.
+    fn reshape_run_whole(
+        &mut self,
+        shaper: &mut ShaperRegistry,
+        run: ShapingRun,
+        source: usize,
+        font_handle: u32,
+        binding_handle: u32,
+    ) -> Result<bool, EngineError> {
+        self.boundary_shape_scratch.clear();
+        let scratch = &mut self.boundary_shape_scratch;
+        let styles = &self.styles.active().arena;
+        shaper
+            .with_shaped_range(
+                font_handle,
+                &self.text.pending().units,
+                ShapeRunRef {
+                    text_start: run.text_start,
+                    text_end: run.text_end,
+                    script: run.script,
+                    language: styles.resolved_language(run.style),
+                    features: styles.resolved_features(run.style),
+                    direction: run.direction,
+                    cluster_level: 0,
+                    flags: 0x40,
+                },
+                ShapeRangeRef {
+                    item_start: run.text_start,
+                    item_end: run.text_end,
+                    context_start: run.text_start,
+                    context_end: run.text_end,
+                    flags: 0x40,
+                },
+                |shaped| {
+                    scratch.append(
+                        source,
+                        font_handle,
+                        binding_handle,
+                        run.text_start,
+                        run.text_end,
+                        shaped,
+                    )
+                },
+            )
+            .map_err(shaper_error)?;
+        if self.boundary_shape_scratch.glyph_ids.contains(&0) {
+            return Ok(false);
+        }
+        let source_run = u32::try_from(source).map_err(|_| EngineError::ResultTooLarge)?;
+        let scratch = &self.boundary_shape_scratch;
+        self.shape.pending_mut().append_text_range_from(
+            scratch,
+            0,
+            source_run,
+            run.text_start,
+            run.text_end,
+            0,
+        )?;
+        Ok(true)
+    }
+
+    /// Edits in several source runs: each edited run is reshaped whole, one shaping call per
+    /// run, and every other run keeps its glyphs, moved by the edited runs before it. Only runs
+    /// whose topology the edits kept, with one first-font fallback span and one shaped run
+    /// each, qualify; a run that needs a fallback font declines the whole request.
+    fn try_prepare_multi_run_shape(
+        &mut self,
+        shaper: &mut ShaperRegistry,
+    ) -> Result<bool, EngineError> {
+        let old_runs = self.shaping_runs.committed().runs();
+        let new_runs = self.shaping_runs.active().runs();
+        if self.text_edit_parts.len() < 2 || old_runs.len() != new_runs.len() || old_runs.is_empty()
+        {
+            return Ok(false);
+        }
+        let Some(edited) = self.edited_source_runs()? else {
+            return Ok(false);
+        };
+        let Some(shifts) = self.kept_run_shifts(&edited)? else {
+            return Ok(false);
+        };
+        if !self.edited_runs_have_one_first_font_run(&edited) {
+            return Ok(false);
         }
 
         self.shape.pending_mut().clear();
@@ -5706,78 +5812,20 @@ impl ParagraphState {
             else {
                 return Ok(false);
             };
-            self.boundary_shape_scratch.clear();
-            let scratch = &mut self.boundary_shape_scratch;
-            let styles = &self.styles.active().arena;
-            let shaped = shaper.with_shaped_range(
+            if !self.reshape_run_whole(
+                shaper,
+                new_run,
+                source as usize,
                 fallback.font_handle,
-                &self.text.pending().units,
-                ShapeRunRef {
-                    text_start: new_run.text_start,
-                    text_end: new_run.text_end,
-                    script: new_run.script,
-                    language: styles.resolved_language(new_run.style),
-                    features: styles.resolved_features(new_run.style),
-                    direction: new_run.direction,
-                    cluster_level: 0,
-                    flags: 0x40,
-                },
-                ShapeRangeRef {
-                    item_start: new_run.text_start,
-                    item_end: new_run.text_end,
-                    context_start: new_run.text_start,
-                    context_end: new_run.text_end,
-                    flags: 0x40,
-                },
-                |shaped| {
-                    scratch.append(
-                        source as usize,
-                        fallback.font_handle,
-                        fallback.binding_handle,
-                        new_run.text_start,
-                        new_run.text_end,
-                        shaped,
-                    )
-                },
-            );
-            shaped.map_err(shaper_error)?;
-            if self.boundary_shape_scratch.glyph_ids.contains(&0) {
-                // The run needs a fallback font: the full shape decides it.
+                fallback.binding_handle,
+            )? {
                 self.shape.pending_mut().clear();
                 self.boundary_shape_scratch.clear();
                 return Ok(false);
             }
-            let scratch = &self.boundary_shape_scratch;
-            self.shape.pending_mut().append_text_range_from(
-                scratch,
-                0,
-                source,
-                new_run.text_start,
-                new_run.text_end,
-                0,
-            )?;
         }
         self.boundary_shape_scratch.clear();
-        self.pending_fallback_spans.clear();
-        for span in self.fallback_spans.iter().copied() {
-            let shift = *shifts
-                .get(span.source_run as usize)
-                .ok_or(EngineError::InvalidRequest)?;
-            let (text_start, text_end) = if edited.binary_search(&span.source_run).is_ok() {
-                let run = self.shaping_runs.active().runs()[span.source_run as usize];
-                (run.text_start, run.text_end)
-            } else {
-                (
-                    shifted_text_offset(span.text_start, shift)?,
-                    shifted_text_offset(span.text_end, shift)?,
-                )
-            };
-            self.pending_fallback_spans.push(FallbackSpan {
-                text_start,
-                text_end,
-                ..span
-            });
-        }
+        self.move_fallback_spans(&edited, &shifts)?;
         self.incremental_shape_source_run = None;
         self.incremental_shape_source_runs = edited;
         self.pending_shape_font_instance = None;
@@ -5882,60 +5930,14 @@ impl ParagraphState {
             }
             // The replaced runs, reshaped whole.
             for index in new_middle.clone() {
-                let run = new_runs[index];
+                let run = self.shaping_runs.active().runs()[index];
                 let stack = find_font_stack(font_stacks, run.style.font_stack_handle)?;
                 let binding_handle = *stack.fonts.first().ok_or(EngineError::FontStackMissing)?;
                 let font_handle = find_font_binding(font_bindings, binding_handle)?.shaping_handle;
-                self.boundary_shape_scratch.clear();
-                let scratch = &mut self.boundary_shape_scratch;
-                let styles = &self.styles.active().arena;
-                shaper
-                    .with_shaped_range(
-                        font_handle,
-                        &self.text.pending().units,
-                        ShapeRunRef {
-                            text_start: run.text_start,
-                            text_end: run.text_end,
-                            script: run.script,
-                            language: styles.resolved_language(run.style),
-                            features: styles.resolved_features(run.style),
-                            direction: run.direction,
-                            cluster_level: 0,
-                            flags: 0x40,
-                        },
-                        ShapeRangeRef {
-                            item_start: run.text_start,
-                            item_end: run.text_end,
-                            context_start: run.text_start,
-                            context_end: run.text_end,
-                            flags: 0x40,
-                        },
-                        |shaped| {
-                            scratch.append(
-                                index,
-                                font_handle,
-                                binding_handle,
-                                run.text_start,
-                                run.text_end,
-                                shaped,
-                            )
-                        },
-                    )
-                    .map_err(shaper_error)?;
-                if self.boundary_shape_scratch.glyph_ids.contains(&0) {
-                    // The run needs a fallback font: the full shape decides it.
+                if !self.reshape_run_whole(shaper, run, index, font_handle, binding_handle)? {
                     return Ok(false);
                 }
                 let source_run = to_u32(index)?;
-                let scratch = &self.boundary_shape_scratch;
-                self.shape.pending_mut().append_text_range_from(
-                    scratch,
-                    0,
-                    source_run,
-                    run.text_start,
-                    run.text_end,
-                    0,
-                )?;
                 spans
                     .try_reserve(1)
                     .map_err(|_| EngineError::ResultTooLarge)?;
