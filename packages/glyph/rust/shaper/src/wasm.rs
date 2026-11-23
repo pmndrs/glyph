@@ -1164,9 +1164,9 @@ fn prepare(
                         .request_trailer(request_len)
                         .map_err(|_| EngineError::InvalidRequest)
                 })
-                .and_then(MeasuredParagraphs::parse);
+                .and_then(MeasuredParagraphs::parse_batch);
             match interest {
-                Ok(interest) => PreparationTarget::Dirty(interest),
+                Ok((interest, prior)) => PreparationTarget::Dirty(interest, prior),
                 Err(error) => return publish_engine_failure(state, root_id, revision, error),
             }
         }

@@ -209,13 +209,14 @@ test('a canceled unprepared creation never adds lifecycle rows to a copy, a read
       assert.equal(retained.measure().glyphCount, 'retained sibling'.length);
       assert.deepEqual(
         preparations,
-        [['upsert']],
+        // The second request is the read of `glyphCount`, which positions the prepared text and carries no row.
+        [['upsert'], []],
         'the first read creates only the text it reads; neither canceled sibling leaves a row',
       );
       assert.deepEqual(staged, [], 'a read cannot publish');
       copy.dispose();
       copy = root.services.copy(source, { kind: 'glyphs', stableIds: inspection.glyphStableIds }, destination());
-      assert.deepEqual(preparations, [['upsert']], 'a later copy still sends no lifecycle request');
+      assert.deepEqual(preparations, [['upsert'], []], 'a later copy still sends no lifecycle request');
       const framed = root.services.createText(textState(font, 'prepared by the frame', unconstrained));
       const canceledBeforeFrame = root.services.createText(textState(font, 'canceled before the frame', unconstrained));
       canceledBeforeFrame.dispose();
@@ -226,15 +227,15 @@ test('a canceled unprepared creation never adds lifecycle rows to a copy, a read
           [['upsert'], []],
           'the frame batch creates only the surviving unread text, and publication carries no lifecycle row',
         );
-        assert.deepEqual(preparations, [['upsert']], 'the frame prepares through its batch, not per paragraph');
+        assert.deepEqual(preparations, [['upsert'], []], 'the frame prepares through its batch, not per paragraph');
         assert.equal(framed.measure().glyphCount, 'prepared by the frame'.length);
         assert.deepEqual(
           preparations,
-          [['upsert'], []],
+          [['upsert'], [], []],
           'a read after the frame only serializes the summary the batch was not asked for',
         );
         framed.measure();
-        assert.deepEqual(preparations, [['upsert'], []], 'a repeated read sends nothing');
+        assert.deepEqual(preparations, [['upsert'], [], []], 'a repeated read sends nothing');
         assert.deepEqual(source.inspect().glyphStableIds, inspection.glyphStableIds);
       } finally {
         framed.dispose();

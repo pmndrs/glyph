@@ -148,8 +148,8 @@ test('a one-character assignment sends a one-unit range replacement from the rea
     assert.equal(preparationCalls, before.preparationCalls + 1, 'unchanged metric and glyph reads reuse preparation');
     assert.equal(
       queryMaterializationCalls,
-      before.queryMaterializationCalls,
-      'repeated measurement and glyph reads reuse the materialized summary',
+      before.queryMaterializationCalls + 1,
+      'repeated measurement reuses the summary; the glyph read positions once for its glyph facts',
     );
     assert.equal(publicationCalls, before.publicationCalls, 'reads do not publish renderer state');
     assert.deepEqual(layoutOf(node), layoutOf(cold), 'the range edit leaves the layout of a cold build');

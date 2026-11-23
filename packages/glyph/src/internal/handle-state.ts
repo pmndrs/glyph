@@ -1387,7 +1387,11 @@ export class PlanTransport {
    * @internal Compile one root's batch preparation into its arena. `measured` names, in ascending order, the
    * paragraphs whose summary the engine serializes; `'all'` asks for every prepared paragraph's.
    */
-  stagePreparation(frame: PlannerFrameUpdate, measured: readonly number[] | 'all'): number {
+  stagePreparation(
+    frame: PlannerFrameUpdate,
+    measured: readonly number[] | 'all',
+    prior: readonly number[] = EMPTY_PARAGRAPH_IDS,
+  ): number {
     this.#assertActive();
     if (this.#stagedUpdate !== undefined) throw new Error('text update request is already staged');
     const trailer = measured === 'all' ? ALL_PARAGRAPHS_MEASURED : measured;
@@ -1395,6 +1399,7 @@ export class PlanTransport {
       frame,
       'text preparation byte length',
       trailer,
+      prior,
     );
     this.#stagedUpdate = { requestLength, initialMemoryBuffer };
     return requestLength;
@@ -1797,6 +1802,7 @@ export class PlanTransport {
     frame: PlannerFrameUpdate,
     lengthLabel: string,
     measured?: readonly number[] | typeof ALL_PARAGRAPHS_MEASURED,
+    prior: readonly number[] = EMPTY_PARAGRAPH_IDS,
   ): { requestLength: number; requestPointer: number; initialMemoryBuffer: ArrayBuffer } {
     // The planner's arrays belong to this transport and are borrowed only until this synchronous write ends.
     // No staged request or issued publication retains the descriptor or its authored frame.
@@ -1805,12 +1811,14 @@ export class PlanTransport {
       this.#invalidate();
       const requestLength = uint32(request.byteLength, lengthLabel);
       const initialMemoryBuffer = this.#exports.memory.buffer;
-      // A batch preparation states after its request which summaries it wants: a count, then the paragraph ids.
+      // A batch preparation states after its request which summaries it wants (a count, then the paragraph ids),
+      // then, the same way, which paragraphs' prior glyph facts it returns first.
       const trailerOffset = (requestLength + 3) & ~3;
+      const measuredLength = measured === ALL_PARAGRAPHS_MEASURED ? 4 : 4 + (measured?.length ?? 0) * 4;
       const arenaLength =
         measured === undefined
           ? requestLength
-          : uint32(trailerOffset + 4 + (measured === ALL_PARAGRAPHS_MEASURED ? 0 : measured.length * 4), lengthLabel);
+          : uint32(trailerOffset + measuredLength + 4 + prior.length * 4, lengthLabel);
       // The recorded capacity never exceeds the arena's, so a request that fits it needs no engine query.
       if (arenaLength > this.#requestCapacity) this.reserve(arenaLength, this.#resultCapacity);
       let requestPointer = this.#requestPointer;
@@ -1837,6 +1845,13 @@ export class PlanTransport {
           target.view.setUint32(trailerOffset + 4 + index * 4, measured[index]!, true);
         }
       }
+      if (measured !== undefined) {
+        const priorOffset = trailerOffset + measuredLength;
+        target.view.setUint32(priorOffset, prior.length, true);
+        for (let index = 0; index < prior.length; index += 1) {
+          target.view.setUint32(priorOffset + 4 + index * 4, prior[index]!, true);
+        }
+      }
       return { requestLength, requestPointer, initialMemoryBuffer };
     } finally {
       clearPlannerFrameScratch(this.#frameScratch);
@@ -1857,6 +1872,8 @@ export class PlanTransport {
     return header;
   }
 }
+
+const EMPTY_PARAGRAPH_IDS: readonly number[] = Object.freeze([]);
 
 /** The trailer value that asks a batch preparation for every prepared paragraph's summary. */
 const ALL_PARAGRAPHS_MEASURED = Symbol('all paragraphs measured');

@@ -134,7 +134,8 @@ export const textShaperAbi = {
     "measurementFlags": {
       "glyphsDeferred": 4,
       "inkBounds": 2,
-      "overflowed": 1
+      "overflowed": 1,
+      "priorGlyphFacts": 8
     },
     "overflowModes": {
       "clip": 2,
@@ -221,7 +222,8 @@ export const textShaperAbi = {
       "borrowedLayout": 4,
       "glyphFacts": 8,
       "layoutInspection": 2,
-      "measurement": 1
+      "measurement": 1,
+      "priorGlyphFacts": 16
     },
     "styleFields": {
       "all": 65535,

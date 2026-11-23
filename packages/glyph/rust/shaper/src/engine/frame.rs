@@ -11,10 +11,15 @@ pub(crate) const SEMANTIC_VIEW_BORROWED_LAYOUT: u32 = 1 << 2;
 /// The measurement must carry glyph counts, line glyph spans and ink: the read positions its
 /// paragraph instead of leaving positioning owed.
 pub(crate) const SEMANTIC_VIEW_GLYPH_FACTS: u32 = 1 << 3;
+/// A read first returns its paragraph's glyph facts as prepared before this request's input, for
+/// a host still holding a summary of that preparation whose facts were deferred. The record is
+/// flagged `MEASUREMENT_FLAG_PRIOR_GLYPH_FACTS`. A batch names those paragraphs in its trailer.
+pub(crate) const SEMANTIC_VIEW_PRIOR_GLYPH_FACTS: u32 = 1 << 4;
 pub(crate) const SEMANTIC_VIEW_MASK: u32 = SEMANTIC_VIEW_MEASUREMENT
     | SEMANTIC_VIEW_LAYOUT_INSPECTION
     | SEMANTIC_VIEW_BORROWED_LAYOUT
-    | SEMANTIC_VIEW_GLYPH_FACTS;
+    | SEMANTIC_VIEW_GLYPH_FACTS
+    | SEMANTIC_VIEW_PRIOR_GLYPH_FACTS;
 
 pub(crate) const TEXT_MUTATION_REPLACE_UTF16: u8 = 1;
 pub(crate) const TEXT_ENCODING_UTF16_LE: u8 = 1;

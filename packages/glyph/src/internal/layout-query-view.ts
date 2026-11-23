@@ -6,6 +6,13 @@ import type {
   ParagraphLineMetrics,
   LineFontMetrics,
 } from '../layout.js';
+import {
+  DeferredGlyphFacts,
+  deferredSummary,
+  glyphFactsOf,
+  type GlyphFacts,
+  type MeasuredLineFields,
+} from './deferred-glyph-facts.js';
 import type { BorrowedLayoutPublication, PlanPublication, PlanTransport } from './handle-state.js';
 
 const zeroFontMetrics: LineFontMetrics = Object.freeze({
@@ -33,6 +40,21 @@ function inkBoundsOf(view: SemanticViewReader, record: number, measured: boolean
 
 /** Reads an explicitly requested semantic sidecar. Rendering never calls this reader. */
 export function readPlannerMeasurements(publication: PlanPublication): ReadonlyMap<number, ParagraphLayoutSummary> {
+  return readMeasurements(publication, false);
+}
+
+/**
+ * Reads the glyph facts a preparation returned for paragraphs as they were before its input: what the deferred
+ * summaries of those earlier preparations answer with.
+ */
+export function readPriorGlyphFacts(publication: PlanPublication): ReadonlyMap<number, GlyphFacts> {
+  const facts = new Map<number, GlyphFacts>();
+  for (const [paragraphId, summary] of readMeasurements(publication, true))
+    facts.set(paragraphId, glyphFactsOf(summary));
+  return facts;
+}
+
+function readMeasurements(publication: PlanPublication, prior: boolean): ReadonlyMap<number, ParagraphLayoutSummary> {
   const view = new SemanticViewReader(publication);
   const table = view.table();
   const recordLayout = textShaperAbi.layouts.engineSemanticView;
@@ -47,11 +69,14 @@ export function readPlannerMeasurements(publication: PlanPublication): ReadonlyM
     if (lineStart + lineCount > table.count)
       throw new RangeError('paragraph measurement line span is outside the query');
     const flags = view.u16(record + recordLayout.flags);
+    if (((flags & textShaperAbi.engine.measurementFlags.priorGlyphFacts) !== 0) !== prior) continue;
     const inkMeasured = (flags & textShaperAbi.engine.measurementFlags.inkBounds) !== 0;
+    // A summary-only read answered from flow: its glyph facts are computed on first read (`DeferredGlyphFacts`).
+    const glyphsDeferred = (flags & textShaperAbi.engine.measurementFlags.glyphsDeferred) !== 0;
     const glyphStart = lineStart + lineCount;
     let firstBaseline = 0;
     let lastBaseline = 0;
-    const lines: ParagraphLineMetrics[] = [];
+    const lines: (ParagraphLineMetrics | MeasuredLineFields)[] = [];
     let previousFontMetrics: LineFontMetrics | undefined;
     for (let lineIndex = 0; lineIndex < lineCount; lineIndex += 1) {
       const line = view.record(table, lineStart + lineIndex);
@@ -95,61 +120,71 @@ export function readPlannerMeasurements(publication: PlanPublication): ReadonlyM
               xHeightSource,
             });
       previousFontMetrics = fontMetrics;
-      // Every measurement carries line glyph spans based at the index where glyph records would
-      // begin, whether or not the view serialized them; owned glyph demand combines these spans
-      // with the borrowed arena.
+      // Every measurement with glyph facts carries line glyph spans based at the index where glyph records would
+      // begin, whether or not the view serialized them; owned glyph demand combines these spans with the borrowed
+      // arena.
+      const metrics = {
+        index: lineIndex,
+        textStart: view.u32(line + recordLayout.textStart),
+        textEnd: view.u32(line + recordLayout.textEnd),
+        baseline,
+        alphabeticBaseline: baseline,
+        ideographicBaseline: baseline - ascent + lineHeight,
+        capHeightTop: view.f32(line + recordLayout.capHeightTop),
+        xHeightTop: view.f32(line + recordLayout.xHeightTop),
+        fontMetrics,
+        advance: view.f32(line + recordLayout.inlineExtent),
+        ascent,
+        descent: lineHeight - ascent,
+        lineHeight,
+      };
       lines.push(
-        Object.freeze({
-          index: lineIndex,
-          textStart: view.u32(line + recordLayout.textStart),
-          textEnd: view.u32(line + recordLayout.textEnd),
-          glyphStart: view.u32(line + recordLayout.itemStart) - glyphStart,
-          glyphCount: view.u32(line + recordLayout.itemCount),
-          baseline,
-          alphabeticBaseline: baseline,
-          ideographicBaseline: baseline - ascent + lineHeight,
-          capHeightTop: view.f32(line + recordLayout.capHeightTop),
-          xHeightTop: view.f32(line + recordLayout.xHeightTop),
-          fontMetrics,
-          advance: view.f32(line + recordLayout.inlineExtent),
-          ascent,
-          descent: lineHeight - ascent,
-          lineHeight,
-          inkBounds: inkBoundsOf(view, line, inkMeasured),
-        }),
+        glyphsDeferred
+          ? metrics
+          : Object.freeze({
+              ...metrics,
+              glyphStart: view.u32(line + recordLayout.itemStart) - glyphStart,
+              glyphCount: view.u32(line + recordLayout.itemCount),
+              inkBounds: inkBoundsOf(view, line, inkMeasured),
+            }),
       );
     }
     if (measurements.has(paragraphId)) throw new TypeError('text engine returned duplicate paragraph measurements');
     const contentHeight = view.f32(record + recordLayout.blockExtent);
     const ascent = view.f32(record + recordLayout.ascent);
+    const fields = {
+      width: view.f32(record + recordLayout.inlineStart),
+      height: view.f32(record + recordLayout.blockStart),
+      contentWidth: view.f32(record + recordLayout.inlineExtent),
+      contentHeight,
+      firstBaseline,
+      lastBaseline,
+      alphabeticBaseline: lines[0]?.alphabeticBaseline ?? 0,
+      ideographicBaseline: lines[0]?.ideographicBaseline ?? 0,
+      capHeightTop: lines[0]?.capHeightTop ?? 0,
+      xHeightTop: lines[0]?.xHeightTop ?? 0,
+      fontMetrics: lines[0]?.fontMetrics ?? zeroFontMetrics,
+      anchorOffset: zeroAnchorOffset,
+      // Whole-paragraph BaselineMetrics use the first baseline as their one reference.
+      ascent,
+      descent: contentHeight - ascent,
+      lineHeight: contentHeight,
+      overflowed: (flags & textShaperAbi.engine.measurementFlags.overflowed) !== 0,
+      minContentWidth: view.f32(record + recordLayout.minContentWidth),
+      maxContentWidth: view.f32(record + recordLayout.maxContentWidth),
+      lineCount,
+    };
     measurements.set(
       paragraphId,
-      Object.freeze({
-        width: view.f32(record + recordLayout.inlineStart),
-        height: view.f32(record + recordLayout.blockStart),
-        contentWidth: view.f32(record + recordLayout.inlineExtent),
-        contentHeight,
-        firstBaseline,
-        lastBaseline,
-        alphabeticBaseline: lines[0]?.alphabeticBaseline ?? 0,
-        ideographicBaseline: lines[0]?.ideographicBaseline ?? 0,
-        capHeightTop: lines[0]?.capHeightTop ?? 0,
-        xHeightTop: lines[0]?.xHeightTop ?? 0,
-        fontMetrics: lines[0]?.fontMetrics ?? zeroFontMetrics,
-        anchorOffset: zeroAnchorOffset,
-        // Whole-paragraph BaselineMetrics use the first baseline as their one reference.
-        ascent,
-        descent: contentHeight - ascent,
-        lineHeight: contentHeight,
-        inkBounds: inkBoundsOf(view, record, inkMeasured),
-        overflowed: (flags & textShaperAbi.engine.measurementFlags.overflowed) !== 0,
-        minContentWidth: view.f32(record + recordLayout.minContentWidth),
-        maxContentWidth: view.f32(record + recordLayout.maxContentWidth),
-        glyphCount: view.u32(record + recordLayout.parentId),
-        lineCount,
-        missingGlyphCount: view.u32(record + recordLayout.textStart),
-        lines: Object.freeze(lines),
-      }),
+      glyphsDeferred
+        ? deferredSummary(fields, lines as MeasuredLineFields[], new DeferredGlyphFacts())
+        : Object.freeze({
+            ...fields,
+            inkBounds: inkBoundsOf(view, record, inkMeasured),
+            glyphCount: view.u32(record + recordLayout.parentId),
+            missingGlyphCount: view.u32(record + recordLayout.textStart),
+            lines: Object.freeze(lines as ParagraphLineMetrics[]),
+          }),
     );
   }
   return measurements;

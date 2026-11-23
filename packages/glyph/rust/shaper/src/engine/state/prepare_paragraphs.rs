@@ -13,8 +13,9 @@ pub(crate) enum PreparationTarget<'request> {
     /// The paragraph a read asks about. It is measured even when the request changes nothing.
     One(u32),
     /// Every paragraph the request carries text, style or geometry input for. Only the listed
-    /// ones have their summary serialized when the request asks for measurement views.
-    Dirty(MeasuredParagraphs<'request>),
+    /// ones have their summary serialized when the request asks for measurement views. The second
+    /// list names the paragraphs whose prior glyph facts the batch returns first.
+    Dirty(MeasuredParagraphs<'request>, MeasuredParagraphs<'request>),
 }
 
 /// The paragraphs of a batch whose summary someone will read: an anchor, an explicit
@@ -29,7 +30,23 @@ pub(crate) enum MeasuredParagraphs<'request> {
 
 impl<'request> MeasuredParagraphs<'request> {
     /// Reads the trailer a batch writes after its request: a `u32` count, then that many
-    /// ascending paragraph ids. A count of `u32::MAX` asks for every prepared paragraph.
+    /// ascending paragraph ids, the paragraphs whose summary is serialized (a count of `u32::MAX`
+    /// asks for every prepared paragraph); then a second count and list, never `u32::MAX`, the
+    /// paragraphs whose prior glyph facts are returned before their input applies.
+    pub(crate) fn parse_batch(trailer: &'request [u8]) -> Result<(Self, Self), EngineError> {
+        let measured = Self::parse(trailer)?;
+        let length = match measured {
+            Self::All => 4,
+            Self::Only(ids) => 4 + ids.len(),
+        };
+        let prior = Self::parse(trailer.get(length..).ok_or(EngineError::InvalidRequest)?)?;
+        if prior == Self::All {
+            return Err(EngineError::InvalidRequest);
+        }
+        Ok((measured, prior))
+    }
+
+    /// Reads one `u32` count and that many ascending paragraph ids.
     pub(crate) fn parse(trailer: &'request [u8]) -> Result<Self, EngineError> {
         let count = trailer
             .get(..4)
@@ -146,7 +163,7 @@ impl TextEngine {
         }
         let scope = match target {
             PreparationTarget::One(paragraph_id) => ParagraphInputScope::Single(paragraph_id),
-            PreparationTarget::Dirty(_) => ParagraphInputScope::Indexed,
+            PreparationTarget::Dirty(..) => ParagraphInputScope::Indexed,
         };
         let implicit_paragraph = implicit_paragraph_id(planner, request)?;
         let lifecycle_plan = validate_lifecycle_input(
@@ -215,7 +232,7 @@ impl TextEngine {
             )?;
             let count = match target {
                 PreparationTarget::One(_) => 1,
-                PreparationTarget::Dirty(_) => planner.semantic_input_spans.len(),
+                PreparationTarget::Dirty(..) => planner.semantic_input_spans.len(),
             };
             for index in 0..count {
                 let (paragraph_id, text, styles, geometry) =
@@ -229,13 +246,60 @@ impl TextEngine {
                 )?;
                 let serialized = match target {
                     PreparationTarget::One(_) => measured,
-                    PreparationTarget::Dirty(interest) => {
+                    PreparationTarget::Dirty(interest, _) => {
                         measured && interest.contains(paragraph_id)
+                    }
+                };
+                // A host holding a summary whose glyph facts were deferred has them answered
+                // here, for the preparation this request is about to replace.
+                let prior = match target {
+                    PreparationTarget::One(_) => {
+                        request.semantic_view_mask
+                            & super::super::frame::SEMANTIC_VIEW_PRIOR_GLYPH_FACTS
+                            != 0
+                    }
+                    PreparationTarget::Dirty(_, prior) => {
+                        prior != MeasuredParagraphs::All && prior.contains(paragraph_id)
                     }
                 };
                 let stages = (|| {
                     let preflight_candidate =
                         preflight_text_candidate_mut(&mut preflight_text_candidates, paragraph_id);
+                    if prior
+                        && planner
+                            .paragraph(paragraph_id)
+                            .is_some_and(|paragraph| !paragraph.created)
+                    {
+                        let mut records = core::mem::take(&mut planner.semantic_records);
+                        let summary = records.len();
+                        let query = (|| {
+                            let state = &mut planner
+                                .paragraph_mut(paragraph_id)
+                                .ok_or(EngineError::InvalidRequest)?
+                                .state;
+                            state.settle_positioning(
+                                shaper.as_deref().ok_or(EngineError::InvalidRequest)?,
+                            )?;
+                            append_paragraph_measurement(
+                                &mut records,
+                                state,
+                                paragraph_id,
+                                shaper.as_deref_mut(),
+                                font_stacks,
+                                font_bindings,
+                                request.limits,
+                                false,
+                                true,
+                                true,
+                            )
+                        })();
+                        if let Some(record) = records.get_mut(summary) {
+                            record.flags |=
+                                super::super::layout_query::MEASUREMENT_FLAG_PRIOR_GLYPH_FACTS;
+                        }
+                        planner.semantic_records = records;
+                        query?;
+                    }
                     let paragraph = planner
                         .paragraph_mut(paragraph_id)
                         .ok_or(EngineError::InvalidRequest)?;
@@ -456,6 +520,24 @@ mod measured_paragraph_tests {
         let all = trailer(&[u32::MAX]);
         assert_eq!(MeasuredParagraphs::parse(&all), Ok(MeasuredParagraphs::All));
         assert!(MeasuredParagraphs::All.contains(9));
+    }
+
+    #[test]
+    fn a_batch_trailer_names_its_prior_glyph_facts_after_its_summaries() {
+        let bytes = trailer(&[1, 4, 2, 4, 9]);
+        let (measured, prior) = MeasuredParagraphs::parse_batch(&bytes).unwrap();
+        assert!(measured.contains(4) && !measured.contains(9));
+        assert!(prior.contains(4) && prior.contains(9) && !prior.contains(1));
+        let bytes = trailer(&[u32::MAX, 0]);
+        let (all, none) = MeasuredParagraphs::parse_batch(&bytes).unwrap();
+        assert_eq!(all, MeasuredParagraphs::All);
+        assert!(!none.contains(3));
+        for words in [&[0][..], &[0, u32::MAX][..], &[1, 2, 2, 5, 5][..]] {
+            assert_eq!(
+                MeasuredParagraphs::parse_batch(&trailer(words)),
+                Err(EngineError::InvalidRequest)
+            );
+        }
     }
 
     #[test]

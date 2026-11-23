@@ -32,7 +32,7 @@ fn a_colour_change_stages_no_layout_and_accumulates_paint_until_publication() {
     request.style_mutations =
         parse_style_mutations(&recoloured, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
     let measured = engine
-        .prepare_paragraphs(Some(&mut shaper), request, PreparationTarget::Dirty(MeasuredParagraphs::All))
+        .prepare_paragraphs(Some(&mut shaper), request, PreparationTarget::Dirty(MeasuredParagraphs::All, MeasuredParagraphs::Only(&[])))
         .unwrap();
     let staged = engine
         .planners
@@ -158,7 +158,7 @@ fn a_width_change_stages_no_glyph_rows() {
         .prepare_paragraphs(
             Some(&mut shaper),
             request,
-            PreparationTarget::Dirty(MeasuredParagraphs::All),
+            PreparationTarget::Dirty(MeasuredParagraphs::All, MeasuredParagraphs::Only(&[])),
         )
         .unwrap();
     engine.commit_measure(measured.witness).unwrap();

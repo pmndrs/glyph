@@ -54,17 +54,17 @@ test('prepared measurement leaves visible ink bounds queryable and cached, with 
   });
   const summary = text.measure();
   assert.ok(summary.inkBounds && summary.inkBounds.width > 0, 'prepared measurement carries real visible ink');
-  assert.equal(preparations(), 1, 'creation prepares the paragraph once');
+  assert.equal(preparations(), 2, 'creation prepares the paragraph once; reading its ink positions it once');
   expected.translate(new THREE.Vector3(summary.anchorOffset.x, -summary.anchorOffset.y, 0));
   const actual = text.computeBoundingBox().clone();
   assert.equal(actual.isEmpty(), false, 'unknown ink must not become a cached empty box');
   sameBox(actual, expected, 'native owner-local ink');
-  assert.equal(preparations(), 1, 'bounding-box demand reuses the prepared paragraph');
+  assert.equal(preparations(), 2, 'bounding-box demand reuses the prepared paragraph');
   for (let repeat = 0; repeat < 3; repeat++) {
     text.measure();
     sameBox(text.computeBoundingBox(), expected, 'cached native ink');
   }
-  assert.equal(preparations(), 1, 'same-revision layout and bounds reads do not reprepare');
+  assert.equal(preparations(), 2, 'same-revision layout and bounds reads do not reprepare');
   const raw = text.glyphs().inkBounds;
   near(actual.min.x, raw.x + summary.anchorOffset.x, 'raw ink to native minimum X');
   near(actual.max.y, -(raw.y + summary.anchorOffset.y), 'raw ink to native maximum Y');
@@ -81,11 +81,19 @@ test('empty and spaces-only bounds remain valid cached answers after prepared me
     const box = text.computeBoundingBox();
     if (content.length === 0) {
       assert.equal(box.isEmpty(), true, 'zero glyphs have no ink box');
-      assert.equal(preparations() - before, 1, 'first demand prepares the unbound empty paragraph once');
+      assert.equal(
+        preparations() - before,
+        2,
+        'first demand prepares the unbound empty paragraph once and positions it once for its ink',
+      );
     } else {
       assert.equal(box.getSize(new THREE.Vector3()).y, 0, 'spaces have no ink area');
       assert.ok(box.min.toArray().every(Number.isFinite), 'positioned whitespace bounds are finite');
-      assert.equal(preparations() - before, 1, 'first demand prepares the unbound whitespace paragraph once');
+      assert.equal(
+        preparations() - before,
+        2,
+        'first demand prepares the unbound whitespace paragraph once and positions it once for its ink',
+      );
     }
     const knownPreparations = preparations();
     text.measure();
@@ -105,7 +113,7 @@ test('desired text edits refresh ink bounds without freezing the old or empty re
   assert.ok(summary.inkBounds && summary.inkBounds.width > 0, 'edited preparation carries current ink');
   const next = text.computeBoundingBox().clone();
   assert.ok(next.getSize(new THREE.Vector3()).x > initial.getSize(new THREE.Vector3()).x);
-  assert.equal(preparations(), 1, 'the edit prepares once and subsequent reads reuse it');
+  assert.equal(preparations(), 2, 'the edit prepares once, its ink positions once, and later reads reuse both');
   const raw = text.glyphs().inkBounds;
   near(next.min.x, raw.x + summary.anchorOffset.x, 'edited anchored minimum X');
   near(next.max.y, -(raw.y + summary.anchorOffset.y), 'edited anchored maximum Y');

@@ -2035,9 +2035,17 @@ impl TextEngine {
             }
             let include_layout_inspection =
                 request.semantic_view_mask & super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION != 0;
-            if request.semantic_view_mask
+            // Glyph facts alone ask for the summaries, with their facts, of the paragraphs prepared
+            // since the last publication only: the ones a summary-only read may have measured.
+            let glyph_facts_only = request.semantic_view_mask
                 & (super::frame::SEMANTIC_VIEW_MEASUREMENT
                     | super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION)
+                == 0
+                && request.semantic_view_mask & super::frame::SEMANTIC_VIEW_GLYPH_FACTS != 0;
+            if request.semantic_view_mask
+                & (super::frame::SEMANTIC_VIEW_MEASUREMENT
+                    | super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION
+                    | super::frame::SEMANTIC_VIEW_GLYPH_FACTS)
                 != 0
             {
                 let mut records = core::mem::take(&mut planner.semantic_records);
@@ -2051,6 +2059,14 @@ impl TextEngine {
                         let positioned_changed = paragraph.positioned_changed
                             || paragraph.preparation_changed_since_publication;
                         if input_unchanged && !positioned_changed && !preparation_changed {
+                            continue;
+                        }
+                        // Glyph facts answer summaries of paragraphs prepared since the last
+                        // publication; a refused one was emptied and has none to answer.
+                        if glyph_facts_only
+                            && (!planner.unpublished_preparation_ids.contains(&paragraph_id)
+                                || paragraph.state.geometry.active().constraints.is_empty())
+                        {
                             continue;
                         }
                         admit_preparation_owner(

@@ -1,4 +1,5 @@
-import type { LayoutPoint, ParagraphMeasurement } from './layout.js';
+import { deferredGlyphFacts, withSummaryFields } from './internal/deferred-glyph-facts.js';
+import type { LayoutPoint, ParagraphLayoutSummary, ParagraphMeasurement } from './layout.js';
 import type { Constraints, TextAnchor } from './text-properties.js';
 
 /** @internal Resolves a validated anchor against unshifted paragraph metrics. Kept renderer-neutral so every host applies the same placement translation without changing shaping or measurement coordinates. */
@@ -40,7 +41,12 @@ export function withTextAnchor<Value extends ParagraphMeasurement>(
   anchor: TextAnchor | undefined,
 ): Value {
   if (anchor === undefined && measurement.anchorOffset.x === 0 && measurement.anchorOffset.y === 0) return measurement;
-  return Object.freeze({ ...measurement, anchorOffset: resolveTextAnchor(measurement, anchor) });
+  const anchorOffset = resolveTextAnchor(measurement, anchor);
+  // Spreading a summary with deferred glyph facts would read them, positioning its paragraph.
+  const summary = measurement as unknown as ParagraphLayoutSummary;
+  if (deferredGlyphFacts(summary) !== undefined)
+    return withSummaryFields(summary, { anchorOffset }) as unknown as Value;
+  return Object.freeze({ ...measurement, anchorOffset });
 }
 
 /** @internal Placement references do not participate in paragraph sizing or shaping. */

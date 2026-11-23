@@ -45,6 +45,8 @@ test('React: the canvas prepares before it renders, and a setter asks an on-dema
     // One frame of the canvas: the layout callback runs while the text is still unpublished, then it is drawn.
     assert.deepEqual(await crossingsOfAsync(() => renderer.advanceFrames(1, 0.016)), {
       engine_prepare_batch: 1,
+      // The callback reads `glyphCount`, a glyph fact the batch's summary computes on first read.
+      engine_measure_paragraph: 1,
       engine_update_batch: 1,
     });
     assert.deepEqual(seen, [[label, label.measure().glyphCount, 'pending']]);

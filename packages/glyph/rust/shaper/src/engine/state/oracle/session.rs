@@ -535,7 +535,9 @@ impl Session {
             || request.geometry.inline_object_count() != 0;
         let target = match read {
             Some(paragraph) => PreparationTarget::One(paragraph),
-            None if carries_input => PreparationTarget::Dirty(MeasuredParagraphs::All),
+            None if carries_input => {
+                PreparationTarget::Dirty(MeasuredParagraphs::All, MeasuredParagraphs::Only(&[]))
+            }
             None => PreparationTarget::One(PARAGRAPH_ID),
         };
         let measured = self

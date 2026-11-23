@@ -32,6 +32,9 @@ pub(crate) const MEASUREMENT_FLAG_INK_BOUNDS: u16 = 2;
 /// glyph count, every line's glyph span and the ink are not in this record. They are the
 /// positioned values a later read with glyph facts returns for the same preparation.
 pub(crate) const MEASUREMENT_FLAG_GLYPHS_DEFERRED: u16 = 4;
+/// This summary, with its lines, describes the paragraph as prepared before the request's input:
+/// the glyph facts a deferred summary of that preparation answers with.
+pub(crate) const MEASUREMENT_FLAG_PRIOR_GLYPH_FACTS: u16 = 8;
 
 /// Union of glyph ink boxes in positioned space.
 ///

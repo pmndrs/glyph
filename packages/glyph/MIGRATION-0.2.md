@@ -114,6 +114,14 @@ Equivalent `Text.set()` state is now a no-op. Assign `font` or `material` explic
 restaging. A renderer-side failure keeps the last accepted draw state and is not retried by unchanged traversals; after
 repairing the cause, assign material or other renderer-relevant state to request a new checkpoint.
 
+## Read glyph facts after `measure()` deliberately
+
+`measure()` returns the same `ParagraphLayoutSummary` fields as before. A read that only needs the paragraph's box,
+lines and baselines no longer positions glyphs: `glyphCount`, `missingGlyphCount`, `inkBounds` and each line's
+`glyphStart`, `glyphCount` and `inkBounds` are computed the first time you read one of them. They describe the text as
+it was when `measure()` returned, even if you edit it before reading them. Reading them right after `measure()` costs a
+second engine call; read only the fields you use in hot paths such as a resize loop.
+
 ## Verify the migration
 
 At minimum, verify:

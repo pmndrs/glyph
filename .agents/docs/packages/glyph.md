@@ -861,6 +861,13 @@ traversal publishes renderer commands from that preparation. The ownership split
 - transform and visibility changes update Three's renderer-local sidecar without calling Wasm;
 - an empty or normalized-equal update sends nothing.
 
+A summary-only read (no `glyphFacts` view, no inspection) commits flow layout and leaves positioning owed against the
+predecessor its commit keeps in each stage's pending slot; publication, glyph, ink, copy and editing reads and the next
+preparation of the paragraph settle it with the eager inputs, so retention, placement segments and canonical revisions
+equal an eager positioning
+([decision](../planning/decisions/summary-only-reads-defer-positioning.md)). Its measurement carries no glyph facts
+(`GLYPHS_DEFERRED`); the TypeScript summary computes them on first read, from a later read, the prior facts the next
+preparation of that paragraph returns first, or the publication that positions it.
 Prepared measurement totals, glyph spans and ink use the same positioned representation. The obsolete line-only
 preparation selector, repair branch and flow-level glyph-total fallback are retired; production query/update entry points
 always supply a shaper and complete positioning. No-shaper fixtures remain test-only. Equivalent geometry retains the
