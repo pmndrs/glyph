@@ -2964,6 +2964,7 @@ impl CodecGatherWorkspace {
 
     /// Selected output rows can only merge the input's nonzero runs, including when
     /// recordless sources disappear. Reserve that upper bound before touching any row.
+    #[inline(never)]
     fn reserve_mask_ranges(
         &mut self,
         masks: &[u16],

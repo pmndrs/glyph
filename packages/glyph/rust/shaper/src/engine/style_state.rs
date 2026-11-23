@@ -1022,6 +1022,7 @@ fn cluster_end_at_or_after(boundaries: &[u32], offset: u32) -> u32 {
         .unwrap_or(offset)
 }
 
+#[inline(never)]
 fn normalize_style_range(start: u32, end: u32, boundaries: &[u32]) -> (u32, u32) {
     let aligned_start = cluster_end_at_or_after(boundaries, start);
     let aligned_end = cluster_end_at_or_after(boundaries, end);

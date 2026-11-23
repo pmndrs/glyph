@@ -385,6 +385,7 @@ impl FrameTransport {
         self.output.pointer()
     }
 
+    #[inline(never)]
     fn write_header(&mut self, values: HeaderValues) {
         let result_capacity = self.output.capacity();
         let request_capacity = self.request.capacity();

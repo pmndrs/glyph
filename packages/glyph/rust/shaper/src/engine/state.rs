@@ -7462,6 +7462,7 @@ impl ParagraphState {
         Ok(())
     }
 
+    #[inline(never)]
     fn discard_positioned_candidate(&mut self) {
         self.positioned.pending_mut().clear();
         self.positioned.discard_candidate();

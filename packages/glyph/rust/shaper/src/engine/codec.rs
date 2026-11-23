@@ -487,6 +487,7 @@ fn decoration_program_index(
     })
 }
 
+#[inline(never)]
 fn program_index(
     programs: &[ProgramDescriptor],
     capability_set: CapabilitySetId,
