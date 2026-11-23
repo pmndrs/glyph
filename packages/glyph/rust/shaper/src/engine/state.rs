@@ -3290,291 +3290,56 @@ impl PlannerState {
             style_validation_sort_pairs_pass,
             ..
         } = self;
-        let spare_text_capacity = spare_paragraph.as_ref().map_or(0, |paragraph| {
-            paragraph
-                .text
-                .pending()
-                .units
-                .capacity()
-                .max(paragraph.text.committed().units.capacity())
-        });
-        let paragraph_index = paragraphs
+        let mut paragraph = paragraphs
             .binary_search_by_key(&paragraph_id, |paragraph| paragraph.id)
-            .ok();
+            .ok()
+            .and_then(|index| paragraphs.get_mut(index))
+            .map(|paragraph| &mut **paragraph);
         let mut empty_styles = StyleArena::default();
 
         let candidate_index = if text_mutations.len() == 0 {
             None
         } else {
-            preflight_text_candidates
-                .try_reserve(1)
-                .map_err(|_| EngineError::ResultTooLarge)?;
-            let index = preflight_text_candidates.len();
-            preflight_text_candidates.push(PreflightTextCandidate::default());
-            let candidate = &mut preflight_text_candidates[index];
-            candidate.paragraph_id = paragraph_id;
-            candidate.buffers = if paragraph_index
-                .and_then(|index| paragraphs.get(index))
-                .is_some_and(|paragraph| {
-                    !paragraph.state.text.is_prepared() && !paragraph.state.unicode.is_prepared()
-                }) {
-                CandidateBuffers::ExistingPending {
-                    unit_ids_mirror_committed: false,
-                }
-            } else if spare_text_candidate_id == Some(paragraph_id) && spare_paragraph.is_some() {
-                CandidateBuffers::SparePending
-            } else {
-                CandidateBuffers::Owned
+            let mut sources = PreflightTextSources {
+                paragraph: paragraph.as_deref_mut(),
+                spare_paragraph: &mut *spare_paragraph,
+                spare_text_candidate_id,
             };
-            match candidate.buffers {
-                CandidateBuffers::ExistingPending { .. } => {
-                    let paragraph = paragraph_index
-                        .and_then(|index| paragraphs.get_mut(index))
-                        .ok_or(EngineError::InvalidRequest)?;
-                    let was_mirrored = paragraph.state.pending_text_mirrors_committed;
-                    candidate.buffers = CandidateBuffers::ExistingPending {
-                        unit_ids_mirror_committed: was_mirrored,
-                    };
-                    let (pending, committed) = paragraph.state.text.derive_mut();
-                    // A valid mirror already contains the accepted text and avoids a full copy.
-                    // Clear the fact before any write so errors cannot leave a false mirror.
-                    paragraph.state.pending_text_mirrors_committed = false;
-                    populate_preflight_text(
-                        &mut pending.units,
-                        &committed.units,
-                        text_mutations,
-                        !was_mirrored,
-                        0,
-                    )?;
-                }
-                CandidateBuffers::SparePending => {
-                    let spare = spare_paragraph
-                        .as_mut()
-                        .ok_or(EngineError::InvalidRequest)?;
-                    let pending = spare.text.pending_mut();
-                    pending.units.clear();
-                    pending.unit_ids.clear();
-                    pending.next_unit_id = 0;
-                    spare.pending_text_mirrors_committed = false;
-                    spare.unicode.pending_mut().clear();
-                    populate_preflight_text(&mut pending.units, &[], text_mutations, false, 0)?;
-                }
-                CandidateBuffers::Owned => {
-                    let committed_text = paragraph_index
-                        .and_then(|index| paragraphs.get(index))
-                        .map_or(&[][..], |paragraph| {
-                            paragraph.state.text.committed().units.as_slice()
-                        });
-                    candidate.text.clear();
-                    let preserved_capacity = paragraph_index
-                        .and_then(|index| paragraphs.get(index))
-                        .map_or(0, |paragraph| {
-                            paragraph
-                                .state
-                                .text
-                                .pending()
-                                .units
-                                .capacity()
-                                .max(paragraph.state.text.committed().units.capacity())
-                        })
-                        .max(spare_text_capacity);
-                    populate_preflight_text(
-                        &mut candidate.text,
-                        committed_text,
-                        text_mutations,
-                        true,
-                        preserved_capacity,
-                    )?;
-                }
-            }
-            let committed_text = paragraph_index
-                .and_then(|index| paragraphs.get(index))
-                .map_or(&[][..], |paragraph| {
-                    paragraph.state.text.committed().units.as_slice()
-                });
-            let candidate_text = match candidate.buffers {
-                CandidateBuffers::ExistingPending { .. } => paragraph_index
-                    .and_then(|index| paragraphs.get(index))
-                    .ok_or(EngineError::InvalidRequest)?
-                    .state
-                    .text
-                    .pending()
-                    .units
-                    .as_slice(),
-                CandidateBuffers::SparePending => spare_paragraph
-                    .as_ref()
-                    .ok_or(EngineError::InvalidRequest)?
-                    .text
-                    .pending()
-                    .units
-                    .as_slice(),
-                CandidateBuffers::Owned => candidate.text.as_slice(),
-            };
-            candidate.unicode_state = CandidateUnicode::ReuseCommitted;
-            candidate.reused_ascii_facts = None;
-            let edit_start = preflight_edit_scratch.len();
-            let reconciliation = text_reconciliation(text_mutations, committed_text.len());
-            if let Some(reconciliation) = reconciliation {
-                collect_text_edits(
-                    committed_text,
-                    candidate_text,
-                    reconciliation,
-                    preflight_edit_scratch,
-                    edit_start,
-                )?;
-            }
-            let edit_end = preflight_edit_scratch.len();
-            candidate.edit_start = edit_start;
-            candidate.edit_end = edit_end;
-            let candidate_edits = &preflight_edit_scratch[edit_start..edit_end];
-            let text_changed = if reconciliation.is_some() {
-                !candidate_edits.is_empty()
-            } else {
-                candidate_text != committed_text
-            };
-            if text_changed {
-                #[cfg(feature = "stage-bench")]
-                let _clock = oracle::stage_bench::clock::UNICODE.guard();
-                let reused_ascii_facts = paragraph_index
-                    .and_then(|index| paragraphs.get(index))
-                    .and_then(|paragraph| {
-                        if paragraph.created || candidate_edits.is_empty() {
-                            return None;
-                        }
-                        let unicode = paragraph.state.unicode.committed();
-                        let mut facts = unicode.printable_ascii_facts();
-                        for edit in candidate_edits.iter().copied() {
-                            facts = unicode.reusable_ascii_facts_for_letter_edit(
-                                committed_text,
-                                candidate_text,
-                                edit.old_start,
-                                edit.old_end,
-                                edit.new_end,
-                                facts,
-                            )?;
-                        }
-                        Some(facts)
-                    });
-                if let Some(facts) = reused_ascii_facts {
-                    candidate.unicode_state = CandidateUnicode::ReuseCommitted;
-                    candidate.reused_ascii_facts = Some(facts);
-                } else {
+            Some(sources.prepare_candidate(
+                paragraph_id,
+                text_mutations,
+                preflight_text_candidates,
+                preflight_edit_scratch,
+            )?)
+        };
+        let paragraph = paragraph.as_deref();
+        let committed_boundaries = || {
+            paragraph.map_or(&[0][..], |paragraph| {
+                paragraph.state.unicode.committed().grapheme_boundaries()
+            })
+        };
+        let grapheme_boundaries =
+            match candidate_index.map(|index| &preflight_text_candidates[index]) {
+                Some(candidate) if candidate.unicode_state == CandidateUnicode::Prepared => {
                     match candidate.buffers {
-                        CandidateBuffers::ExistingPending { .. } => {
-                            let paragraph = paragraph_index
-                                .and_then(|index| paragraphs.get_mut(index))
-                                .ok_or(EngineError::InvalidRequest)?;
-                            let created = paragraph.created;
-                            let state = &mut paragraph.state;
-                            let candidate_text = state.text.pending().units.as_slice();
-                            let (committed, pending) = state.unicode.pair_mut();
-                            // One edit of an analysed text is analysed around the edit alone:
-                            // the one a reconciliation found, or the request's only mutation.
-                            let edit = match *candidate_edits {
-                                [edit] => Some((
-                                    edit.new_start,
-                                    edit.old_end - edit.old_start,
-                                    edit.new_end - edit.new_start,
-                                )),
-                                [] if reconciliation.is_none() && text_mutations.len() == 1 => {
-                                    text_mutations.get(0).and_then(|mutation| {
-                                        Some((
-                                            usize::try_from(mutation.text_start).ok()?,
-                                            usize::try_from(mutation.delete_count).ok()?,
-                                            mutation.insert_utf16_le.len() / 2,
-                                        ))
-                                    })
-                                }
-                                _ => None,
-                            };
-                            match edit {
-                                Some((start, removed, inserted)) if !created => pending
-                                    .analyze_edited(
-                                        committed,
-                                        candidate_text,
-                                        start,
-                                        removed,
-                                        inserted,
-                                    ),
-                                _ => pending.analyze(candidate_text),
-                            }
-                            .map_err(unicode_error)?;
-                        }
-                        CandidateBuffers::SparePending => {
-                            let spare = spare_paragraph
-                                .as_mut()
-                                .ok_or(EngineError::InvalidRequest)?;
-                            let candidate_text = spare.text.pending().units.as_slice();
-                            spare
-                                .unicode
-                                .pending_mut()
-                                .analyze(candidate_text)
-                                .map_err(unicode_error)?;
-                        }
-                        CandidateBuffers::Owned => {
-                            let preserved_capacity = paragraph_index
-                                .and_then(|index| paragraphs.get(index))
-                                .map_or(0, |paragraph| {
-                                    paragraph
-                                        .state
-                                        .text
-                                        .pending()
-                                        .units
-                                        .capacity()
-                                        .max(paragraph.state.text.committed().units.capacity())
-                                })
-                                .max(spare_text_capacity);
-                            candidate
-                                .unicode
-                                .reserve(preserved_capacity)
-                                .map_err(unicode_error)?;
-                            candidate
-                                .unicode
-                                .analyze(candidate_text)
-                                .map_err(unicode_error)?;
-                        }
+                        CandidateBuffers::ExistingPending { .. } => paragraph
+                            .ok_or(EngineError::InvalidRequest)?
+                            .state
+                            .unicode
+                            .pending()
+                            .grapheme_boundaries(),
+                        CandidateBuffers::SparePending => spare_paragraph
+                            .as_ref()
+                            .ok_or(EngineError::InvalidRequest)?
+                            .unicode
+                            .pending()
+                            .grapheme_boundaries(),
+                        CandidateBuffers::Owned => candidate.unicode.grapheme_boundaries(),
                     }
-                    candidate.unicode_state = CandidateUnicode::Prepared;
                 }
-            }
-            Some(index)
-        };
-        let grapheme_boundaries = if let Some(index) = candidate_index {
-            let candidate = &preflight_text_candidates[index];
-            if candidate.unicode_state == CandidateUnicode::Prepared {
-                match candidate.buffers {
-                    CandidateBuffers::ExistingPending { .. } => paragraph_index
-                        .and_then(|index| paragraphs.get(index))
-                        .ok_or(EngineError::InvalidRequest)?
-                        .state
-                        .unicode
-                        .pending()
-                        .grapheme_boundaries(),
-                    CandidateBuffers::SparePending => spare_paragraph
-                        .as_ref()
-                        .ok_or(EngineError::InvalidRequest)?
-                        .unicode
-                        .pending()
-                        .grapheme_boundaries(),
-                    CandidateBuffers::Owned => candidate.unicode.grapheme_boundaries(),
-                }
-            } else {
-                paragraph_index
-                    .and_then(|index| paragraphs.get(index))
-                    .map_or(&[0][..], |paragraph| {
-                        paragraph.state.unicode.committed().grapheme_boundaries()
-                    })
-            }
-        } else {
-            paragraph_index
-                .and_then(|index| paragraphs.get(index))
-                .map_or(&[0][..], |paragraph| {
-                    paragraph.state.unicode.committed().grapheme_boundaries()
-                })
-        };
-        let committed_styles = paragraph_index
-            .and_then(|index| paragraphs.get(index))
-            .map(|paragraph| &paragraph.state.styles.committed().arena);
+                _ => committed_boundaries(),
+            };
+        let committed_styles = paragraph.map(|paragraph| &paragraph.state.styles.committed().arena);
         let mut scratch = MutationTopologyScratch {
             topology: style_validation_topology_scratch,
             mutations: style_validation_mutation_scratch,
@@ -8806,6 +8571,307 @@ fn concat_boundary_is_safe(shape: &ShapeArena, boundary: u32) -> bool {
         }
     }
     found
+}
+
+/// The largest text buffer a paragraph state already holds.
+fn text_capacity(state: &ParagraphState) -> usize {
+    state
+        .text
+        .pending()
+        .units
+        .capacity()
+        .max(state.text.committed().units.capacity())
+}
+
+/// The retained buffers a preflight text candidate may write into instead of its own.
+struct PreflightTextSources<'a> {
+    /// The paragraph the candidate edits, when it exists.
+    paragraph: Option<&'a mut RetainedParagraph>,
+    spare_paragraph: &'a mut Option<ParagraphState>,
+    spare_text_candidate_id: Option<u32>,
+}
+
+impl PreflightTextSources<'_> {
+    /// Builds the candidate text of `paragraph_id`, records its edits against the committed
+    /// text, and analyses its Unicode unless committed analysis can be reused. Returns the
+    /// candidate's index.
+    fn prepare_candidate(
+        &mut self,
+        paragraph_id: u32,
+        text_mutations: super::semantic_wire::TextMutationBatch<'_>,
+        candidates: &mut Vec<PreflightTextCandidate>,
+        edit_scratch: &mut Vec<TextEdit>,
+    ) -> Result<usize, EngineError> {
+        candidates
+            .try_reserve(1)
+            .map_err(|_| EngineError::ResultTooLarge)?;
+        let index = candidates.len();
+        candidates.push(PreflightTextCandidate::default());
+        let candidate = &mut candidates[index];
+        candidate.paragraph_id = paragraph_id;
+        candidate.buffers = self.candidate_buffers(paragraph_id);
+        self.populate_candidate_text(candidate, text_mutations)?;
+        candidate.unicode_state = CandidateUnicode::ReuseCommitted;
+        candidate.reused_ascii_facts = None;
+        let edit_start = edit_scratch.len();
+        let committed_len = self.committed_text().len();
+        let reconciliation = text_reconciliation(text_mutations, committed_len);
+        let text_changed = {
+            let committed_text = self.committed_text();
+            let candidate_text = self.candidate_text(candidate)?;
+            if let Some(reconciliation) = reconciliation {
+                collect_text_edits(
+                    committed_text,
+                    candidate_text,
+                    reconciliation,
+                    edit_scratch,
+                    edit_start,
+                )?;
+                edit_scratch.len() != edit_start
+            } else {
+                candidate_text != committed_text
+            }
+        };
+        candidate.edit_start = edit_start;
+        candidate.edit_end = edit_scratch.len();
+        if text_changed {
+            self.prepare_candidate_unicode(
+                candidate,
+                &edit_scratch[edit_start..],
+                reconciliation,
+                text_mutations,
+            )?;
+        }
+        Ok(index)
+    }
+
+    fn spare_text_capacity(&self) -> usize {
+        self.spare_paragraph.as_ref().map_or(0, text_capacity)
+    }
+
+    /// The capacity an owned candidate keeps so a later commit need not grow it.
+    fn preserved_capacity(&self) -> usize {
+        self.paragraph
+            .as_deref()
+            .map_or(0, |paragraph| text_capacity(&paragraph.state))
+            .max(self.spare_text_capacity())
+    }
+
+    fn committed_text(&self) -> &[u16] {
+        self.paragraph.as_deref().map_or(&[][..], |paragraph| {
+            paragraph.state.text.committed().units.as_slice()
+        })
+    }
+
+    fn candidate_buffers(&self, paragraph_id: u32) -> CandidateBuffers {
+        if self.paragraph.as_deref().is_some_and(|paragraph| {
+            !paragraph.state.text.is_prepared() && !paragraph.state.unicode.is_prepared()
+        }) {
+            CandidateBuffers::ExistingPending {
+                unit_ids_mirror_committed: false,
+            }
+        } else if self.spare_text_candidate_id == Some(paragraph_id)
+            && self.spare_paragraph.is_some()
+        {
+            CandidateBuffers::SparePending
+        } else {
+            CandidateBuffers::Owned
+        }
+    }
+
+    fn populate_candidate_text(
+        &mut self,
+        candidate: &mut PreflightTextCandidate,
+        text_mutations: super::semantic_wire::TextMutationBatch<'_>,
+    ) -> Result<(), EngineError> {
+        match candidate.buffers {
+            CandidateBuffers::ExistingPending { .. } => {
+                let paragraph = self
+                    .paragraph
+                    .as_deref_mut()
+                    .ok_or(EngineError::InvalidRequest)?;
+                let was_mirrored = paragraph.state.pending_text_mirrors_committed;
+                candidate.buffers = CandidateBuffers::ExistingPending {
+                    unit_ids_mirror_committed: was_mirrored,
+                };
+                let (pending, committed) = paragraph.state.text.derive_mut();
+                // A valid mirror already contains the accepted text and avoids a full copy.
+                // Clear the fact before any write so errors cannot leave a false mirror.
+                paragraph.state.pending_text_mirrors_committed = false;
+                populate_preflight_text(
+                    &mut pending.units,
+                    &committed.units,
+                    text_mutations,
+                    !was_mirrored,
+                    0,
+                )
+            }
+            CandidateBuffers::SparePending => {
+                let spare = self
+                    .spare_paragraph
+                    .as_mut()
+                    .ok_or(EngineError::InvalidRequest)?;
+                let pending = spare.text.pending_mut();
+                pending.units.clear();
+                pending.unit_ids.clear();
+                pending.next_unit_id = 0;
+                spare.pending_text_mirrors_committed = false;
+                spare.unicode.pending_mut().clear();
+                populate_preflight_text(&mut pending.units, &[], text_mutations, false, 0)
+            }
+            CandidateBuffers::Owned => {
+                let preserved_capacity = self.preserved_capacity();
+                candidate.text.clear();
+                populate_preflight_text(
+                    &mut candidate.text,
+                    self.committed_text(),
+                    text_mutations,
+                    true,
+                    preserved_capacity,
+                )
+            }
+        }
+    }
+
+    fn candidate_text<'s>(
+        &'s self,
+        candidate: &'s PreflightTextCandidate,
+    ) -> Result<&'s [u16], EngineError> {
+        Ok(match candidate.buffers {
+            CandidateBuffers::ExistingPending { .. } => self
+                .paragraph
+                .as_deref()
+                .ok_or(EngineError::InvalidRequest)?
+                .state
+                .text
+                .pending()
+                .units
+                .as_slice(),
+            CandidateBuffers::SparePending => self
+                .spare_paragraph
+                .as_ref()
+                .ok_or(EngineError::InvalidRequest)?
+                .text
+                .pending()
+                .units
+                .as_slice(),
+            CandidateBuffers::Owned => candidate.text.as_slice(),
+        })
+    }
+
+    /// A changed candidate reuses the committed printable-ASCII facts when every edit is a
+    /// letter edit they survive; otherwise its Unicode is analysed in its own buffers.
+    fn prepare_candidate_unicode(
+        &mut self,
+        candidate: &mut PreflightTextCandidate,
+        candidate_edits: &[TextEdit],
+        reconciliation: Option<TextReconciliation>,
+        text_mutations: super::semantic_wire::TextMutationBatch<'_>,
+    ) -> Result<(), EngineError> {
+        #[cfg(feature = "stage-bench")]
+        let _clock = oracle::stage_bench::clock::UNICODE.guard();
+        if let Some(facts) = self.reused_ascii_facts(candidate, candidate_edits)? {
+            candidate.unicode_state = CandidateUnicode::ReuseCommitted;
+            candidate.reused_ascii_facts = Some(facts);
+            return Ok(());
+        }
+        match candidate.buffers {
+            CandidateBuffers::ExistingPending { .. } => {
+                let paragraph = self
+                    .paragraph
+                    .as_deref_mut()
+                    .ok_or(EngineError::InvalidRequest)?;
+                let created = paragraph.created;
+                let state = &mut paragraph.state;
+                let candidate_text = state.text.pending().units.as_slice();
+                let (committed, pending) = state.unicode.pair_mut();
+                match local_unicode_edit(candidate_edits, reconciliation, text_mutations) {
+                    Some((start, removed, inserted)) if !created => {
+                        pending.analyze_edited(committed, candidate_text, start, removed, inserted)
+                    }
+                    _ => pending.analyze(candidate_text),
+                }
+                .map_err(unicode_error)?;
+            }
+            CandidateBuffers::SparePending => {
+                let spare = self
+                    .spare_paragraph
+                    .as_mut()
+                    .ok_or(EngineError::InvalidRequest)?;
+                let candidate_text = spare.text.pending().units.as_slice();
+                spare
+                    .unicode
+                    .pending_mut()
+                    .analyze(candidate_text)
+                    .map_err(unicode_error)?;
+            }
+            CandidateBuffers::Owned => {
+                candidate
+                    .unicode
+                    .reserve(self.preserved_capacity())
+                    .map_err(unicode_error)?;
+                candidate
+                    .unicode
+                    .analyze(&candidate.text)
+                    .map_err(unicode_error)?;
+            }
+        }
+        candidate.unicode_state = CandidateUnicode::Prepared;
+        Ok(())
+    }
+
+    fn reused_ascii_facts(
+        &self,
+        candidate: &PreflightTextCandidate,
+        candidate_edits: &[TextEdit],
+    ) -> Result<Option<PrintableAsciiFacts>, EngineError> {
+        let committed_text = self.committed_text();
+        let candidate_text = self.candidate_text(candidate)?;
+        Ok(self.paragraph.as_deref().and_then(|paragraph| {
+            if paragraph.created || candidate_edits.is_empty() {
+                return None;
+            }
+            let unicode = paragraph.state.unicode.committed();
+            let mut facts = unicode.printable_ascii_facts();
+            for edit in candidate_edits.iter().copied() {
+                facts = unicode.reusable_ascii_facts_for_letter_edit(
+                    committed_text,
+                    candidate_text,
+                    edit.old_start,
+                    edit.old_end,
+                    edit.new_end,
+                    facts,
+                )?;
+            }
+            Some(facts)
+        }))
+    }
+}
+
+/// One edit of an analysed text is analysed around the edit alone: the one a reconciliation
+/// found, or the request's only mutation. Returns `(start, removed, inserted)`.
+fn local_unicode_edit(
+    candidate_edits: &[TextEdit],
+    reconciliation: Option<TextReconciliation>,
+    text_mutations: super::semantic_wire::TextMutationBatch<'_>,
+) -> Option<(usize, usize, usize)> {
+    match *candidate_edits {
+        [edit] => Some((
+            edit.new_start,
+            edit.old_end - edit.old_start,
+            edit.new_end - edit.new_start,
+        )),
+        [] if reconciliation.is_none() && text_mutations.len() == 1 => {
+            text_mutations.get(0).and_then(|mutation| {
+                Some((
+                    usize::try_from(mutation.text_start).ok()?,
+                    usize::try_from(mutation.delete_count).ok()?,
+                    mutation.insert_utf16_le.len() / 2,
+                ))
+            })
+        }
+        _ => None,
+    }
 }
 
 #[derive(Clone, Copy)]
