@@ -867,7 +867,12 @@ preparation of the paragraph settle it with the eager inputs, so retention, plac
 equal an eager positioning
 ([decision](../planning/decisions/summary-only-reads-defer-positioning.md)). Its measurement carries no glyph facts
 (`GLYPHS_DEFERRED`); the TypeScript summary computes them on first read, from a later read, the prior facts the next
-preparation of that paragraph returns first, or the publication that positions it.
+preparation of that paragraph returns first, or the publication that positions it. Two exceptions keep that off hot
+paths: TypeScript reads also set `availableGlyphFacts`, so a paragraph positioned once preparation ends (an inline leaf,
+or a width whose lines positioning already describes) carries its facts at no cost; and a text whose caller read the
+facts of its last summary asks for them up front (`glyphFacts`) on its next read, observing again whether they are read.
+The oracle never sets `availableGlyphFacts`, so equal oracle requests still return equal records. A measurement decides
+whether its visible layout fell short with `flow_consumed_clusters`, not a full `flow_extents` line measurement.
 Prepared measurement totals, glyph spans and ink use the same positioned representation. The obsolete line-only
 preparation selector, repair branch and flow-level glyph-total fallback are retired; production query/update entry points
 always supply a shaper and complete positioning. No-shaper fixtures remain test-only. Equivalent geometry retains the

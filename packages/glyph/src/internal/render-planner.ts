@@ -57,8 +57,8 @@ import {
   copyPreparedLayoutInspection,
   measurementFromLayoutInspection,
   readPlannerLayouts,
+  readPlannerGlyphFacts,
   readPlannerMeasurements,
-  readPriorGlyphFacts,
 } from './layout-query-view.js';
 import {
   createBorrowedGlyphLayout,
@@ -459,6 +459,11 @@ interface RetainedTextState {
    * adopted, so they are resolved before the engine prepares or removes this paragraph again.
    */
   deferredFacts: DeferredGlyphFacts | undefined;
+  /**
+   * The glyph facts of the last summary a measurement handed out, deferred or not. When its caller read them, the
+   * next read asks for glyph facts up front instead of leaving them for a second engine call.
+   */
+  observedFacts: DeferredGlyphFacts | undefined;
 }
 
 interface CommittedFlowRegion {
@@ -818,6 +823,7 @@ class RenderPlannerImpl {
       measurementRead: false,
       inspection: undefined,
       deferredFacts: undefined,
+      observedFacts: undefined,
     };
     try {
       state.preparedOrder = this.#preparationOrderForCreation(state.metrics.order);
@@ -1391,7 +1397,7 @@ class RenderPlannerImpl {
           staged.includeMeasurement || staged.prior.length !== 0
             ? (publication) => {
                 if (staged.includeMeasurement) measurements = readPlannerMeasurements(publication);
-                if (staged.prior.length !== 0) prior = readPriorGlyphFacts(publication);
+                if (staged.prior.length !== 0) prior = readPlannerGlyphFacts(publication, true);
               }
             : undefined,
         );
@@ -1698,12 +1704,15 @@ class RenderPlannerImpl {
       consumedRevision: this.#revision,
       acknowledgedPublicationGeneration: this.#acknowledgedGeneration,
       // A summary-only read answers from flow layout and leaves positioning owed to the publication or to the next
-      // read of positions; its summary computes glyph facts on first read (`#resolveGlyphFacts`).
+      // read of positions; its summary computes glyph facts on first read (`#resolveGlyphFacts`), unless the
+      // paragraph is positioned anyway and the engine can answer them at no cost.
       semanticViewMask:
         (includeMeasurement
           ? textShaperAbi.engine.semanticViewMasks.measurement |
             textShaperAbi.engine.semanticViewMasks.borrowedLayout |
-            (glyphFacts ? textShaperAbi.engine.semanticViewMasks.glyphFacts : 0)
+            (glyphFacts
+              ? textShaperAbi.engine.semanticViewMasks.glyphFacts
+              : textShaperAbi.engine.semanticViewMasks.availableGlyphFacts)
           : 0) | (priorFacts ? textShaperAbi.engine.semanticViewMasks.priorGlyphFacts : 0),
       limits: this.#limits,
     };
@@ -1728,7 +1737,8 @@ class RenderPlannerImpl {
     if (preparation.geometryChanged) commitFlowEntityRevisions(state);
     state.geometryRevision = preparation.geometryRevision;
     const facts = measurement === undefined ? undefined : deferredGlyphFacts(measurement);
-    if (facts !== undefined) {
+    if (facts !== undefined) state.observedFacts = facts;
+    if (facts?.pending === true) {
       facts.bind(() => this.#resolveGlyphFacts(state));
       state.deferredFacts = facts;
       this.#deferredFactTexts.add(state);
@@ -1810,9 +1820,13 @@ class RenderPlannerImpl {
               order: created.preparedOrder,
             })),
           ];
+    // A read that changes nothing only serializes: it positions now rather than return facts for later.
+    const answerFacts = glyphFacts || !preparationChanged;
+    // So does a read whose caller read the glyph facts of the summary before, which saves that caller a second call;
+    // its summary still observes whether they are read, so a caller that stops reading them stops paying for them.
+    const observeFacts = !answerFacts && includeMeasurement && state.observedFacts?.read === true;
     const request: PlannerFrameUpdate = {
-      // A read that changes nothing only serializes: it positions now rather than return facts for later.
-      ...this.#preparationRequestHeader(includeMeasurement, glyphFacts || !preparationChanged, priorFacts),
+      ...this.#preparationRequestHeader(includeMeasurement, answerFacts || observeFacts, priorFacts),
       paragraphMutations,
       paragraphOrderMutations: EMPTY_REQUEST_ITEMS,
       textMutations: preparation.text === undefined ? EMPTY_REQUEST_ITEMS : [preparation.text],
@@ -1832,8 +1846,10 @@ class RenderPlannerImpl {
         state.paragraphId,
         includeMeasurement || priorFacts
           ? (publication) => {
-              if (includeMeasurement) measurement = readPlannerMeasurements(publication).get(state.paragraphId);
-              if (priorFacts) prior = readPriorGlyphFacts(publication);
+              if (includeMeasurement) {
+                measurement = readPlannerMeasurements(publication, observeFacts).get(state.paragraphId);
+              }
+              if (priorFacts) prior = readPlannerGlyphFacts(publication, true);
             }
           : undefined,
       );
@@ -2264,11 +2280,11 @@ class RenderPlannerImpl {
 
   /** Answers deferred summaries from the summaries a publication returned for the paragraphs it positioned. */
   #settlePublishedGlyphFacts(publication: PlanPublication): void {
-    const measurements = readPlannerMeasurements(publication);
+    const published = readPlannerGlyphFacts(publication, false);
     for (const state of this.#deferredFactTexts) {
-      const measurement = measurements.get(state.paragraphId);
-      if (measurement === undefined || state.deferredFacts === undefined) continue;
-      state.deferredFacts.settle(glyphFactsOf(measurement));
+      const facts = published.get(state.paragraphId);
+      if (facts === undefined || state.deferredFacts === undefined) continue;
+      state.deferredFacts.settle(facts);
       state.deferredFacts = undefined;
       this.#deferredFactTexts.delete(state);
     }
@@ -2341,18 +2357,18 @@ class RenderPlannerImpl {
       exclusions: EMPTY_REQUEST_ITEMS,
       inlineObjects: EMPTY_REQUEST_ITEMS,
     };
-    let measurement: ParagraphLayoutSummary | undefined;
+    let facts: GlyphFacts | undefined;
     try {
       this.#transport.prepareParagraph(request, state.paragraphId, (publication) => {
-        measurement = readPlannerMeasurements(publication).get(state.paragraphId);
+        facts = readPlannerGlyphFacts(publication, false).get(state.paragraphId);
       });
       this.#transport.acceptPreparedMutation();
     } catch (error) {
       this.#invalidateUnadoptedPreparation();
       throw error;
     }
-    if (measurement === undefined) throw new Error('text engine returned no measurement for prepared text');
-    return glyphFactsOf(measurement);
+    if (facts === undefined) throw new Error('text engine returned no measurement for prepared text');
+    return facts;
   }
 
   #invalidateUnadoptedPreparation(): void {

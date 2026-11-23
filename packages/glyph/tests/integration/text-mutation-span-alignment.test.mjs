@@ -136,8 +136,8 @@ test('a rejected authored mutation leaves the accepted planner usable for the ne
     node.set({ text: 'B' });
     assert.equal(node.text, 'B');
     assert.equal(node.measure().glyphCount, 1, 'the same Rust root accepts the next valid edit');
-    // One read prepares the edit; reading `glyphCount` positions it through one more.
-    assert.equal(prepareCount, 2);
+    // One read prepares the edit; a one-line leaf is positioned as it prepares, so it answers `glyphCount` too.
+    assert.equal(prepareCount, 1);
     assert.equal(resetCount, 0, 'the valid edit does not require a hidden recovery reset');
   } finally {
     PlanTransport.prototype.resetDerivedRoot = originalReset;
@@ -199,7 +199,7 @@ test(
       split = mounted.nodes[0].split()[0];
       assert.equal(split.count, 2);
       assert.equal(preparations, 1, 'measurement, inspection, caret, selection, and split do not reprepare');
-      assert.equal(queryMaterializations, 1, 'only the first glyph-fact read positions; later reads reuse it');
+      assert.equal(queryMaterializations, 0, 'the read answered its glyph facts; later reads reuse them');
 
       mounted.nodes[0].set({ text: 'overwritten before any read' });
       mounted.nodes[0].set({ text: 'C' });
@@ -210,16 +210,12 @@ test(
       overwrittenSplit = mounted.nodes[0].split()[0];
       assert.equal(overwrittenSplit.count, 1);
       assert.equal(preparations, 2, 'reads after the overwrite reuse its prepared revision');
-      assert.equal(
-        queryMaterializations,
-        2,
-        'the overwritten value uses already requested summaries; its glyph facts took one read',
-      );
+      assert.equal(queryMaterializations, 0, 'the overwritten value uses already requested summaries');
 
       mounted.scene.updateMatrixWorld(true);
       assert.equal(publications, 1, 'the batch publishes its accumulated dirty records once');
       assert.equal(preparations, 2, 'renderer publication does not repeat retained layout preparation');
-      assert.equal(queryMaterializations, 2, 'renderer publication does not request another summary');
+      assert.equal(queryMaterializations, 0, 'renderer publication does not request another summary');
       assert.equal(batchPreparations, 0, 'the frame batch-prepares nothing a read already prepared');
       assert.equal(mounted.nodes[0].commitState().status, 'committed');
 
@@ -248,7 +244,7 @@ test(
       mounted.nodes[0].renderOrder = 10;
       mounted.scene.updateMatrixWorld(true);
       assert.equal(preparations, 2, 'an order-only update leaves retained layout preparation intact');
-      assert.equal(queryMaterializations, 2, 'an order-only update does not materialize text summaries');
+      assert.equal(queryMaterializations, 0, 'an order-only update does not materialize text summaries');
       assert.equal(batchPreparations, 0, 'an order-only update is not a preparation');
       assert.equal(publications, 2, 'an order-only rank change crosses the renderer publication boundary once');
 
@@ -563,7 +559,7 @@ test(
       assert.equal(mounted.nodes[1].measure().glyphCount, 1);
       assert.equal(resetCount, 2, 'restated texts need no further reset');
       assert.equal(restatementCount, 3, 'restated texts are not prepared again');
-      assert.equal(restatementQueryCount, 2, 'each restatement returned its summary; its glyph facts took one read');
+      assert.equal(restatementQueryCount, 0, 'each restatement returned its summary, glyph facts included');
       assert.deepEqual(rendererBytes(mounted), rendererBefore, 'measurement recovery does not publish renderer bytes');
 
       let batchPreparations = 0;
@@ -662,7 +658,7 @@ test('post-write recovery keeps flow revisions monotonic and restores keyed coun
     mounted.nodes[0].set({ flow: { regions: [region(120)] } });
     assert.equal(mounted.nodes[0].measure().glyphCount, 1);
     mounted.nodes[0].set({ text: 'BBB' });
-    assert.equal(completedRequests.length, 2, 'setters do not prepare (the read and its glyph facts made two)');
+    assert.equal(completedRequests.length, 1, 'setters do not prepare (the read answered its glyph facts)');
     failPreparation = true;
     assert.throws(
       () => mounted.nodes[0].measure(),
@@ -714,7 +710,8 @@ test('post-write recovery keeps flow revisions monotonic and restores keyed coun
     );
     assert.equal(resetCount, resetsBeforeRecovery + 1, 'the next read resets the derived root after the late failure');
     const recoveryRequests = completedRequests.slice(requestsBeforeRecovery);
-    // Comparing the whole summary reads its glyph facts: one restatement, then one read that positions it.
+    // Comparing the whole summary reads its glyph facts: one restatement, then one read that positions it. Because
+    // the caller read them, the reads below answer them with the read itself.
     assert.equal(recoveryRequests.length, 2, 'recovery is one restatement of the paragraph that was read');
     assert.deepEqual(
       recoveryRequests[0].regions.map(({ id }) => id),
@@ -738,8 +735,7 @@ test('post-write recovery keeps flow revisions monotonic and restores keyed coun
       acceptedMeasurement,
       'a keyed count decrease after recovery restores the one-region layout',
     );
-    // The last request read the summary's glyph facts; the one before it restored the flow.
-    const restoredFlow = completedRequests.at(-2);
+    const restoredFlow = completedRequests.at(-1);
     assert.deepEqual(
       [restoredFlow.regions.map(({ id }) => id), restoredFlow.exclusions],
       [[failedCountChange.regions[0].id], []],
@@ -752,9 +748,9 @@ test('post-write recovery keeps flow revisions monotonic and restores keyed coun
     );
 
     mounted.nodes[0].set({ flow: expandedFlow });
-    assert.equal(completedRequests.at(-2), restoredFlow, 'the setter does not prepare');
+    assert.equal(completedRequests.at(-1), restoredFlow, 'the setter does not prepare');
     assert.deepEqual(mounted.nodes[0].measure(), freshMeasurement);
-    const acceptedExpandedFlow = completedRequests.at(-2);
+    const acceptedExpandedFlow = completedRequests.at(-1);
     assert.deepEqual(
       acceptedExpandedFlow.regions.map(({ id }) => id),
       failedCountChange.regions.map(({ id }) => id),

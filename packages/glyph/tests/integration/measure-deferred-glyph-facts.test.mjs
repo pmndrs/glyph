@@ -152,3 +152,64 @@ test('measure and edit cycles keep no generation alive', { timeout }, async (t) 
     assert.deepEqual(summaryOf(measurement), expected, `summary ${String(index)} still answers exactly`);
   }
 });
+
+test('a caller that reads glyph facts gets them with its next read, until it stops', { timeout }, async (t) => {
+  const widths = [320, 300, 280, 260];
+  const expected = await Promise.all(
+    widths.map((size) => coldSummary(t, { text: paragraph, constraints: { width: { mode: 'exact', size } } })),
+  );
+  const { add, frame } = await createScene(t);
+  const text = add(wide);
+  frame();
+  const measureAt = (index) => {
+    text.constraints = { width: { mode: 'exact', size: widths[index] } };
+    return text.measure();
+  };
+
+  // The first summary leaves its facts deferred; reading them costs one more read.
+  const first = measureAt(1);
+  assert.deepEqual(
+    crossingsOf(() => first.glyphCount),
+    { engine_measure_paragraph: 1 },
+  );
+  // That caller reads facts, so its next read answers them: the read is the only call.
+  let second;
+  assert.deepEqual(
+    crossingsOf(() => {
+      second = measureAt(2);
+    }),
+    { engine_measure_paragraph: 1 },
+  );
+  assert.deepEqual(
+    crossingsOf(() => summaryOf(second)),
+    {},
+    'the read answered every glyph fact',
+  );
+  assert.deepEqual(summaryOf(second), expected[2]);
+  // A summary whose facts nobody reads ends that: the read after it defers them again.
+  const unread = measureAt(3);
+  const deferred = measureAt(0);
+  assert.deepEqual(
+    crossingsOf(() => deferred.glyphCount),
+    { engine_measure_paragraph: 1 },
+  );
+  assert.deepEqual(summaryOf(deferred), expected[0]);
+  assert.deepEqual(summaryOf(unread), expected[3], 'the unread summary still answers for its own width');
+  assert.deepEqual(summaryOf(first), expected[1]);
+});
+
+test('a paragraph that is positioned anyway answers its glyph facts with the read', { timeout }, async (t) => {
+  const label = { text: 'label 0042', constraints: { width: { mode: 'exact', size: 160 } } };
+  const expected = await coldSummary(t, label);
+  const { add, frame } = await createScene(t);
+  const text = add({ ...label, text: 'label 0001' });
+  frame();
+  text.text = label.text;
+  const measurement = text.measure();
+  assert.deepEqual(
+    crossingsOf(() => summaryOf(measurement)),
+    {},
+    'a one-line leaf positions as it prepares',
+  );
+  assert.deepEqual(summaryOf(measurement), expected);
+});

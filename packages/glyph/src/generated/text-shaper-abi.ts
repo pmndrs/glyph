@@ -219,6 +219,7 @@ export const textShaperAbi = {
     },
     "semanticViewMasks": {
       "all": 3,
+      "availableGlyphFacts": 32,
       "borrowedLayout": 4,
       "glyphFacts": 8,
       "layoutInspection": 2,
