@@ -436,7 +436,8 @@ impl<'a> hb_ot_map_builder_t<'a> {
         }
 
         if self.is_simple {
-            map_features.sort();
+            // A stable sort by tag: equal tags keep their insertion order.
+            sort_by_tag_then_position(&mut map_features, |feature| feature.tag);
         }
 
         (map_features, required_stage, global_mask)
@@ -617,21 +618,30 @@ impl<'a> hb_ot_map_builder_t<'a> {
 // one `[u64]::sort_unstable` with the embedding crate instead of linking a sort per element type.
 
 /// Sorts in `feature_info_t` order, `(tag, seq)`. Before deduplication `seq` is each entry's
-/// position (entries are only pushed), so the key carries the source index and the order is total.
-/// A plan holds a few dozen features, far below the 2^32 a key's low half can index.
+/// position (entries are only pushed), so this is the tag-then-position order.
 fn sort_feature_infos(feature_infos: &mut Vec<feature_info_t>) {
     debug_assert!(feature_infos
         .iter()
         .enumerate()
         .all(|(index, info)| info.seq == index));
-    // `Tag` orders its bytes lexicographically, which is big-endian `u32` order.
-    let mut keys: Vec<u64> = feature_infos
+    sort_by_tag_then_position(feature_infos, |info| info.tag);
+}
+
+/// Sorts by tag, keeping equal tags in their current order (a stable sort by tag), through
+/// `(tag as big-endian u32) << 32 | position` keys. `Tag` orders its bytes lexicographically,
+/// which is big-endian `u32` order. A plan holds a few dozen features, far below the 2^32
+/// positions a key's low half can index.
+fn sort_by_tag_then_position<T: Copy>(items: &mut Vec<T>, tag: fn(&T) -> hb_tag_t) {
+    let mut keys: Vec<u64> = items
         .iter()
-        .map(|info| (u64::from(u32::from_be_bytes(info.tag.to_be_bytes())) << 32) | info.seq as u64)
+        .enumerate()
+        .map(|(position, item)| {
+            (u64::from(u32::from_be_bytes(tag(item).to_be_bytes())) << 32) | position as u64
+        })
         .collect();
     keys.sort_unstable();
-    let original = feature_infos.clone();
-    for (slot, key) in feature_infos.iter_mut().zip(&keys) {
+    let original = items.clone();
+    for (slot, key) in items.iter_mut().zip(&keys) {
         *slot = original[(*key as u32) as usize];
     }
 }

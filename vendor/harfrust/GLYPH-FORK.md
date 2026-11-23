@@ -1,7 +1,7 @@
 # HarfRust fork carried by pmndrs/glyph
 
 This directory is the published `harfrust` 0.12.0 crate with four cargo features, one constructor,
-one inlining attribute, two keyed plan-compile sorts and one additive module (`SimpleTextPlan`) added. It is wired into `packages/glyph/rust/shaper` and `packages/glyph/rust/font-baker`
+one inlining attribute, three keyed plan-compile sorts and one additive module (`SimpleTextPlan`) added. It is wired into `packages/glyph/rust/shaper` and `packages/glyph/rust/font-baker`
 with `[patch.crates-io]`, so both manifests still ask for `harfrust = "0.12.0"`.
 
 ## Base
@@ -149,9 +149,14 @@ already links for its own keys:
   (`index`, `auto_zwnj`, `auto_zwj`, `random`, `mask`, `per_syllable`), so sorting the keys and
   unpacking them is the derived sort exactly.
 
-Both produce the same sequence as upstream. In the shaper this removed `17,113` raw / `5,333` gzip
-bytes beyond replacing the two stable sorts with unstable ones. `map_features.sort()` stays stable:
-it orders by tag alone, and a simple map can hold one tag twice.
+- `map_features.sort()` (simple maps only) orders by tag alone and is stable, and a simple map can
+  hold one tag twice. `sort_by_tag_then_position` keys it `(tag as big-endian u32) << 32 |
+position`, which is that stable order; `sort_feature_infos` uses the same helper, since its
+  `seq` is the position.
+
+All three produce the same sequence as upstream, and the shaper links no sort over a HarfRust map
+type. In the shaper the two cuts removed `18,118` raw / `5,751` gzip and `5,456` raw / `1,728`
+gzip.
 
 ## Checks
 
