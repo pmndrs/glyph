@@ -1148,6 +1148,7 @@ impl ScalarScan {
 
     /// Chooses the break for a line that overflows at `index`: the last allowed break that
     /// settles, then the safe chain, then the first complete word.
+    #[inline(always)]
     fn overflow_break<C: BreakCorrections>(
         &self,
         fit: &mut LineFit<'_, C>,

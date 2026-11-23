@@ -55,6 +55,7 @@ impl OrderedPlanCompiler {
     /// Admits a replacement gather against the current mapping: maps every unchanged record's
     /// input slot and seeds each prior batch with its retained instances. Returns `false` when
     /// the correspondence does not describe the current plan.
+    #[inline(always)]
     fn admit_replacement(
         &mut self,
         codec: &ValidatedCodec,
@@ -112,6 +113,7 @@ impl OrderedPlanCompiler {
 
     /// Maps the input slots of every unchanged correspondence entry. Returns the old and next
     /// record ends the entries reach, or `None` when they are not contiguous and in bounds.
+    #[inline(always)]
     fn retain_corresponding_slots(
         &mut self,
         input: OrderedPlanInput<'_>,
@@ -145,6 +147,7 @@ impl OrderedPlanCompiler {
     /// Assigns every input glyph after `prefix` to a pending batch: a retained instance to the
     /// batch that holds its slot, a new one to the batch of its program and resource. Returns
     /// `false` when a replacement would need a batch the plan does not have.
+    #[inline(always)]
     fn assign_input_batches(
         &mut self,
         codec: &ValidatedCodec,
@@ -630,6 +633,7 @@ fn check_program_resource(
 
 impl PendingBatch {
     /// A batch with no allocation or patches yet, its patch range empty at `patch_cursor`.
+    #[inline(always)]
     fn unallocated(
         state: BatchState,
         prior_index: Option<u32>,

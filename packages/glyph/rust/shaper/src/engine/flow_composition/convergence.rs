@@ -151,6 +151,7 @@ impl FlowLayoutArena {
 
     /// Where a convergence rebuild for the dirty range starting at `dirty_start` begins: whether
     /// the edit touches a drop cap, the first line to recompose and the edited thread's constraint.
+    #[inline(always)]
     pub(super) fn convergence_start(
         &self,
         geometry: &FlowGeometryArena,
@@ -190,6 +191,7 @@ impl FlowLayoutArena {
     /// Recomposes each dirty range from its restart line until the new lines converge with the
     /// previous ones, retaining every line in between. Returns whether every range converged.
     #[allow(clippy::too_many_arguments)]
+    #[inline(always)]
     pub(super) fn converge_dirty_ranges<M, F>(
         &mut self,
         convergence: &Convergence<'_, M, F>,
@@ -262,6 +264,7 @@ impl FlowLayoutArena {
     /// the same metrics and break state, past the dirty range. Returns that line, or `None` when
     /// the rebuild diverges.
     #[allow(clippy::too_many_arguments)]
+    #[inline(always)]
     pub(super) fn recompose_until_converged<M, F>(
         &mut self,
         convergence: &Convergence<'_, M, F>,
@@ -374,6 +377,7 @@ impl FlowLayoutArena {
     /// Returns the new band's height, or `None` when its region is gone or the band composes
     /// nothing.
     #[allow(clippy::too_many_arguments)]
+    #[inline(always)]
     pub(super) fn recompose_line<M, F>(
         &mut self,
         convergence: &Convergence<'_, M, F>,
@@ -444,6 +448,7 @@ impl FlowLayoutArena {
 
     /// Retains the lines after the last converged one, reconciles the thread's drop caps and
     /// marks the whole thread recomposed when its flexible inline end moved.
+    #[inline(always)]
     pub(super) fn finish_converged_thread(
         &mut self,
         previous: &Self,
@@ -515,6 +520,7 @@ pub(super) struct Convergence<'a, M, F> {
 impl<M, F> Convergence<'_, M, F> {
     /// The cluster the recomposition from `line_index` starts at, or `None` when that line left
     /// the thread, has no fragment, or its cluster's identity changed under an unchanged cap.
+    #[inline(always)]
     pub(super) fn restart_cluster(
         &self,
         line_index: usize,
@@ -549,6 +555,7 @@ impl<M, F> Convergence<'_, M, F> {
 
     /// Whether either the previous or the pending drop cap cuts the band of the line after
     /// `candidate`.
+    #[inline(always)]
     pub(super) fn next_cap_affected(
         &self,
         next_line: Option<FlowLine>,
@@ -580,6 +587,7 @@ impl<M, F> Convergence<'_, M, F> {
 
 /// Folds every queued dirty range that starts by `text_end` into `dirty`. Returns `false` when a
 /// queued range overlaps the current one or is empty.
+#[inline(always)]
 pub(super) fn extend_dirty_range(
     dirty_ranges: &mut core::iter::Peekable<impl Iterator<Item = Range<u32>>>,
     dirty: &mut Range<u32>,

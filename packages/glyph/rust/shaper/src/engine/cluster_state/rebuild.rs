@@ -56,6 +56,7 @@ impl ClusterArena {
 
     /// Whether the new text, unit identities, graphemes and shape arrays have the shape of this
     /// arena's, so one source run can be rebuilt in place.
+    #[inline(always)]
     fn same_cluster_topology(
         &self,
         text: &[u16],
@@ -94,6 +95,7 @@ impl ClusterArena {
     /// `false` when a style no longer covers a cluster or the run's glyphs no longer fill the
     /// window.
     #[allow(clippy::too_many_arguments)]
+    #[inline(always)]
     fn rebuild_run_clusters(
         &mut self,
         previous: &Self,
@@ -165,6 +167,7 @@ impl ClusterArena {
     /// Resets each cluster of the run to its unshaped state: spacing advance, hard-break and
     /// space flags, and its first unit's identity. Returns `false` when a cluster's style no
     /// longer covers it.
+    #[inline(always)]
     fn reset_run_clusters(
         &mut self,
         text: &[u16],
@@ -209,6 +212,7 @@ impl ClusterArena {
     }
 
     /// Counts the run's glyphs into their clusters and adds their scaled advances.
+    #[inline(always)]
     fn accumulate_run_glyphs(
         &mut self,
         shape: &ShapeArena,
@@ -249,6 +253,7 @@ impl ClusterArena {
 
     /// Lays the run's clusters' glyph starts out from the previous window's start. Returns
     /// `false` when their glyphs no longer fill exactly the previous window.
+    #[inline(always)]
     fn place_run_glyph_starts(
         &mut self,
         previous: &Self,
@@ -280,6 +285,7 @@ impl ClusterArena {
     }
 
     /// Copies the run's glyphs into their clusters' slots, in shaped order within each cluster.
+    #[inline(always)]
     fn copy_run_glyphs(&mut self, shape: &ShapeArena, source_run: u32) -> Result<(), EngineError> {
         for shaped_run in shape.runs.iter().filter(|run| run.source_run == source_run) {
             for glyph in shaped_glyph_range(*shaped_run).ok_or(EngineError::InvalidRequest)? {
@@ -310,6 +316,7 @@ impl ClusterArena {
 
     /// Marks the line breaks that fall in or just before the rebuilt run, after clearing the
     /// allowed break the cluster before it carried.
+    #[inline(always)]
     fn mark_run_line_breaks(&mut self, unicode: &UnicodeAnalysis, clusters: Range<usize>) {
         if clusters.start > 0 {
             self.flags[clusters.start - 1] &= !(CLUSTER_ALLOWED_BREAK | CLUSTER_BREAK_CORRECTION);
@@ -459,6 +466,7 @@ impl ClusterArena {
 }
 
 /// The glyph range of a shaped run, or `None` when it does not fit `usize`.
+#[inline(always)]
 fn shaped_glyph_range(run: crate::engine::shaping_state::ShapedRun) -> Option<Range<usize>> {
     let start = usize::try_from(run.glyph_start).ok()?;
     let end = start.checked_add(usize::try_from(run.glyph_count).ok()?)?;

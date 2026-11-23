@@ -195,6 +195,7 @@ struct GatherTarget<'u> {
 }
 
 /// The codec an update names, with the capability set it asks for.
+#[inline(always)]
 fn update_codec<'c>(
     codecs: &'c IdMap<ValidatedCodec>,
     request: UpdateRequest<'_>,
@@ -213,6 +214,7 @@ fn update_codec<'c>(
 
 /// Refuses an update whose codec differs from the root's binding or whose revisions and
 /// publication generations do not follow the root's.
+#[inline(always)]
 fn check_update_admission(
     planner: &PlannerState,
     request: UpdateRequest<'_>,
@@ -238,6 +240,7 @@ fn check_update_admission(
 /// Everything an update prepares after the root's lifecycle: paragraphs, placement slots, the
 /// gathered plan and the measurement views. Returns whether the gather workspace then holds the
 /// next revision's output.
+#[inline(always)]
 fn prepare_root_update(
     planner: &mut PlannerState,
     mut shaper: Option<&mut ShaperRegistry>,
@@ -293,6 +296,7 @@ fn prepare_root_update(
 }
 
 /// Whether the update only reorders unchanged paragraphs of a published root.
+#[inline(always)]
 fn reorder_only(planner: &PlannerState, pass: UpdatePass<'_>) -> bool {
     !pass.checkpoint
         && !pass.preparation_changed
@@ -304,6 +308,7 @@ fn reorder_only(planner: &PlannerState, pass: UpdatePass<'_>) -> bool {
 
 /// Re-sorts the published instances by their stable ids, reusing every prepared batch. Returns
 /// whether the plan accepted the reorder; otherwise the update prepares as usual.
+#[inline(always)]
 fn try_prepare_reorder_only(
     planner: &mut PlannerState,
     target: &mut GatherTarget<'_>,
@@ -344,6 +349,7 @@ fn try_prepare_reorder_only(
 }
 
 /// The outlined glyphs of every active paragraph, in order.
+#[inline(always)]
 fn active_outlined_total(planner: &PlannerState) -> Result<usize, EngineError> {
     planner
         .active_order()
@@ -359,6 +365,7 @@ fn active_outlined_total(planner: &PlannerState) -> Result<usize, EngineError> {
 }
 
 /// The stable ids of the drawn glyphs in publication order, which a reorder sorts instances by.
+#[inline(always)]
 fn collect_reorder_stable_ids(
     planner: &PlannerState,
     font_bindings: &[RegisteredFontBinding],
@@ -382,6 +389,7 @@ fn collect_reorder_stable_ids(
     Ok(())
 }
 
+#[inline(always)]
 fn push_inline_stable_ids(
     leaf: &InlineLeaf,
     state: &ParagraphState,
@@ -398,6 +406,7 @@ fn push_inline_stable_ids(
     Ok(())
 }
 
+#[inline(always)]
 fn push_positioned_stable_ids(
     state: &ParagraphState,
     font_bindings: &[RegisteredFontBinding],
@@ -446,6 +455,7 @@ fn drawn_stable_id(
 }
 
 /// Prepares one paragraph the update carries input for, or that a read left pending.
+#[inline(always)]
 fn prepare_dirty_paragraph(
     planner: &mut PlannerState,
     shaper: Option<&mut ShaperRegistry>,
@@ -506,6 +516,7 @@ fn prepare_dirty_paragraph(
 
 /// Prepares the root's placement slots, or reuses them when nothing positioned changed. Returns
 /// whether any positioned output changed.
+#[inline(always)]
 fn prepare_update_placement(
     planner: &mut PlannerState,
     pass: UpdatePass<'_>,
@@ -537,6 +548,7 @@ fn prepare_update_placement(
 
 /// Gathers the root's records (retained where the previous gather allows) and prepares the
 /// renderer plan from them.
+#[inline(always)]
 fn prepare_gathered_plan(
     planner: &mut PlannerState,
     target: &mut GatherTarget<'_>,
@@ -629,6 +641,7 @@ fn prepare_gathered_plan(
 }
 
 /// Whether a paragraph's published owner switched between the inline and general paths.
+#[inline(always)]
 fn owner_kind_changed(planner: &PlannerState) -> bool {
     planner.active_order().iter().any(|ordered| {
         planner.paragraph(ordered.id).is_some_and(|paragraph| {
@@ -641,6 +654,7 @@ fn owner_kind_changed(planner: &PlannerState) -> bool {
 
 /// Gathers every record of the root into the workspace, retaining the previous rows when
 /// `attempt_retained` and the workspace admit it. Returns whether the gather was retained.
+#[inline(always)]
 fn gather_planner_records(
     gather: &mut CodecGatherWorkspace,
     planner: &mut PlannerState,
@@ -685,6 +699,7 @@ fn gather_planner_records(
 }
 
 /// The outputs a retained gather changed, for the plan to patch instead of rewrite.
+#[inline(always)]
 fn retained_output_scope(
     gather: &CodecGatherWorkspace,
     previous_revision: u32,
@@ -713,6 +728,7 @@ fn retained_output_scope(
 }
 
 /// Appends the measurement, inspection and glyph-fact views the update asks for.
+#[inline(always)]
 fn append_update_measurements(
     planner: &mut PlannerState,
     shaper: Option<&mut ShaperRegistry>,
@@ -732,6 +748,7 @@ fn append_update_measurements(
     query
 }
 
+#[inline(always)]
 fn append_due_measurements(
     planner: &mut PlannerState,
     records: &mut Vec<crate::engine::semantic_view::SemanticRecord>,
@@ -786,6 +803,7 @@ fn append_due_measurements(
 }
 
 /// Whether the update's views answer for this paragraph.
+#[inline(always)]
 fn measurement_due(
     planner: &PlannerState,
     paragraph_id: u32,

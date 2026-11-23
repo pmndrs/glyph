@@ -106,6 +106,7 @@ impl RetainedOccurrenceProof<'_> {
 
     /// Proves one previous occurrence span still names the same glyphs under its new placement
     /// and appends it re-targeted. Returns its outlined count.
+    #[inline(always)]
     fn retain_span(
         &mut self,
         placement: &PlacementState,
@@ -165,6 +166,7 @@ impl RetainedOccurrenceProof<'_> {
 
     /// Retains a span whose run token moved: the runs on both sides must carry the same
     /// canonical glyphs, and the span is re-based onto the new run.
+    #[inline(always)]
     fn retain_moved_span(
         &mut self,
         old: OccurrenceSpan,
@@ -276,6 +278,7 @@ impl RetainedOccurrenceProof<'_> {
     /// Replacement tokens come from same_boundary_run. Its relative cluster comparison needs
     /// the absolute base too when projecting retained occurrences: both boundary records must
     /// stay mid-line in this thread with the same binding, override and shaped first cluster.
+    #[inline(always)]
     fn check_boundary_span(
         &self,
         old: OccurrenceSpan,

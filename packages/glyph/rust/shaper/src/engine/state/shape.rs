@@ -107,6 +107,7 @@ impl ParagraphState {
     /// One exception: a metric change can MERGE adjacent runs whose layout styles became identical, and the
     /// retained shaped runs then index a run list that no longer exists — the shape must re-run whenever the
     /// rebuilt run list breaks positional topology with the committed one.
+    #[inline(always)]
     fn shape_still_valid(&self) -> bool {
         !self.text.is_prepared()
             && !self.style_invalidation.shaping
@@ -694,6 +695,7 @@ pub(super) fn push_fallback_span(
 }
 
 /// One span per shaping run, in the first font of its stack. Returns the deepest stack.
+#[inline(always)]
 fn seed_fallback_spans(
     spans: &mut Vec<FallbackSpan>,
     runs: &[ShapingRun],
@@ -722,6 +724,7 @@ fn seed_fallback_spans(
 }
 
 /// Shapes every span with its font into a cleared `output`.
+#[inline(always)]
 fn shape_fallback_spans(
     shaper: &mut ShaperRegistry,
     output: &mut ShapeArena,
@@ -773,6 +776,7 @@ fn shape_fallback_spans(
 
 /// Splits every span at its missing clusters, handing those to the next font of the span's
 /// stack, into `next`. Returns whether any cluster moved to a next font.
+#[inline(always)]
 fn split_missing_clusters(
     spans: &[FallbackSpan],
     records: &[ClusterRecord],
@@ -804,6 +808,7 @@ fn split_missing_clusters(
 
 /// Splits one span at the missing clusters among `records` (which start at the span's first
 /// cluster). Returns whether any cluster moved to the next font.
+#[inline(always)]
 fn split_span_at_missing_clusters(
     span: FallbackSpan,
     records: &[ClusterRecord],
@@ -885,6 +890,7 @@ fn split_span_at_missing_clusters(
 
 /// The font of a shape that is one run shaped whole in its first font, whose instance the
 /// committed shape can then be keyed by.
+#[inline(always)]
 fn whole_run_font_handle(
     runs: &[ShapingRun],
     shape: &ShapeArena,

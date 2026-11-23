@@ -653,6 +653,7 @@ impl ClusterArena {
 
     /// Marks the clusters whose break changed in the stretch between runs `index - 1` and
     /// `index`, comparing new breaks with old ones moved by the stretch's text shift.
+    #[inline(always)]
     fn mark_changed_gap_breaks(
         &self,
         dirty: &mut Vec<Range<usize>>,
@@ -684,6 +685,7 @@ impl ClusterArena {
 
     /// Walks new and shifted old breaks in position order and marks the cluster of every break
     /// that appears, disappears or changes kind.
+    #[inline(always)]
     fn mark_break_differences<'b>(
         &self,
         dirty: &mut Vec<Range<usize>>,
@@ -734,6 +736,7 @@ impl ClusterArena {
     }
 
     /// Clears the break flags of `range` and sets them again from the new line breaks.
+    #[inline(always)]
     fn reflag_range(&mut self, range: Range<usize>, new: &[LineBreak]) {
         for flags in &mut self.flags[range.clone()] {
             *flags &= !BREAK_BITS;
@@ -869,6 +872,7 @@ impl<T> GlyphLane for alloc::vec::Vec<T> {
 }
 
 /// The union of cluster ranges, in order.
+#[inline(always)]
 fn merged_cluster_ranges(dirty: &[Range<usize>]) -> Vec<Range<usize>> {
     // Cluster indices are `u32` in the arena (`index_at`), so each range packs into one
     // key for the shared sort kernel; `(start, end)` order merges to the same union as

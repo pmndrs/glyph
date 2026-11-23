@@ -35,6 +35,7 @@ impl PlannerState {
         result
     }
 
+    #[inline(always)]
     fn prepare_placement_slots_into(
         &mut self,
         desired: &mut Vec<PlacementLogicalKey>,
@@ -116,6 +117,7 @@ impl PlannerState {
 
     /// Prepares the slot arena for the desired placements: the retained subset when `sparse`
     /// admits it, otherwise the complete reconciliation. Returns whether the subset held.
+    #[inline(always)]
     fn reconcile_placement_slots(
         &mut self,
         desired: &mut Vec<PlacementLogicalKey>,
@@ -153,6 +155,7 @@ impl PlannerState {
 
     /// The logical keys of every placement segment of the work order, in order, with room
     /// reserved for their session rows.
+    #[inline(always)]
     fn desired_placement_keys(
         &self,
         desired: &mut Vec<PlacementLogicalKey>,
@@ -209,6 +212,7 @@ impl PlannerState {
 
     /// A publication commits every paragraph it prepared and settles every one a read prepared
     /// since the last publication.
+    #[inline(always)]
     fn commit_published_preparations(&mut self) {
         for id in &self.pending_preparation_ids {
             let Ok(index) = self
@@ -254,6 +258,7 @@ impl PlannerState {
 
     /// A read commits the paragraphs it prepared and remembers the ones its commit left
     /// unpublished.
+    #[inline(always)]
     fn commit_measured_preparations(&mut self) {
         // Paragraph IDs survive lifecycle ordering changes. Resolve only the prepared nodes;
         // lifecycle adoption below independently owns creation, removal and ordering.
@@ -276,6 +281,7 @@ impl PlannerState {
 
     /// Adopts the prepared lifecycle: removes retired paragraphs, adopts pending placements and
     /// the pending renderer order.
+    #[inline(always)]
     fn adopt_lifecycle(&mut self) {
         let mut index = 0;
         while index < self.paragraphs.len() {
@@ -323,12 +329,14 @@ struct PreparationOwners<'a> {
 }
 
 impl PreparationOwners<'_> {
+    #[inline(always)]
     fn admit(&mut self, paragraph_id: u32) -> Result<(), EngineError> {
         admit_preparation_owner(self.pending, self.unpublished, paragraph_id)
     }
 }
 
 /// Pushes the logical key of each of the paragraph's placement segments.
+#[inline(always)]
 fn push_placement_keys(
     desired: &mut Vec<PlacementLogicalKey>,
     paragraph: &RetainedParagraph,
@@ -365,6 +373,7 @@ fn push_placement_keys(
 }
 
 /// Pushes one session row per placement segment, at its assigned slot.
+#[inline(always)]
 fn push_placement_rows(
     rows: &mut Vec<SessionPlacementRow>,
     state: &ParagraphState,
@@ -388,6 +397,7 @@ fn push_placement_rows(
 /// Binds the paragraph's placement handles to their assigned slots where they moved, admitting
 /// the paragraph as a preparation owner when it must republish, and refuses a paragraph whose
 /// committed handles disagree with an assignment it is not allowed to rebind.
+#[inline(always)]
 fn bind_paragraph_placements(
     paragraph: &mut RetainedParagraph,
     id: u32,
@@ -444,6 +454,7 @@ fn bind_paragraph_placements(
 
 /// Replaces `rows` with one row per placement segment of every active paragraph, at its bound
 /// slot: a retained subset cannot patch rows the plan must see complete.
+#[inline(always)]
 fn complete_placement_rows(
     rows: &mut Vec<SessionPlacementRow>,
     active_order: &[ParagraphOrder],
