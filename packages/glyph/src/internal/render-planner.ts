@@ -68,7 +68,14 @@ import {
 } from './borrowed-layout-view.js';
 import type { PortableResource } from '../config/resources.js';
 import { reuseOrCreateTextPropertySnapshot, reuseOrCreateTextStyleSnapshot } from '../config/text-property.js';
-import type { ParagraphId, ResourceHandle, StyleId } from './glyph-id.js';
+import {
+  createHandleIdFactory,
+  GlyphIdScope,
+  type HandleIdFactory,
+  type ParagraphId,
+  type ResourceHandle,
+  type StyleId,
+} from './glyph-id.js';
 import { codecCapabilitySetSelectionId, selectCodecCapabilitySet } from './codec-capability-selection.js';
 import { ownTextInput } from '../config/text-span-owner.js';
 import {
@@ -408,6 +415,10 @@ export interface OwnedTextInspectionView {
 type TextInspection = OwnedTextInspection | { readonly kind: 'borrowed'; recordReads: number };
 
 interface RetainedTextState {
+  /** Every ID this text minted, released together when the text retires so the registry holds only live texts. */
+  readonly idScope: GlyphIdScope;
+  /** Mints into `idScope`; built on the first compile, since a text disposed before it is prepared needs none. */
+  ids: HandleIdFactory | undefined;
   readonly paragraphId: ParagraphId;
   readonly ordinal: number;
   readonly styleIds: StyleId[];
@@ -790,8 +801,11 @@ class RenderPlannerImpl {
       releaseResolvedText(desired);
       throw error;
     }
-    const paragraphId = this.#handleState.id('paragraph', `${this.#handleState.integration}/text/${ordinal}`);
+    const idScope = new GlyphIdScope();
+    const paragraphId = idScope.id('paragraph', `${this.#handleState.integration}/text/${ordinal}`);
     const state: RetainedTextState = {
+      idScope,
+      ids: undefined,
       paragraphId,
       ordinal,
       styleIds: [],
@@ -833,6 +847,7 @@ class RenderPlannerImpl {
         styleChanges: retainedStyleChanges(desired),
       });
     } catch (error) {
+      idScope.dispose();
       releaseResolvedText(desired);
       throw error;
     }
@@ -860,6 +875,7 @@ class RenderPlannerImpl {
       textStates.delete(text);
       state.disposed = true;
       state.desiredReleased = true;
+      idScope.dispose();
       releaseResolvedText(desired);
       this.#nextTextOrdinal = ordinal;
       this.#baseOrderValidationPending = previousBaseOrderValidationPending;
@@ -1216,6 +1232,7 @@ class RenderPlannerImpl {
       state.removed = true;
       state.desiredReleased = true;
       releaseResolvedText(state.desired);
+      state.idScope.dispose();
       this.#dirtyListener?.();
       return;
     }
@@ -1341,7 +1358,6 @@ class RenderPlannerImpl {
     for (const style of preparation.styles) records.styleMutations.push(style);
     if (!preparation.geometryChanged) return;
     const geometry = compileGeometry(
-      this.#handleState,
       state,
       records.regions.length,
       records.exclusions.length,
@@ -1350,7 +1366,7 @@ class RenderPlannerImpl {
     records.constraints.push(geometry.constraint);
     for (const region of geometry.regions) records.regions.push(region);
     for (const exclusion of geometry.exclusions) records.exclusions.push(exclusion);
-    for (const object of compileInlineObjects(this.#handleState, state, preparation.geometryRevision)) {
+    for (const object of compileInlineObjects(state, preparation.geometryRevision)) {
       records.inlineObjects.push(object);
     }
   }
@@ -1622,6 +1638,7 @@ class RenderPlannerImpl {
       state.committed = undefined;
       if (state.preparedDesired !== undefined) attempt(() => releaseResolvedText(state.preparedDesired!));
       state.preparedDesired = undefined;
+      attempt(() => state.idScope.dispose());
     }
     this.#texts.clear();
     this.#removed.clear();
@@ -1669,9 +1686,7 @@ class RenderPlannerImpl {
     const prepared = state.prepared ? state.preparedDesired : undefined;
     const desired = state.desired;
     const styles =
-      prepared === desired
-        ? EMPTY_REQUEST_ITEMS
-        : compileStyles(this.#handleState, state, retainedStyleChanges(desired, prepared));
+      prepared === desired ? EMPTY_REQUEST_ITEMS : compileStyles(state, retainedStyleChanges(desired, prepared));
     const geometryChanged = state.geometryDirty || prepared === undefined;
     // An edit that stated its range is told to the engine as stated; a whole-string setter is compared.
     const replacement =
@@ -1780,6 +1795,11 @@ class RenderPlannerImpl {
     for (const removed of removals) {
       this.#preparationRemovals.delete(removed);
       this.#releasePreparedOrder(removed);
+      // The engine has dropped the paragraph and no publication ever carried it, so no frame has to remove it.
+      if (!removed.published) {
+        this.#removed.delete(removed);
+        this.#retireRemoved(removed);
+      }
     }
   }
 
@@ -1804,7 +1824,7 @@ class RenderPlannerImpl {
     const priorFacts = preparationChanged && state.deferredFacts?.pending === true;
     if (preparationChanged) for (const removed of removals) this.#settleGlyphFacts(removed);
     const geometry = preparation.geometryChanged
-      ? compileGeometry(this.#handleState, state, 0, 0, preparation.geometryRevision)
+      ? compileGeometry(state, 0, 0, preparation.geometryRevision)
       : undefined;
     // A read that creates its paragraph creates every sibling the engine has not seen too. The lifecycle is then
     // settled for the whole root, and the reads that follow carry no lifecycle rows at all.
@@ -1835,7 +1855,7 @@ class RenderPlannerImpl {
       regions: geometry === undefined ? EMPTY_REQUEST_ITEMS : geometry.regions,
       exclusions: geometry === undefined ? EMPTY_REQUEST_ITEMS : geometry.exclusions,
       inlineObjects: preparation.geometryChanged
-        ? compileInlineObjects(this.#handleState, state, preparation.geometryRevision)
+        ? compileInlineObjects(state, preparation.geometryRevision)
         : EMPTY_REQUEST_ITEMS,
     };
     let measurement: ParagraphLayoutSummary | undefined;
@@ -1982,17 +2002,21 @@ class RenderPlannerImpl {
     this.#pendingTexts.delete(state);
   }
 
+  /** Forgets a removed text nothing references any more: neither the engine nor a publication the renderer holds. */
+  #retireRemoved(state: RetainedTextState): void {
+    this.#releasePreparedOrder(state);
+    this.#texts.delete(state);
+    if (!state.desiredReleased) releaseResolvedText(state.desired);
+    state.desiredReleased = true;
+    if (state.committed !== undefined) releaseResolvedText(state.committed);
+    state.committed = undefined;
+    if (state.preparedDesired !== undefined) releaseResolvedText(state.preparedDesired);
+    state.preparedDesired = undefined;
+    state.idScope.dispose();
+  }
+
   #commitDesiredState(): void {
-    for (const state of this.#removed) {
-      this.#releasePreparedOrder(state);
-      this.#texts.delete(state);
-      if (!state.desiredReleased) releaseResolvedText(state.desired);
-      state.desiredReleased = true;
-      if (state.committed !== undefined) releaseResolvedText(state.committed);
-      state.committed = undefined;
-      if (state.preparedDesired !== undefined) releaseResolvedText(state.preparedDesired);
-      state.preparedDesired = undefined;
-    }
+    for (const state of this.#removed) this.#retireRemoved(state);
     this.#removed.clear();
     this.#preparationRemovals.clear();
     for (const state of this.#pendingTexts) {
@@ -3055,8 +3079,12 @@ function sameSpanEngineStyle(left: ResolvedSpan, right: ResolvedSpan): boolean {
   );
 }
 
+function textIds(state: RetainedTextState): HandleIdFactory {
+  // The planner asserts it is live before it compiles; a retired text's disposed scope refuses to mint.
+  return (state.ids ??= createHandleIdFactory(state.idScope, () => undefined));
+}
+
 function compileStyles(
-  handleState: GlyphHandleState,
   state: RetainedTextState,
   changes: readonly RetainedStyleChange[],
 ): readonly PlannerStyleMutation[] {
@@ -3065,7 +3093,7 @@ function compileStyles(
   const source = desired.source;
   return changes.map((change): PlannerStyleMutation => {
     const styleIndex = change.kind === 'root' ? 1 : change.styleIndex;
-    const styleId = (state.styleIds[styleIndex] ??= engineStyleId(handleState.id, state.paragraphId, styleIndex));
+    const styleId = (state.styleIds[styleIndex] ??= engineStyleId(textIds(state), state.paragraphId, styleIndex));
     if (change.kind === 'remove') {
       return {
         opcode: 'remove',
@@ -3124,7 +3152,6 @@ function pendingStyleMutationCount(state: RetainedTextLimitState): number {
 }
 
 function compileGeometry(
-  handleState: GlyphHandleState,
   state: RetainedTextState,
   regionStart: number,
   exclusionStart: number,
@@ -3134,8 +3161,9 @@ function compileGeometry(
   regions: readonly PlannerRegion[];
   exclusions: readonly PlannerExclusion[];
 }> {
+  const ids = textIds(state);
   const ordinary = compileEngineGeometry(
-    handleState.id,
+    ids,
     state.paragraphId,
     state.desired.transform.handle,
     revision,
@@ -3155,7 +3183,7 @@ function compileGeometry(
     const transform = state.desired.flowTransforms[regionIndex]!;
     const firstExclusion = exclusionStart + exclusions.length;
     const { key: regionKey, ...region } = input.region;
-    const regionId = handleState.id('region', keyedFlowIdentity(state.paragraphId, 'region', regionKey));
+    const regionId = ids('region', keyedFlowIdentity(state.paragraphId, 'region', regionKey));
     const committedRegion = state.committedFlowRegions.get(regionKey);
     const regionRevision =
       committedRegion !== undefined &&
@@ -3186,7 +3214,7 @@ function compileGeometry(
           : revision;
       exclusions.push({
         ...record,
-        id: handleState.id('exclusion', keyedFlowIdentity(state.paragraphId, 'exclusion', regionKey, exclusionKey)),
+        id: ids('exclusion', keyedFlowIdentity(state.paragraphId, 'exclusion', regionKey, exclusionKey)),
         regionId,
         geometryRevision: exclusionRevision,
       });
@@ -3266,14 +3294,13 @@ function flowExclusionIdentity(regionKey: string, exclusionKey: string): string 
 }
 
 function compileInlineObjects(
-  handleState: GlyphHandleState,
   state: RetainedTextState,
   contentRevision = state.geometryRevision + 1,
 ): readonly PlannerInlineObject[] {
   return (state.desired.source.inlineObjects ?? []).map((object, index) => ({
     ...object,
     paragraphId: state.paragraphId,
-    id: handleState.id('inline-object', `paragraph/${state.paragraphId}/inline/${index}`),
+    id: textIds(state)('inline-object', `paragraph/${state.paragraphId}/inline/${index}`),
     contentRevision,
     materialId: state.desired.inlineMaterials[index]!.handle,
     resourceId: state.desired.inlineResources[index]!.handle,
