@@ -1,7 +1,7 @@
 # HarfRust fork carried by pmndrs/glyph
 
 This directory is the published `harfrust` 0.12.0 crate with four cargo features, one constructor,
-one inlining attribute and one additive module (`SimpleTextPlan`) added. It is wired into `packages/glyph/rust/shaper` and `packages/glyph/rust/font-baker`
+one inlining attribute, two keyed plan-compile sorts and one additive module (`SimpleTextPlan`) added. It is wired into `packages/glyph/rust/shaper` and `packages/glyph/rust/font-baker`
 with `[patch.crates-io]`, so both manifests still ask for `harfrust = "0.12.0"`.
 
 ## Base
@@ -133,6 +133,25 @@ compiles them, and the `FontInstance` match arms in `face.rs`, `font_funcs.rs` a
 nothing observable changes, and the read-fonts `FontTables` model paths are no longer linked.
 `shape` (the experimental entry point) is compiled only with the feature too, instead of being
 allowed to be dead.
+
+### Plan-compile sorts in `ot_map.rs` through `u64` keys
+
+`dedup_feature_infos` and the map compiler's per-stage lookup sort used `sort()` on
+`feature_info_t` and `lookup_map_t`, which links a driftsort per element type. The fork lowers each
+order to `u64` keys and sorts those with `sort_unstable`, the one instantiation the embedding shaper
+already links for its own keys:
+
+- `sort_feature_infos`: key `(tag as big-endian u32) << 32 | seq`. `Tag` orders its bytes
+  lexicographically, which is big-endian `u32` order, and before deduplication `seq` is each
+  entry's position, so the key's low half names the source entry and the order is the derived
+  `(tag, seq, ...)` order, total because `seq` is unique.
+- `sort_lookup_maps`: every field of `lookup_map_t` packs into 52 bits in declaration order
+  (`index`, `auto_zwnj`, `auto_zwj`, `random`, `mask`, `per_syllable`), so sorting the keys and
+  unpacking them is the derived sort exactly.
+
+Both produce the same sequence as upstream. In the shaper this removed `17,113` raw / `5,333` gzip
+bytes beyond replacing the two stable sorts with unstable ones. `map_features.sort()` stays stable:
+it orders by tag alone, and a simple map can hold one tag twice.
 
 ## Checks
 
