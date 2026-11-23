@@ -13,72 +13,10 @@ impl OrderedPlanCompiler {
         let prefix = replacement
             .and_then(|entries| entries.first())
             .map_or(0, |entry| entry.old.record_start());
-        if let Some(correspondence) = replacement {
-            if correspondence.is_empty() {
-                return Ok(false);
-            }
-            if self.mapping_state != MappingState::Current
-                || self.codec_fingerprint != codec.fingerprint()
-                || self.capability_set != capability_set.0
-                || prefix > input.glyphs.len()
-                || prefix > self.instances.len()
-                || self.input_batches.len() != self.instances.len()
-                || self.input_slots.len() != self.instances.len()
-            {
-                return Ok(false);
-            }
-            reserve(&mut self.retained_input_slots, input.glyphs.len())?;
-            self.retained_input_slots.resize(input.glyphs.len(), NONE);
-            self.retain_input_slots(0..prefix, 0)?;
-            let mut old_end = prefix;
-            let mut next_end = prefix;
-            for entry in correspondence {
-                let old = entry.old.record_start()..entry.old.record_end();
-                let next = entry.next.record_start()..entry.next.record_end();
-                if old.start != old_end
-                    || next.start != next_end
-                    || old.end < old.start
-                    || next.end < next.start
-                    || old.end > self.instances.len()
-                    || next.end > input.glyphs.len()
-                    || (entry.owner.is_none() && old.len() != next.len())
-                {
-                    return Ok(false);
-                }
-                if entry.owner.is_none() {
-                    self.retain_input_slots(old.clone(), next.start)?;
-                }
-                old_end = old.end;
-                next_end = next.end;
-            }
-            if self.instances.len() - old_end != input.glyphs.len() - next_end {
-                return Ok(false);
-            }
-            self.retain_input_slots(old_end..self.instances.len(), next_end)?;
-            reserve(&mut self.pending_batches, self.batches.len())?;
-            for (index, batch) in self.batches.iter().copied().enumerate() {
-                self.pending_batches.push(PendingBatch {
-                    retained_count: batch.instance_count,
-                    state: batch,
-                    prior_index: Some(index as u32),
-                    allocation_start: None,
-                    patch_start: self.patches.len(),
-                    patch_end: self.patches.len(),
-                    capacity: 0,
-                    buffer_ids: [0; MAX_PHYSICAL_BUFFERS],
-                    buffer_generations: [0; MAX_PHYSICAL_BUFFERS],
-                });
-            }
-            for &batch_index in &self.input_batches[prefix..] {
-                let Some(batch) = self.pending_batches.get_mut(batch_index as usize) else {
-                    return Ok(false);
-                };
-                let Some(count) = batch.retained_count.checked_sub(1) else {
-                    return Ok(false);
-                };
-                batch.retained_count = count;
-                batch.state.instance_count = count;
-            }
+        if let Some(correspondence) = replacement
+            && !self.admit_replacement(codec, capability_set, input, correspondence, prefix)?
+        {
+            return Ok(false);
         }
         // These mappings are speculative until commit. An aborted full fallback must
         // repair through complete admission before they can authorize retained work.
@@ -88,26 +26,139 @@ impl OrderedPlanCompiler {
         self.input_batches.resize(input.glyphs.len(), NONE);
         self.input_batches[prefix..].fill(NONE);
         self.input_slots.resize(input.glyphs.len(), 0);
+        if !self.assign_input_batches(
+            codec,
+            capability_set,
+            input,
+            prefix,
+            replacement.is_some(),
+        )? {
+            return Ok(false);
+        }
+        if replacement.is_some()
+            && self
+                .pending_batches
+                .iter()
+                .any(|batch| batch.state.instance_count == 0)
+        {
+            return Ok(false);
+        }
+        self.layout_pending_instances(input, prefix)?;
+        // A changed source tail can keep emitted/batch counts while changing draw
+        // identity or extrema (for example, one glyph replaced by a ligature).
+        // Retaining storage alone cannot authorize retention of renderer bindings.
+        self.bindings_dirty |= replacement.is_some();
+        self.mapping_state = MappingState::RebuiltPending;
+        Ok(true)
+    }
+
+    /// Admits a replacement gather against the current mapping: maps every unchanged record's
+    /// input slot and seeds each prior batch with its retained instances. Returns `false` when
+    /// the correspondence does not describe the current plan.
+    fn admit_replacement(
+        &mut self,
+        codec: &ValidatedCodec,
+        capability_set: CapabilitySetId,
+        input: OrderedPlanInput<'_>,
+        correspondence: &[GatherCorrespondence],
+        prefix: usize,
+    ) -> Result<bool, OrderedPlanError> {
+        if correspondence.is_empty() {
+            return Ok(false);
+        }
+        if self.mapping_state != MappingState::Current
+            || self.codec_fingerprint != codec.fingerprint()
+            || self.capability_set != capability_set.0
+            || prefix > input.glyphs.len()
+            || prefix > self.instances.len()
+            || self.input_batches.len() != self.instances.len()
+            || self.input_slots.len() != self.instances.len()
+        {
+            return Ok(false);
+        }
+        reserve(&mut self.retained_input_slots, input.glyphs.len())?;
+        self.retained_input_slots.resize(input.glyphs.len(), NONE);
+        self.retain_input_slots(0..prefix, 0)?;
+        let Some((old_end, next_end)) =
+            self.retain_corresponding_slots(input, correspondence, prefix)?
+        else {
+            return Ok(false);
+        };
+        if self.instances.len() - old_end != input.glyphs.len() - next_end {
+            return Ok(false);
+        }
+        self.retain_input_slots(old_end..self.instances.len(), next_end)?;
+        reserve(&mut self.pending_batches, self.batches.len())?;
+        for (index, batch) in self.batches.iter().copied().enumerate() {
+            self.pending_batches.push(PendingBatch::unallocated(
+                batch,
+                Some(index as u32),
+                batch.instance_count,
+                self.patches.len(),
+            ));
+        }
+        for &batch_index in &self.input_batches[prefix..] {
+            let Some(batch) = self.pending_batches.get_mut(batch_index as usize) else {
+                return Ok(false);
+            };
+            let Some(count) = batch.retained_count.checked_sub(1) else {
+                return Ok(false);
+            };
+            batch.retained_count = count;
+            batch.state.instance_count = count;
+        }
+        Ok(true)
+    }
+
+    /// Maps the input slots of every unchanged correspondence entry. Returns the old and next
+    /// record ends the entries reach, or `None` when they are not contiguous and in bounds.
+    fn retain_corresponding_slots(
+        &mut self,
+        input: OrderedPlanInput<'_>,
+        correspondence: &[GatherCorrespondence],
+        prefix: usize,
+    ) -> Result<Option<(usize, usize)>, OrderedPlanError> {
+        let mut old_end = prefix;
+        let mut next_end = prefix;
+        for entry in correspondence {
+            let old = entry.old.record_start()..entry.old.record_end();
+            let next = entry.next.record_start()..entry.next.record_end();
+            if old.start != old_end
+                || next.start != next_end
+                || old.end < old.start
+                || next.end < next.start
+                || old.end > self.instances.len()
+                || next.end > input.glyphs.len()
+                || (entry.owner.is_none() && old.len() != next.len())
+            {
+                return Ok(None);
+            }
+            if entry.owner.is_none() {
+                self.retain_input_slots(old.clone(), next.start)?;
+            }
+            old_end = old.end;
+            next_end = next.end;
+        }
+        Ok(Some((old_end, next_end)))
+    }
+
+    /// Assigns every input glyph after `prefix` to a pending batch: a retained instance to the
+    /// batch that holds its slot, a new one to the batch of its program and resource. Returns
+    /// `false` when a replacement would need a batch the plan does not have.
+    fn assign_input_batches(
+        &mut self,
+        codec: &ValidatedCodec,
+        capability_set: CapabilitySetId,
+        input: OrderedPlanInput<'_>,
+        prefix: usize,
+        replacement: bool,
+    ) -> Result<bool, OrderedPlanError> {
         let mut cached_kind_program = None;
         for (input_index, glyph) in input.glyphs.iter().copied().enumerate().skip(prefix) {
             if let Some(&source) = self.retained_input_slots.get(input_index)
                 && source != NONE
             {
-                let batch_index = self.batches.partition_point(|batch| {
-                    u64::from(batch.instance_start) + u64::from(batch.instance_count)
-                        <= u64::from(source)
-                });
-                let batch = self
-                    .pending_batches
-                    .get_mut(batch_index)
-                    .ok_or(OrderedPlanError::InvalidIdentity)?;
-                batch.state.instance_count = batch
-                    .state
-                    .instance_count
-                    .checked_add(1)
-                    .ok_or(OrderedPlanError::ArithmeticOverflow)?;
-                self.input_batches[input_index] =
-                    u32::try_from(batch_index).map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
+                self.input_batches[input_index] = self.count_retained_instance(source)?;
                 continue;
             }
             #[cfg(test)]
@@ -126,50 +177,10 @@ impl OrderedPlanCompiler {
                     program
                 }
             };
-            if program.primitive_kind != PRIMITIVE_DECORATION {
-                let resource_bit = 1_u32
-                    .checked_shl(u32::from(glyph.resource_kind - 1))
-                    .ok_or(OrderedPlanError::InvalidResource)?;
-                if program.resource_kind_mask & resource_bit == 0 {
-                    return Err(OrderedPlanError::InvalidResource);
-                }
-            }
+            check_program_resource(program, glyph)?;
             let key = batch_key(program, glyph);
-            let batch_index = match self
-                .pending_batches
-                .iter()
-                .position(|batch| batch.state.key == key)
-            {
-                Some(index) => index,
-                None => {
-                    if replacement.is_some() {
-                        return Ok(false);
-                    }
-                    reserve(&mut self.pending_batches, 1)?;
-                    let prior_index = self
-                        .batches
-                        .iter()
-                        .position(|batch| batch.key == key)
-                        .map(|index| index as u32);
-                    self.pending_batches.push(PendingBatch {
-                        retained_count: 0,
-                        state: BatchState {
-                            key,
-                            instance_start: 0,
-                            instance_count: 0,
-                            buffer_start: 0,
-                            buffer_count: 0,
-                        },
-                        prior_index,
-                        allocation_start: None,
-                        patch_start: self.patches.len(),
-                        patch_end: self.patches.len(),
-                        capacity: 0,
-                        buffer_ids: [0; MAX_PHYSICAL_BUFFERS],
-                        buffer_generations: [0; MAX_PHYSICAL_BUFFERS],
-                    });
-                    self.pending_batches.len() - 1
-                }
+            let Some(batch_index) = self.pending_batch_for(key, replacement)? else {
+                return Ok(false);
             };
             self.pending_batches[batch_index].state.instance_count = self.pending_batches
                 [batch_index]
@@ -180,21 +191,65 @@ impl OrderedPlanCompiler {
             self.input_batches[input_index] =
                 u32::try_from(batch_index).map_err(|_| OrderedPlanError::ArithmeticOverflow)?;
         }
-        if replacement.is_some()
-            && self
-                .pending_batches
-                .iter()
-                .any(|batch| batch.state.instance_count == 0)
-        {
-            return Ok(false);
-        }
-        self.layout_pending_instances(input, prefix)?;
-        // A changed source tail can keep emitted/batch counts while changing draw
-        // identity or extrema (for example, one glyph replaced by a ligature).
-        // Retaining storage alone cannot authorize retention of renderer bindings.
-        self.bindings_dirty |= replacement.is_some();
-        self.mapping_state = MappingState::RebuiltPending;
         Ok(true)
+    }
+
+    /// Counts a retained instance into the pending batch that holds its slot and returns that
+    /// batch's index.
+    #[inline]
+    fn count_retained_instance(&mut self, source: u32) -> Result<u32, OrderedPlanError> {
+        let batch_index = self.batches.partition_point(|batch| {
+            u64::from(batch.instance_start) + u64::from(batch.instance_count) <= u64::from(source)
+        });
+        let batch = self
+            .pending_batches
+            .get_mut(batch_index)
+            .ok_or(OrderedPlanError::InvalidIdentity)?;
+        batch.state.instance_count = batch
+            .state
+            .instance_count
+            .checked_add(1)
+            .ok_or(OrderedPlanError::ArithmeticOverflow)?;
+        u32::try_from(batch_index).map_err(|_| OrderedPlanError::ArithmeticOverflow)
+    }
+
+    /// The pending batch for `key`, opened when the plan has none. A replacement never opens a
+    /// batch: `None` sends it to the complete path.
+    #[inline]
+    fn pending_batch_for(
+        &mut self,
+        key: BatchKey,
+        replacement: bool,
+    ) -> Result<Option<usize>, OrderedPlanError> {
+        if let Some(index) = self
+            .pending_batches
+            .iter()
+            .position(|batch| batch.state.key == key)
+        {
+            return Ok(Some(index));
+        }
+        if replacement {
+            return Ok(None);
+        }
+        reserve(&mut self.pending_batches, 1)?;
+        let prior_index = self
+            .batches
+            .iter()
+            .position(|batch| batch.key == key)
+            .map(|index| index as u32);
+        self.pending_batches.push(PendingBatch::unallocated(
+            BatchState {
+                key,
+                instance_start: 0,
+                instance_count: 0,
+                buffer_start: 0,
+                buffer_count: 0,
+            },
+            prior_index,
+            0,
+            self.patches.len(),
+        ));
+        Ok(Some(self.pending_batches.len() - 1))
     }
 
     pub(super) fn retain_input_slots(
@@ -554,4 +609,43 @@ pub(super) fn instance_state(
         input_index: u32::try_from(input_index)
             .map_err(|_| OrderedPlanError::ArithmeticOverflow)?,
     })
+}
+
+/// Refuses a glyph whose resource kind its program does not accept.
+#[inline]
+fn check_program_resource(
+    program: &crate::engine::codec::ProgramDescriptor,
+    glyph: OrderedGlyph,
+) -> Result<(), OrderedPlanError> {
+    if program.primitive_kind != PRIMITIVE_DECORATION {
+        let resource_bit = 1_u32
+            .checked_shl(u32::from(glyph.resource_kind - 1))
+            .ok_or(OrderedPlanError::InvalidResource)?;
+        if program.resource_kind_mask & resource_bit == 0 {
+            return Err(OrderedPlanError::InvalidResource);
+        }
+    }
+    Ok(())
+}
+
+impl PendingBatch {
+    /// A batch with no allocation or patches yet, its patch range empty at `patch_cursor`.
+    fn unallocated(
+        state: BatchState,
+        prior_index: Option<u32>,
+        retained_count: u32,
+        patch_cursor: usize,
+    ) -> Self {
+        Self {
+            retained_count,
+            state,
+            prior_index,
+            allocation_start: None,
+            patch_start: patch_cursor,
+            patch_end: patch_cursor,
+            capacity: 0,
+            buffer_ids: [0; MAX_PHYSICAL_BUFFERS],
+            buffer_generations: [0; MAX_PHYSICAL_BUFFERS],
+        }
+    }
 }
