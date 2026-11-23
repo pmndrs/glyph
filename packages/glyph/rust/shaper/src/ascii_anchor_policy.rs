@@ -154,11 +154,7 @@ fn check_class_def(
 /// private HarfRust feature/lookup selection. Every lazy read is checked.
 pub(crate) fn screen_font(sfnt: &[u8]) -> PolicyResult<FontScreen> {
     let font = ReadFontRef::new(sfnt).map_err(|_| Unsupported::Font)?;
-    if font.table_directory().table_records().iter().any(|record| {
-        [b"morx", b"kerx", b"kern", b"trak", b"fvar"]
-            .iter()
-            .any(|tag| record.tag.get() == read_fonts::types::Tag::new(tag))
-    }) {
+    if has_unsupported_table(&font) {
         return Err(Unsupported::Font);
     }
     let gsub = font.gsub().map_err(|_| Unsupported::Font)?;
@@ -175,180 +171,253 @@ pub(crate) fn screen_font(sfnt: &[u8]) -> PolicyResult<FontScreen> {
     if glyph_count == 0 {
         return Err(Unsupported::Font);
     }
-    let mut inputs = Vec::new();
-    inputs
-        .try_reserve_exact(GLYPH_BITMAP_BYTES)
-        .map_err(|_| Unsupported::Resource)?;
-    inputs.resize(GLYPH_BITMAP_BYTES, 0);
-    if inputs
-        .capacity()
-        .checked_add(core::mem::size_of::<FontScreen>())
-        .ok_or(Unsupported::Resource)?
-        > SUMMARY_BYTES_MAX
-    {
-        return Err(Unsupported::Resource);
-    }
-    let mut result = FontScreen {
-        gsub_inputs: inputs,
-        nominal: [None; 95],
-        lookup_count: 0,
-        multiple_product: 1,
-        table_visits: 0,
-    };
+    let mut result = FontScreen::empty()?;
     let mut visits = Visits(0);
     check_class_def(&classes, &mut visits)?;
-    let gsub_lookups = gsub.lookup_list().map_err(|_| Unsupported::Font)?.lookups();
-    if gsub_lookups.len() > GS_LOOKUPS_MAX {
-        return Err(Unsupported::Resource);
-    }
-    result.lookup_count = gsub_lookups.len();
-    for lookup in gsub_lookups.iter() {
-        visits.add(1)?;
-        let lookup = lookup.map_err(|_| Unsupported::Font)?;
-        if lookup.lookup_flag().to_bits() != 0
-            || lookup.mark_filtering_set().is_some()
-            || lookup.lookup_type() == 7
+    let mut gsub_screen = GsubScreen {
+        classes: &classes,
+        glyph_count,
+        result: &mut result,
+        visits: &mut visits,
+    };
+    gsub_screen.screen_lookups(&gsub)?;
+    screen_gpos_lookups(&gpos, &mut visits)?;
+    result.table_visits = visits.0;
+    Ok(result)
+}
+
+/// AAT, legacy kerning, tracking, and variable fonts take HarfRust paths the
+/// screen does not model.
+fn has_unsupported_table(font: &ReadFontRef<'_>) -> bool {
+    font.table_directory().table_records().iter().any(|record| {
+        [b"morx", b"kerx", b"kern", b"trak", b"fvar"]
+            .iter()
+            .any(|tag| record.tag.get() == read_fonts::types::Tag::new(tag))
+    })
+}
+
+impl FontScreen {
+    fn empty() -> PolicyResult<Self> {
+        let mut inputs = Vec::new();
+        inputs
+            .try_reserve_exact(GLYPH_BITMAP_BYTES)
+            .map_err(|_| Unsupported::Resource)?;
+        inputs.resize(GLYPH_BITMAP_BYTES, 0);
+        if inputs
+            .capacity()
+            .checked_add(core::mem::size_of::<FontScreen>())
+            .ok_or(Unsupported::Resource)?
+            > SUMMARY_BYTES_MAX
         {
-            return Err(Unsupported::Lookup);
-        }
-        let mut largest_multiple = 1usize;
-        match lookup.subtables().map_err(|_| Unsupported::Font)? {
-            SubstitutionSubtables::Single(tables) => {
-                for table in tables.iter() {
-                    visits.add(1)?;
-                    match table.map_err(|_| Unsupported::Font)? {
-                        SingleSubst::Format1(table) => {
-                            for glyph in table.coverage().map_err(|_| Unsupported::Font)?.iter() {
-                                let input = glyph.to_u16();
-                                let output = (i32::from(input) + i32::from(table.delta_glyph_id()))
-                                    .rem_euclid(65_536)
-                                    as u16;
-                                if input >= glyph_count
-                                    || output == 0
-                                    || output >= glyph_count
-                                    || !nonmark(&classes, output)
-                                {
-                                    return Err(Unsupported::Font);
-                                }
-                                result.mark_input(input, &mut visits)?;
-                            }
-                        }
-                        SingleSubst::Format2(table) => {
-                            let coverage = table.coverage().map_err(|_| Unsupported::Font)?;
-                            let outputs = table.substitute_glyph_ids();
-                            if outputs.len() > TABLE_VISITS_MAX {
-                                return Err(Unsupported::Resource);
-                            }
-                            let mut covered = coverage.iter();
-                            for output in outputs.iter() {
-                                let input = covered.next().ok_or(Unsupported::Font)?;
-                                let input = input.to_u16();
-                                let output = output.get().to_u16();
-                                if input >= glyph_count
-                                    || output == 0
-                                    || output >= glyph_count
-                                    || !nonmark(&classes, output)
-                                {
-                                    return Err(Unsupported::Font);
-                                }
-                                result.mark_input(input, &mut visits)?;
-                            }
-                            if covered.next().is_some() {
-                                return Err(Unsupported::Font);
-                            }
-                        }
-                    }
-                }
-            }
-            SubstitutionSubtables::Multiple(tables) => {
-                for table in tables.iter() {
-                    visits.add(1)?;
-                    let table = table.map_err(|_| Unsupported::Font)?;
-                    let coverage = table.coverage().map_err(|_| Unsupported::Font)?;
-                    let sequences = table.sequences();
-                    if sequences.len() > TABLE_VISITS_MAX {
-                        return Err(Unsupported::Resource);
-                    }
-                    let mut covered = coverage.iter();
-                    for sequence in sequences.iter() {
-                        let input = covered.next().ok_or(Unsupported::Font)?;
-                        let input = input.to_u16();
-                        if input >= glyph_count {
-                            return Err(Unsupported::Font);
-                        }
-                        result.mark_input(input, &mut visits)?;
-                        let sequence = sequence.map_err(|_| Unsupported::Font)?;
-                        let len = usize::from(sequence.glyph_count());
-                        if !(1..=4).contains(&len) {
-                            return Err(Unsupported::Resource);
-                        }
-                        largest_multiple = largest_multiple.max(len);
-                        for output in sequence.substitute_glyph_ids() {
-                            visits.add(1)?;
-                            let output = output.get().to_u16();
-                            if output == 0 || output >= glyph_count || !nonmark(&classes, output) {
-                                return Err(Unsupported::Font);
-                            }
-                        }
-                    }
-                    if covered.next().is_some() {
-                        return Err(Unsupported::Font);
-                    }
-                }
-            }
-            SubstitutionSubtables::Ligature(tables) => {
-                for table in tables.iter() {
-                    visits.add(1)?;
-                    let table = table.map_err(|_| Unsupported::Font)?;
-                    let coverage = table.coverage().map_err(|_| Unsupported::Font)?;
-                    let sets = table.ligature_sets();
-                    if sets.len() > TABLE_VISITS_MAX {
-                        return Err(Unsupported::Resource);
-                    }
-                    let mut covered = coverage.iter();
-                    for set in sets.iter() {
-                        let input = covered.next().ok_or(Unsupported::Font)?;
-                        let input = input.to_u16();
-                        if input >= glyph_count {
-                            return Err(Unsupported::Font);
-                        }
-                        result.mark_input(input, &mut visits)?;
-                        let set = set.map_err(|_| Unsupported::Font)?;
-                        for ligature in set.ligatures().iter() {
-                            visits.add(1)?;
-                            let ligature = ligature.map_err(|_| Unsupported::Font)?;
-                            let count = usize::from(ligature.component_count());
-                            if !(2..=LIG_COMPONENTS_MAX).contains(&count) {
-                                return Err(Unsupported::Resource);
-                            }
-                            let output = ligature.ligature_glyph().to_u16();
-                            if output == 0 || output >= glyph_count || !nonmark(&classes, output) {
-                                return Err(Unsupported::Font);
-                            }
-                            for component in ligature.component_glyph_ids() {
-                                let component = component.get().to_u16();
-                                if component >= glyph_count {
-                                    return Err(Unsupported::Font);
-                                }
-                                result.mark_input(component, &mut visits)?;
-                            }
-                        }
-                    }
-                    if covered.next().is_some() {
-                        return Err(Unsupported::Font);
-                    }
-                }
-            }
-            _ => return Err(Unsupported::Lookup),
-        }
-        result.multiple_product = result
-            .multiple_product
-            .checked_mul(largest_multiple)
-            .ok_or(Unsupported::Resource)?;
-        if result.multiple_product > MULTIPLE_PRODUCT_MAX {
             return Err(Unsupported::Resource);
         }
+        Ok(FontScreen {
+            gsub_inputs: inputs,
+            nominal: [None; 95],
+            lookup_count: 0,
+            multiple_product: 1,
+            table_visits: 0,
+        })
     }
+}
+
+/// GSUB walk state: every substituted-from glyph is marked mutable, and every
+/// substituted-to glyph must be a real, non-mark glyph of the font.
+struct GsubScreen<'a, 'font> {
+    classes: &'a read_fonts::tables::gdef::ClassDef<'font>,
+    glyph_count: u16,
+    result: &'a mut FontScreen,
+    visits: &'a mut Visits,
+}
+
+impl GsubScreen<'_, '_> {
+    fn screen_lookups(&mut self, gsub: &read_fonts::tables::gsub::Gsub<'_>) -> PolicyResult<()> {
+        let lookups = gsub.lookup_list().map_err(|_| Unsupported::Font)?.lookups();
+        if lookups.len() > GS_LOOKUPS_MAX {
+            return Err(Unsupported::Resource);
+        }
+        self.result.lookup_count = lookups.len();
+        for lookup in lookups.iter() {
+            self.visits.add(1)?;
+            let lookup = lookup.map_err(|_| Unsupported::Font)?;
+            if lookup.lookup_flag().to_bits() != 0
+                || lookup.mark_filtering_set().is_some()
+                || lookup.lookup_type() == 7
+            {
+                return Err(Unsupported::Lookup);
+            }
+            let largest_multiple = match lookup.subtables().map_err(|_| Unsupported::Font)? {
+                SubstitutionSubtables::Single(tables) => {
+                    for table in tables.iter() {
+                        self.visits.add(1)?;
+                        self.screen_single(table.map_err(|_| Unsupported::Font)?)?;
+                    }
+                    1
+                }
+                SubstitutionSubtables::Multiple(tables) => {
+                    let mut largest = 1;
+                    for table in tables.iter() {
+                        self.visits.add(1)?;
+                        let table = table.map_err(|_| Unsupported::Font)?;
+                        largest = self.screen_multiple(&table, largest)?;
+                    }
+                    largest
+                }
+                SubstitutionSubtables::Ligature(tables) => {
+                    for table in tables.iter() {
+                        self.visits.add(1)?;
+                        self.screen_ligature(&table.map_err(|_| Unsupported::Font)?)?;
+                    }
+                    1
+                }
+                _ => return Err(Unsupported::Lookup),
+            };
+            self.result.multiple_product = self
+                .result
+                .multiple_product
+                .checked_mul(largest_multiple)
+                .ok_or(Unsupported::Resource)?;
+            if self.result.multiple_product > MULTIPLE_PRODUCT_MAX {
+                return Err(Unsupported::Resource);
+            }
+        }
+        Ok(())
+    }
+
+    fn check_input(&self, input: u16) -> PolicyResult<()> {
+        if input >= self.glyph_count {
+            return Err(Unsupported::Font);
+        }
+        Ok(())
+    }
+
+    fn check_output(&self, output: u16) -> PolicyResult<()> {
+        if output == 0 || output >= self.glyph_count || !nonmark(self.classes, output) {
+            return Err(Unsupported::Font);
+        }
+        Ok(())
+    }
+
+    fn screen_single(&mut self, table: SingleSubst<'_>) -> PolicyResult<()> {
+        match table {
+            SingleSubst::Format1(table) => {
+                for glyph in table.coverage().map_err(|_| Unsupported::Font)?.iter() {
+                    let input = glyph.to_u16();
+                    let output = (i32::from(input) + i32::from(table.delta_glyph_id()))
+                        .rem_euclid(65_536) as u16;
+                    self.check_substitution(input, output)?;
+                }
+            }
+            SingleSubst::Format2(table) => {
+                let coverage = table.coverage().map_err(|_| Unsupported::Font)?;
+                let outputs = table.substitute_glyph_ids();
+                if outputs.len() > TABLE_VISITS_MAX {
+                    return Err(Unsupported::Resource);
+                }
+                let mut covered = coverage.iter();
+                for output in outputs.iter() {
+                    let input = covered.next().ok_or(Unsupported::Font)?.to_u16();
+                    self.check_substitution(input, output.get().to_u16())?;
+                }
+                if covered.next().is_some() {
+                    return Err(Unsupported::Font);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// One-to-one substitution: the input is checked together with its output
+    /// before it is marked.
+    fn check_substitution(&mut self, input: u16, output: u16) -> PolicyResult<()> {
+        if input >= self.glyph_count {
+            return Err(Unsupported::Font);
+        }
+        self.check_output(output)?;
+        self.result.mark_input(input, self.visits)
+    }
+
+    /// Returns the largest sequence length seen so far, starting from `largest`.
+    fn screen_multiple(
+        &mut self,
+        table: &read_fonts::tables::gsub::MultipleSubstFormat1<'_>,
+        mut largest: usize,
+    ) -> PolicyResult<usize> {
+        let coverage = table.coverage().map_err(|_| Unsupported::Font)?;
+        let sequences = table.sequences();
+        if sequences.len() > TABLE_VISITS_MAX {
+            return Err(Unsupported::Resource);
+        }
+        let mut covered = coverage.iter();
+        for sequence in sequences.iter() {
+            let input = covered.next().ok_or(Unsupported::Font)?.to_u16();
+            self.check_input(input)?;
+            self.result.mark_input(input, self.visits)?;
+            let sequence = sequence.map_err(|_| Unsupported::Font)?;
+            let len = usize::from(sequence.glyph_count());
+            if !(1..=4).contains(&len) {
+                return Err(Unsupported::Resource);
+            }
+            largest = largest.max(len);
+            for output in sequence.substitute_glyph_ids() {
+                self.visits.add(1)?;
+                self.check_output(output.get().to_u16())?;
+            }
+        }
+        if covered.next().is_some() {
+            return Err(Unsupported::Font);
+        }
+        Ok(largest)
+    }
+
+    fn screen_ligature(
+        &mut self,
+        table: &read_fonts::tables::gsub::LigatureSubstFormat1<'_>,
+    ) -> PolicyResult<()> {
+        let coverage = table.coverage().map_err(|_| Unsupported::Font)?;
+        let sets = table.ligature_sets();
+        if sets.len() > TABLE_VISITS_MAX {
+            return Err(Unsupported::Resource);
+        }
+        let mut covered = coverage.iter();
+        for set in sets.iter() {
+            let input = covered.next().ok_or(Unsupported::Font)?.to_u16();
+            self.check_input(input)?;
+            self.result.mark_input(input, self.visits)?;
+            let set = set.map_err(|_| Unsupported::Font)?;
+            for ligature in set.ligatures().iter() {
+                self.visits.add(1)?;
+                self.screen_ligature_glyph(&ligature.map_err(|_| Unsupported::Font)?)?;
+            }
+        }
+        if covered.next().is_some() {
+            return Err(Unsupported::Font);
+        }
+        Ok(())
+    }
+
+    fn screen_ligature_glyph(
+        &mut self,
+        ligature: &read_fonts::tables::gsub::Ligature<'_>,
+    ) -> PolicyResult<()> {
+        let count = usize::from(ligature.component_count());
+        if !(2..=LIG_COMPONENTS_MAX).contains(&count) {
+            return Err(Unsupported::Resource);
+        }
+        self.check_output(ligature.ligature_glyph().to_u16())?;
+        for component in ligature.component_glyph_ids() {
+            let component = component.get().to_u16();
+            self.check_input(component)?;
+            self.result.mark_input(component, self.visits)?;
+        }
+        Ok(())
+    }
+}
+
+fn screen_gpos_lookups(
+    gpos: &read_fonts::tables::gpos::Gpos<'_>,
+    visits: &mut Visits,
+) -> PolicyResult<()> {
     for lookup in gpos
         .lookup_list()
         .map_err(|_| Unsupported::Font)?
@@ -367,120 +436,125 @@ pub(crate) fn screen_font(sfnt: &[u8]) -> PolicyResult<FontScreen> {
             PositionSubtables::Single(tables) => {
                 for table in tables.iter() {
                     visits.add(1)?;
-                    match table.map_err(|_| Unsupported::Font)? {
-                        SinglePos::Format1(value) => {
-                            if !supported_value_format(value.value_format().bits()) {
-                                return Err(Unsupported::Lookup);
-                            }
-                            value
-                                .offset_data()
-                                .read_with_args::<read_fonts::tables::gpos::ValueRecord>(
-                                    value.value_record_byte_range(),
-                                    &value.value_format(),
-                                )
-                                .map_err(|_| Unsupported::Font)?;
-                            for _ in value.coverage().map_err(|_| Unsupported::Font)?.iter() {
-                                visits.add(1)?;
-                            }
-                        }
-                        SinglePos::Format2(value) => {
-                            if !supported_value_format(value.value_format().bits()) {
-                                return Err(Unsupported::Lookup);
-                            }
-                            let coverage = value.coverage().map_err(|_| Unsupported::Font)?;
-                            if value.value_records().len() != usize::from(value.value_count()) {
-                                return Err(Unsupported::Font);
-                            }
-                            for index in 0..usize::from(value.value_count()) {
-                                visits.add(1)?;
-                                value
-                                    .value_records()
-                                    .get(index)
-                                    .map_err(|_| Unsupported::Font)?;
-                            }
-                            let mut count = 0;
-                            for _ in coverage.iter() {
-                                visits.add(1)?;
-                                count += 1;
-                            }
-                            if count != usize::from(value.value_count()) {
-                                return Err(Unsupported::Font);
-                            }
-                        }
-                    }
+                    screen_single_pos(table.map_err(|_| Unsupported::Font)?, visits)?;
                 }
             }
             PositionSubtables::Pair(tables) => {
                 for table in tables.iter() {
                     visits.add(1)?;
-                    let table = table.map_err(|_| Unsupported::Font)?;
-                    if table.value_format2().bits() != 0
-                        || !supported_value_format(table.value_format1().bits())
-                    {
-                        return Err(Unsupported::Lookup);
-                    }
-                    match table {
-                        PairPos::Format1(value) => {
-                            let coverage = value.coverage().map_err(|_| Unsupported::Font)?;
-                            let mut count = 0;
-                            for _ in coverage.iter() {
-                                visits.add(1)?;
-                                count += 1;
-                            }
-                            if count != usize::from(value.pair_set_count()) {
-                                return Err(Unsupported::Font);
-                            }
-                            for set in value.pair_sets().iter() {
-                                visits.add(1)?;
-                                let set = set.map_err(|_| Unsupported::Font)?;
-                                for record in set.pair_value_records().iter() {
-                                    visits.add(1)?;
-                                    record.map_err(|_| Unsupported::Font)?;
-                                }
-                            }
-                        }
-                        PairPos::Format2(value) => {
-                            for _ in value.coverage().map_err(|_| Unsupported::Font)?.iter() {
-                                visits.add(1)?;
-                            }
-                            check_class_def(
-                                &value.class_def1().map_err(|_| Unsupported::Font)?,
-                                &mut visits,
-                            )?;
-                            check_class_def(
-                                &value.class_def2().map_err(|_| Unsupported::Font)?,
-                                &mut visits,
-                            )?;
-                            let count = usize::from(value.class1_count())
-                                .checked_mul(usize::from(value.class2_count()))
-                                .ok_or(Unsupported::Resource)?;
-                            visits.add(count)?;
-                            if value.class1_records().len() != usize::from(value.class1_count()) {
-                                return Err(Unsupported::Font);
-                            }
-                            for index in 0..usize::from(value.class1_count()) {
-                                let row = value
-                                    .class1_records()
-                                    .get(index)
-                                    .map_err(|_| Unsupported::Font)?;
-                                if row.class2_records().len() != usize::from(value.class2_count()) {
-                                    return Err(Unsupported::Font);
-                                }
-                                for column in 0..usize::from(value.class2_count()) {
-                                    row.class2_records()
-                                        .get(column)
-                                        .map_err(|_| Unsupported::Font)?;
-                                }
-                            }
-                        }
-                    }
+                    screen_pair_pos(table.map_err(|_| Unsupported::Font)?, visits)?;
                 }
             }
             _ => return Err(Unsupported::Lookup),
         }
     }
-    result.table_visits = visits.0;
-    Ok(result)
+    Ok(())
+}
+
+/// Visits every covered glyph and returns how many there were.
+fn count_coverage(
+    coverage: &read_fonts::tables::layout::CoverageTable<'_>,
+    visits: &mut Visits,
+) -> PolicyResult<usize> {
+    let mut count = 0;
+    for _ in coverage.iter() {
+        visits.add(1)?;
+        count += 1;
+    }
+    Ok(count)
+}
+
+fn screen_single_pos(table: SinglePos<'_>, visits: &mut Visits) -> PolicyResult<()> {
+    match table {
+        SinglePos::Format1(value) => {
+            if !supported_value_format(value.value_format().bits()) {
+                return Err(Unsupported::Lookup);
+            }
+            value
+                .offset_data()
+                .read_with_args::<read_fonts::tables::gpos::ValueRecord>(
+                    value.value_record_byte_range(),
+                    &value.value_format(),
+                )
+                .map_err(|_| Unsupported::Font)?;
+            count_coverage(&value.coverage().map_err(|_| Unsupported::Font)?, visits)?;
+        }
+        SinglePos::Format2(value) => {
+            if !supported_value_format(value.value_format().bits()) {
+                return Err(Unsupported::Lookup);
+            }
+            let coverage = value.coverage().map_err(|_| Unsupported::Font)?;
+            if value.value_records().len() != usize::from(value.value_count()) {
+                return Err(Unsupported::Font);
+            }
+            for index in 0..usize::from(value.value_count()) {
+                visits.add(1)?;
+                value
+                    .value_records()
+                    .get(index)
+                    .map_err(|_| Unsupported::Font)?;
+            }
+            if count_coverage(&coverage, visits)? != usize::from(value.value_count()) {
+                return Err(Unsupported::Font);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn screen_pair_pos(table: PairPos<'_>, visits: &mut Visits) -> PolicyResult<()> {
+    if table.value_format2().bits() != 0 || !supported_value_format(table.value_format1().bits()) {
+        return Err(Unsupported::Lookup);
+    }
+    match table {
+        PairPos::Format1(value) => {
+            let coverage = value.coverage().map_err(|_| Unsupported::Font)?;
+            if count_coverage(&coverage, visits)? != usize::from(value.pair_set_count()) {
+                return Err(Unsupported::Font);
+            }
+            for set in value.pair_sets().iter() {
+                visits.add(1)?;
+                let set = set.map_err(|_| Unsupported::Font)?;
+                for record in set.pair_value_records().iter() {
+                    visits.add(1)?;
+                    record.map_err(|_| Unsupported::Font)?;
+                }
+            }
+        }
+        PairPos::Format2(value) => screen_class_pair_pos(&value, visits)?,
+    }
+    Ok(())
+}
+
+fn screen_class_pair_pos(
+    value: &read_fonts::tables::gpos::PairPosFormat2<'_>,
+    visits: &mut Visits,
+) -> PolicyResult<()> {
+    count_coverage(&value.coverage().map_err(|_| Unsupported::Font)?, visits)?;
+    check_class_def(&value.class_def1().map_err(|_| Unsupported::Font)?, visits)?;
+    check_class_def(&value.class_def2().map_err(|_| Unsupported::Font)?, visits)?;
+    let count = usize::from(value.class1_count())
+        .checked_mul(usize::from(value.class2_count()))
+        .ok_or(Unsupported::Resource)?;
+    visits.add(count)?;
+    if value.class1_records().len() != usize::from(value.class1_count()) {
+        return Err(Unsupported::Font);
+    }
+    for index in 0..usize::from(value.class1_count()) {
+        let row = value
+            .class1_records()
+            .get(index)
+            .map_err(|_| Unsupported::Font)?;
+        if row.class2_records().len() != usize::from(value.class2_count()) {
+            return Err(Unsupported::Font);
+        }
+        for column in 0..usize::from(value.class2_count()) {
+            row.class2_records()
+                .get(column)
+                .map_err(|_| Unsupported::Font)?;
+        }
+    }
+    Ok(())
 }
 
 struct NominalBootstrap<'a> {
