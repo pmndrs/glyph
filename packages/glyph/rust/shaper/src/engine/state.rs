@@ -3197,17 +3197,20 @@ impl PlannerState {
             .or(self.spare_paragraph.as_ref())
     }
 
-    fn paragraph(&self, id: u32) -> Option<&RetainedParagraph> {
+    /// One out-of-line search behind the dozens of `paragraph`/`paragraph_mut` call sites.
+    #[inline(never)]
+    fn paragraph_index(&self, id: u32) -> Option<usize> {
         self.paragraphs
             .binary_search_by_key(&id, |paragraph| paragraph.id)
             .ok()
-            .map(|index| &*self.paragraphs[index])
+    }
+
+    fn paragraph(&self, id: u32) -> Option<&RetainedParagraph> {
+        self.paragraph_index(id).map(|index| &*self.paragraphs[index])
     }
 
     fn paragraph_mut(&mut self, id: u32) -> Option<&mut RetainedParagraph> {
-        self.paragraphs
-            .binary_search_by_key(&id, |paragraph| paragraph.id)
-            .ok()
+        self.paragraph_index(id)
             .map(|index| &mut *self.paragraphs[index])
     }
 
