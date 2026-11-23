@@ -266,7 +266,7 @@ impl TextEngine {
                                 request.limits,
                                 false,
                                 true,
-                                true,
+                                GlyphFactDemand::Required,
                             )
                         })();
                         if let Some(record) = records.get_mut(summary) {
@@ -322,8 +322,7 @@ impl TextEngine {
                         request.semantic_view_mask
                             & super::super::frame::SEMANTIC_VIEW_BORROWED_LAYOUT
                             != 0,
-                        request.semantic_view_mask & super::super::frame::SEMANTIC_VIEW_GLYPH_FACTS
-                            != 0,
+                        GlyphFactDemand::of_view_mask(request.semantic_view_mask),
                     );
                     planner.semantic_records = records;
                     query

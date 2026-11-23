@@ -73,6 +73,18 @@ fn deferred_read(
     engine.commit_measure(measured).unwrap();
 }
 
+/// The records one read returns.
+fn deferred_read_records(
+    engine: &mut TextEngine,
+    shaper: &mut ShaperRegistry,
+    text: &mut Vec<u16>,
+    read: DeferredRead,
+    view_mask: u32,
+) -> Vec<super::super::semantic_view::SemanticRecord> {
+    deferred_read(engine, shaper, text, read, view_mask);
+    engine.planners.get(&4).unwrap().semantic_records.clone()
+}
+
 fn deferred_publish(engine: &mut TextEngine, shaper: &mut ShaperRegistry) {
     let revision = engine.root_revision(4).unwrap();
     let mut publication = update(revision.engine, revision.root, revision.root);
@@ -227,4 +239,51 @@ fn a_read_of_glyphs_settles_owed_positioning_and_keeps_no_predecessor() {
         }
     }
     assert!(owed >= 16, "the cycles defer positioning: {owed} reads");
+}
+
+#[test]
+fn available_glyph_facts_are_carried_exactly_when_positioning_is_current() {
+    let measure = super::super::frame::SEMANTIC_VIEW_MEASUREMENT
+        | super::super::frame::SEMANTIC_VIEW_BORROWED_LAYOUT;
+    let available = measure | super::super::frame::SEMANTIC_VIEW_AVAILABLE_GLYPH_FACTS;
+    let required = measure | super::super::frame::SEMANTIC_VIEW_GLYPH_FACTS;
+    let [(mut engine, mut shaper), (mut eager, mut eager_shaper)] = deferred_positioning_engines();
+    let mut text = utf16(&"Every summary-only read answers from flow layout. ".repeat(24));
+    let mut eager_text = text.clone();
+    let narrower = DeferredRead {
+        width: Some(300.0),
+        edit: None,
+    };
+    let unchanged = DeferredRead {
+        width: None,
+        edit: None,
+    };
+    let deferred_flag = super::super::layout_query::MEASUREMENT_FLAG_GLYPHS_DEFERRED;
+
+    // A new width leaves positioning owed: the facts are not free, so they stay deferred, exactly
+    // as a read without the bit defers them.
+    let owed = deferred_read_records(&mut engine, &mut shaper, &mut text, narrower, available);
+    assert!(engine.planners.get(&4).unwrap().first_paragraph_state().unwrap().positioning_owed());
+    assert_ne!(owed[0].flags & deferred_flag, 0);
+    let [(mut plain, mut plain_shaper), _] = deferred_positioning_engines();
+    let mut plain_text = utf16(&"Every summary-only read answers from flow layout. ".repeat(24));
+    assert_eq!(
+        owed,
+        deferred_read_records(&mut plain, &mut plain_shaper, &mut plain_text, narrower, measure),
+        "owed facts are deferred whether or not the read accepts available ones"
+    );
+
+    // Positioned, the same paragraph answers the facts as a read that requires them does.
+    engine.settle_paragraph_positioning(&shaper, 4, 1).unwrap();
+    let current = deferred_read_records(&mut engine, &mut shaper, &mut text, unchanged, available);
+    deferred_read(&mut eager, &mut eager_shaper, &mut eager_text, narrower, required);
+    let positioned = deferred_read_records(
+        &mut eager,
+        &mut eager_shaper,
+        &mut eager_text,
+        unchanged,
+        required,
+    );
+    assert_eq!(current[0].flags & deferred_flag, 0);
+    assert_eq!(current, positioned);
 }

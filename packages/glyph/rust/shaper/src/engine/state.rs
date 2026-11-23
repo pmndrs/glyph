@@ -2067,7 +2067,7 @@ impl TextEngine {
                                 != 0,
                             // Publication positions every paragraph, so its views carry
                             // glyph facts.
-                            true,
+                            GlyphFactDemand::Required,
                         )
                         .map_err(|error| error.in_paragraph(paragraph_id))?;
                     }
@@ -2413,6 +2413,36 @@ fn shaping_run_topology_stable(
         })
 }
 
+/// Whether a measurement carries its paragraph's glyph facts: glyph and missing-glyph counts, line
+/// glyph spans and ink.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum GlyphFactDemand {
+    /// Left deferred (`MEASUREMENT_FLAG_GLYPHS_DEFERRED`): the read answers from flow layout.
+    Deferred,
+    /// Carried when they cost nothing more (`SEMANTIC_VIEW_AVAILABLE_GLYPH_FACTS`), deferred
+    /// otherwise.
+    Available,
+    /// Carried, positioning the paragraph if a read left it owed.
+    Required,
+}
+
+impl GlyphFactDemand {
+    /// The demand a request's semantic view mask states.
+    pub(super) fn of_view_mask(mask: u32) -> Self {
+        if mask
+            & (super::frame::SEMANTIC_VIEW_GLYPH_FACTS
+                | super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION)
+            != 0
+        {
+            Self::Required
+        } else if mask & super::frame::SEMANTIC_VIEW_AVAILABLE_GLYPH_FACTS != 0 {
+            Self::Available
+        } else {
+            Self::Deferred
+        }
+    }
+}
+
 /// Emits prepared measurements and optional inspection, building missing intrinsic layout in the shared pipeline.
 // D-244 found outlining this stage size-neutral; keep its inputs explicit.
 #[allow(clippy::too_many_arguments)]
@@ -2426,13 +2456,18 @@ fn append_paragraph_measurement(
     limits: super::frame::UpdateLimits,
     include_layout_inspection: bool,
     include_borrowed_layout: bool,
-    include_glyph_facts: bool,
+    glyph_facts: GlyphFactDemand,
 ) -> Result<(), EngineError> {
     // A measurement carries glyph facts exactly when its request asks for them, whatever the
     // paragraph's history: a summary-only read answers from flow layout whether or not its
-    // positioning is owed, so equal requests over equal text return equal records.
-    let include_glyph_facts = include_glyph_facts || include_layout_inspection;
+    // positioning is owed, so equal requests over equal text return equal records. Only a
+    // request that accepts them when available (a host that never compares records) gets them
+    // from a paragraph that is positioned anyway.
+    let required_glyph_facts =
+        glyph_facts == GlyphFactDemand::Required || include_layout_inspection;
     if let Some(leaf) = state.active_inline() {
+        // An inline leaf positions its glyphs as it prepares them.
+        let include_glyph_facts = required_glyph_facts || glyph_facts == GlyphFactDemand::Available;
         let line = leaf.line.as_ref().ok_or(EngineError::InvalidRequest)?;
         let fragment = leaf.fragment.as_ref().ok_or(EngineError::InvalidRequest)?;
         let count =
@@ -2470,21 +2505,15 @@ fn append_paragraph_measurement(
             include_layout_inspection,
         );
     }
-    let visible_extents = {
-        let clusters = state.clusters.active();
-        let geometry = state.geometry.active();
-        let flow = state.flow_layout.active();
-        let flow_thread_id = geometry
+    let visible_consumed_clusters = {
+        let flow_thread_id = state
+            .geometry
+            .active()
             .constraints
             .first()
             .ok_or(EngineError::InvalidRequest)?
             .flow_thread_id;
-        super::layout_query::flow_extents(
-            flow_thread_id,
-            flow,
-            clusters,
-            thread_typography(geometry, flow_thread_id),
-        )?
+        super::layout_query::flow_consumed_clusters(flow_thread_id, state.flow_layout.active())?
     };
     let active_flow = state.flow_layout.active();
     let active_line_count = active_flow.lines.len();
@@ -2507,7 +2536,7 @@ fn append_paragraph_measurement(
             state.intrinsic_widths_cache = Some((constraint.wrap, widths));
             widths
         });
-    let needs_intrinsic = visible_extents.consumed_clusters < cluster_count || has_ellipsis;
+    let needs_intrinsic = visible_consumed_clusters < cluster_count || has_ellipsis;
     let reuse_intrinsic = !state.has_pending_preparation()
         && state.clipped_inspection.active().mode != IntrinsicInspection::None;
     if needs_intrinsic && !reuse_intrinsic {
@@ -2524,6 +2553,12 @@ fn append_paragraph_measurement(
             >= usize::try_from(constraint.max_lines).map_err(|_| EngineError::ResultTooLarge)?;
     let inspect_full_clipped_layout =
         needs_intrinsic && constraint.overflow == OVERFLOW_CLIP && !max_lines_truncated;
+    // Positions that describe the current flow make the facts free, unless a clipped paragraph
+    // would first have to position its full layout.
+    let include_glyph_facts = required_glyph_facts
+        || (glyph_facts == GlyphFactDemand::Available
+            && !state.positioning_owed()
+            && !inspect_full_clipped_layout);
     // Glyph facts and the full clipped layout count positioned glyphs, so they position now.
     if (inspect_full_clipped_layout || include_glyph_facts) && state.positioning_owed() {
         state.settle_positioning(shaper.as_deref().ok_or(EngineError::InvalidRequest)?)?;
