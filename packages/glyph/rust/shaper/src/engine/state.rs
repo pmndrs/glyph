@@ -398,6 +398,39 @@ struct RetainedParagraph {
     state: ParagraphState,
 }
 
+impl RetainedParagraph {
+    /// A paragraph created by this request. Out of line so the state is moved into the box as
+    /// one copy rather than field by field inside the caller.
+    #[inline(never)]
+    fn created(
+        id: u32,
+        incarnation: ParagraphIncarnation,
+        order: u32,
+        state: ParagraphState,
+    ) -> Box<Self> {
+        let placement = ParagraphPlacement {
+            order,
+            scope: 0,
+            rank: 0.0,
+        };
+        Box::new(Self {
+            id,
+            incarnation,
+            placement,
+            pending_placement: Some(placement),
+            pending_remove: false,
+            created: true,
+            positioned_changed: false,
+            preparation_changed_since_publication: false,
+            gather_range: None,
+            published_owner_inline: None,
+            renderer_order_index: usize::MAX,
+            placement_range: RecordSpan::default(),
+            state,
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct ParagraphIncarnation(NonZeroU32);
 
@@ -915,7 +948,7 @@ impl TextEngine {
             placement_acknowledgement_rebased: high_water.acknowledged_publication_generation != 0,
             ..PlannerState::default()
         };
-        let mut spare = ParagraphState::default();
+        let mut spare = ParagraphState::empty();
         spare.initialize()?;
         planner.spare_paragraph = Some(spare);
         Ok(planner)
@@ -3558,33 +3591,11 @@ impl PlannerState {
                 } else {
                     // Only the reusable spare is prewarmed. New retained paragraphs grow
                     // each arena from their actual content instead of paying planner defaults.
-                    ParagraphState::default()
+                    ParagraphState::empty()
                 };
                 self.paragraphs.insert(
                     index,
-                    Box::new(RetainedParagraph {
-                        id,
-                        incarnation,
-                        placement: ParagraphPlacement {
-                            order,
-                            scope: 0,
-                            rank: 0.0,
-                        },
-                        pending_placement: Some(ParagraphPlacement {
-                            order,
-                            scope: 0,
-                            rank: 0.0,
-                        }),
-                        pending_remove: false,
-                        created: true,
-                        positioned_changed: false,
-                        preparation_changed_since_publication: false,
-                        gather_range: None,
-                        published_owner_inline: None,
-                        renderer_order_index: usize::MAX,
-                        placement_range: RecordSpan::default(),
-                        state,
-                    }),
+                    RetainedParagraph::created(id, incarnation, order, state),
                 );
                 Ok(())
             }
@@ -4046,6 +4057,13 @@ impl RetainedParagraph {
 }
 
 impl ParagraphState {
+    /// An empty paragraph, built in one place. The state has well over a hundred fields; an
+    /// inlined `default()` is about 10 kB of constant stores at each call site.
+    #[inline(never)]
+    fn empty() -> Self {
+        Self::default()
+    }
+
     fn active_inline(&self) -> Option<&InlineLeaf> {
         match self.prepared_layout.active() {
             PreparedLayout::Inline(leaf) => Some(leaf),

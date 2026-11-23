@@ -387,7 +387,7 @@ fn refuse_paragraph(planner: &mut PlannerState, paragraph_id: u32) -> Result<(),
         .ok_or(EngineError::InvalidRequest)?;
     // Dropped, not cleared: a refusal is usually memory, and a cleared paragraph keeps every lane it
     // had grown, which would leave its siblings as short of memory as it was.
-    paragraph.state = ParagraphState::default();
+    paragraph.state = ParagraphState::empty();
     paragraph.positioned_changed = true;
     Ok(())
 }
