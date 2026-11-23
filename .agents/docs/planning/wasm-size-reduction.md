@@ -682,6 +682,55 @@ Not taken:
   and a per-syllable hot path.
 - `codec_gather::splice_appended` and the column-lane pairs (about 3 kB duplicate) are per-column kernels.
 
+### 2026-11-23 `engine::state` pass
+
+Branch `experiments/sil-state-size` from `sil-green-54` (`dda804dda`), same build and compression as above (the scratch
+build is byte-identical to the package's `dist/text-shaper.wasm`). Control: `1,578,343` raw / `621,409` gzip /
+`484,719` Brotli, `engine::state` `293,029` B. Inlining was attributed with a twin build at `debug = "limited"`: each
+`DW_TAG_inlined_subroutine` range is charged to the function it sits in (pre-wasm-opt bytes).
+
+- `PlannerState::prepare_upsert` (`43,726` B) was paragraph creation: the derived `ParagraphState::default()` (well over
+  a hundred fields) inlined as ~10 kB of constant stores, then `Box::new(RetainedParagraph { .., state })` storing the
+  scalarised state into the box field by field (~20 kB). The same default was inlined into `new_planner` (11 kB) and the
+  refusal path. After the cut `prepare_upsert` is `525` B and `new_planner` `2,345` B.
+- `OrderedPlanCompiler::prepare_internal` (`27,418` B) and `PositionedGlyphArena::build_lines` (`26,455` B) are
+  single-caller steps on the publication and per-line paths (`compile_draw_spans` 10.8 kB, `write_changed_ranges`
+  9.8 kB; `prepare_build` 10.4 kB, `position_line` 7.3 kB). One copy each, nothing cold: not cut.
+- The rest was helpers inlined at many sites, listed in the table.
+
+| Cut                                                                    | Commit      |   Δ raw |  Δ gzip | Δ Brotli |
+| ---------------------------------------------------------------------- | ----------- | ------: | ------: | -------: |
+| empty `ParagraphState` and boxed `RetainedParagraph` built out of line | `60b33df10` | −54,386 | −26,169 |  −16,952 |
+| one `WasmState` initialization behind `with_state` (43 instances)      | `58523b642` | −21,238 |  −3,042 |     −921 |
+| arena `clear`s out of line                                             | `e7b60e799` |  −7,987 |  −2,070 |     −944 |
+| one out-of-line paragraph binary search                                | `7fd123655` | −10,868 |  −3,743 |   −1,711 |
+| `PlacementLogicalKey` ordering through one out-of-line `cmp`           | `5ad42ef5f` |  −7,629 |  −2,999 |   −1,921 |
+| allocator `alloc`/`dealloc` out of line (~690 sites)                   | `cf54b15a1` |  −2,887 |    −873 |     −171 |
+| failure publication `#[cold]`                                          | `3d4794766` |    −559 |    −216 |     −503 |
+| five per-publication helpers out of line                               | `fcd2048cd` |  −3,638 |  −1,348 |     −737 |
+
+Together `−109,192` raw / `−40,460` gzip (−6.5%) / `−23,860` Brotli; `engine::state` `226,967` B. Speed: headline harness
+(5 loads per cut, each against the one before; host load average 11 to 31 from other lanes) moved no row beyond its
+ranges; control against the pass's tip (7 loads) read every row within `−6%` to `+4%`, and
+`benchmark:headline-bidi-edit` (5 rounds) `0.96` to `1.02`.
+
+**Rope fast path.** After the merge of the monomorphization pass (`1,407,038` / `563,770` / `449,269`), the ordered
+update's per-record step became a dyn visitor call plus a runtime-size byte copy, and bidi15k `paste-middle` read about
+2.5% slower. The tree walk stays type-erased; it now hands each leaf, through one indirect call, to
+`update_leaf_records`, an `#[inline(always)]` loop generic over the record type and the caller's update. Cost `+2,493`
+raw / `+1,389` gzip / `+825` Brotli (`6009e8318`), about 16% of the rope cut's `8,816`. Against the pre-merge tip,
+`benchmark:headline-bidi-edit` (6 rounds) reads `paste-middle` `12.78` → `12.80` ms and the headline harness (7 loads)
+`0.99` frame / `1.00` layout. Against the merged tip directly the bidi-edit run read `+3%` with overlapping loads, so the
+2.5% itself is not resolvable on this host.
+
+**Cold code at size (research for the crate split).** `#[optimize(size)]` on the 57 functions that only run at setup,
+registration, validation or on rare requests (`validate_planner_inputs`, `stage_planner_inputs`, `ValidatedCodec::new`
+and codec validation, codec and font-binding wire decoding, language resolution, root and registry lifecycle) saves
+`6,215` raw / `907` gzip. Moving language resolution into a crate built at `opt-level = "z"` saved `95` gzip. The
+largest cold bodies (`validate_planner_inputs` 14.8 kB, `stage_planner_inputs` 7.5 kB) are methods over
+`engine::state`'s types and cannot leave the crate without those types. Cold code is a small, already compact share;
+the size is in hot code.
+
 ### HarfRust fork features (owner direction B)
 
 `variations` (default on upstream, off for us): every font shapes at its default instance; variation coordinates, the
