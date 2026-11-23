@@ -443,7 +443,7 @@ impl ParagraphIncarnation {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct PlacementLogicalKey {
     paragraph: ParagraphIncarnation,
     run_owner: LayoutRunOwner,
@@ -453,6 +453,33 @@ struct PlacementLogicalKey {
     source_anchor: u32,
     numeric_block_ordinal: u32,
     glyph_source: GlyphSource,
+}
+
+/// Field order, as a derive would compare. Out of line: a derived comparison of eight fields was
+/// inlined about thirty times into the placement arena's sort and merge loops.
+impl Ord for PlacementLogicalKey {
+    #[inline(never)]
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        let fields = |key: &Self| {
+            (
+                key.paragraph,
+                key.run_owner,
+                key.run_source,
+                key.identity,
+                key.segment_anchor,
+                key.source_anchor,
+                key.numeric_block_ordinal,
+                key.glyph_source,
+            )
+        };
+        fields(self).cmp(&fields(other))
+    }
+}
+
+impl PartialOrd for PlacementLogicalKey {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
