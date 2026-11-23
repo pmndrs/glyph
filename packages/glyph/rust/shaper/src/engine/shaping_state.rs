@@ -294,6 +294,7 @@ impl ShapeArena {
         reserve_vec(&mut self.glyph_flags, capacity)
     }
 
+    #[inline(never)]
     pub(crate) fn clear(&mut self) {
         self.runs.clear();
         self.glyph_ids.clear();

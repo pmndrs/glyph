@@ -385,6 +385,7 @@ struct SourceWordPrefix {
 }
 
 impl RunLocalArena {
+    #[inline(never)]
     pub(crate) fn clear(&mut self) {
         self.clear_geometry();
         self.ink.clear();
@@ -545,6 +546,7 @@ impl RunLocalArena {
     }
 
     /// Drops blocks, rows and the outline index; font-unit ink stays.
+    #[inline(never)]
     pub(super) fn clear_geometry(&mut self) {
         self.index.clear();
         self.rows.clear();

@@ -2789,6 +2789,7 @@ impl PositionedGlyphArena {
             .ok_or(EngineError::InvalidRequest)
     }
 
+    #[inline(never)]
     pub(crate) fn clear(&mut self) {
         self.decorations.clear();
         self.replacement_runs.clear();
