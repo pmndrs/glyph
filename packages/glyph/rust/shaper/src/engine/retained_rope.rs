@@ -3088,4 +3088,115 @@ mod tests {
         assert!(empty.replace_range(0..0, &packed).unwrap());
         assert_matches_flat(&empty, &values);
     }
+
+    /// Records whose stride is not a whole number of storage words: packing, splitting,
+    /// joining and replacing must move exact record bytes across word boundaries.
+    #[test]
+    fn odd_stride_records_match_vec_through_every_edit() {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        struct Packed5([u8; 5]);
+        impl RopeRecord for Packed5 {
+            fn rope_summary(&self) -> RopeSummary {
+                RopeSummary {
+                    records: 1,
+                    fragments: usize::from(self.0[4] % 3 + 1),
+                    ..RopeSummary::default()
+                }
+            }
+        }
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        struct Wide12(u32, u32, u32);
+        impl RopeRecord for Wide12 {
+            fn rope_summary(&self) -> RopeSummary {
+                RopeSummary {
+                    records: 1,
+                    fragments: 1,
+                    source_start: self.0,
+                    source_end: self.0 + 1,
+                    has_source: true,
+                }
+            }
+        }
+
+        fn exercise<T: RopeRecord + PartialEq + core::fmt::Debug>(make: impl Fn(u32) -> T) {
+            let values: Vec<T> = (0..200).map(&make).collect();
+            let exact =
+                RetainedRope::try_from_exact(values.len(), |index| Ok::<_, ()>(values[index]))
+                    .unwrap();
+            let mut pushed = RetainedRope::default();
+            for value in &values {
+                pushed.push(*value).unwrap();
+            }
+            let mut appended = RetainedRope::default();
+            for chunk in values.chunks(13) {
+                appended.append_records(chunk).unwrap();
+            }
+            for rope in [&exact, &pushed, &appended] {
+                assert_eq!(rope.iter().copied().collect::<Vec<_>>(), values);
+                assert_eq!(rope.iter().rev().count(), values.len());
+            }
+
+            let mut model = values.clone();
+            let mut rope = appended.clone();
+            let mut random = 0x51ed_270b_u32;
+            for step in 0..96u32 {
+                random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                let index = random as usize % model.len();
+                match step % 4 {
+                    0 => {
+                        let next = make(1_000 + step);
+                        assert!(rope.update(index, |record| *record = next).unwrap());
+                        model[index] = next;
+                    }
+                    1 => {
+                        let end = (index + 1 + step as usize % 40).min(model.len());
+                        let replacement: RetainedRope<T> =
+                            RetainedRope::from(values[..(step as usize % 7)].to_vec());
+                        assert!(rope.replace_range(index..end, &replacement).unwrap());
+                        model.splice(index..end, values[..(step as usize % 7)].iter().copied());
+                    }
+                    2 => {
+                        let end = (index + 37).min(model.len());
+                        let next = make(2_000 + step);
+                        rope.update_ordered(index..end, |position, _| {
+                            Ok::<_, ()>(if position % 3 == 0 {
+                                RopeUpdate::Replace(next)
+                            } else {
+                                RopeUpdate::Keep
+                            })
+                        })
+                        .unwrap();
+                        for (position, record) in model.iter_mut().enumerate().take(end).skip(index)
+                        {
+                            if position % 3 == 0 {
+                                *record = next;
+                            }
+                        }
+                    }
+                    _ => {
+                        let source = exact.clone();
+                        let start = index % 150;
+                        assert!(
+                            rope.append_shared_range(&source, start..start + 50)
+                                .unwrap()
+                        );
+                        model.extend_from_slice(&values[start..start + 50]);
+                        rope.truncate(260.min(model.len())).unwrap();
+                        model.truncate(260);
+                    }
+                }
+                assert_eq!(rope.iter().copied().collect::<Vec<_>>(), model);
+                assert_eq!(rope.summary().records, model.len());
+                assert_eq!(rope.is_empty(), model.is_empty());
+                if model.is_empty() {
+                    model = values.clone();
+                    rope = appended.clone();
+                }
+            }
+            assert_eq!(exact.iter().copied().collect::<Vec<_>>(), values);
+        }
+
+        exercise(|value| Packed5([value as u8, (value >> 8) as u8, 7, 0xa5, value as u8 ^ 0x5a]));
+        exercise(|value| Wide12(value, !value, value.rotate_left(13)));
+    }
 }
