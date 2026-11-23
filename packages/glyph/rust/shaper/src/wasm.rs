@@ -33,7 +33,43 @@ mod diagnostic_live_memory;
 
 #[cfg(all(target_arch = "wasm32", not(feature = "diagnostic-live-memory")))]
 #[global_allocator]
-static ALLOCATOR: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocator();
+static ALLOCATOR: OutOfLineTalc = OutOfLineTalc(talc::wasm::new_wasm_dynamic_allocator());
+
+/// Talc behind one out-of-line `alloc` and `dealloc`. Talc marks both `#[inline]`, so every drop
+/// of an owned buffer carried its own copy of the free path (about 690 sites).
+#[cfg(all(target_arch = "wasm32", not(feature = "diagnostic-live-memory")))]
+struct OutOfLineTalc(talc::wasm::WasmDynamicTalc);
+
+#[cfg(all(target_arch = "wasm32", not(feature = "diagnostic-live-memory")))]
+// SAFETY: every method forwards unchanged to Talc's own `GlobalAlloc` implementation.
+unsafe impl core::alloc::GlobalAlloc for OutOfLineTalc {
+    #[inline(never)]
+    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
+        // SAFETY: the caller upholds `GlobalAlloc::alloc`'s contract, which Talc requires.
+        unsafe { self.0.alloc(layout) }
+    }
+
+    #[inline(never)]
+    unsafe fn dealloc(&self, pointer: *mut u8, layout: core::alloc::Layout) {
+        // SAFETY: the caller upholds `GlobalAlloc::dealloc`'s contract, which Talc requires.
+        unsafe { self.0.dealloc(pointer, layout) }
+    }
+
+    unsafe fn alloc_zeroed(&self, layout: core::alloc::Layout) -> *mut u8 {
+        // SAFETY: the caller upholds `GlobalAlloc::alloc_zeroed`'s contract, which Talc requires.
+        unsafe { self.0.alloc_zeroed(layout) }
+    }
+
+    unsafe fn realloc(
+        &self,
+        pointer: *mut u8,
+        layout: core::alloc::Layout,
+        new_size: usize,
+    ) -> *mut u8 {
+        // SAFETY: the caller upholds `GlobalAlloc::realloc`'s contract, which Talc requires.
+        unsafe { self.0.realloc(pointer, layout, new_size) }
+    }
+}
 
 #[cfg(feature = "diagnostic-live-memory")]
 #[global_allocator]
