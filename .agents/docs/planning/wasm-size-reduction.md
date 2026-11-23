@@ -594,6 +594,8 @@ tuple type of its own. Remaining, priced:
   total (`feature_info_t` compares the sequence number, merged lookups combine commutatively), so one unstable kernel
   would do, but that is a fork change to the plan compiler and needs the cold-start check.
 
+All three items above were taken on 2026-11-23 (next section), except the `usize` sort.
+
 How we write generics in this crate so they collapse:
 
 1. A generic function is a thin shell. It converts its generic arguments (`impl AsRef<[T]>`, closures, iterators) into
@@ -601,12 +603,84 @@ How we write generics in this crate so they collapse:
    generic over their element.
 2. A closure parameter on a function that is not a per-glyph or per-cluster kernel is `&mut dyn FnMut`, not
    `impl FnMut`. One indirect call per record is invisible next to the record's work; a second copy of the body is not.
+   The rope's ordered update pays one per visited record with no measurable cost on the headline edit rows.
 3. Every ordering lowers its key to `u64` (`sort::pack2`, `sort::f64_key`) and sorts through `sort::sort_keys` or
-   `sort::sort_pairs`. A new `sort_unstable_by_key` or `sort_by` is a new copy of pdqsort (3 to 6 kB raw).
+   `sort::sort_pairs`. A key that does not lower (a many-field logical key) sorts `(prefix, index)` pairs through
+   `sort::sort_pairs_by` and permutes with `sort::apply_pair_order`. A new `sort_unstable_by_key`, `sort_by` or `sort`
+   is a new copy of pdqsort or driftsort (3 to 8 kB raw), in vendored crates too, where a stable sort by a small key is
+   an unstable sort of `key << 32 | position`.
 4. A container generic over its element (`retained_rope`) keeps the structural algorithm on an erased node and makes the
-   element type visible only where elements are copied, dropped or summarised.
-5. Before adding a generic with more than one caller, check `twiggy monos` on the named build
+   element type visible only where elements are copied, dropped or summarised. Byte storage in `u64` words with a
+   `&'static` per-type descriptor works for `Copy` records; the typed view is one `unsafe` cast resting on the invariant
+   that only the typed shell writes records.
+5. Erasing a small generic is not always a gzip win: replacing three ~450-byte `apply_pair_order` copies with a swap
+   callback cut raw bytes and added gzip bytes, because the copies compressed well against each other. Measure gzip.
+6. Before adding a generic with more than one caller, check `twiggy monos` on the named build
    (`glyph:shaper-profile-artifact`) for its duplicate bytes, and justify a second copy with an A/B.
+
+### 2026-11-23 monomorphization pass
+
+Branch `experiments/sil-monos` from `sil-green-53` (`36fe54722`). Same build and measurement as above (package flags,
+isolated target, gzip 9, Brotli 11; the scratch build is byte-identical to the package's `dist/text-shaper.wasm`).
+`twiggy monos` on the named control: generics with more than one instantiation hold `145,473` B, `99,504` of them
+duplicate copies (`core`/`alloc` `53,922`, ours `39,040`, HarfRust `5,587`). The top duplicates were stable quicksort
+over HarfRust map types (`14,470`), `retained_rope::update_ordered_node` over seven type and closure pairs (`13,766`),
+unstable quicksort (`11,025`, `IndexEdit` alone `6,138`), drop glue over 29 types (`10,381`), drift sort (`6,175`),
+HarfRust `apply_chain_with_sequences` (`5,587`) and `retained_rope` `split`/`balance`/`join_nodes`/`append_right`/
+`branch` (`19,149` together). After the pass: `65,400` B total, `39,653` duplicate (ours `4,796`).
+
+| Cut                                                                 | Commit      |       raw |   Δ raw |    gzip | Δ gzip |  Brotli | Δ Brotli |
+| ------------------------------------------------------------------- | ----------- | --------: | ------: | ------: | -----: | ------: | -------: |
+| control `sil-green-53`                                              | `36fe54722` | 1,578,052 |       — | 621,697 |      — | 484,862 |        — |
+| `retained_rope` type-erased tree core                               | `1e2303d46` | 1,541,888 | −36,164 | 612,881 | −8,816 | 478,320 |   −6,542 |
+| `IndexEdit` and splice `Range` sorts through shared kernels         | `0cd655f53` | 1,534,502 |  −7,386 | 609,932 | −2,949 | 476,480 |   −1,840 |
+| HarfRust `feature_info_t`/`lookup_map_t` sorts as `u64` keys (fork) | `3f6b7559d` | 1,516,384 | −18,118 | 604,181 | −5,751 | 471,668 |   −4,812 |
+| `sort_pairs` shares `sort_pairs_by`'s instantiation                 | `748046ba3` | 1,511,499 |  −4,885 | 602,850 | −1,331 | 471,408 |     −260 |
+| HarfRust `map_features` stable tag sort as `u64` keys (fork)        | `ca7656dd5` | 1,506,043 |  −5,456 | 601,122 | −1,728 | 469,752 |   −1,656 |
+
+Together `−72,009` raw / `−20,575` gzip / `−15,110` Brotli.
+
+**Rope.** One non-generic `Node` serves every record type: a leaf keeps its records as bytes at the type's stride in
+`u64` words (so every record type with alignment up to 8 is aligned) beside a `&'static RecordKind` holding the stride
+and a per-type summary function. Split, join, balance, append, point update, the exact builder and the ordered-update
+traversal compile once; the ordered update's per-record callback and range source cross as `&mut dyn FnMut`, the
+callback writing a replacement record's bytes into a stack buffer. The first replacement in a leaf copies the whole leaf
+and later ones overwrite their row. Iteration, cursors, point lookup, `index_for_fragment` and `find_source` still borrow
+a leaf as `&[T]` and stay specialised. What is left per type is the shell (`update_ordered_ranges` with its inlined
+call-site closures, about 7.8 kB over 25 call sites) and five 200-byte summary functions. The estimate was `−10` to
+`−12` kB gzip; the cut gave `−8.8` kB.
+
+**Sorts.** `PlacementLogicalKey` does not pack into `u64`, so placement edits sort `(0, index)` pairs through
+`sort::sort_pairs_by`, whose comparator is `&mut dyn FnMut` and is reached only on equal prefixes, then permute with
+`apply_pair_order`; `sort_pairs` runs the same instantiation without a comparator. The HarfRust plan compiler's three
+sorts lower to `u64` keys and share the shaper's `[u64]` sort: `tag << 32 | position` gives `feature_info_t` order
+(`seq` is the position) and the stable tag order of `map_features`, and all six `lookup_map_t` fields pack into 52 bits
+and unpack after the sort (see `vendor/harfrust/GLYPH-FORK.md`; the fork parity tests pass in both configurations).
+
+Speed: headline harness, 7 fresh-browser loads per arm, each cut against the one before it, and
+`benchmark:headline-bidi-edit` with 5 rounds per cut. The host carried other lanes (load average 5 to 15) and, during
+the fork-key cut's run, this lane's own oracle gates. No row moved beyond its ranges. The rope cut's first run read
+latin15k `delete-middle` +11% (frame and layout) against a baseline range of `4.42..8.22`; a 9-load latin-only rerun
+read every latin row within ±2%. The sort cuts' rows are within ±8% in both directions with overlapping ranges; the
+`sort_pairs` cut's bidi-edit read `+1%` to `+6%` per step with overlapping loads. The `map_features` cut's rows overlap (bidi-edit
+`delete-middle` `+9%` with overlapping loads). Control against the tip on a quieter host (7 loads): every row within
+`−6%` to `+3.5%`; latin15k and stress22k rows overlap, and the bidi15k edit rows read `+1%` to `+3.5%`, with
+`paste-middle` (`12.47` to `12.77` ms frame, `8.59` to `8.80` ms layout) the one row whose ranges do not overlap. The
+likely cause is the rope's indirect per-record call in the ordered update; the drift is inside the owner's allowance
+and is reported, not reverted.
+
+Not taken:
+
+- `apply_pair_order` through a `&mut dyn FnMut(usize, usize)` swap: `−315` raw but `+337` gzip.
+- The `u32`/`usize` pdqsort (about 3.9 kB raw with its helpers): its callers (`dirty_instances`, placement-slot and
+  lifecycle scratch in `engine/state.rs`, `drawn` graphemes) sort `u32` or `usize` vectors in place; routing them
+  through `sort_keys` needs a `u64` scratch at each site, and two are in `state.rs` code another lane owns.
+- Drop glue (`10,406` duplicate over 29 types) is one function per distinct type, not duplication a shell can remove.
+- HarfRust `apply_chain_with_sequences` (three match-function triples, `5,587` duplicate) is the per-glyph GSUB/GPOS
+  matcher; an indirect match call per glyph is not worth about 2 kB gzip. `unicode-bidi`'s bracket-pair sort and
+  HarfRust Indic's per-syllable stable sort (about 9 kB raw with their drift-sort halves) are an unvendored dependency
+  and a per-syllable hot path.
+- `codec_gather::splice_appended` and the column-lane pairs (about 3 kB duplicate) are per-column kernels.
 
 ### HarfRust fork features (owner direction B)
 

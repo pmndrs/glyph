@@ -23,6 +23,7 @@ use core::ops::Range;
 use crate::{FontInkTable, FontMetrics, unicode::UnicodeAnalysis};
 
 use super::super::run_local_paragraph::{RunLocalSplice, RunLocalWindow};
+use super::super::sort;
 
 use super::{
     CLUSTER_ALLOWED_BREAK, CLUSTER_BREAK_CORRECTION, CLUSTER_REQUIRED_BREAK, ClusterArena,
@@ -699,9 +700,19 @@ impl ClusterArena {
                 }
             }
         }
-        dirty.sort_unstable_by_key(|range| range.start);
+        // Cluster indices are `u32` in the arena (`index_at`), so each range packs into one
+        // key for the shared sort kernel; `(start, end)` order merges to the same union as
+        // start order.
+        let mut keys: Vec<u64> = dirty
+            .iter()
+            .map(|range| sort::pack2(range.start as u32, range.end as u32))
+            .collect();
+        sort::sort_keys(&mut keys);
         let mut merged: Vec<Range<usize>> = Vec::new();
-        for range in dirty {
+        for range in keys
+            .into_iter()
+            .map(|key| (key >> 32) as usize..(key as u32) as usize)
+        {
             match merged.last_mut() {
                 Some(last) if range.start <= last.end => last.end = last.end.max(range.end),
                 _ => merged.push(range),

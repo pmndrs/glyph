@@ -2,6 +2,7 @@
 //! Dense slots use generations and remain quarantined until renderer acknowledgement.
 
 use super::retained_rope::{LEAF_CAPACITY, RetainedRope, RopeRecord, RopeSummary};
+use super::sort;
 use alloc::vec::Vec;
 use core::{num::NonZeroU32, ops::Range};
 
@@ -122,6 +123,8 @@ pub(crate) struct PlacementSlotArena<Key: Copy> {
     /// Physical slots in a structurally changed pending desired-occurrence order.
     pending_order: RetainedRope<PlacementSlot>,
     index_edits: Vec<IndexEdit<Key>>,
+    /// Sort scratch for `index_edits`: `(0, edit index)` pairs.
+    edit_order: Vec<(u64, u32)>,
     occurrence_edits: Vec<(Range<usize>, Range<usize>)>,
     pending_structural_change: bool,
     pending_slot_count: u32,
@@ -150,6 +153,7 @@ impl<Key: Copy> Default for PlacementSlotArena<Key> {
             pending_index: RetainedRope::default(),
             pending_order: RetainedRope::default(),
             index_edits: Vec::new(),
+            edit_order: Vec::new(),
             occurrence_edits: Vec::new(),
             pending_structural_change: false,
             pending_slot_count: 0,
@@ -444,7 +448,20 @@ where
         let (removed_edits, desired_edits) = self.index_edits.split_at_mut(removed_count);
         for edits in [removed_edits, desired_edits] {
             if edits.windows(2).any(|pair| pair[0].key > pair[1].key) {
-                edits.sort_unstable_by_key(|edit| edit.key);
+                // A logical key does not lower to `u64`, so the edits sort through the shared
+                // comparator kernel. Equal keys are rejected as duplicates below, so the
+                // order is the key order whatever the tie-break.
+                if edits.len() > sort::MAX_PAIRS {
+                    return Err(PlacementSlotError::ArithmeticOverflow);
+                }
+                self.edit_order.clear();
+                reserve(&mut self.edit_order, edits.len())?;
+                self.edit_order
+                    .extend((0..edits.len() as u32).map(|index| (0, index)));
+                sort::sort_pairs_by(&mut self.edit_order, &mut |left, right| {
+                    edits[left as usize].key.cmp(&edits[right as usize].key)
+                });
+                sort::apply_pair_order(edits, &mut self.edit_order);
             }
         }
         self.assignments.resize(

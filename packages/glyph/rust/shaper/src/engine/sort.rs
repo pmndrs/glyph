@@ -11,10 +11,40 @@ use alloc::vec::Vec;
 
 const PERMUTATION_VISITED: u32 = 1 << 31;
 
-/// The one keyed-sort instantiation: `(key, source index)` pairs in ascending order.
-/// The index tiebreak makes the result independent of the sort algorithm.
+/// Keyed sort: `(key, source index)` pairs in ascending order. The index tiebreak makes the
+/// result independent of the sort algorithm. It shares `sort_pairs_by`'s instantiation without
+/// a tie callback, so equal keys cost no indirect call.
 pub(crate) fn sort_pairs(pairs: &mut [(u64, u32)]) {
-    pairs.sort_unstable();
+    sort_pairs_with(pairs, None);
+}
+
+/// Largest slice `apply_pair_order` can permute: source indices keep their top bit free.
+pub(crate) const MAX_PAIRS: usize = PERMUTATION_VISITED as usize;
+
+/// The one pair-sort instantiation, also for keys that do not lower to `u64`: pairs are
+/// `(prefix key, source index)`, ordered by prefix, then by `tie` over the two source
+/// indices, then by index. `tie` crosses as `&mut dyn FnMut`, so every such ordering shares
+/// one copy of the sort; one indirect call per comparison is the price.
+pub(crate) fn sort_pairs_by(
+    pairs: &mut [(u64, u32)],
+    tie: &mut dyn FnMut(u32, u32) -> core::cmp::Ordering,
+) {
+    sort_pairs_with(pairs, Some(tie));
+}
+
+fn sort_pairs_with(
+    pairs: &mut [(u64, u32)],
+    mut tie: Option<&mut dyn FnMut(u32, u32) -> core::cmp::Ordering>,
+) {
+    pairs.sort_unstable_by(|left, right| {
+        left.0
+            .cmp(&right.0)
+            .then_with(|| {
+                tie.as_mut()
+                    .map_or(core::cmp::Ordering::Equal, |tie| tie(left.1, right.1))
+            })
+            .then(left.1.cmp(&right.1))
+    });
 }
 
 /// The one raw-key instantiation.

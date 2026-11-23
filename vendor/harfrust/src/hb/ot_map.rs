@@ -436,7 +436,8 @@ impl<'a> hb_ot_map_builder_t<'a> {
         }
 
         if self.is_simple {
-            map_features.sort();
+            // A stable sort by tag: equal tags keep their insertion order.
+            sort_by_tag_then_position(&mut map_features, |feature| feature.tag);
         }
 
         (map_features, required_stage, global_mask)
@@ -449,7 +450,7 @@ impl<'a> hb_ot_map_builder_t<'a> {
         }
 
         if !self.is_simple {
-            feature_infos.sort();
+            sort_feature_infos(feature_infos);
         }
 
         let mut j = 0;
@@ -538,7 +539,7 @@ impl<'a> hb_ot_map_builder_t<'a> {
                 let len = lookups.len();
 
                 if last_lookup + 1 < len {
-                    lookups[last_lookup..].sort();
+                    sort_lookup_maps(&mut lookups[last_lookup..]);
 
                     let mut j = last_lookup;
                     for i in j + 1..len {
@@ -610,5 +611,64 @@ impl<'a> hb_ot_map_builder_t<'a> {
         }
 
         Some(())
+    }
+}
+
+// The two plan-compile sorts below lower their order to `u64` keys and sort those, so they share
+// one `[u64]::sort_unstable` with the embedding crate instead of linking a sort per element type.
+
+/// Sorts in `feature_info_t` order, `(tag, seq)`. Before deduplication `seq` is each entry's
+/// position (entries are only pushed), so this is the tag-then-position order.
+fn sort_feature_infos(feature_infos: &mut Vec<feature_info_t>) {
+    debug_assert!(feature_infos
+        .iter()
+        .enumerate()
+        .all(|(index, info)| info.seq == index));
+    sort_by_tag_then_position(feature_infos, |info| info.tag);
+}
+
+/// Sorts by tag, keeping equal tags in their current order (a stable sort by tag), through
+/// `(tag as big-endian u32) << 32 | position` keys. `Tag` orders its bytes lexicographically,
+/// which is big-endian `u32` order. A plan holds a few dozen features, far below the 2^32
+/// positions a key's low half can index.
+fn sort_by_tag_then_position<T: Copy>(items: &mut Vec<T>, tag: fn(&T) -> hb_tag_t) {
+    let mut keys: Vec<u64> = items
+        .iter()
+        .enumerate()
+        .map(|(position, item)| {
+            (u64::from(u32::from_be_bytes(tag(item).to_be_bytes())) << 32) | position as u64
+        })
+        .collect();
+    keys.sort_unstable();
+    let original = items.clone();
+    for (slot, key) in items.iter_mut().zip(&keys) {
+        *slot = original[(*key as u32) as usize];
+    }
+}
+
+/// Sorts in the derived `lookup_map_t` order. Every field packs into the key, high to low in
+/// declaration order, so sorting the keys and unpacking them is the same sort.
+fn sort_lookup_maps(lookups: &mut [lookup_map_t]) {
+    let mut keys: Vec<u64> = lookups
+        .iter()
+        .map(|lookup| {
+            (u64::from(lookup.index) << 48)
+                | (u64::from(lookup.auto_zwnj) << 47)
+                | (u64::from(lookup.auto_zwj) << 46)
+                | (u64::from(lookup.random) << 45)
+                | (u64::from(lookup.mask) << 1)
+                | u64::from(lookup.per_syllable)
+        })
+        .collect();
+    keys.sort_unstable();
+    for (lookup, key) in lookups.iter_mut().zip(keys) {
+        *lookup = lookup_map_t {
+            index: (key >> 48) as u16,
+            auto_zwnj: key & (1 << 47) != 0,
+            auto_zwj: key & (1 << 46) != 0,
+            random: key & (1 << 45) != 0,
+            mask: (key >> 1) as u32,
+            per_syllable: key & 1 != 0,
+        };
     }
 }

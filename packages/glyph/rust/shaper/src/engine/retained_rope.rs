@@ -5,14 +5,33 @@
 //! boundary chunks. Interior summaries
 //! carry both record and fragment counts plus source-coordinate coverage, so callers can
 //! navigate in either coordinate without flattening the tree.
+//!
+//! The tree is type-erased: one `Node` serves every record type, and a leaf stores its
+//! records as bytes at the type's stride beside a `RecordKind` that summarises them. The
+//! structural algorithms (split, join, balance, append, point and ordered update) are
+//! therefore compiled once, not once per record type. `RetainedRope<T>` is the typed shell:
+//! it converts records to bytes on the way in and borrows leaves as `&[T]` on the read
+//! paths (iteration, cursors, point lookup), which stay specialised per record type.
 
 use alloc::{sync::Arc, vec::Vec};
 #[cfg(test)]
 use core::fmt;
-use core::{iter::FusedIterator, ops::Range};
+use core::{
+    iter::FusedIterator,
+    marker::PhantomData,
+    mem::{MaybeUninit, align_of, size_of},
+    ops::Range,
+};
 
 pub(crate) const LEAF_CAPACITY: usize = 32;
 const MAX_HEIGHT: usize = usize::BITS as usize + 1;
+/// Largest record the tree stores. An ordered update stages one candidate record in a stack
+/// buffer of this size.
+const MAX_RECORD_BYTES: usize = 256;
+const WORD_BYTES: usize = size_of::<u64>();
+
+type Word = MaybeUninit<u64>;
+type Byte = MaybeUninit<u8>;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct RopeSummary {
@@ -49,15 +68,192 @@ impl RopeSummary {
     }
 }
 
-pub(crate) trait RopeRecord: Copy {
+pub(crate) trait RopeRecord: Copy + 'static {
     /// Summarizes exactly one stored record. Implementations are package-owned;
     /// `records` must therefore be one.
     fn rope_summary(&self) -> RopeSummary;
 }
 
-enum Node<T: RopeRecord> {
+/// What the type-erased tree needs from one record type: its stride, and how to summarise a
+/// run of a leaf's records.
+struct RecordKind {
+    size: usize,
+    summarize: fn(&Leaf, Range<usize>) -> Option<RopeSummary>,
+}
+
+struct KindOf<T>(PhantomData<T>);
+
+impl<T: RopeRecord> KindOf<T> {
+    const KIND: &'static RecordKind = &RecordKind {
+        size: {
+            assert!(align_of::<T>() <= align_of::<u64>());
+            assert!(size_of::<T>() != 0 && size_of::<T>() <= MAX_RECORD_BYTES);
+            size_of::<T>()
+        },
+        summarize: summarize_leaf::<T>,
+    };
+}
+
+fn summarize_leaf<T: RopeRecord>(leaf: &Leaf, range: Range<usize>) -> Option<RopeSummary> {
+    summarize(leaf.records::<T>().get(range)?)
+}
+
+/// The bytes of a record slice. Padding is uninitialised, which `MaybeUninit` admits.
+fn record_bytes<T: RopeRecord>(records: &[T]) -> &[Byte] {
+    // SAFETY: the view covers exactly the slice's `size_of_val` bytes, lives as long as the
+    // borrow, and reads nothing: every byte is `MaybeUninit<u8>`, which has no validity
+    // requirement and alignment one.
+    unsafe {
+        core::slice::from_raw_parts(
+            records.as_ptr().cast::<Byte>(),
+            core::mem::size_of_val(records),
+        )
+    }
+}
+
+/// One leaf's records, packed at their kind's stride from the start of `u64` words, so every
+/// record type `KindOf` admits is aligned. Only `RetainedRope<T>` writes records, and every
+/// node reachable from a `RetainedRope<T>` holds records of `T` written from values of `T`:
+/// that module invariant is what makes the typed view `records` sound.
+struct Leaf {
+    kind: &'static RecordKind,
+    words: Vec<Word>,
+    len: usize,
+}
+
+impl Leaf {
+    fn empty(kind: &'static RecordKind) -> Self {
+        Self {
+            kind,
+            words: Vec::new(),
+            len: 0,
+        }
+    }
+
+    fn with_capacity(kind: &'static RecordKind, records: usize) -> Result<Self, ()> {
+        let mut leaf = Self::empty(kind);
+        leaf.reserve_exact(records)?;
+        Ok(leaf)
+    }
+
+    fn copy_of(kind: &'static RecordKind, records: &[Byte]) -> Result<Self, ()> {
+        let mut leaf = Self::with_capacity(kind, records.len() / kind.size)?;
+        leaf.extend(records)?;
+        Ok(leaf)
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn capacity(&self) -> usize {
+        self.words.capacity() * WORD_BYTES / self.kind.size
+    }
+
+    fn words_for(&self, records: usize) -> Result<usize, ()> {
+        records
+            .checked_mul(self.kind.size)
+            .map(|bytes| bytes.div_ceil(WORD_BYTES))
+            .ok_or(())
+    }
+
+    fn reserve_exact(&mut self, additional: usize) -> Result<(), ()> {
+        let words = self.words_for(self.len.checked_add(additional).ok_or(())?)?;
+        self.words
+            .try_reserve_exact(words.saturating_sub(self.words.len()))
+            .map_err(|_| ())
+    }
+
+    /// Grows as `Vec::try_reserve` does, at least doubling, so repeated pushes stay amortised.
+    fn reserve(&mut self, additional: usize) -> Result<(), ()> {
+        let required = self.len.checked_add(additional).ok_or(())?;
+        let capacity = self.capacity();
+        if required <= capacity {
+            return Ok(());
+        }
+        self.reserve_exact(required.max(capacity.saturating_mul(2)).max(4) - self.len)
+    }
+
+    fn bytes(&self) -> &[Byte] {
+        // SAFETY: `words` owns `words.len()` initialised `MaybeUninit<u64>` slots; the view
+        // covers exactly their bytes for the borrow's lifetime and reads nothing, since every
+        // byte is `MaybeUninit<u8>`.
+        let bytes = unsafe {
+            core::slice::from_raw_parts(
+                self.words.as_ptr().cast::<Byte>(),
+                self.words.len() * WORD_BYTES,
+            )
+        };
+        &bytes[..self.len * self.kind.size]
+    }
+
+    fn bytes_mut(&mut self) -> &mut [Byte] {
+        let len = self.len * self.kind.size;
+        // SAFETY: as in `bytes`, over the uniquely borrowed `words`; writing `MaybeUninit`
+        // bytes cannot break the `MaybeUninit<u64>` slots they belong to.
+        let bytes = unsafe {
+            core::slice::from_raw_parts_mut(
+                self.words.as_mut_ptr().cast::<Byte>(),
+                self.words.len() * WORD_BYTES,
+            )
+        };
+        &mut bytes[..len]
+    }
+
+    /// Appends whole records' bytes, growing like `Vec::try_reserve`.
+    fn extend(&mut self, records: &[Byte]) -> Result<(), ()> {
+        debug_assert!(records.len().is_multiple_of(self.kind.size));
+        self.reserve(records.len() / self.kind.size)?;
+        let start = self.len * self.kind.size;
+        let end = start + records.len();
+        self.words
+            .resize(end.div_ceil(WORD_BYTES), MaybeUninit::uninit());
+        self.len += records.len() / self.kind.size;
+        self.bytes_mut()[start..end].copy_from_slice(records);
+        Ok(())
+    }
+
+    fn push<T: RopeRecord>(&mut self, record: T) -> Result<(), ()> {
+        debug_assert_eq!(self.kind.size, size_of::<T>());
+        self.reserve(1)?;
+        let start = self.len * size_of::<T>();
+        let end = start + size_of::<T>();
+        self.words
+            .resize(end.div_ceil(WORD_BYTES), MaybeUninit::uninit());
+        self.len += 1;
+        self.bytes_mut()[start..end].copy_from_slice(record_bytes(core::slice::from_ref(&record)));
+        Ok(())
+    }
+
+    fn record_mut(&mut self, index: usize) -> Option<&mut [Byte]> {
+        let size = self.kind.size;
+        self.bytes_mut()
+            .get_mut(index.checked_mul(size)?..index.checked_add(1)?.checked_mul(size)?)
+    }
+
+    fn clear(&mut self) {
+        self.words.clear();
+        self.len = 0;
+    }
+
+    fn summary(&self, range: Range<usize>) -> Option<RopeSummary> {
+        (self.kind.summarize)(self, range)
+    }
+
+    /// The leaf's records as `T`. Only for a leaf reachable from a `RetainedRope<T>`.
+    fn records<T: RopeRecord>(&self) -> &[T] {
+        debug_assert_eq!(self.kind.size, size_of::<T>());
+        // SAFETY: by the module invariant on `Leaf`, the first `len * size_of::<T>()` bytes
+        // are `len` records of `T` copied from values of `T`. They start a `u64`-aligned
+        // allocation and `KindOf<T>` proves `align_of::<T>() <= align_of::<u64>()`, so every
+        // record is aligned; the borrow of `self` keeps the words alive and unmodified.
+        unsafe { core::slice::from_raw_parts(self.words.as_ptr().cast::<T>(), self.len) }
+    }
+}
+
+enum Node {
     Leaf {
-        items: Vec<T>,
+        leaf: Leaf,
         summary: RopeSummary,
     },
     Branch {
@@ -68,7 +264,8 @@ enum Node<T: RopeRecord> {
     },
 }
 
-type SplitNodes<T> = (Option<Arc<Node<T>>>, Option<Arc<Node<T>>>);
+type Root = Option<Arc<Node>>;
+type SplitNodes = (Root, Root);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RopeEditError<E> {
@@ -83,7 +280,23 @@ pub(crate) enum RopeUpdate<T> {
     Stop,
 }
 
-impl<T: RopeRecord> Node<T> {
+/// An erased edit failure. The typed shell holds the callback's own error.
+#[derive(Clone, Copy)]
+enum Failure {
+    Storage,
+    Callback,
+}
+
+impl Failure {
+    fn into_edit_error<E>(self, callback: Option<E>) -> RopeEditError<E> {
+        match (self, callback) {
+            (Self::Callback, Some(error)) => RopeEditError::Callback(error),
+            _ => RopeEditError::Storage,
+        }
+    }
+}
+
+impl Node {
     fn summary(&self) -> RopeSummary {
         match self {
             Self::Leaf { summary, .. } | Self::Branch { summary, .. } => *summary,
@@ -98,18 +311,31 @@ impl<T: RopeRecord> Node<T> {
     }
 }
 
-#[derive(Clone)]
 pub(crate) struct RetainedRope<T: RopeRecord> {
-    root: Option<Arc<Node<T>>>,
+    root: Root,
+    records: PhantomData<T>,
+}
+
+impl<T: RopeRecord> Clone for RetainedRope<T> {
+    fn clone(&self) -> Self {
+        Self::with_root(self.root.clone())
+    }
 }
 
 impl<T: RopeRecord> Default for RetainedRope<T> {
     fn default() -> Self {
-        Self { root: None }
+        Self::with_root(None)
     }
 }
 
 impl<T: RopeRecord> RetainedRope<T> {
+    const fn with_root(root: Root) -> Self {
+        Self {
+            root,
+            records: PhantomData,
+        }
+    }
+
     /// Constructs a packed, balanced root from exactly `count` records in storage order.
     /// A failed producer or summary leaves no published root.
     pub(crate) fn try_from_exact<E>(
@@ -120,8 +346,26 @@ impl<T: RopeRecord> RetainedRope<T> {
             return Ok(Self::default());
         }
         let leaf_count = count / LEAF_CAPACITY + usize::from(!count.is_multiple_of(LEAF_CAPACITY));
-        let root = build_exact_node(count, 0..leaf_count, &mut produce)?;
-        Ok(Self { root: Some(root) })
+        let mut failure = None;
+        let root = build_exact_node(
+            KindOf::<T>::KIND,
+            count,
+            0..leaf_count,
+            &mut |leaf, records| {
+                for index in records {
+                    let record = produce(index).map_err(|error| {
+                        failure = Some(error);
+                        Failure::Callback
+                    })?;
+                    leaf.push(record).map_err(|()| Failure::Storage)?;
+                }
+                Ok(())
+            },
+        );
+        match root {
+            Ok(root) => Ok(Self::with_root(Some(root))),
+            Err(error) => Err(error.into_edit_error(failure)),
+        }
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -134,14 +378,7 @@ impl<T: RopeRecord> RetainedRope<T> {
 
     /// Whether this root has the exact leaf partitions and midpoint tree of `try_from_exact`.
     pub(crate) fn is_exact_shape(&self) -> bool {
-        let count = self.len();
-        if count == 0 {
-            return true;
-        }
-        let leaves = count / LEAF_CAPACITY + usize::from(!count.is_multiple_of(LEAF_CAPACITY));
-        self.root
-            .as_deref()
-            .is_some_and(|root| exact_shape(root, count, 0..leaves))
+        is_exact_shape(self.root.as_deref())
     }
 
     pub(crate) fn summary(&self) -> RopeSummary {
@@ -149,13 +386,7 @@ impl<T: RopeRecord> RetainedRope<T> {
     }
 
     pub(crate) fn clear(&mut self) {
-        // A unique root leaf can serve as empty scratch without exposing records.
-        if let Some(Node::Leaf { items, summary }) = self.root.as_mut().and_then(Arc::get_mut) {
-            items.clear();
-            *summary = RopeSummary::default();
-            return;
-        }
-        self.root = None;
+        clear_root(&mut self.root);
     }
 
     #[cfg(test)]
@@ -175,77 +406,29 @@ impl<T: RopeRecord> RetainedRope<T> {
             .as_deref()
             .map_or(0, rightmost_leaf_space)
             .min(items.len());
-        let fitting_all = fitting == items.len();
-        let mut staged = None;
-        // The kernel validates summaries and reserves before its logical write. Only
-        // multi-chunk input needs staging against a failure in a later chunk.
-        let root = if fitting_all {
-            &mut self.root
-        } else {
-            staged = self.root.clone();
-            &mut staged
-        };
-        if fitting != 0 {
-            append_right(
-                root.as_mut().ok_or(())?,
-                &items[..fitting],
-                summarize(&items[..fitting]).ok_or(())?,
-            )?;
-            #[cfg(test)]
-            super::work_attribution::record(|work| {
-                work.rope_bulk_records += fitting;
-                work.rope_bulk_chunks += 1;
-            });
-        }
-        if fitting_all {
-            return Ok(());
-        }
-        for chunk in items[fitting..].chunks(LEAF_CAPACITY) {
-            let leaf = leaf_from_items(copy_items(chunk)?)?;
-            *root = join(root.take(), Some(leaf))?;
-            #[cfg(test)]
-            super::work_attribution::record(|work| {
-                work.rope_bulk_records += chunk.len();
-                work.rope_bulk_chunks += 1;
-            });
-        }
-        self.root = staged;
-        Ok(())
+        let fitting_summary = summarize(&items[..fitting]).ok_or(())?;
+        append_records(
+            &mut self.root,
+            KindOf::<T>::KIND,
+            record_bytes(items),
+            fitting,
+            fitting_summary,
+        )
     }
 
     pub(crate) fn push(&mut self, item: T) -> Result<(), ()> {
         #[cfg(test)]
         super::work_attribution::record(|work| work.rope_record_pushes += 1);
-        if self
-            .root
-            .as_deref()
-            .is_some_and(|root| rightmost_leaf_space(root) != 0)
-        {
-            return append_right(
-                self.root.as_mut().ok_or(())?,
-                core::slice::from_ref(&item),
-                item.rope_summary(),
-            );
-        }
-        let mut items = Vec::new();
-        items.try_reserve(1).map_err(|_| ())?;
-        items.push(item);
-        let leaf = leaf_from_items(items)?;
-        let root = join(self.root.clone(), Some(leaf))?;
-        self.root = root;
-        Ok(())
+        push_record(
+            &mut self.root,
+            KindOf::<T>::KIND,
+            record_bytes(core::slice::from_ref(&item)),
+            item.rope_summary(),
+        )
     }
 
     pub(crate) fn truncate(&mut self, len: usize) -> Result<(), ()> {
-        if len >= self.len() {
-            return Ok(());
-        }
-        let Some(root) = self.root.as_ref().map(Arc::clone) else {
-            return Ok(());
-        };
-        let root = split(root, len)?.0;
-        self.root = root;
-        Ok(())
+        truncate_root(&mut self.root, len)
     }
 
     pub(crate) fn append_shared_range(
@@ -253,23 +436,7 @@ impl<T: RopeRecord> RetainedRope<T> {
         source: &Self,
         range: Range<usize>,
     ) -> Result<bool, ()> {
-        if range.start > range.end || range.end > source.len() {
-            return Ok(false);
-        }
-        if range.is_empty() {
-            return Ok(true);
-        }
-        let Some(source_root) = source.root.as_ref() else {
-            return Ok(false);
-        };
-        let (_, tail) = split(Arc::clone(source_root), range.start)?;
-        let Some(tail) = tail else {
-            return Ok(false);
-        };
-        let (middle, _) = split(tail, range.end - range.start)?;
-        let root = join(self.root.clone(), middle)?;
-        self.root = root;
-        Ok(true)
+        append_shared_range(&mut self.root, source.root.as_ref(), range)
     }
 
     /// Atomically replaces an ordered interval, sharing untouched chunks.
@@ -278,23 +445,7 @@ impl<T: RopeRecord> RetainedRope<T> {
         range: Range<usize>,
         replacement: &Self,
     ) -> Result<bool, ()> {
-        if range.start > range.end || range.end > self.len() {
-            return Ok(false);
-        }
-        let (prefix, suffix) = match self.root.as_ref() {
-            Some(root) => {
-                let (prefix, tail) = split(Arc::clone(root), range.start)?;
-                let suffix = match tail {
-                    Some(tail) => split(tail, range.end - range.start)?.1,
-                    None => None,
-                };
-                (prefix, suffix)
-            }
-            None => (None, None),
-        };
-        let root = join(join(prefix, replacement.root.clone())?, suffix)?;
-        self.root = root;
-        Ok(true)
+        replace_range(&mut self.root, range, replacement.root.as_ref())
     }
 
     pub(crate) fn get(&self, index: usize) -> Option<&T> {
@@ -303,31 +454,22 @@ impl<T: RopeRecord> RetainedRope<T> {
     }
 
     pub(crate) fn update(&mut self, index: usize, update: impl FnOnce(&mut T)) -> Result<bool, ()> {
-        let Some(root) = self.root.as_ref() else {
-            return Ok(false);
-        };
-        let Some(current) = get_record(root, index).copied() else {
+        let Some(current) = self
+            .root
+            .as_deref()
+            .and_then(|root| get_record::<T>(root, index))
+            .copied()
+        else {
             return Ok(false);
         };
         let mut candidate = current;
         update(&mut candidate);
-
-        // Prove every replacement summary before touching a uniquely owned path. A shared
-        // path is rebuilt functionally and published only after all fallible work succeeds.
-        // Both cases therefore preserve the old root on a deep summary overflow.
-        let mut summaries = [RopeSummary::default(); MAX_HEIGHT];
-        preflight_update(root, index, candidate, 0, &mut summaries).ok_or(())?;
-        if path_is_unique(root, index)
-            && let Some(root) = self.root.as_mut()
-        {
-            return apply_unique_update(root, index, candidate, 0, &summaries)
-                .then_some(true)
-                .ok_or(());
-        }
-        let root = self.root.as_ref().ok_or(())?;
-        let replacement = replace_record(root, index, candidate)?;
-        self.root = Some(replacement);
-        Ok(true)
+        update_record(
+            &mut self.root,
+            index,
+            record_bytes(core::slice::from_ref(&candidate)),
+            candidate.rope_summary(),
+        )
     }
 
     /// Visits a record range once in storage order and transactionally replaces records
@@ -349,37 +491,33 @@ impl<T: RopeRecord> RetainedRope<T> {
     /// is reconstructed once even when several ranges intersect it.
     pub(crate) fn update_ordered_ranges<E>(
         &mut self,
-        ranges: impl Iterator<Item = Result<Range<usize>, E>>,
+        mut ranges: impl Iterator<Item = Result<Range<usize>, E>>,
         mut update: impl FnMut(usize, &T) -> Result<RopeUpdate<T>, E>,
     ) -> Result<bool, RopeEditError<E>> {
-        if self.is_empty() {
-            return Ok(false);
-        }
-        let Some(root) = self.root.as_ref() else {
-            return Ok(false);
-        };
-        let mut ranges = OrderedRanges {
-            ranges,
-            current: None,
-            previous_end: 0,
-            len: self.len(),
-        };
-        ranges.advance_to(0)?;
-        if ranges.current.is_none() {
-            return Ok(false);
-        }
-        record_ordered_traversal();
-        let mut stopped = false;
-        let replacement = update_ordered_node(root, 0, &mut ranges, &mut update, &mut stopped)?;
-        if !stopped {
-            ranges.advance_to(self.len())?;
-        }
-        if let Some(replacement) = replacement {
-            self.root = Some(replacement);
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        let mut range_failure = None;
+        let mut update_failure = None;
+        let result = update_ordered(
+            &mut self.root,
+            &mut || {
+                Some(ranges.next()?.map_err(|error| {
+                    range_failure = Some(error);
+                }))
+            },
+            &mut |index, leaf, offset, candidate| match update(index, &leaf.records::<T>()[offset])
+            {
+                Ok(RopeUpdate::Keep) => Ok(Visit::Keep),
+                Ok(RopeUpdate::Replace(next)) => {
+                    candidate.copy_from_slice(record_bytes(core::slice::from_ref(&next)));
+                    Ok(Visit::Replace)
+                }
+                Ok(RopeUpdate::Stop) => Ok(Visit::Stop),
+                Err(error) => {
+                    update_failure = Some(error);
+                    Err(())
+                }
+            },
+        );
+        result.map_err(|failure| failure.into_edit_error(range_failure.or(update_failure)))
     }
 
     pub(crate) fn iter(&self) -> RopeIter<'_, T> {
@@ -411,8 +549,8 @@ impl<T: RopeRecord> RetainedRope<T> {
         let mut record_base = 0usize;
         loop {
             match node {
-                Node::Leaf { items, .. } => {
-                    for (offset, item) in items.iter().enumerate() {
+                Node::Leaf { leaf, .. } => {
+                    for (offset, item) in leaf.records::<T>().iter().enumerate() {
                         let count = item.rope_summary().fragments;
                         if fragment < count {
                             return Some(record_base + offset);
@@ -445,9 +583,9 @@ impl<T: RopeRecord> RetainedRope<T> {
 
     #[cfg(test)]
     pub(crate) fn retained_capacity(&self) -> usize {
-        fn capacity<T: RopeRecord>(node: &Node<T>) -> usize {
+        fn capacity(node: &Node) -> usize {
             match node {
-                Node::Leaf { items, .. } => items.capacity(),
+                Node::Leaf { leaf, .. } => leaf.capacity(),
                 Node::Branch { left, right, .. } => capacity(left).saturating_add(capacity(right)),
             }
         }
@@ -455,41 +593,185 @@ impl<T: RopeRecord> RetainedRope<T> {
     }
 }
 
-fn build_exact_node<T: RopeRecord, E>(
+fn is_exact_shape(root: Option<&Node>) -> bool {
+    let Some(root) = root else {
+        return true;
+    };
+    let count = root.summary().records;
+    if count == 0 {
+        return true;
+    }
+    let leaves = count / LEAF_CAPACITY + usize::from(!count.is_multiple_of(LEAF_CAPACITY));
+    exact_shape(root, count, 0..leaves)
+}
+
+fn clear_root(root: &mut Root) {
+    // A unique root leaf can serve as empty scratch without exposing records.
+    if let Some(Node::Leaf { leaf, summary }) = root.as_mut().and_then(Arc::get_mut) {
+        leaf.clear();
+        *summary = RopeSummary::default();
+        return;
+    }
+    *root = None;
+}
+
+fn append_records(
+    root: &mut Root,
+    kind: &'static RecordKind,
+    records: &[Byte],
+    fitting: usize,
+    fitting_summary: RopeSummary,
+) -> Result<(), ()> {
+    let size = kind.size;
+    let fitting_all = fitting * size == records.len();
+    let mut staged = None;
+    // The kernel validates summaries and reserves before its logical write. Only
+    // multi-chunk input needs staging against a failure in a later chunk.
+    let target = if fitting_all {
+        &mut *root
+    } else {
+        staged = root.clone();
+        &mut staged
+    };
+    if fitting != 0 {
+        append_right(
+            target.as_mut().ok_or(())?,
+            &records[..fitting * size],
+            fitting_summary,
+        )?;
+        #[cfg(test)]
+        super::work_attribution::record(|work| {
+            work.rope_bulk_records += fitting;
+            work.rope_bulk_chunks += 1;
+        });
+    }
+    if fitting_all {
+        return Ok(());
+    }
+    for chunk in records[fitting * size..].chunks(LEAF_CAPACITY * size) {
+        let leaf = leaf_node(Leaf::copy_of(kind, chunk)?)?;
+        *target = join(target.take(), Some(leaf))?;
+        #[cfg(test)]
+        super::work_attribution::record(|work| {
+            work.rope_bulk_records += chunk.len() / size;
+            work.rope_bulk_chunks += 1;
+        });
+    }
+    *root = staged;
+    Ok(())
+}
+
+fn push_record(
+    root: &mut Root,
+    kind: &'static RecordKind,
+    record: &[Byte],
+    record_summary: RopeSummary,
+) -> Result<(), ()> {
+    if root
+        .as_deref()
+        .is_some_and(|root| rightmost_leaf_space(root) != 0)
+    {
+        return append_right(root.as_mut().ok_or(())?, record, record_summary);
+    }
+    let mut leaf = Leaf::empty(kind);
+    leaf.extend(record)?;
+    let leaf = leaf_node(leaf)?;
+    *root = join(root.clone(), Some(leaf))?;
+    Ok(())
+}
+
+fn truncate_root(root: &mut Root, len: usize) -> Result<(), ()> {
+    let Some(node) = root.as_ref().map(Arc::clone) else {
+        return Ok(());
+    };
+    if len >= node.summary().records {
+        return Ok(());
+    }
+    *root = split(node, len)?.0;
+    Ok(())
+}
+
+fn append_shared_range(
+    root: &mut Root,
+    source: Option<&Arc<Node>>,
+    range: Range<usize>,
+) -> Result<bool, ()> {
+    let source_len = source.map_or(0, |source| source.summary().records);
+    if range.start > range.end || range.end > source_len {
+        return Ok(false);
+    }
+    if range.is_empty() {
+        return Ok(true);
+    }
+    let Some(source) = source else {
+        return Ok(false);
+    };
+    let (_, tail) = split(Arc::clone(source), range.start)?;
+    let Some(tail) = tail else {
+        return Ok(false);
+    };
+    let (middle, _) = split(tail, range.end - range.start)?;
+    *root = join(root.clone(), middle)?;
+    Ok(true)
+}
+
+fn replace_range(
+    root: &mut Root,
+    range: Range<usize>,
+    replacement: Option<&Arc<Node>>,
+) -> Result<bool, ()> {
+    let len = root.as_deref().map_or(0, |root| root.summary().records);
+    if range.start > range.end || range.end > len {
+        return Ok(false);
+    }
+    let (prefix, suffix) = match root.as_ref() {
+        Some(root) => {
+            let (prefix, tail) = split(Arc::clone(root), range.start)?;
+            let suffix = match tail {
+                Some(tail) => split(tail, range.end - range.start)?.1,
+                None => None,
+            };
+            (prefix, suffix)
+        }
+        None => (None, None),
+    };
+    *root = join(join(prefix, replacement.cloned())?, suffix)?;
+    Ok(true)
+}
+
+type FillLeaf<'a> = dyn FnMut(&mut Leaf, Range<usize>) -> Result<(), Failure> + 'a;
+
+fn build_exact_node(
+    kind: &'static RecordKind,
     count: usize,
     leaves: Range<usize>,
-    produce: &mut impl FnMut(usize) -> Result<T, E>,
-) -> Result<Arc<Node<T>>, RopeEditError<E>> {
+    fill: &mut FillLeaf<'_>,
+) -> Result<Arc<Node>, Failure> {
     if leaves.end - leaves.start == 1 {
         let start = leaves
             .start
             .checked_mul(LEAF_CAPACITY)
-            .ok_or(RopeEditError::Storage)?;
+            .ok_or(Failure::Storage)?;
         let end = start
             .checked_add(LEAF_CAPACITY)
             .map_or(count, |end| end.min(count));
-        let mut items = Vec::new();
-        items
-            .try_reserve_exact(end - start)
-            .map_err(|_| RopeEditError::Storage)?;
-        for index in start..end {
-            items.push(produce(index).map_err(RopeEditError::Callback)?);
-        }
-        return leaf_from_items(items).map_err(|_| RopeEditError::Storage);
+        let mut leaf = Leaf::with_capacity(kind, end - start).map_err(|()| Failure::Storage)?;
+        fill(&mut leaf, start..end)?;
+        return leaf_node(leaf).map_err(|()| Failure::Storage);
     }
     let middle = leaves.start + (leaves.end - leaves.start) / 2;
-    let left = build_exact_node(count, leaves.start..middle, produce)?;
-    let right = build_exact_node(count, middle..leaves.end, produce)?;
-    branch(left, right).map_err(|_| RopeEditError::Storage)
+    let left = build_exact_node(kind, count, leaves.start..middle, fill)?;
+    let right = build_exact_node(kind, count, middle..leaves.end, fill)?;
+    branch(left, right).map_err(|()| Failure::Storage)
 }
 
-fn exact_shape<T: RopeRecord>(node: &Node<T>, count: usize, leaves: Range<usize>) -> bool {
+fn exact_shape(node: &Node, count: usize, leaves: Range<usize>) -> bool {
     #[cfg(test)]
     super::work_attribution::record(|work| work.ordered_shape_nodes += 1);
     if leaves.end - leaves.start == 1 {
         let start = leaves.start * LEAF_CAPACITY;
         let expected = (count - start).min(LEAF_CAPACITY);
-        return matches!(node, Node::Leaf { items, .. } if items.len() == expected);
+        return matches!(node, Node::Leaf { leaf, .. } if leaf.len() == expected);
     }
     let middle = leaves.start + (leaves.end - leaves.start) / 2;
     match node {
@@ -539,18 +821,20 @@ impl<T: RopeRecord> core::ops::Index<usize> for RetainedRope<T> {
 }
 
 pub(crate) struct RopeRange<'a, T: RopeRecord> {
-    root: Option<&'a Node<T>>,
+    root: Option<&'a Node>,
     range: Range<usize>,
+    records: PhantomData<&'a [T]>,
 }
 
 impl<'a, T: RopeRecord> RopeRange<'a, T> {
     /// Store coordinates relative to the smallest node covering the range. Leaf-local
     /// ranges need no tree traversal when iterated or inspected.
-    fn new(mut root: Option<&'a Node<T>>, mut range: Range<usize>) -> Self {
+    fn new(mut root: Option<&'a Node>, mut range: Range<usize>) -> Self {
         if range.is_empty() {
             return Self {
                 root: None,
                 range: 0..0,
+                records: PhantomData,
             };
         }
         while let Some(Node::Branch { left, right, .. }) = root {
@@ -565,7 +849,11 @@ impl<'a, T: RopeRecord> RopeRange<'a, T> {
                 break;
             }
         }
-        Self { root, range }
+        Self {
+            root,
+            range,
+            records: PhantomData,
+        }
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -629,12 +917,12 @@ enum RopeIterState<'a, T: RopeRecord> {
 }
 
 impl<'a, T: RopeRecord> RopeIter<'a, T> {
-    fn new(root: Option<&'a Node<T>>, range: Range<usize>) -> Self {
+    fn new(root: Option<&'a Node>, range: Range<usize>) -> Self {
         #[cfg(test)]
         super::work_attribution::record(|work| work.rope_iterator_starts += 1);
         match root {
-            Some(Node::Leaf { items, .. }) if !range.is_empty() => Self {
-                state: RopeIterState::Leaf(items[range].iter()),
+            Some(Node::Leaf { leaf, .. }) if !range.is_empty() => Self {
+                state: RopeIterState::Leaf(leaf.records::<T>()[range].iter()),
             },
             Some(root @ Node::Branch { .. }) if !range.is_empty() => Self {
                 state: RopeIterState::Tree(TreeRopeIter::new(root, range)),
@@ -658,18 +946,18 @@ impl<'a, T: RopeRecord> RopeIter<'a, T> {
 }
 
 struct TreeRopeIter<'a, T: RopeRecord> {
-    front_stack: [Option<&'a Node<T>>; MAX_HEIGHT],
+    front_stack: [Option<&'a Node>; MAX_HEIGHT],
     front_depth: usize,
     front_leaf: Option<core::slice::Iter<'a, T>>,
-    front_node: Option<&'a Node<T>>,
-    back_stack: [Option<&'a Node<T>>; MAX_HEIGHT],
+    front_node: Option<&'a Node>,
+    back_stack: [Option<&'a Node>; MAX_HEIGHT],
     back_depth: usize,
     back_leaf: Option<core::slice::Iter<'a, T>>,
     remaining: usize,
 }
 
 impl<'a, T: RopeRecord> TreeRopeIter<'a, T> {
-    fn new(root: &'a Node<T>, range: Range<usize>) -> Self {
+    fn new(root: &'a Node, range: Range<usize>) -> Self {
         let mut this = Self {
             front_stack: [None; MAX_HEIGHT],
             front_depth: 0,
@@ -685,12 +973,12 @@ impl<'a, T: RopeRecord> TreeRopeIter<'a, T> {
         this
     }
 
-    fn descend_front_at(&mut self, mut node: &'a Node<T>, mut index: usize) {
+    fn descend_front_at(&mut self, mut node: &'a Node, mut index: usize) {
         loop {
             match node {
-                Node::Leaf { items, .. } => {
+                Node::Leaf { leaf, .. } => {
                     self.front_node = Some(node);
-                    self.front_leaf = Some(items[index..].iter());
+                    self.front_leaf = Some(leaf.records::<T>()[index..].iter());
                     return;
                 }
                 Node::Branch { left, right, .. } => {
@@ -708,11 +996,11 @@ impl<'a, T: RopeRecord> TreeRopeIter<'a, T> {
         }
     }
 
-    fn descend_back_at(&mut self, mut node: &'a Node<T>, mut end: usize) {
+    fn descend_back_at(&mut self, mut node: &'a Node, mut end: usize) {
         loop {
             match node {
-                Node::Leaf { items, .. } => {
-                    self.back_leaf = Some(items[..end].iter());
+                Node::Leaf { leaf, .. } => {
+                    self.back_leaf = Some(leaf.records::<T>()[..end].iter());
                     return;
                 }
                 Node::Branch { left, right, .. } => {
@@ -730,12 +1018,12 @@ impl<'a, T: RopeRecord> TreeRopeIter<'a, T> {
         }
     }
 
-    fn descend_front(&mut self, mut node: &'a Node<T>) {
+    fn descend_front(&mut self, mut node: &'a Node) {
         loop {
             match node {
-                Node::Leaf { items, .. } => {
+                Node::Leaf { leaf, .. } => {
                     self.front_node = Some(node);
-                    self.front_leaf = Some(items.iter());
+                    self.front_leaf = Some(leaf.records::<T>().iter());
                     return;
                 }
                 Node::Branch { left, right, .. } => {
@@ -747,11 +1035,11 @@ impl<'a, T: RopeRecord> TreeRopeIter<'a, T> {
         }
     }
 
-    fn descend_back(&mut self, mut node: &'a Node<T>) {
+    fn descend_back(&mut self, mut node: &'a Node) {
         loop {
             match node {
-                Node::Leaf { items, .. } => {
-                    self.back_leaf = Some(items.iter());
+                Node::Leaf { leaf, .. } => {
+                    self.back_leaf = Some(leaf.records::<T>().iter());
                     return;
                 }
                 Node::Branch { left, right, .. } => {
@@ -897,7 +1185,7 @@ impl<T: RopeRecord> ExactSizeIterator for RopeIter<'_, T> {}
 impl<T: RopeRecord> FusedIterator for RopeIter<'_, T> {}
 
 pub(crate) struct RopeCursor<'a, T: RopeRecord> {
-    root: Option<&'a Node<T>>,
+    root: Option<&'a Node>,
     index: usize,
     iter: RopeIter<'a, T>,
 }
@@ -978,25 +1266,24 @@ fn summarize<T: RopeRecord>(items: &[T]) -> Option<RopeSummary> {
         })
 }
 
-fn rightmost_leaf_space<T: RopeRecord>(mut node: &Node<T>) -> usize {
+fn rightmost_leaf_space(mut node: &Node) -> usize {
     loop {
         match node {
-            Node::Leaf { items, .. } => return LEAF_CAPACITY - items.len(),
+            Node::Leaf { leaf, .. } => return LEAF_CAPACITY - leaf.len(),
             Node::Branch { right, .. } => node = right,
         }
     }
 }
 
-fn append_right<T: RopeRecord>(
-    node: &mut Arc<Node<T>>,
-    appended: &[T],
+fn append_right(
+    node: &mut Arc<Node>,
+    appended: &[Byte],
     appended_summary: RopeSummary,
 ) -> Result<(), ()> {
     let next_summary = node.summary().combine(appended_summary).ok_or(())?;
     match make_node_mut(node)? {
-        Node::Leaf { items, summary } => {
-            items.try_reserve(appended.len()).map_err(|_| ())?;
-            items.extend_from_slice(appended);
+        Node::Leaf { leaf, summary } => {
+            leaf.extend(appended)?;
             *summary = next_summary;
         }
         Node::Branch { right, summary, .. } => {
@@ -1007,17 +1294,17 @@ fn append_right<T: RopeRecord>(
     Ok(())
 }
 
-fn leaf_from_items<T: RopeRecord>(items: Vec<T>) -> Result<Arc<Node<T>>, ()> {
-    let summary = summarize(&items).ok_or(())?;
+fn leaf_node(leaf: Leaf) -> Result<Arc<Node>, ()> {
+    let summary = leaf.summary(0..leaf.len()).ok_or(())?;
     // Stable Rust has no fallible `Arc` constructor. Caller-derived bulk storage is
     // reserved fallibly in fixed-capacity leaves; each tree node is one constant-size
     // allocation and stays in safe Rust rather than introducing a custom allocator.
     #[cfg(test)]
     LEAF_ALLOCATIONS.with(|count| count.set(count.get() + 1));
-    Ok(Arc::new(Node::Leaf { items, summary }))
+    Ok(Arc::new(Node::Leaf { leaf, summary }))
 }
 
-fn branch<T: RopeRecord>(left: Arc<Node<T>>, right: Arc<Node<T>>) -> Result<Arc<Node<T>>, ()> {
+fn branch(left: Arc<Node>, right: Arc<Node>) -> Result<Arc<Node>, ()> {
     let height = left.height().max(right.height()).checked_add(1).ok_or(())?;
     let summary = left.summary().combine(right.summary()).ok_or(())?;
     Ok(Arc::new(Node::Branch {
@@ -1028,10 +1315,7 @@ fn branch<T: RopeRecord>(left: Arc<Node<T>>, right: Arc<Node<T>>) -> Result<Arc<
     }))
 }
 
-fn join<T: RopeRecord>(
-    left: Option<Arc<Node<T>>>,
-    right: Option<Arc<Node<T>>>,
-) -> Result<Option<Arc<Node<T>>>, ()> {
+fn join(left: Root, right: Root) -> Result<Root, ()> {
     // Empty root leaves are scratch only; they must never become branch children.
     let left = left.filter(|node| node.summary().records != 0);
     let right = right.filter(|node| node.summary().records != 0);
@@ -1042,25 +1326,22 @@ fn join<T: RopeRecord>(
     })
 }
 
-fn join_nodes<T: RopeRecord>(left: Arc<Node<T>>, right: Arc<Node<T>>) -> Result<Arc<Node<T>>, ()> {
+fn join_nodes(left: Arc<Node>, right: Arc<Node>) -> Result<Arc<Node>, ()> {
     if let (
         Node::Leaf {
-            items: left_items, ..
+            leaf: left_leaf, ..
         },
         Node::Leaf {
-            items: right_items, ..
+            leaf: right_leaf, ..
         },
     ) = (left.as_ref(), right.as_ref())
-        && left_items.len() + right_items.len() <= LEAF_CAPACITY
+        && left_leaf.len() + right_leaf.len() <= LEAF_CAPACITY
     {
-        record_copies(left_items.len() + right_items.len());
-        let mut items = Vec::new();
-        items
-            .try_reserve_exact(left_items.len() + right_items.len())
-            .map_err(|_| ())?;
-        items.extend_from_slice(left_items);
-        items.extend_from_slice(right_items);
-        return leaf_from_items(items);
+        record_copies(left_leaf.len() + right_leaf.len());
+        let mut merged = Leaf::with_capacity(left_leaf.kind, left_leaf.len() + right_leaf.len())?;
+        merged.extend(left_leaf.bytes())?;
+        merged.extend(right_leaf.bytes())?;
+        return leaf_node(merged);
     }
     if left.height() > right.height().saturating_add(1)
         && let Node::Branch {
@@ -1083,7 +1364,7 @@ fn join_nodes<T: RopeRecord>(left: Arc<Node<T>>, right: Arc<Node<T>>) -> Result<
     branch(left, right)
 }
 
-fn balance<T: RopeRecord>(left: Arc<Node<T>>, right: Arc<Node<T>>) -> Result<Arc<Node<T>>, ()> {
+fn balance(left: Arc<Node>, right: Arc<Node>) -> Result<Arc<Node>, ()> {
     if left.height() > right.height().saturating_add(1)
         && let Node::Branch {
             left: left_left,
@@ -1137,7 +1418,7 @@ fn balance<T: RopeRecord>(left: Arc<Node<T>>, right: Arc<Node<T>>) -> Result<Arc
     branch(left, right)
 }
 
-fn split<T: RopeRecord>(node: Arc<Node<T>>, index: usize) -> Result<SplitNodes<T>, ()> {
+fn split(node: Arc<Node>, index: usize) -> Result<SplitNodes, ()> {
     if index == 0 {
         return Ok((None, Some(node)));
     }
@@ -1145,11 +1426,12 @@ fn split<T: RopeRecord>(node: Arc<Node<T>>, index: usize) -> Result<SplitNodes<T
         return Ok((Some(node), None));
     }
     Ok(match node.as_ref() {
-        Node::Leaf { items, .. } => {
-            record_copies(items.len());
+        Node::Leaf { leaf, .. } => {
+            record_copies(leaf.len());
+            let (prefix, suffix) = leaf.bytes().split_at(index * leaf.kind.size);
             (
-                Some(leaf_from_items(copy_items(&items[..index])?)?),
-                Some(leaf_from_items(copy_items(&items[index..])?)?),
+                Some(leaf_node(Leaf::copy_of(leaf.kind, prefix)?)?),
+                Some(leaf_node(Leaf::copy_of(leaf.kind, suffix)?)?),
             )
         }
         Node::Branch { left, right, .. } => {
@@ -1167,12 +1449,13 @@ fn split<T: RopeRecord>(node: Arc<Node<T>>, index: usize) -> Result<SplitNodes<T
     })
 }
 
-fn get_record<T: RopeRecord>(mut node: &Node<T>, mut index: usize) -> Option<&T> {
+/// The leaf holding record `index`, and the record's offset within it.
+fn leaf_at(mut node: &Node, mut index: usize) -> Option<(&Leaf, usize)> {
     #[cfg(test)]
     super::work_attribution::record(|work| work.rope_point_queries += 1);
     loop {
         match node {
-            Node::Leaf { items, .. } => return items.get(index),
+            Node::Leaf { leaf, .. } => return (index < leaf.len()).then_some((leaf, index)),
             Node::Branch { left, right, .. } => {
                 let left_len = left.summary().records;
                 if index < left_len {
@@ -1186,28 +1469,53 @@ fn get_record<T: RopeRecord>(mut node: &Node<T>, mut index: usize) -> Option<&T>
     }
 }
 
-fn preflight_update<T: RopeRecord>(
-    node: &Node<T>,
+fn get_record<T: RopeRecord>(node: &Node, index: usize) -> Option<&T> {
+    let (leaf, offset) = leaf_at(node, index)?;
+    leaf.records::<T>().get(offset)
+}
+
+fn update_record(
+    root: &mut Root,
     index: usize,
-    candidate: T,
+    candidate: &[Byte],
+    candidate_summary: RopeSummary,
+) -> Result<bool, ()> {
+    let Some(node) = root.as_ref() else {
+        return Ok(false);
+    };
+    // Prove every replacement summary before touching a uniquely owned path. A shared
+    // path is rebuilt functionally and published only after all fallible work succeeds.
+    // Both cases therefore preserve the old root on a deep summary overflow.
+    let mut summaries = [RopeSummary::default(); MAX_HEIGHT];
+    preflight_update(node, index, candidate_summary, 0, &mut summaries).ok_or(())?;
+    if path_is_unique(node, index)
+        && let Some(node) = root.as_mut()
+    {
+        return apply_unique_update(node, index, candidate, 0, &summaries)
+            .then_some(true)
+            .ok_or(());
+    }
+    let node = root.as_ref().ok_or(())?;
+    let replacement = replace_record(node, index, candidate)?;
+    *root = Some(replacement);
+    Ok(true)
+}
+
+fn preflight_update(
+    node: &Node,
+    index: usize,
+    candidate: RopeSummary,
     depth: usize,
     summaries: &mut [RopeSummary; MAX_HEIGHT],
 ) -> Option<RopeSummary> {
     let summary = match node {
-        Node::Leaf { items, .. } => {
-            if index >= items.len() {
+        Node::Leaf { leaf, .. } => {
+            if index >= leaf.len() {
                 return None;
             }
-            items.iter().enumerate().try_fold(
-                RopeSummary::default(),
-                |summary, (item_index, item)| {
-                    summary.combine(if item_index == index {
-                        candidate.rope_summary()
-                    } else {
-                        item.rope_summary()
-                    })
-                },
-            )?
+            leaf.summary(0..index)?
+                .combine(candidate)?
+                .combine(leaf.summary(index + 1..leaf.len())?)?
         }
         Node::Branch { left, right, .. } => {
             let left_len = left.summary().records;
@@ -1229,12 +1537,12 @@ fn preflight_update<T: RopeRecord>(
     Some(summary)
 }
 
-fn path_is_unique<T: RopeRecord>(node: &Arc<Node<T>>, index: usize) -> bool {
+fn path_is_unique(node: &Arc<Node>, index: usize) -> bool {
     if Arc::strong_count(node) != 1 || index >= node.summary().records {
         return false;
     }
     match node.as_ref() {
-        Node::Leaf { items, .. } => index < items.len(),
+        Node::Leaf { leaf, .. } => index < leaf.len(),
         Node::Branch { left, right, .. } => {
             let left_len = left.summary().records;
             if index < left_len {
@@ -1246,10 +1554,10 @@ fn path_is_unique<T: RopeRecord>(node: &Arc<Node<T>>, index: usize) -> bool {
     }
 }
 
-fn apply_unique_update<T: RopeRecord>(
-    node: &mut Arc<Node<T>>,
+fn apply_unique_update(
+    node: &mut Arc<Node>,
     index: usize,
-    candidate: T,
+    candidate: &[Byte],
     depth: usize,
     summaries: &[RopeSummary; MAX_HEIGHT],
 ) -> bool {
@@ -1257,14 +1565,14 @@ fn apply_unique_update<T: RopeRecord>(
         return false;
     };
     match node {
-        Node::Leaf { items, summary } => {
-            let Some(item) = items.get_mut(index) else {
+        Node::Leaf { leaf, summary } => {
+            let Some(record) = leaf.record_mut(index) else {
                 return false;
             };
             let Some(next_summary) = summaries.get(depth).copied() else {
                 return false;
             };
-            *item = candidate;
+            record.copy_from_slice(candidate);
             *summary = next_summary;
             true
         }
@@ -1293,23 +1601,19 @@ fn apply_unique_update<T: RopeRecord>(
     }
 }
 
-fn replace_record<T: RopeRecord>(
-    node: &Arc<Node<T>>,
-    index: usize,
-    candidate: T,
-) -> Result<Arc<Node<T>>, ()> {
+fn replace_record(node: &Arc<Node>, index: usize, candidate: &[Byte]) -> Result<Arc<Node>, ()> {
     if index >= node.summary().records {
         return Err(());
     }
     match node.as_ref() {
-        Node::Leaf { items, .. } => {
-            record_copies(items.len());
-            let mut replacement = copy_items(items)?;
-            let Some(item) = replacement.get_mut(index) else {
-                return Err(());
-            };
-            *item = candidate;
-            leaf_from_items(replacement)
+        Node::Leaf { leaf, .. } => {
+            record_copies(leaf.len());
+            let mut replacement = Leaf::copy_of(leaf.kind, leaf.bytes())?;
+            replacement
+                .record_mut(index)
+                .ok_or(())?
+                .copy_from_slice(candidate);
+            leaf_node(replacement)
         }
         Node::Branch { left, right, .. } => {
             let left_len = left.summary().records;
@@ -1325,27 +1629,42 @@ fn replace_record<T: RopeRecord>(
     }
 }
 
-struct OrderedRanges<I> {
-    ranges: I,
+/// The next requested range, or `Err` when the caller's range source failed.
+type NextRange<'a> = dyn FnMut() -> Option<Result<Range<usize>, ()>> + 'a;
+
+/// An ordered update's decision for one record. `Replace` means the visitor wrote the
+/// replacement record's bytes into the candidate buffer.
+enum Visit {
+    Keep,
+    Replace,
+    Stop,
+}
+
+/// Visits `(record index, leaf, offset in leaf, candidate buffer)`; `Err` when the caller's
+/// update failed.
+type VisitRecord<'a> = dyn FnMut(usize, &Leaf, usize, &mut [Byte]) -> Result<Visit, ()> + 'a;
+
+struct OrderedRanges<'a, 'b> {
+    ranges: &'a mut NextRange<'b>,
     current: Option<Range<usize>>,
     previous_end: usize,
     len: usize,
 }
 
-impl<E, I: Iterator<Item = Result<Range<usize>, E>>> OrderedRanges<I> {
-    fn advance_to(&mut self, offset: usize) -> Result<(), RopeEditError<E>> {
+impl OrderedRanges<'_, '_> {
+    fn advance_to(&mut self, offset: usize) -> Result<(), Failure> {
         while self
             .current
             .as_ref()
             .is_none_or(|range| range.end <= offset)
         {
-            let Some(range) = self.ranges.next() else {
+            let Some(range) = (self.ranges)() else {
                 self.current = None;
                 return Ok(());
             };
-            let range = range.map_err(RopeEditError::Callback)?;
+            let range = range.map_err(|()| Failure::Callback)?;
             if range.start < self.previous_end || range.start > range.end || range.end > self.len {
-                return Err(RopeEditError::Storage);
+                return Err(Failure::Storage);
             }
             self.previous_end = range.end;
             if range.is_empty() {
@@ -1357,19 +1676,58 @@ impl<E, I: Iterator<Item = Result<Range<usize>, E>>> OrderedRanges<I> {
     }
 }
 
-fn update_ordered_node<T: RopeRecord, E>(
-    node: &Arc<Node<T>>,
+fn update_ordered(
+    root: &mut Root,
+    ranges: &mut NextRange<'_>,
+    visit: &mut VisitRecord<'_>,
+) -> Result<bool, Failure> {
+    let Some(node) = root.as_ref() else {
+        return Ok(false);
+    };
+    let len = node.summary().records;
+    if len == 0 {
+        return Ok(false);
+    }
+    let mut ranges = OrderedRanges {
+        ranges,
+        current: None,
+        previous_end: 0,
+        len,
+    };
+    ranges.advance_to(0)?;
+    if ranges.current.is_none() {
+        return Ok(false);
+    }
+    record_ordered_traversal();
+    let mut candidate = [Byte::uninit(); MAX_RECORD_BYTES];
+    let mut stopped = false;
+    let replacement =
+        update_ordered_node(node, 0, &mut ranges, visit, &mut candidate, &mut stopped)?;
+    if !stopped {
+        ranges.advance_to(len)?;
+    }
+    if let Some(replacement) = replacement {
+        *root = Some(replacement);
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+fn update_ordered_node(
+    node: &Arc<Node>,
     record_start: usize,
-    ranges: &mut OrderedRanges<impl Iterator<Item = Result<Range<usize>, E>>>,
-    update: &mut impl FnMut(usize, &T) -> Result<RopeUpdate<T>, E>,
+    ranges: &mut OrderedRanges<'_, '_>,
+    visit: &mut VisitRecord<'_>,
+    candidate: &mut [Byte; MAX_RECORD_BYTES],
     stopped: &mut bool,
-) -> Result<Option<Arc<Node<T>>>, RopeEditError<E>> {
+) -> Result<Option<Arc<Node>>, Failure> {
     if *stopped {
         return Ok(None);
     }
     let record_end = record_start
         .checked_add(node.summary().records)
-        .ok_or(RopeEditError::Storage)?;
+        .ok_or(Failure::Storage)?;
     ranges.advance_to(record_start)?;
     if ranges
         .current
@@ -1379,11 +1737,15 @@ fn update_ordered_node<T: RopeRecord, E>(
         return Ok(None);
     }
     match node.as_ref() {
-        Node::Leaf { items, .. } => {
+        Node::Leaf { leaf, .. } => {
             record_ordered_leaf_visit();
-            let mut replacement: Option<Vec<T>> = None;
+            let candidate = &mut candidate[..leaf.kind.size];
+            // The first replacement copies the whole leaf; later replacements overwrite
+            // their record in that copy.
+            let mut replacement: Option<Leaf> = None;
+            let mut replaced = 0;
             let mut item_index = 0;
-            while item_index < items.len() {
+            while item_index < leaf.len() {
                 let global_index = record_start + item_index;
                 ranges.advance_to(global_index)?;
                 let Some(range) = ranges.current.as_ref() else {
@@ -1398,75 +1760,65 @@ fn update_ordered_node<T: RopeRecord, E>(
                 record_ordered_record_visit();
                 let global_index = record_start
                     .checked_add(visited_index)
-                    .ok_or(RopeEditError::Storage)?;
-                let candidate = match update(global_index, &items[visited_index])
-                    .map_err(RopeEditError::Callback)?
+                    .ok_or(Failure::Storage)?;
+                match visit(global_index, leaf, visited_index, candidate)
+                    .map_err(|()| Failure::Callback)?
                 {
-                    RopeUpdate::Keep => {
-                        if let Some(replacement) = replacement.as_mut() {
-                            let copied = visited_index + 1 - replacement.len();
-                            record_copies(copied);
-                            replacement
-                                .extend_from_slice(&items[replacement.len()..=visited_index]);
-                        }
-                        continue;
-                    }
-                    RopeUpdate::Replace(candidate) => candidate,
-                    RopeUpdate::Stop => {
+                    Visit::Keep => continue,
+                    Visit::Replace => {}
+                    Visit::Stop => {
                         *stopped = true;
                         break;
                     }
-                };
-                if replacement.is_none() {
-                    let mut next = Vec::new();
-                    next.try_reserve_exact(items.len())
-                        .map_err(|_| RopeEditError::Storage)?;
-                    record_copies(visited_index);
-                    next.extend_from_slice(&items[..visited_index]);
-                    replacement = Some(next);
                 }
-                let next = replacement.as_mut().ok_or(RopeEditError::Storage)?;
-                let copied = visited_index - next.len();
-                record_copies(copied);
-                next.extend_from_slice(&items[next.len()..visited_index]);
-                next.push(candidate);
+                let next = match replacement.as_mut() {
+                    Some(next) => next,
+                    None => replacement.insert(
+                        Leaf::copy_of(leaf.kind, leaf.bytes()).map_err(|()| Failure::Storage)?,
+                    ),
+                };
+                next.record_mut(visited_index)
+                    .ok_or(Failure::Storage)?
+                    .copy_from_slice(candidate);
+                replaced += 1;
             }
-            let Some(mut replacement) = replacement else {
+            let Some(replacement) = replacement else {
                 return Ok(None);
             };
-            record_copies(items.len() - replacement.len());
-            replacement.extend_from_slice(&items[replacement.len()..]);
-            leaf_from_items(replacement)
+            record_copies(leaf.len() - replaced);
+            leaf_node(replacement)
                 .map(Some)
-                .map_err(|()| RopeEditError::Storage)
+                .map_err(|()| Failure::Storage)
         }
         Node::Branch { left, right, .. } => {
             let right_start = record_start
                 .checked_add(left.summary().records)
-                .ok_or(RopeEditError::Storage)?;
-            let next_left = update_ordered_node(left, record_start, ranges, update, stopped)?;
-            let next_right = update_ordered_node(right, right_start, ranges, update, stopped)?;
+                .ok_or(Failure::Storage)?;
+            let next_left =
+                update_ordered_node(left, record_start, ranges, visit, candidate, stopped)?;
+            let next_right =
+                update_ordered_node(right, right_start, ranges, visit, candidate, stopped)?;
             let replacement = match (next_left, next_right) {
                 (None, None) => return Ok(None),
                 (Some(next_left), None) => branch(next_left, Arc::clone(right)),
                 (None, Some(next_right)) => branch(Arc::clone(left), next_right),
                 (Some(next_left), Some(next_right)) => branch(next_left, next_right),
             }
-            .map_err(|()| RopeEditError::Storage)?;
+            .map_err(|()| Failure::Storage)?;
             Ok(Some(replacement))
         }
     }
 }
 
-fn make_node_mut<T: RopeRecord>(node: &mut Arc<Node<T>>) -> Result<&mut Node<T>, ()> {
+fn make_node_mut(node: &mut Arc<Node>) -> Result<&mut Node, ()> {
     if Arc::get_mut(node).is_none() {
         let replacement = match node.as_ref() {
-            Node::Leaf { items, summary } => {
-                record_copies(items.len());
+            Node::Leaf { leaf, summary } => {
+                record_copies(leaf.len());
                 #[cfg(test)]
                 LEAF_ALLOCATIONS.with(|count| count.set(count.get() + 1));
                 Node::Leaf {
-                    items: copy_items(items)?,
+                    leaf: Leaf::copy_of(leaf.kind, leaf.bytes())?,
                     summary: *summary,
                 }
             }
@@ -1489,7 +1841,7 @@ fn make_node_mut<T: RopeRecord>(node: &mut Arc<Node<T>>) -> Result<&mut Node<T>,
     Arc::get_mut(node).ok_or(())
 }
 
-fn prefix_summary<T: RopeRecord>(node: Option<&Node<T>>, index: usize) -> Option<RopeSummary> {
+fn prefix_summary(node: Option<&Node>, index: usize) -> Option<RopeSummary> {
     let Some(node) = node else {
         return Some(RopeSummary::default());
     };
@@ -1500,7 +1852,7 @@ fn prefix_summary<T: RopeRecord>(node: Option<&Node<T>>, index: usize) -> Option
         return Some(node.summary());
     }
     match node {
-        Node::Leaf { items, .. } => summarize(&items[..index]),
+        Node::Leaf { leaf, .. } => leaf.summary(0..index),
         Node::Branch { left, right, .. } => {
             let left_len = left.summary().records;
             if index <= left_len {
@@ -1513,15 +1865,8 @@ fn prefix_summary<T: RopeRecord>(node: Option<&Node<T>>, index: usize) -> Option
     }
 }
 
-fn copy_items<T: Copy>(source: &[T]) -> Result<Vec<T>, ()> {
-    let mut copied = Vec::new();
-    copied.try_reserve_exact(source.len()).map_err(|_| ())?;
-    copied.extend_from_slice(source);
-    Ok(copied)
-}
-
 fn find_source<T: RopeRecord>(
-    node: &Node<T>,
+    node: &Node,
     offset: u32,
     base: usize,
     contains: impl Fn(&T, u32) -> bool + Copy,
@@ -1530,10 +1875,15 @@ fn find_source<T: RopeRecord>(
         return None;
     }
     match node {
-        Node::Leaf { items, .. } => items.iter().enumerate().find_map(|(index, item)| {
-            record_source_visit();
-            contains(item, offset).then_some(base + index)
-        }),
+        Node::Leaf { leaf, .. } => {
+            leaf.records::<T>()
+                .iter()
+                .enumerate()
+                .find_map(|(index, item)| {
+                    record_source_visit();
+                    contains(item, offset).then_some(base + index)
+                })
+        }
         Node::Branch { left, right, .. } => {
             find_source(left, offset, base, contains).or_else(|| {
                 find_source(
@@ -1691,9 +2041,10 @@ mod tests {
             .unwrap()
     }
 
-    fn assert_node_invariants(node: &Node<Record>) -> (u8, RopeSummary) {
+    fn assert_node_invariants(node: &Node) -> (u8, RopeSummary) {
         match node {
-            Node::Leaf { items, summary } => {
+            Node::Leaf { leaf, summary } => {
+                let items = leaf.records::<Record>();
                 assert!(!items.is_empty());
                 assert!(items.len() <= LEAF_CAPACITY);
                 let expected = flat_summary(items);
@@ -1727,7 +2078,7 @@ mod tests {
             values.iter().rev().copied().collect::<Vec<_>>()
         );
         match rope.root.as_deref() {
-            Some(Node::Leaf { items, summary }) if items.is_empty() => {
+            Some(Node::Leaf { leaf, summary }) if leaf.len() == 0 => {
                 assert!(values.is_empty());
                 assert_eq!(*summary, RopeSummary::default());
             }
@@ -1834,9 +2185,9 @@ mod tests {
 
     #[test]
     fn exact_producer_builds_packed_balanced_roots_with_flat_navigation() {
-        fn leaf_lengths(node: &Node<Record>, lengths: &mut Vec<usize>) {
+        fn leaf_lengths(node: &Node, lengths: &mut Vec<usize>) {
             match node {
-                Node::Leaf { items, .. } => lengths.push(items.len()),
+                Node::Leaf { leaf, .. } => lengths.push(leaf.len()),
                 Node::Branch { left, right, .. } => {
                     leaf_lengths(left, lengths);
                     leaf_lengths(right, lengths);
@@ -2377,12 +2728,20 @@ mod tests {
         let original = records(96);
         let exact = RetainedRope::try_from_exact(96, |index| Ok::<_, ()>(original[index])).unwrap();
         assert!(exact.is_exact_shape());
-        let first = leaf_from_items(original[..32].to_vec()).unwrap();
-        let second = leaf_from_items(original[32..64].to_vec()).unwrap();
-        let third = leaf_from_items(original[64..].to_vec()).unwrap();
-        let skewed = RetainedRope {
-            root: Some(branch(branch(first, second).unwrap(), third).unwrap()),
-        };
+        let first = leaf_node(
+            Leaf::copy_of(KindOf::<Record>::KIND, record_bytes(&original[..32])).unwrap(),
+        )
+        .unwrap();
+        let second = leaf_node(
+            Leaf::copy_of(KindOf::<Record>::KIND, record_bytes(&original[32..64])).unwrap(),
+        )
+        .unwrap();
+        let third = leaf_node(
+            Leaf::copy_of(KindOf::<Record>::KIND, record_bytes(&original[64..])).unwrap(),
+        )
+        .unwrap();
+        let skewed =
+            RetainedRope::with_root(Some(branch(branch(first, second).unwrap(), third).unwrap()));
         assert_matches_flat(&skewed, &original);
         assert!(!skewed.is_exact_shape());
         let mut updated = skewed.clone();
@@ -2728,5 +3087,116 @@ mod tests {
         empty.clear();
         assert!(empty.replace_range(0..0, &packed).unwrap());
         assert_matches_flat(&empty, &values);
+    }
+
+    /// Records whose stride is not a whole number of storage words: packing, splitting,
+    /// joining and replacing must move exact record bytes across word boundaries.
+    #[test]
+    fn odd_stride_records_match_vec_through_every_edit() {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        struct Packed5([u8; 5]);
+        impl RopeRecord for Packed5 {
+            fn rope_summary(&self) -> RopeSummary {
+                RopeSummary {
+                    records: 1,
+                    fragments: usize::from(self.0[4] % 3 + 1),
+                    ..RopeSummary::default()
+                }
+            }
+        }
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        struct Wide12(u32, u32, u32);
+        impl RopeRecord for Wide12 {
+            fn rope_summary(&self) -> RopeSummary {
+                RopeSummary {
+                    records: 1,
+                    fragments: 1,
+                    source_start: self.0,
+                    source_end: self.0 + 1,
+                    has_source: true,
+                }
+            }
+        }
+
+        fn exercise<T: RopeRecord + PartialEq + core::fmt::Debug>(make: impl Fn(u32) -> T) {
+            let values: Vec<T> = (0..200).map(&make).collect();
+            let exact =
+                RetainedRope::try_from_exact(values.len(), |index| Ok::<_, ()>(values[index]))
+                    .unwrap();
+            let mut pushed = RetainedRope::default();
+            for value in &values {
+                pushed.push(*value).unwrap();
+            }
+            let mut appended = RetainedRope::default();
+            for chunk in values.chunks(13) {
+                appended.append_records(chunk).unwrap();
+            }
+            for rope in [&exact, &pushed, &appended] {
+                assert_eq!(rope.iter().copied().collect::<Vec<_>>(), values);
+                assert_eq!(rope.iter().rev().count(), values.len());
+            }
+
+            let mut model = values.clone();
+            let mut rope = appended.clone();
+            let mut random = 0x51ed_270b_u32;
+            for step in 0..96u32 {
+                random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                let index = random as usize % model.len();
+                match step % 4 {
+                    0 => {
+                        let next = make(1_000 + step);
+                        assert!(rope.update(index, |record| *record = next).unwrap());
+                        model[index] = next;
+                    }
+                    1 => {
+                        let end = (index + 1 + step as usize % 40).min(model.len());
+                        let replacement: RetainedRope<T> =
+                            RetainedRope::from(values[..(step as usize % 7)].to_vec());
+                        assert!(rope.replace_range(index..end, &replacement).unwrap());
+                        model.splice(index..end, values[..(step as usize % 7)].iter().copied());
+                    }
+                    2 => {
+                        let end = (index + 37).min(model.len());
+                        let next = make(2_000 + step);
+                        rope.update_ordered(index..end, |position, _| {
+                            Ok::<_, ()>(if position % 3 == 0 {
+                                RopeUpdate::Replace(next)
+                            } else {
+                                RopeUpdate::Keep
+                            })
+                        })
+                        .unwrap();
+                        for (position, record) in model.iter_mut().enumerate().take(end).skip(index)
+                        {
+                            if position % 3 == 0 {
+                                *record = next;
+                            }
+                        }
+                    }
+                    _ => {
+                        let source = exact.clone();
+                        let start = index % 150;
+                        assert!(
+                            rope.append_shared_range(&source, start..start + 50)
+                                .unwrap()
+                        );
+                        model.extend_from_slice(&values[start..start + 50]);
+                        rope.truncate(260.min(model.len())).unwrap();
+                        model.truncate(260);
+                    }
+                }
+                assert_eq!(rope.iter().copied().collect::<Vec<_>>(), model);
+                assert_eq!(rope.summary().records, model.len());
+                assert_eq!(rope.is_empty(), model.is_empty());
+                if model.is_empty() {
+                    model = values.clone();
+                    rope = appended.clone();
+                }
+            }
+            assert_eq!(exact.iter().copied().collect::<Vec<_>>(), values);
+        }
+
+        exercise(|value| Packed5([value as u8, (value >> 8) as u8, 7, 0xa5, value as u8 ^ 0x5a]));
+        exercise(|value| Wide12(value, !value, value.rotate_left(13)));
     }
 }
