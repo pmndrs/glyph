@@ -1586,37 +1586,13 @@ impl TextEngine {
         {
             return Err(EngineError::RevisionConflict);
         }
-        let implicit_paragraph = implicit_paragraph_id(planner, request)?;
-        let lifecycle_plan = validate_lifecycle_input(
-            planner,
-            request.paragraph_mutations,
-            request.paragraph_order_mutations,
+        let StagedInputs {
             implicit_paragraph,
-            request.limits.max_paragraphs,
-        )?;
-        let spare_text_candidate_id = (lifecycle_plan.creates == 1
-            && lifecycle_plan.removals == 0
-            && request.paragraph_mutations.len() == 0
-            && request.paragraph_order_mutations.len() == 0)
-            .then_some(implicit_paragraph)
-            .flatten()
-            .filter(|id| {
-                planner.paragraph(*id).is_none()
-                    && planner.spare_paragraph.is_some()
-                    && has_text_mutations_for(request.text_mutations, *id)
-            });
-        let mut preflight_text_candidates = core::mem::take(&mut planner.preflight_text_candidates);
-        let mut preflight_edit_scratch = core::mem::take(&mut planner.preflight_edit_scratch);
-        validate_planner_inputs(
-            planner,
-            request,
-            ParagraphInputScope::Indexed,
-            font_stacks,
+            lifecycle_plan,
             spare_text_candidate_id,
-            &mut preflight_text_candidates,
-            &mut preflight_edit_scratch,
-        )?;
-        planner.prepare_semantic_inputs(request, ParagraphInputScope::Indexed)?;
+            mut preflight_text_candidates,
+            mut preflight_edit_scratch,
+        } = stage_planner_inputs(planner, request, ParagraphInputScope::Indexed, font_stacks)?;
         let next = match (
             planner.revision.engine.checked_add(1),
             planner.revision.root.checked_add(1),
@@ -7605,6 +7581,64 @@ fn has_text_mutations_for(
     paragraph_id: u32,
 ) -> bool {
     (0..mutations.len()).any(|index| mutations.paragraph_id(index) == Some(paragraph_id))
+}
+
+/// What a preparation keeps from validating a request's lifecycle and semantic inputs.
+struct StagedInputs {
+    implicit_paragraph: Option<u32>,
+    lifecycle_plan: LifecyclePlan,
+    spare_text_candidate_id: Option<u32>,
+    preflight_text_candidates: Vec<PreflightTextCandidate>,
+    preflight_edit_scratch: Vec<TextEdit>,
+}
+
+/// Plans the request's paragraph lifecycle, validates its text and style inputs against it,
+/// and stages its semantic inputs for `scope`. A single created paragraph with text and no
+/// other lifecycle change may write its candidate into the spare paragraph's buffers.
+fn stage_planner_inputs(
+    planner: &mut PlannerState,
+    request: UpdateRequest<'_>,
+    scope: ParagraphInputScope,
+    font_stacks: &[RegisteredFontStack],
+) -> Result<StagedInputs, EngineError> {
+    let implicit_paragraph = implicit_paragraph_id(planner, request)?;
+    let lifecycle_plan = validate_lifecycle_input(
+        planner,
+        request.paragraph_mutations,
+        request.paragraph_order_mutations,
+        implicit_paragraph,
+        request.limits.max_paragraphs,
+    )?;
+    let spare_text_candidate_id = (lifecycle_plan.creates == 1
+        && lifecycle_plan.removals == 0
+        && request.paragraph_mutations.len() == 0
+        && request.paragraph_order_mutations.len() == 0)
+        .then_some(implicit_paragraph)
+        .flatten()
+        .filter(|id| {
+            planner.paragraph(*id).is_none()
+                && planner.spare_paragraph.is_some()
+                && has_text_mutations_for(request.text_mutations, *id)
+        });
+    let mut preflight_text_candidates = core::mem::take(&mut planner.preflight_text_candidates);
+    let mut preflight_edit_scratch = core::mem::take(&mut planner.preflight_edit_scratch);
+    validate_planner_inputs(
+        planner,
+        request,
+        scope,
+        font_stacks,
+        spare_text_candidate_id,
+        &mut preflight_text_candidates,
+        &mut preflight_edit_scratch,
+    )?;
+    planner.prepare_semantic_inputs(request, scope)?;
+    Ok(StagedInputs {
+        implicit_paragraph,
+        lifecycle_plan,
+        spare_text_candidate_id,
+        preflight_text_candidates,
+        preflight_edit_scratch,
+    })
 }
 
 fn validate_planner_inputs(

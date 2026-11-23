@@ -165,37 +165,13 @@ impl TextEngine {
             PreparationTarget::One(paragraph_id) => ParagraphInputScope::Single(paragraph_id),
             PreparationTarget::Dirty(..) => ParagraphInputScope::Indexed,
         };
-        let implicit_paragraph = implicit_paragraph_id(planner, request)?;
-        let lifecycle_plan = validate_lifecycle_input(
-            planner,
-            request.paragraph_mutations,
-            request.paragraph_order_mutations,
+        let StagedInputs {
             implicit_paragraph,
-            request.limits.max_paragraphs,
-        )?;
-        let spare_text_candidate_id = (lifecycle_plan.creates == 1
-            && lifecycle_plan.removals == 0
-            && request.paragraph_mutations.len() == 0
-            && request.paragraph_order_mutations.len() == 0)
-            .then_some(implicit_paragraph)
-            .flatten()
-            .filter(|id| {
-                planner.paragraph(*id).is_none()
-                    && planner.spare_paragraph.is_some()
-                    && has_text_mutations_for(request.text_mutations, *id)
-            });
-        let mut preflight_text_candidates = core::mem::take(&mut planner.preflight_text_candidates);
-        let mut preflight_edit_scratch = core::mem::take(&mut planner.preflight_edit_scratch);
-        validate_planner_inputs(
-            planner,
-            request,
-            scope,
-            font_stacks,
+            lifecycle_plan,
             spare_text_candidate_id,
-            &mut preflight_text_candidates,
-            &mut preflight_edit_scratch,
-        )?;
-        planner.prepare_semantic_inputs(request, scope)?;
+            mut preflight_text_candidates,
+            mut preflight_edit_scratch,
+        } = stage_planner_inputs(planner, request, scope, font_stacks)?;
         let next_measure_generation = planner
             .measure_generation
             .checked_add(1)
