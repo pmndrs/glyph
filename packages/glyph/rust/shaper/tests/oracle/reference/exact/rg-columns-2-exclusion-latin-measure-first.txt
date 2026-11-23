@@ -29,13 +29,13 @@ stage gpu value 3 9b191492b0572518
 stage plan value 23 cd24a940cd48eb9f
 stage plan identity 7 1b4580ec5a380b9b
 step 01 insert in the first region
-class value 233 9532591b0e910954
-class identity 27 94759889ab92770a
+class value 233 9573118fedcfbd08
+class identity 27 235f4c30f79f910a
 class repr 44 756e2937064e0fef
 class wire 1 fee7d5b604659fe7
 step 02 delete in a later region
-class value 233 73fc405a3e9f8180
-class identity 27 2f108935f753d348
+class value 233 0641464109bb5ad9
+class identity 27 2a1e3b526f622713
 class repr 44 24568e905455cf33
 class wire 1 05940a7517f7c565
 step 03 narrower measure
@@ -54,12 +54,12 @@ class identity 27 e266c46d1eee8bfd
 class repr 44 aed6307b5b79e394
 class wire 1 5b7092c989d0cac4
 step 06 one region
-class value 233 a4bf9bbc31b4243c
-class identity 27 3e79252deb4eb38c
+class value 233 92b39ccdfe8993aa
+class identity 27 9927bbc68ec34fc5
 class repr 44 541c8dcc63147821
 class wire 1 1410bce0edd7137c
 step 07 the starting regions
-class value 233 73fc405a3e9f8180
-class identity 27 fbb874efc55fd422
+class value 233 0641464109bb5ad9
+class identity 27 15d14d814c2be453
 class repr 44 24568e905455cf33
 class wire 1 abd5c0c03734a96e

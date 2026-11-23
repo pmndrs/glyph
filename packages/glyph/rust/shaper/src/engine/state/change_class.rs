@@ -136,6 +136,7 @@ impl ParagraphState {
             || self.clusters.is_prepared()
             || self.flow_layout.is_prepared()
             || self.positioned.is_prepared()
+            || self.positioning_owed()
             || self.prepared_layout.is_prepared();
         if content {
             ChangeClass::Content

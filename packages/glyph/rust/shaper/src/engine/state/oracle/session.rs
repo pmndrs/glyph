@@ -30,8 +30,8 @@ use crate::{
         },
         frame::{
             SEMANTIC_F32_SHADOW_OFFSET_Y_EM, SEMANTIC_U32_PLACEMENT_SLOT,
-            SEMANTIC_VIEW_BORROWED_LAYOUT, SEMANTIC_VIEW_LAYOUT_INSPECTION,
-            SEMANTIC_VIEW_MEASUREMENT,
+            SEMANTIC_VIEW_BORROWED_LAYOUT, SEMANTIC_VIEW_GLYPH_FACTS,
+            SEMANTIC_VIEW_LAYOUT_INSPECTION, SEMANTIC_VIEW_MEASUREMENT,
         },
         frame_wire::parse_update_request,
         render_plan::{
@@ -59,6 +59,9 @@ pub const ALL_VIEWS: u32 =
     SEMANTIC_VIEW_MEASUREMENT | SEMANTIC_VIEW_LAYOUT_INSPECTION | SEMANTIC_VIEW_BORROWED_LAYOUT;
 /// What the host asks for when it measures between publications.
 const MEASURE_VIEWS: u32 = SEMANTIC_VIEW_MEASUREMENT | SEMANTIC_VIEW_BORROWED_LAYOUT;
+/// What a host reading layout back after a publication asks for: the summary with its glyph
+/// facts, which a summary-only read leaves to a later read.
+const READ_BACK_VIEWS: u32 = MEASURE_VIEWS | SEMANTIC_VIEW_GLYPH_FACTS;
 const SEMANTIC_F32_FIELD_COUNT: u8 = SEMANTIC_F32_SHADOW_OFFSET_Y_EM + 1;
 const SEMANTIC_U32_FIELD_COUNT: u8 = SEMANTIC_U32_PLACEMENT_SLOT + 1;
 const FIRST_FONT_HANDLE: u32 = 1;
@@ -329,7 +332,7 @@ impl Session {
         if route.measure_after {
             for id in next.ids() {
                 let query = request(
-                    self.header(MEASURE_VIEWS),
+                    self.header(READ_BACK_VIEWS),
                     limits,
                     &Lifecycle::default(),
                     &[],

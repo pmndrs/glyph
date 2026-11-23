@@ -132,6 +132,7 @@ export const textShaperAbi = {
       "justify": 2
     },
     "measurementFlags": {
+      "glyphsDeferred": 4,
       "inkBounds": 2,
       "overflowed": 1
     },
@@ -218,6 +219,7 @@ export const textShaperAbi = {
     "semanticViewMasks": {
       "all": 3,
       "borrowedLayout": 4,
+      "glyphFacts": 8,
       "layoutInspection": 2,
       "measurement": 1
     },

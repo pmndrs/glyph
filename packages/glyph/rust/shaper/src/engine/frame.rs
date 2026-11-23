@@ -8,8 +8,13 @@ pub(crate) const FRAME_FLAGS: u32 = FRAME_FLAG_COMPOSITING_INDEPENDENT;
 pub(crate) const SEMANTIC_VIEW_MEASUREMENT: u32 = 1 << 0;
 pub(crate) const SEMANTIC_VIEW_LAYOUT_INSPECTION: u32 = 1 << 1;
 pub(crate) const SEMANTIC_VIEW_BORROWED_LAYOUT: u32 = 1 << 2;
-pub(crate) const SEMANTIC_VIEW_MASK: u32 =
-    SEMANTIC_VIEW_MEASUREMENT | SEMANTIC_VIEW_LAYOUT_INSPECTION | SEMANTIC_VIEW_BORROWED_LAYOUT;
+/// The measurement must carry glyph counts, line glyph spans and ink: the read positions its
+/// paragraph instead of leaving positioning owed.
+pub(crate) const SEMANTIC_VIEW_GLYPH_FACTS: u32 = 1 << 3;
+pub(crate) const SEMANTIC_VIEW_MASK: u32 = SEMANTIC_VIEW_MEASUREMENT
+    | SEMANTIC_VIEW_LAYOUT_INSPECTION
+    | SEMANTIC_VIEW_BORROWED_LAYOUT
+    | SEMANTIC_VIEW_GLYPH_FACTS;
 
 pub(crate) const TEXT_MUTATION_REPLACE_UTF16: u8 = 1;
 pub(crate) const TEXT_ENCODING_UTF16_LE: u8 = 1;

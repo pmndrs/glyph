@@ -58,8 +58,8 @@ class wire 1 fbb592b5158a9110
 class identity 1 0b15778fb54f5b80
 class value 1 16373847b11b5f2e
 step 03 three new paragraphs
-class value 538 75c429a9b5cffc87
-class identity 45 fca300848de8d47b
+class value 538 0bc8c8160d437490
+class identity 45 a2588ec669a59f10
 class repr 129 30be3287fadc7f8c
 class cache 3 bd7bf1e48747bc49
 class wire 1 f32d78035dabf094

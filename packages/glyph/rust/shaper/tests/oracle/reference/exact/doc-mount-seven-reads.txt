@@ -152,14 +152,14 @@ stage plan value 23 866f1876e7ca7b94
 stage plan identity 7 c87e13a8ad54591c
 stage doc value 3 bb52517d84517a30
 step 01 edit the last paragraph
-class value 1282 7de4e3cc88d3d264
-class identity 95 dd86b8eed6c866fe
+class value 1282 6bc6ff9d824892d3
+class identity 95 f5ced4495947da84
 class repr 302 e6ce20aee88d9adb
 class cache 8 725dae21fd26b934
 class wire 1 3094a373fa99cf26
 step 02 nothing changes
-class value 1282 592c78f7b35fde72
-class identity 95 d5ca42d9aed63a64
+class value 1282 ca323825527d018a
+class identity 95 9e38bbf6b58c5a0a
 class repr 302 e6ce20aee88d9adb
 class cache 8 725dae21fd26b934
 class wire 1 28cabc547af1be5b

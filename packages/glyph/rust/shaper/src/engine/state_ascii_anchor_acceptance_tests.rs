@@ -57,8 +57,10 @@ fn acceptance_edit<'a>(
     request.limits.max_clusters = 8_192;
     request.limits.max_lines = 8_192;
     request.limits.max_output_bytes = 1 << 22;
+    // The acceptance compares borrowed glyphs right after the read, so the read positions.
     request.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_MEASUREMENT
-        | super::super::frame::SEMANTIC_VIEW_BORROWED_LAYOUT;
+        | super::super::frame::SEMANTIC_VIEW_BORROWED_LAYOUT
+        | super::super::frame::SEMANTIC_VIEW_GLYPH_FACTS;
     request.text_mutations = parse_text_mutations(bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
         .unwrap();
     request.style_mutations = parse_style_mutations(style, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
@@ -270,6 +272,8 @@ fn ascii_anchor_same_length_reuse_keeps_mask_then_conservatively_falls_back() {
         request.limits.max_output_bytes = 1 << 22;
         request.text_mutations = parse_text_mutations(
             &same, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        // Borrowed glyphs are compared below, so the read positions.
+        request.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_GLYPH_FACTS;
         let measured = engine.measure_paragraph_with_shaper(shaper, request, 1).unwrap();
         engine.commit_measure(measured).unwrap();
         let state = &engine.planners.get(&4).unwrap().paragraph(1).unwrap().state;

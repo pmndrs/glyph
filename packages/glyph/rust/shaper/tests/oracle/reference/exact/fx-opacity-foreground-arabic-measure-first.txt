@@ -29,17 +29,17 @@ stage gpu value 3 4ea2dcdc921d40a8
 stage plan value 23 bf342c97bf9cc38c
 stage plan identity 7 c0abddf879e48152
 step 01 half opaque
-class value 245 3793ec18ecb500b1
-class identity 27 26de73fde7033b14
+class value 245 7bf3b6d585868829
+class identity 27 d536340b2acbf6a4
 class repr 44 f1d759e2cd755ef7
 class wire 1 94644a64afc43f2a
 step 02 foreground
-class value 245 359a36bbc84fa484
-class identity 27 f8d5eed504eecd19
+class value 245 ae399a7541594975
+class identity 27 58738e3833592400
 class repr 44 f1d759e2cd755ef7
 class wire 1 6889dcc9c8c868ab
 step 03 foreground and width
-class value 245 c740bacf431469f1
-class identity 27 9976c85bc28a6fc9
+class value 245 8c2b681ccf17c388
+class identity 27 f32b4f6fe188033e
 class repr 44 03f609437503c1b1
 class wire 1 de1dad725a3123e1

@@ -955,6 +955,13 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_copy_glyphs(
             .chunks_exact(4)
             .map(|bytes| u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
             .collect();
+        if let Err(error) =
+            state
+                .engine
+                .settle_paragraph_positioning(&state.registry, root_id, paragraph_id)
+        {
+            return publish_engine_failure(state, root_id, revision, error);
+        }
         let plan = match state.engine.copy_glyphs(
             root_id,
             paragraph_id,
@@ -1008,6 +1015,13 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_copy_decorations(
             Ok(revision) => revision,
             Err(_) => return 0,
         };
+        if let Err(error) =
+            state
+                .engine
+                .settle_paragraph_positioning(&state.registry, root_id, paragraph_id)
+        {
+            return publish_engine_failure(state, root_id, revision, error);
+        }
         let plan =
             match state
                 .engine
@@ -1243,6 +1257,13 @@ pub extern "C" fn pmndrs_glyph_engine_borrow_paragraph_layout(
     paragraph_id: u32,
 ) -> u32 {
     with_state(|state| {
+        if state
+            .engine
+            .settle_paragraph_positioning(&state.registry, root_id, paragraph_id)
+            .is_err()
+        {
+            return 0;
+        }
         let glyph_count = match state
             .engine
             .borrowed_paragraph_layout(root_id, paragraph_id)
@@ -1332,6 +1353,13 @@ fn text_query(
 ) -> u32 {
     with_state(|state| {
         state.text_query = TextQueryResult::default();
+        if state
+            .engine
+            .settle_paragraph_positioning(&state.registry, root_id, paragraph_id)
+            .is_err()
+        {
+            return STATUS_INVALID_REQUEST;
+        }
         if let Some(unit) = unit.and_then(unit_from_wire)
             && state
                 .engine

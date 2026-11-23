@@ -32,32 +32,32 @@ stage gpu value 3 371bf5d8fb1e8fa6
 stage plan value 23 6e085fdd90adc5b0
 stage plan identity 7 b65a14036160df65
 step 01 material swapped
-class value 280 469a804167b6f9cd
-class identity 29 5df86e6882b6e76d
+class value 280 c19849e634bbf4e8
+class identity 29 5bfc190c8978a681
 class repr 64 6d0e001b71a0ba42
 class cache 5 ab968f21cb7a4012
 class wire 1 94644a64afc43f2a
 step 02 recolour
-class value 280 40fa3323f87337f1
-class identity 29 ad2aa901b60cd2cc
+class value 280 e8b356db88cf70c7
+class identity 29 aa6331ebafb4b03c
 class repr 64 6d0e001b71a0ba42
 class cache 5 ab968f21cb7a4012
 class wire 1 6889dcc9c8c868ab
 step 03 material and edit
-class value 280 49f1cedd51ae2d66
-class identity 29 5cafb19d03af2a12
+class value 280 242c4beb3c7b2134
+class identity 29 bed756dd68299be5
 class repr 64 df7aeef910c33cd2
 class cache 5 6c222f41092c1a77
 class wire 1 c143b1c24a3b96ee
 step 04 material and same-length edit
-class value 280 30e1a9df2c590255
-class identity 29 fa911baa077118be
+class value 280 097d008780cb0c85
+class identity 29 5005881e8fb5f6e3
 class repr 64 e76f2c6888eba347
 class cache 5 6c222f41092c1a77
 class wire 1 6ee52c4e6e318044
 step 05 material and width
-class value 280 1b62b6f38eadd134
-class identity 29 cb97334b726ce908
+class value 280 0051a986470d28ad
+class identity 29 236d1287d2ab6407
 class repr 64 14d8818c07e735bb
 class cache 5 03014a65336f4bae
 class wire 1 7f6c164bbdfecb0a

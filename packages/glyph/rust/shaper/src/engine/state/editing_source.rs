@@ -41,6 +41,8 @@ impl TextEngine {
             .planners
             .get(&root_id)
             .and_then(|planner| planner.paragraph(paragraph_id))
+            // Owed positioning is settled at the query's entry (`settle_paragraph_positioning`).
+            .filter(|paragraph| !paragraph.state.positioning_owed())
             .ok_or(EditingError::NotPrepared)?;
         Ok(Editing::new(ParagraphSource {
             paragraph: &paragraph.state,

@@ -91,53 +91,53 @@ stage plan value 23 c80e9de6d6b02b8e
 stage plan identity 7 0f8d2e29ded6dec0
 stage doc value 3 bc50abe8ec8b3781
 step 01 edit paragraph 2 alone
-class value 789 17c7cfea07f0227e
-class identity 64 24783e914c98069c
+class value 789 fb1c699d54846c30
+class identity 64 4c464de7dd0498cc
 class repr 173 0232674115df8bf9
 class cache 3 95295bd90571493a
 class wire 1 6082636e78e011e2
 step 02 edit all four
-class value 824 1f3845d474f0b3d7
-class identity 66 73d8888748c30def
+class value 824 1eaff98534319beb
+class identity 66 47bd6686c448d866
 class repr 193 6c3efb6766454776
 class cache 5 825ee18a96071368
 class wire 1 dc43fcc1b375254e
 step 03 narrow paragraph 3, edit paragraph 4
-class value 789 b5f060334f4f813a
-class identity 64 0fd9a2d83afbc0ec
+class value 789 7bfd9664ae65d529
+class identity 64 d32497da8cc4e07b
 class repr 173 7cdbe753ec3f0b29
 class cache 5 825ee18a96071368
 class wire 1 f94ea44e06dceeed
 step 04 move paragraph 1 last
-class value 769 5dda06f16c40bf57
-class identity 62 c4b03aa10701f134
+class value 769 b2c8c76d07dc10a8
+class identity 62 07d39077622a1f98
 class repr 173 7cdbe753ec3f0b29
 class cache 5 825ee18a96071368
 class wire 1 f563b2c3d74ac26c
 step 05 rank paragraphs 1 and 4 in a scope
-class value 769 5dda06f16c40bf57
-class identity 62 c4b03aa10701f134
+class value 769 b2c8c76d07dc10a8
+class identity 62 07d39077622a1f98
 class repr 173 7cdbe753ec3f0b29
 class cache 5 825ee18a96071368
 class wire 1 7c302c2aabd1c4ac
 step 06 remove paragraph 3
-class value 618 c47d7f5c7846b1b5
-class identity 53 75673262baae15da
+class value 618 6d24a180283255d2
+class identity 53 7aa2c577e3653fae
 class repr 132 309227a6d5949a91
 class wire 1 172c42c164a8a681
 step 07 add paragraph 5
-class value 789 3c36de8ebb0cac96
-class identity 64 5369df93672cc403
+class value 789 9bcbead0d615ce1a
+class identity 64 739d42b33a85c2f8
 class repr 176 b129e88865413134
 class wire 1 75e4fcc458b819c5
 step 08 remove 2, add 6, edit 4
-class value 789 ec63c58dab755556
-class identity 64 7c5f391e3b31b236
+class value 789 9bbb52ed96e22114
+class identity 64 4a322623f3789f6f
 class repr 173 1d8c42beb5f4234f
 class wire 1 ebe57f7cdf786ccd
 step 09 nothing changes
-class value 769 2db3543e3d5df272
-class identity 62 f82590040cc682b2
+class value 769 f6808d98c9ccf156
+class identity 62 86c2f47072ab1b49
 class repr 173 1d8c42beb5f4234f
 class wire 1 9040ffcfcf5f7ec0
 step 10 remove paragraph 5 + paragraph 4: replace 1 at 120 + add paragraph 7

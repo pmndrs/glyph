@@ -1656,8 +1656,12 @@ class RenderPlannerImpl {
       expectedEngineRevision: this.#engineRevision,
       consumedRevision: this.#revision,
       acknowledgedPublicationGeneration: this.#acknowledgedGeneration,
+      // A summary carries its glyph facts, so the read positions its paragraph. A preparation that serializes no
+      // summary leaves positioning owed to the publication or to the next read of positions.
       semanticViewMask: includeMeasurement
-        ? textShaperAbi.engine.semanticViewMasks.measurement | textShaperAbi.engine.semanticViewMasks.borrowedLayout
+        ? textShaperAbi.engine.semanticViewMasks.measurement |
+          textShaperAbi.engine.semanticViewMasks.borrowedLayout |
+          textShaperAbi.engine.semanticViewMasks.glyphFacts
         : 0,
       limits: this.#limits,
     };

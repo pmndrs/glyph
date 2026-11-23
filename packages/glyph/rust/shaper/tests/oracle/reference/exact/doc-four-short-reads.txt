@@ -91,52 +91,52 @@ stage plan value 23 c80e9de6d6b02b8e
 stage plan identity 7 0f8d2e29ded6dec0
 stage doc value 3 bc50abe8ec8b3781
 step 01 edit paragraph 2 alone
-class value 769 72db8ea6ea38286b
-class identity 62 fb52ad15d9667bda
+class value 769 5db53f9617f628c8
+class identity 62 de876ad6899e544f
 class repr 173 0232674115df8bf9
 class cache 3 95295bd90571493a
 class wire 1 84c34db705dba323
 step 02 edit all four
-class value 804 f845389aedb8b78d
-class identity 64 92e7e21abba8a7d4
+class value 804 a4096bde1ebf9988
+class identity 64 e4d76019b96967b5
 class repr 193 6c3efb6766454776
 class cache 5 825ee18a96071368
 class wire 1 28e4e734ef87c91d
 step 03 narrow paragraph 3, edit paragraph 4
-class value 769 2e4d8bef9d1f56f7
-class identity 62 c8db0c42123a63de
+class value 769 8e52947097a0320f
+class identity 62 e2dc14d7cce9e5f7
 class repr 173 7cdbe753ec3f0b29
 class cache 5 825ee18a96071368
 class wire 1 81fb1fc1a1e23974
 step 04 move paragraph 1 last
-class value 769 5dda06f16c40bf57
-class identity 62 e349a4006de171e5
+class value 769 b2c8c76d07dc10a8
+class identity 62 690dad1eee071322
 class repr 173 7cdbe753ec3f0b29
 class cache 5 825ee18a96071368
 class wire 1 19fb8b53e363fa1f
 step 05 rank paragraphs 1 and 4 in a scope
-class value 769 5dda06f16c40bf57
-class identity 62 e349a4006de171e5
+class value 769 b2c8c76d07dc10a8
+class identity 62 690dad1eee071322
 class repr 173 7cdbe753ec3f0b29
 class cache 5 825ee18a96071368
 class wire 1 7c302c2aabd1c4ac
 step 06 remove paragraph 3
-class value 598 845ef3ad03136165
-class identity 51 a8730154ee7f47e9
+class value 598 b12dcce167684bd7
+class identity 51 71f2cd8bebc51f90
 class repr 132 309227a6d5949a91
 class wire 1 7b6d5dbbbdb151a6
 step 07 add paragraph 5
-class value 769 c74e3c39aee43cb5
-class identity 62 7b40731e11118289
+class value 769 c74e109b1873c991
+class identity 62 cfa56315083cc10d
 class repr 176 b129e88865413134
 class wire 1 188ce18193513070
 step 08 remove 2, add 6, edit 4
-class value 769 032beeaa9ec7968e
-class identity 62 d314c2df8ae025c8
+class value 769 912214dff265b470
+class identity 62 d0a98083127b46f1
 class repr 173 1d8c42beb5f4234f
 class wire 1 ebc7b00098dd853c
 step 09 nothing changes
-class value 769 2db3543e3d5df272
-class identity 62 0cff24d9f4222446
+class value 769 f6808d98c9ccf156
+class identity 62 d7139bcb47b11849
 class repr 173 1d8c42beb5f4234f
 class wire 1 956299db36e3c2be

@@ -4,6 +4,7 @@
 //! request carries input for, in one call. Both stage the same candidates and commit through
 //! `commit_measure`; neither touches the renderer plan, its revision or its acknowledgement.
 
+use super::deferred_positioning::PositioningDemand;
 use super::*;
 
 /// Which paragraphs one preparation request covers.
@@ -187,6 +188,17 @@ impl TextEngine {
             & (super::super::frame::SEMANTIC_VIEW_MEASUREMENT
                 | super::super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION)
             != 0;
+        // A read that asks for no glyph, ink or inspection answers from flow layout; positioning
+        // is owed until something reads positions (`deferred_positioning`).
+        let positioning = if request.semantic_view_mask
+            & (super::super::frame::SEMANTIC_VIEW_LAYOUT_INSPECTION
+                | super::super::frame::SEMANTIC_VIEW_GLYPH_FACTS)
+            == 0
+        {
+            PositioningDemand::Deferrable
+        } else {
+            PositioningDemand::Now
+        };
         let mut refused = None;
         // Everything up to here either validated without writing or wrote only scratch. From
         // here a failure of the lifecycle still discards the derived root; a failure inside one
@@ -234,8 +246,8 @@ impl TextEngine {
                         .state
                         .reserve_text(prepared_text_length(&paragraph.state, text)?)?;
                     // Preparation is durable independently of the result sidecar the host
-                    // requested, so it always includes positioning. A semantic mask controls
-                    // serialization, not which stage becomes the current retained preparation.
+                    // requested: every stage it runs commits. Positioning alone may be owed,
+                    // against a kept predecessor, until something reads positions.
                     paragraph.positioned_changed = paragraph.state.prepare(
                         shaper.as_deref_mut(),
                         font_stacks,
@@ -247,6 +259,7 @@ impl TextEngine {
                         &mut next_glyph_id,
                         preflight_candidate,
                         &preflight_edit_scratch,
+                        positioning,
                     )?;
                     if !serialized {
                         return Ok(());
@@ -268,6 +281,8 @@ impl TextEngine {
                             != 0,
                         request.semantic_view_mask
                             & super::super::frame::SEMANTIC_VIEW_BORROWED_LAYOUT
+                            != 0,
+                        request.semantic_view_mask & super::super::frame::SEMANTIC_VIEW_GLYPH_FACTS
                             != 0,
                     );
                     planner.semantic_records = records;

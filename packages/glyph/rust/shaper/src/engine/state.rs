@@ -642,6 +642,8 @@ struct ParagraphState {
     style_nesting_scratch: Vec<u32>,
     style_resolution_scratch: Vec<ResolutionScope>,
     style_invalidation: StyleInvalidation,
+    /// Whether positions describe the current flow, and what owed positioning compares against.
+    positioning: deferred_positioning::PositioningState,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1045,6 +1047,10 @@ impl TextEngine {
         if let Some(leaf) = paragraph.state.active_inline() {
             return Ok(leaf.semantic_count());
         }
+        // Owed positioning is settled at the read's entry (`settle_paragraph_positioning`).
+        if paragraph.state.positioning_owed() {
+            return Err(EngineError::InvalidRequest);
+        }
         let positioned = paragraph.state.inspection_positioned();
         Ok(positioned.occurrence_count())
     }
@@ -1080,6 +1086,9 @@ impl TextEngine {
                 *record = row.placed(translation)?;
             }
             return Ok(());
+        }
+        if paragraph.state.positioning_owed() {
+            return Err(EngineError::InvalidRequest);
         }
         let positioned = paragraph.state.inspection_positioned();
         let boundary = paragraph.state.inspection_boundary_shape();
@@ -1229,6 +1238,9 @@ impl TextEngine {
         let paragraph = planner
             .paragraph(paragraph_id)
             .ok_or(EngineError::InvalidRequest)?;
+        if paragraph.state.positioning_owed() {
+            return Err(EngineError::InvalidRequest);
+        }
         if let Some(leaf) = paragraph.state.committed_inline() {
             let mut selected_sources = Vec::new();
             let mut selected_placement_slots = Vec::new();
@@ -1443,6 +1455,9 @@ impl TextEngine {
         let paragraph = planner
             .paragraph(paragraph_id)
             .ok_or(EngineError::InvalidRequest)?;
+        if paragraph.state.positioning_owed() {
+            return Err(EngineError::InvalidRequest);
+        }
         let positioned = paragraph.state.positioned.committed();
 
         let mut gather = CodecGatherWorkspace::default();
@@ -1654,6 +1669,11 @@ impl TextEngine {
                 lifecycle_plan,
                 spare_text_candidate_id,
             )?;
+            // A read may have left positioning owed; publication draws positions, so it settles
+            // that first, against the predecessor the read kept.
+            if let Some(shaper) = shaper.as_deref() {
+                planner.settle_owed_positioning(shaper)?;
+            }
             if !checkpoint
                 && !preparation_changed
                 && planner.lifecycle_changed
@@ -1823,6 +1843,7 @@ impl TextEngine {
                         &mut next_glyph_id,
                         preflight_candidate,
                         &preflight_edit_scratch,
+                        deferred_positioning::PositioningDemand::Now,
                     )
                 };
                 planner
@@ -2052,6 +2073,9 @@ impl TextEngine {
                             request.semantic_view_mask
                                 & super::frame::SEMANTIC_VIEW_BORROWED_LAYOUT
                                 != 0,
+                            // Publication positions every paragraph, so its views carry
+                            // glyph facts.
+                            true,
                         )
                         .map_err(|error| error.in_paragraph(paragraph_id))?;
                     }
@@ -2410,12 +2434,19 @@ fn append_paragraph_measurement(
     limits: super::frame::UpdateLimits,
     include_layout_inspection: bool,
     include_borrowed_layout: bool,
+    include_glyph_facts: bool,
 ) -> Result<(), EngineError> {
+    // A measurement carries glyph facts exactly when its request asks for them, whatever the
+    // paragraph's history: a summary-only read answers from flow layout whether or not its
+    // positioning is owed, so equal requests over equal text return equal records.
+    let include_glyph_facts = include_glyph_facts || include_layout_inspection;
     if let Some(leaf) = state.active_inline() {
         let line = leaf.line.as_ref().ok_or(EngineError::InvalidRequest)?;
         let fragment = leaf.fragment.as_ref().ok_or(EngineError::InvalidRequest)?;
         let count =
             u32::try_from(leaf.semantic_count()).map_err(|_| EngineError::ResultTooLarge)?;
+        let starts = [0];
+        let counts = [count];
         let mut source = 0u32;
         return super::layout_query::append_measurement_from_inline_occurrences(
             records,
@@ -2426,7 +2457,11 @@ fn append_paragraph_measurement(
             line,
             fragment,
             leaf.inline_extent,
-            leaf.semantic_count(),
+            if include_glyph_facts {
+                leaf.semantic_count()
+            } else {
+                0
+            },
             || {
                 let row = leaf
                     .row(source)
@@ -2436,8 +2471,7 @@ fn append_paragraph_measurement(
                 Ok(row)
             },
             leaf.placement_translations(),
-            &[0],
-            &[count],
+            include_glyph_facts.then_some((&starts[..], &counts[..])),
             None,
             leaf.intrinsics,
             include_layout_inspection || include_borrowed_layout,
@@ -2498,6 +2532,44 @@ fn append_paragraph_measurement(
             >= usize::try_from(constraint.max_lines).map_err(|_| EngineError::ResultTooLarge)?;
     let inspect_full_clipped_layout =
         needs_intrinsic && constraint.overflow == OVERFLOW_CLIP && !max_lines_truncated;
+    // Glyph facts and the full clipped layout count positioned glyphs, so they position now.
+    if (inspect_full_clipped_layout || include_glyph_facts) && state.positioning_owed() {
+        state.settle_positioning(shaper.as_deref().ok_or(EngineError::InvalidRequest)?)?;
+    }
+    if !include_glyph_facts && !inspect_full_clipped_layout {
+        let flow_thread_id = constraint.flow_thread_id;
+        let geometry = state.geometry.active();
+        let intrinsic_extents = needs_intrinsic
+            .then(|| {
+                super::layout_query::flow_extents(
+                    flow_thread_id,
+                    &state.intrinsic_flow_layout_scratch,
+                    state.clusters.active(),
+                    thread_typography(geometry, flow_thread_id),
+                )
+            })
+            .transpose()?;
+        super::layout_query::append_measurement_from_flow(
+            records,
+            paragraph_id,
+            state.text.active().units.len(),
+            cluster_count,
+            geometry,
+            state.flow_layout.active(),
+            state.clusters.active(),
+            intrinsic_extents,
+            intrinsics,
+        )?;
+        if !reuse_intrinsic {
+            state.clipped_inspection.pending_mut().mode = if needs_intrinsic {
+                IntrinsicInspection::Flow
+            } else {
+                IntrinsicInspection::None
+            };
+            state.clipped_inspection.mark_prepared();
+        }
+        return Ok(());
+    }
     if inspect_full_clipped_layout && !reuse_intrinsic {
         state
             .prepare_intrinsic_positioned(shaper.as_deref().ok_or(EngineError::InvalidRequest)?)?;
@@ -4547,6 +4619,7 @@ impl ParagraphState {
 
     fn reset_for_reuse_inner(&mut self, preserve_text_candidate: bool) {
         self.change_since_publication = ParagraphChange::default();
+        self.positioning = deferred_positioning::PositioningState::Current;
         self.intrinsic_widths_cache = None;
         {
             let (committed, pending) = self.text.pair_mut();
@@ -4683,6 +4756,7 @@ impl ParagraphState {
         next_glyph_id: &mut u32,
         preflight_candidate: Option<&mut PreflightTextCandidate>,
         preflight_edits: &[TextEdit],
+        positioning: deferred_positioning::PositioningDemand,
     ) -> Result<bool, EngineError> {
         let positioned_changed = self.prepare_stages(
             shaper,
@@ -4695,6 +4769,7 @@ impl ParagraphState {
             next_glyph_id,
             preflight_candidate,
             preflight_edits,
+            positioning,
         )?;
         self.accumulate_staged_change();
         Ok(positioned_changed)
@@ -4713,10 +4788,16 @@ impl ParagraphState {
         next_glyph_id: &mut u32,
         mut preflight_candidate: Option<&mut PreflightTextCandidate>,
         preflight_edits: &[TextEdit],
+        positioning: deferred_positioning::PositioningDemand,
     ) -> Result<bool, EngineError> {
         #[cfg(test)]
         {
             self.preparation_count += 1;
+        }
+        // Positioning a read left owed runs first, against the predecessor it kept: every stage
+        // below then compares against committed values that the positioned arena describes.
+        if let Some(shaper) = shaper.as_deref() {
+            self.settle_positioning(shaper)?;
         }
         self.prepare_text(
             text_mutations,
@@ -4764,6 +4845,7 @@ impl ParagraphState {
             limits,
             next_glyph_id,
             cluster_geometry_changed,
+            positioning,
         )?;
         if cluster_geometry_changed {
             self.intrinsic_widths_cache = None;
@@ -4782,6 +4864,7 @@ impl ParagraphState {
         limits: super::frame::UpdateLimits,
         next_glyph_id: &mut u32,
         cluster_geometry_changed: bool,
+        positioning: deferred_positioning::PositioningDemand,
     ) -> Result<bool, EngineError> {
         self.prepare_geometry(geometry)?;
         let flow_changed = cluster_geometry_changed
@@ -4844,13 +4927,24 @@ impl ParagraphState {
                 }
             }
             if positioned_changed {
-                self.prepare_positioned(shaper)?;
+                match positioning {
+                    deferred_positioning::PositioningDemand::Now => {
+                        self.prepare_positioned(shaper)?;
+                    }
+                    deferred_positioning::PositioningDemand::Deferrable => {
+                        self.skip_positioning();
+                    }
+                }
             }
         }
         Ok(positioned_changed)
     }
 
     fn commit_all(&mut self) {
+        if let deferred_positioning::PositioningState::Skipped(plan) = self.positioning {
+            self.commit_deferring_positioning(plan);
+            return;
+        }
         self.commit_text();
         self.commit_styles();
         self.commit_unicode();
@@ -7461,9 +7555,21 @@ impl ParagraphState {
         self.discard_flow_layout_candidate();
     }
 
-    #[inline(never)]
     fn prepare_positioned(&mut self, shaper: &ShaperRegistry) -> Result<(), EngineError> {
+        let plan = self.positioning_plan();
+        self.position(shaper, plan)
+    }
+
+    /// The one positioning implementation, eager or deferred: `plan` carries the facts about
+    /// the staged stages that a deferred run can no longer read off their flags.
+    #[inline(never)]
+    fn position(
+        &mut self,
+        shaper: &ShaperRegistry,
+        plan: deferred_positioning::PositioningPlan,
+    ) -> Result<(), EngineError> {
         self.discard_positioned_candidate();
+        self.positioning = deferred_positioning::PositioningState::Current;
         let text = self.text.active().units.as_slice();
         let clusters = self.clusters.active();
         let runs = self.shaping_runs.active().runs();
@@ -7477,25 +7583,14 @@ impl ParagraphState {
             &self.boundary_shape
         };
         let geometry = self.geometry.active();
-        let retained_flow = (self.geometry.is_prepared()
-            && !self.clusters.is_prepared()
-            && !self.text.is_prepared()
-            && !self.styles.is_prepared()
-            && !self.unicode.is_prepared()
-            && !self.bidi.is_prepared()
-            && !self.shape.is_prepared()
-            && !self.shaping_runs.is_prepared()
-            && !self.style_invalidation.metrics
-            && !self.style_invalidation.positioning)
-            .then(|| self.flow_layout.committed());
+        let retained_flow = plan.retains_flow.then(|| self.flow_layout.committed());
         // Layout islands authorize semantic reuse only within this preparation.
         // Paint/effects invalidate positioning even when layout itself is unchanged.
-        let recomposed_lines =
-            if self.flow_layout.is_prepared() && !self.style_invalidation.positioning {
-                flow.recomposed_line_ranges()
-            } else {
-                None
-            };
+        let recomposed_lines = if plan.recomposed_lines {
+            flow.recomposed_line_ranges()
+        } else {
+            None
+        };
         let (committed_positioned, pending_positioned) = self.positioned.pair_mut();
         pending_positioned.build_with_previous(
             committed_positioned,
@@ -10003,6 +10098,7 @@ fn gather_error(error: GatherError) -> EngineError {
 pub mod oracle;
 
 mod change_class;
+mod deferred_positioning;
 mod editing_source;
 mod prepare_paragraphs;
 #[cfg(test)]
@@ -11835,7 +11931,9 @@ mod tests {
         query.limits.max_clusters = 256;
         query.limits.max_lines = 256;
         query.limits.max_output_bytes = 1 << 20;
-        query.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_MEASUREMENT;
+        // Glyph facts make each read position, so warm and cold summaries compare whole.
+        query.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_MEASUREMENT
+            | super::super::frame::SEMANTIC_VIEW_GLYPH_FACTS;
         let measured = engine
             .measure_paragraph_with_shaper(&mut shaper, query, 1)
             .unwrap();
@@ -12308,8 +12406,10 @@ mod tests {
 
         let mut borrowed_query = update(1, 1, 1);
         borrowed_query.limits = query_limits;
+        // The query reads glyph facts, so its records equal the publication's below.
         borrowed_query.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_MEASUREMENT
-            | super::super::frame::SEMANTIC_VIEW_BORROWED_LAYOUT;
+            | super::super::frame::SEMANTIC_VIEW_BORROWED_LAYOUT
+            | super::super::frame::SEMANTIC_VIEW_GLYPH_FACTS;
         super::super::work_attribution::reset();
         let before_query_shape_calls = crate::SHAPINGS.with(core::cell::Cell::get);
         let measured = engine
@@ -12334,9 +12434,11 @@ mod tests {
         assert_eq!(first_query_work.intrinsic_flow_preparations, 1);
         assert_eq!(first_query_work.intrinsic_positioning_preparations, 0);
         assert_eq!(first_query_work.measurement_intrinsic_cluster_visits, 40);
-        // Positioning measured each line's ink while the setter prepared; the query unions lines.
-        assert_eq!(setter_work.measurement_ink_glyph_visits, 5);
-        assert_eq!(first_query_work.measurement_ink_glyph_visits, 0);
+        // The mask-zero setter left positioning owed. The query, a later read of the same
+        // paragraph, settles it first; positioning measures each line's ink, and the summary
+        // unions lines rather than walking glyphs.
+        assert_eq!(setter_work.measurement_ink_glyph_visits, 0);
+        assert_eq!(first_query_work.measurement_ink_glyph_visits, 5);
         assert_eq!(first_query_shape_calls, 0);
         engine.commit_measure(measured).unwrap();
         assert_eq!(
@@ -14664,16 +14766,27 @@ mod tests {
                         assert_eq!(preparation.gather_glyph_visits, 0);
                         assert_eq!(preparation.ordered_admission_visits, 0);
                         assert_eq!(preparation.draw_reduced_glyphs, 0);
-                        assert_eq!(
-                            preparation.measurement_ink_glyph_visits,
-                            paragraph_count as usize * 10
-                        );
+                        // A summary-only read answers from flow and leaves positioning, which
+                        // measures ink, to the publication.
+                        assert_eq!(preparation.measurement_ink_glyph_visits, 0);
                         assert_eq!(
                             preparation.measurement_intrinsic_cluster_visits,
                             paragraph_count as usize * 10
                         );
                         assert!(preparation.query_serialized_records >= paragraph_count as usize);
                         assert!(preparation.query_serialized_bytes > 0);
+                    }
+                    // The reads left positioning owed; it is settled outside the attributed
+                    // publication so that phase counts only gather and plan work.
+                    let positioning_before = super::super::work_attribution::snapshot();
+                    engine.settle_root_positioning(&shaper, 4).unwrap();
+                    let positioning = super::super::work_attribution::snapshot();
+                    if step != 0 {
+                        assert_eq!(
+                            positioning.measurement_ink_glyph_visits
+                                - positioning_before.measurement_ink_glyph_visits,
+                            paragraph_count as usize * 10
+                        );
                     }
                     super::super::work_attribution::reset();
                     let mut publication = update(revision, revision, revision);
@@ -15066,6 +15179,8 @@ mod tests {
                     edit.style_mutations =
                         parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
                             .unwrap();
+                    // Positions in the read itself: this test inspects positioning at preparation.
+                    edit.semantic_view_mask |= super::super::frame::SEMANTIC_VIEW_GLYPH_FACTS;
                     let measured = engine
                         .measure_paragraph_with_shaper(&mut shaper, edit, id)
                         .unwrap();
@@ -15948,6 +16063,8 @@ mod tests {
         moved.geometry = parse_root_geometry_with_exclusions(&next_geometry, 1, moved.limits);
         let limits = moved.limits;
         super::super::work_attribution::reset();
+        // Positions in the read itself: this test inspects positioning at preparation.
+        moved.semantic_view_mask |= super::super::frame::SEMANTIC_VIEW_GLYPH_FACTS;
         let measured = engine
             .measure_paragraph_with_shaper(&mut shaper, moved, 1)
             .unwrap();
@@ -17403,6 +17520,8 @@ mod tests {
                     parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 8_193)
                         .unwrap();
                 super::super::work_attribution::reset();
+                // Positions in the read itself: this test inspects positioning at preparation.
+                request.semantic_view_mask |= super::super::frame::SEMANTIC_VIEW_GLYPH_FACTS;
                 let measured = warm_engine
                     .measure_paragraph_with_shaper(&mut warm_shaper, request, 1)
                     .unwrap();
@@ -17626,6 +17745,9 @@ mod tests {
                         measured_request.text_mutations =
                             parse_text_mutations(&mutations, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1)
                                 .unwrap();
+                        // Positions in the read itself: this test inspects positioning at preparation.
+                        measured_request.semantic_view_mask |=
+                            super::super::frame::SEMANTIC_VIEW_GLYPH_FACTS;
                         let measured = warm_engine
                             .measure_paragraph_with_shaper(&mut warm_shaper, measured_request, 1)
                             .unwrap();
@@ -17821,6 +17943,8 @@ mod tests {
             request.text_mutations =
                 parse_text_mutations(&text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
             super::super::work_attribution::reset();
+            // Positions in the read itself: this test inspects positioning at preparation.
+            request.semantic_view_mask |= super::super::frame::SEMANTIC_VIEW_GLYPH_FACTS;
             let measured = engine
                 .measure_paragraph_with_shaper(&mut shaper, request, 1)
                 .unwrap();
@@ -17925,6 +18049,8 @@ mod tests {
             parse_text_mutations(&text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
         request.style_mutations =
             parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
+        // Positions in the read itself: this test inspects positioning at preparation.
+        request.semantic_view_mask |= super::super::frame::SEMANTIC_VIEW_GLYPH_FACTS;
         let measured = engine
             .measure_paragraph_with_shaper(&mut shaper, request, 1)
             .unwrap();
@@ -18117,6 +18243,8 @@ mod tests {
             request.text_mutations =
                 parse_text_mutations(&text, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
             if !mixed {
+                // Positions in the read itself: this test inspects positioning at preparation.
+                request.semantic_view_mask |= super::super::frame::SEMANTIC_VIEW_GLYPH_FACTS;
                 let measured = engine
                     .measure_paragraph_with_shaper(&mut shaper, request, 1)
                     .unwrap();
@@ -18144,6 +18272,8 @@ mod tests {
             request.style_mutations =
                 parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
             super::super::work_attribution::reset();
+            // Positions in the read itself: this test inspects positioning at preparation.
+            request.semantic_view_mask |= super::super::frame::SEMANTIC_VIEW_GLYPH_FACTS;
             let measured = engine
                 .measure_paragraph_with_shaper(&mut shaper, request, 1)
                 .unwrap();
@@ -23439,6 +23569,7 @@ mod tests {
     }
     include!("state/change_class_tests.rs");
     include!("state/refusal_tests.rs");
+    include!("state/deferred_positioning_tests.rs");
     include!("state/run_local_prefix_tests.rs");
     include!("state_ascii_anchor_runtime_oracle.rs");
     include!("state_ascii_anchor_acceptance_tests.rs");

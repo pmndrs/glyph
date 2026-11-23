@@ -65,6 +65,8 @@ fn a_failed_preparation_resets_its_paragraph_and_leaves_the_root_usable() {
         .unwrap();
     assert_eq!(prepared.refused, None);
     engine.commit_measure(prepared.witness).unwrap();
+    // The read answered from flow; the comparison below reads positions.
+    engine.settle_root_positioning(&shaper, 4).unwrap();
 
     let (cold_engine, _) =
         shaped_outlined_engine_with_styles_geometry(&restated_text, &grown_styles, &geometry);

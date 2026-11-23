@@ -93,52 +93,52 @@ stage plan value 23 f7322922f7feb908
 stage plan identity 7 68fc13aebb961467
 stage doc value 3 bc50abe8ec8b3781
 step 01 edit paragraph 2 alone
-class value 724 7502445985b2fea9
-class identity 56 edc63ba27eedee20
+class value 724 7c6672312996e67a
+class identity 56 00c2974a38abb820
 class repr 193 e1d217b92df23ae1
 class cache 5 e7ec200ce8b8908d
 class wire 1 55d8bd791a6212aa
 step 02 edit all four
-class value 724 458f53099fe36320
-class identity 56 cedb33ad3e162971
+class value 724 83d12d91029a07c0
+class identity 56 ac9d2831674e800d
 class repr 193 ae24c8ffdf1d8ba3
 class cache 5 4cb87809ff087c60
 class wire 1 bfa7c8bebb059e35
 step 03 narrow paragraph 3, edit paragraph 4
-class value 724 a89991d1eb089423
-class identity 56 a5e87b59ee9c2542
+class value 724 cbd6e54cb182d005
+class identity 56 b3e66773d85be1f9
 class repr 193 28c364bc196c28b0
 class cache 5 72ec9ccf70f4b2d6
 class wire 1 6be579ffae3fb7b0
 step 04 move paragraph 1 last
-class value 724 3759b7132e48f8c1
-class identity 56 9a74543d79067333
+class value 724 d91726d9cd50b83e
+class identity 56 feeff912ac26c115
 class repr 193 28c364bc196c28b0
 class cache 5 72ec9ccf70f4b2d6
 class wire 1 e0e3ea8514397dd5
 step 05 rank paragraphs 1 and 4 in a scope
-class value 724 3759b7132e48f8c1
-class identity 56 9a74543d79067333
+class value 724 d91726d9cd50b83e
+class identity 56 feeff912ac26c115
 class repr 193 28c364bc196c28b0
 class cache 5 72ec9ccf70f4b2d6
 class wire 1 7cadf38803df51dc
 step 06 remove paragraph 3
-class value 538 c3ef7c0cdca62427
-class identity 45 3d9a116a6ab025fb
+class value 538 8a64f82676c44e99
+class identity 45 a01264770882570d
 class repr 132 27e95a03faed14dd
 class wire 1 cdd2bcff71e4ecd4
 step 07 add paragraph 5
-class value 689 356b9bf5d26e4dbd
-class identity 54 2d53a8484a4ec08a
+class value 689 6045a7e3d01b0737
+class identity 54 b3dcd2aa7e0087e1
 class repr 176 8a755c5e9fcdd3c9
 class wire 1 3a19b2f796d11b88
 step 08 remove 2, add 6, edit 4
-class value 689 6010760090a3b41d
-class identity 54 63b8f7d603865edf
+class value 689 832c36fd2f53969e
+class identity 54 4f7b125e1da6e0e2
 class repr 173 a8742e4912325f75
 class wire 1 d176cf056fe87603
 step 09 nothing changes
-class value 689 92ab0edeefe5121e
-class identity 54 d87e06d71c2f2dce
+class value 689 6e718f193a9f72da
+class identity 54 28e5323e461d75e7
 class repr 173 a8742e4912325f75
 class wire 1 4651b1f5d139b55d

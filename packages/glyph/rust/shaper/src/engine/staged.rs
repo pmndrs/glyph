@@ -90,6 +90,15 @@ impl<T> Staged<T> {
         self.prepared = false;
     }
 
+    /// Reverses a `commit` whose retired value is still in the pending slot: the previous value
+    /// becomes committed again and the accepted one pending and live. A derivation that reads
+    /// both halves, such as positioning deferred past the commit of its inputs, then sees the
+    /// exact pair it would have seen before that commit.
+    pub(crate) fn restore_candidate(&mut self) {
+        core::mem::swap(&mut self.committed, &mut self.pending);
+        self.prepared = true;
+    }
+
     /// Seeds the committed value for a test. Retained-plan reuse goes through the owning
     /// arena's `reset_for_reuse`, not through this.
     #[cfg(test)]

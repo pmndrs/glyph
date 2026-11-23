@@ -32,32 +32,32 @@ stage gpu value 3 371bf5d8fb1e8fa6
 stage plan value 23 6e085fdd90adc5b0
 stage plan identity 7 b65a14036160df65
 step 01 material on
-class value 268 bdcb6b4530fb4b88
-class identity 29 05550ff0f13d394e
+class value 268 35165c62ce7ad360
+class identity 29 b9047ba20ba3679c
 class repr 64 6d0e001b71a0ba42
 class cache 5 ab968f21cb7a4012
 class wire 1 94644a64afc43f2a
 step 02 material swapped
-class value 268 4456a9532ecdcc74
-class identity 29 dbf8b002f78e3017
+class value 268 db7545285d555b2e
+class identity 29 39821c4f190bd291
 class repr 64 6d0e001b71a0ba42
 class cache 5 ab968f21cb7a4012
 class wire 1 6889dcc9c8c868ab
 step 03 underline on
-class value 280 53b9458fd9367dd3
-class identity 29 f0dab4939ae755f4
+class value 280 54ce89dd3e3d7ff7
+class identity 29 4166cd82ae2e87ba
 class repr 64 6d0e001b71a0ba42
 class cache 5 ab968f21cb7a4012
 class wire 1 d1584aacf6bcb96c
 step 04 material swapped under decoration
-class value 280 7e0dd8bc251b39db
-class identity 29 7fe60096a2f471ee
+class value 280 81a4d39fafd71074
+class identity 29 1ebbab36fe46d765
 class repr 64 6d0e001b71a0ba42
 class cache 5 ab968f21cb7a4012
 class wire 1 52d8fd3e7cbf69ca
 step 05 underline off
-class value 268 6b640b1d4e342790
-class identity 29 c26b32563c6fdd18
+class value 268 c2a155feb0a9ff1d
+class identity 29 a333431e757a01be
 class repr 64 6d0e001b71a0ba42
 class cache 5 ab968f21cb7a4012
 class wire 1 1485eb364e4cb1c5

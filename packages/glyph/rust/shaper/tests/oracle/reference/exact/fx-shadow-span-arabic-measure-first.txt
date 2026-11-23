@@ -29,27 +29,27 @@ stage gpu value 3 4ea2dcdc921d40a8
 stage plan value 23 bf342c97bf9cc38c
 stage plan identity 7 c0abddf879e48152
 step 01 shadow on
-class value 233 3b79540f9d0936f0
-class identity 27 ad621b8b6818f26b
+class value 233 d9010747dc2a5881
+class identity 27 6468d4857c2be068
 class repr 44 f1d759e2cd755ef7
 class wire 1 94644a64afc43f2a
 step 02 moved
-class value 233 a64e1540147c2de0
-class identity 27 3737b2f5ff53de4e
+class value 233 aff816201b184611
+class identity 27 c665de1defe3ec34
 class repr 44 f1d759e2cd755ef7
 class wire 1 6889dcc9c8c868ab
 step 03 recolour and same-length edit
-class value 233 63e908ed3b78975e
-class identity 27 8e1101679e7b2056
+class value 233 a6468863924cdc52
+class identity 27 9669e44568e7e594
 class repr 44 941dec03b4cc8ee9
 class wire 1 6903dd7e0a846cf7
 step 04 shadow off and edit
-class value 233 96eeadc8866ad111
-class identity 27 07690f09ea0dad02
+class value 233 c99be41553a92f3f
+class identity 27 65e752f74e26cbfe
 class repr 44 afe0db6132923aef
 class wire 1 cb3866131c80dd06
 step 05 shadow and outline on
-class value 233 ba5cb583b28203b7
-class identity 27 65bc246050d5de2b
+class value 233 41275add1cb16626
+class identity 27 01b9bc6099d210eb
 class repr 44 afe0db6132923aef
 class wire 1 1485eb364e4cb1c5

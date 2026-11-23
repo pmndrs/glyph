@@ -93,53 +93,53 @@ stage plan value 23 f7322922f7feb908
 stage plan identity 7 68fc13aebb961467
 stage doc value 3 bc50abe8ec8b3781
 step 01 edit paragraph 2 alone
-class value 824 39abd29335c0954a
-class identity 66 1407b31d5ceb488f
+class value 824 377a10c55d29963f
+class identity 66 c5874dde35b8fdab
 class repr 193 e1d217b92df23ae1
 class cache 5 e7ec200ce8b8908d
 class wire 1 bce24f59504c1e19
 step 02 edit all four
-class value 824 b045d4f5b0c1c24d
-class identity 66 ec4c5a9abf58226e
+class value 824 7fadb868b77a2a9c
+class identity 66 238e1797007be037
 class repr 193 ae24c8ffdf1d8ba3
 class cache 5 4cb87809ff087c60
 class wire 1 b501bb73689f17cf
 step 03 narrow paragraph 3, edit paragraph 4
-class value 824 52e7abd61153cd98
-class identity 66 8fc9a029420d017e
+class value 824 9fdc62f3f638bed2
+class identity 66 9edf8f94741b05aa
 class repr 193 28c364bc196c28b0
 class cache 5 72ec9ccf70f4b2d6
 class wire 1 686995550b57347f
 step 04 move paragraph 1 last
-class value 804 510590dfe3cad7dc
-class identity 64 010bbadebbaecfea
+class value 804 12b02648d9fa6316
+class identity 64 d676471f29be1aae
 class repr 193 28c364bc196c28b0
 class cache 5 72ec9ccf70f4b2d6
 class wire 1 0199a40e0a3e1236
 step 05 rank paragraphs 1 and 4 in a scope
-class value 804 510590dfe3cad7dc
-class identity 64 010bbadebbaecfea
+class value 804 12b02648d9fa6316
+class identity 64 d676471f29be1aae
 class repr 193 28c364bc196c28b0
 class cache 5 72ec9ccf70f4b2d6
 class wire 1 72f745eab8c5676f
 step 06 remove paragraph 3
-class value 618 aa9f5290afab61c1
-class identity 53 9c3b5ab55664becb
+class value 618 f22579c34e885179
+class identity 53 b5572d533e8ba8bd
 class repr 132 27e95a03faed14dd
 class wire 1 994d8c608aee8e45
 step 07 add paragraph 5
-class value 789 9e7ec6e8434ff7ce
-class identity 64 bbe7ebf8ad3df363
+class value 789 1d9b87b64932bb3b
+class identity 64 d7cb117ce5420dfe
 class repr 176 8a755c5e9fcdd3c9
 class wire 1 e9a4eb5da6556ebf
 step 08 remove 2, add 6, edit 4
-class value 789 700d3046d4eb8986
-class identity 64 7b2ffbfe211a6fda
+class value 789 e20ffadfdd5b7932
+class identity 64 20805682a04a74e5
 class repr 173 a8742e4912325f75
 class wire 1 aad67f9615c09283
 step 09 nothing changes
-class value 769 bb3e8c44a22515fc
-class identity 62 5d4ed8d13234d79d
+class value 769 3cbe2f49400388c9
+class identity 62 7c690cdc8fe1e55f
 class repr 173 a8742e4912325f75
 class wire 1 7aca8ea3d3e7dde6
 step 10 paragraph 5: insert Bidi (1 units) at 194

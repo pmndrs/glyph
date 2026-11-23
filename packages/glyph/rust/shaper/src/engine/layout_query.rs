@@ -28,6 +28,10 @@ pub(crate) const MEASUREMENT_FLAG_OVERFLOWED: u16 = 1;
 /// this query did not position glyphs, so the ink box is absent rather than empty — a paragraph
 /// that positioned zero glyphs still sets the bit and reports a degenerate box.
 pub(crate) const MEASUREMENT_FLAG_INK_BOUNDS: u16 = 2;
+/// The read answered from flow layout and left positioning owed: the glyph count, the missing
+/// glyph count, every line's glyph span and the ink are not in this record. They are the
+/// positioned values a later read with glyph facts returns for the same preparation.
+pub(crate) const MEASUREMENT_FLAG_GLYPHS_DEFERRED: u16 = 4;
 
 /// Union of glyph ink boxes in positioned space.
 ///
@@ -437,13 +441,47 @@ pub(crate) fn append_measurement_from_occurrences(
         &mut next_glyph,
         placement_translations,
         line_ink,
-        semantic_line_glyph_starts,
-        semantic_line_glyph_counts,
+        Some((semantic_line_glyph_starts, semantic_line_glyph_counts)),
         semantic_line_inline_extents,
         intrinsic_extents,
         intrinsics,
         empty_ink_authoritative,
         include_glyphs,
+    )
+}
+
+/// Serializes a measurement from flow layout alone, for a read that left positioning owed: every
+/// line metric and the paragraph box, with line advances from the flow, and no glyph facts.
+#[inline(never)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn append_measurement_from_flow(
+    target: &mut Vec<SemanticRecord>,
+    paragraph_id: u32,
+    text_length: usize,
+    cluster_count: usize,
+    geometry: &FlowGeometryArena,
+    flow: &FlowLayoutArena,
+    clusters: &ClusterArena,
+    intrinsic_extents: Option<LayoutExtents>,
+    intrinsics: super::cluster_state::IntrinsicWidths,
+) -> Result<(), EngineError> {
+    append_measurement_from_occurrences_source(
+        target,
+        paragraph_id,
+        text_length,
+        cluster_count,
+        geometry,
+        MeasurementSource::General { flow, clusters },
+        0,
+        &mut || Err(EngineError::InvalidRequest),
+        &[],
+        None,
+        None,
+        None,
+        intrinsic_extents,
+        intrinsics,
+        false,
+        false,
     )
 }
 
@@ -463,8 +501,8 @@ pub(crate) fn append_measurement_from_inline_occurrences(
     positioned_count: usize,
     mut next_glyph: impl FnMut() -> Result<PositionedSemanticGlyph, EngineError>,
     placement_translations: &[SegmentTranslation],
-    semantic_line_glyph_starts: &[u32],
-    semantic_line_glyph_counts: &[u32],
+    // `None`: the read asked for no glyph facts (`GLYPHS_DEFERRED`).
+    line_glyph_spans: Option<(&[u32], &[u32])>,
     intrinsic_extents: Option<LayoutExtents>,
     intrinsics: super::cluster_state::IntrinsicWidths,
     empty_ink_authoritative: bool,
@@ -485,8 +523,7 @@ pub(crate) fn append_measurement_from_inline_occurrences(
         &mut next_glyph,
         placement_translations,
         None,
-        semantic_line_glyph_starts,
-        semantic_line_glyph_counts,
+        line_glyph_spans,
         None,
         intrinsic_extents,
         intrinsics,
@@ -509,8 +546,8 @@ fn append_measurement_from_occurrences_source(
     next_glyph: &mut dyn FnMut() -> Result<PositionedSemanticGlyph, EngineError>,
     placement_translations: &[SegmentTranslation],
     line_ink: Option<(&[LineInk], &[u32])>,
-    semantic_line_glyph_starts: &[u32],
-    semantic_line_glyph_counts: &[u32],
+    // `None`: positioning is owed, so the record carries no glyph facts (`GLYPHS_DEFERRED`).
+    line_glyph_spans: Option<(&[u32], &[u32])>,
     semantic_line_inline_extents: Option<&[f64]>,
     intrinsic_extents: Option<LayoutExtents>,
     intrinsics: super::cluster_state::IntrinsicWidths,
@@ -526,9 +563,11 @@ fn append_measurement_from_occurrences_source(
     if constraint.paragraph_id != paragraph_id {
         return Err(EngineError::InvalidRequest);
     }
-    if semantic_line_glyph_starts.len() != source.line_len()
-        || semantic_line_glyph_counts.len() != source.line_len()
-        || semantic_line_inline_extents.is_some_and(|extents| extents.len() != source.line_len())
+    let glyphs_deferred = line_glyph_spans.is_none();
+    if line_glyph_spans.is_some_and(|(starts, counts)| {
+        starts.len() != source.line_len() || counts.len() != source.line_len()
+    }) || semantic_line_inline_extents.is_some_and(|extents| extents.len() != source.line_len())
+        || (glyphs_deferred && (include_glyphs || positioned_count != 0))
     {
         return Err(EngineError::InvalidRequest);
     }
@@ -585,18 +624,17 @@ fn append_measurement_from_occurrences_source(
         let fragments = fragment_cursor.take(line)?;
         let first_thread_line = previous_flow_thread_id != Some(line.flow_thread_id);
         previous_flow_thread_id = Some(line.flow_thread_id);
-        let span_start = usize::try_from(
-            *semantic_line_glyph_starts
-                .get(index)
-                .ok_or(EngineError::InvalidRequest)?,
-        )
-        .map_err(|_| EngineError::InvalidRequest)?;
-        let span_count = usize::try_from(
-            *semantic_line_glyph_counts
-                .get(index)
-                .ok_or(EngineError::InvalidRequest)?,
-        )
-        .map_err(|_| EngineError::InvalidRequest)?;
+        let (line_glyph_start, line_glyph_count) = match line_glyph_spans {
+            Some((starts, counts)) => (
+                *starts.get(index).ok_or(EngineError::InvalidRequest)?,
+                *counts.get(index).ok_or(EngineError::InvalidRequest)?,
+            ),
+            None => (0, 0),
+        };
+        let span_start =
+            usize::try_from(line_glyph_start).map_err(|_| EngineError::InvalidRequest)?;
+        let span_count =
+            usize::try_from(line_glyph_count).map_err(|_| EngineError::InvalidRequest)?;
         if span_start != glyph_cursor {
             return Err(EngineError::InvalidRequest);
         }
@@ -682,9 +720,9 @@ fn append_measurement_from_occurrences_source(
         // records would begin, so a view without glyph records reports the same spans as one with them.
         let item_start = u32::try_from(glyph_record_start)
             .map_err(|_| EngineError::ResultTooLarge)?
-            .checked_add(semantic_line_glyph_starts[index])
+            .checked_add(line_glyph_start)
             .ok_or(EngineError::ResultTooLarge)?;
-        let item_count = semantic_line_glyph_counts[index];
+        let item_count = line_glyph_count;
         target[summary_index + 1 + line_count_emitted] = semantic_line_record(
             paragraph_id,
             index,
@@ -752,8 +790,10 @@ fn append_measurement_from_occurrences_source(
         }),
         MeasurementSource::Inline { .. } => cluster_count == 0,
     };
-    let ink_measured =
-        positioned_count != 0 || (empty_ink_authoritative && line_count == 0) || nothing_to_draw();
+    let ink_measured = !glyphs_deferred
+        && (positioned_count != 0
+            || (empty_ink_authoritative && line_count == 0)
+            || nothing_to_draw());
     target[summary_index] = SemanticRecord {
         id: paragraph_id,
         kind: SEMANTIC_PARAGRAPH_MEASUREMENT,
@@ -763,6 +803,10 @@ fn append_measurement_from_occurrences_source(
             0
         } | if ink_measured {
             MEASUREMENT_FLAG_INK_BOUNDS
+        } else {
+            0
+        } | if glyphs_deferred {
+            MEASUREMENT_FLAG_GLYPHS_DEFERRED
         } else {
             0
         },
@@ -1187,8 +1231,7 @@ mod tests {
                 positioned.len(),
                 || rows.next().ok_or(EngineError::InvalidRequest),
                 &[SegmentTranslation::default()],
-                &[0],
-                &[2],
+                Some((&[0], &[2])),
                 None,
                 crate::engine::cluster_state::IntrinsicWidths::default(),
                 include_spans,

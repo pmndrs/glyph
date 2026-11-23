@@ -21,12 +21,12 @@ stage gather value 36 b2c211b3621cca23
 stage gpu identity 2 cb22b7176c06fbea
 stage gpu value 3 727941098af27b9b
 step 01 change the span
-class value 210 ea181a9e208d463a
-class identity 20 ed3145296b3442ad
+class value 210 7c39d90db2aaee55
+class identity 20 b9fcb78939e2919b
 class repr 41 c42c7ada0f2405c6
 class wire 1 3b46805db80b23ea
 step 02 restore
-class value 210 9b6a2cdc3e5ff3c9
-class identity 20 28fef485869fc303
+class value 210 41dafb77ccac28f1
+class identity 20 a21def374393eab4
 class repr 41 64288e81bfadfa2e
 class wire 1 140521dc5921051d

@@ -32,44 +32,44 @@ stage gpu value 3 371bf5d8fb1e8fa6
 stage plan value 23 6e085fdd90adc5b0
 stage plan identity 7 b65a14036160df65
 step 01 recolour
-class value 280 ecad6f13fa1358b4
-class identity 29 5df86e6882b6e76d
+class value 280 8fae55328393cf96
+class identity 29 5bfc190c8978a681
 class repr 64 6d0e001b71a0ba42
 class cache 5 ab968f21cb7a4012
 class wire 1 94644a64afc43f2a
 step 02 recolour and width
-class value 280 1af5b4645cb23fcf
-class identity 29 feb59acfe2bf06df
+class value 280 6ca9119ed5c25246
+class identity 29 8ebd6c28da64b289
 class repr 64 b8dac8757781cc0e
 class cache 5 9671cfa50cb38fc4
 class wire 1 db5ebef06c143f99
 step 03 thicker
-class value 280 6424571f51ea0968
-class identity 29 075d5348b7a0fee2
+class value 280 2b0499995d9f2963
+class identity 29 2ae5dd8a8c6523b1
 class repr 64 b8dac8757781cc0e
 class cache 5 9671cfa50cb38fc4
 class wire 1 d1584aacf6bcb96c
 step 04 double
-class value 280 287efcb6cb9d9602
-class identity 29 9ceca8401457373f
+class value 280 42a5b103f72fdbef
+class identity 29 c1cd5c2db7fbb5c2
 class repr 64 b8dac8757781cc0e
 class cache 5 9671cfa50cb38fc4
 class wire 1 52d8fd3e7cbf69ca
 step 05 add strikethrough
-class value 280 3d64a556a2b72dc9
-class identity 29 748471508cfac42b
+class value 280 60527768c123a1ce
+class identity 29 5c2098083771e96f
 class repr 64 b8dac8757781cc0e
 class cache 5 9671cfa50cb38fc4
 class wire 1 1485eb364e4cb1c5
 step 06 decoration off
-class value 268 30afd4cc54392913
-class identity 29 37b84aeb0da0c301
+class value 268 193aac96557c4218
+class identity 29 e88fb0406f5b77f7
 class repr 64 b8dac8757781cc0e
 class cache 5 9671cfa50cb38fc4
 class wire 1 092cd7f4e719d47e
 step 07 decoration on with an edit
-class value 280 f87f8f5e2e6b4a31
-class identity 29 e50aff5add714cea
+class value 280 0e7692a1ef778eb6
+class identity 29 3f4b99fd6de94cc3
 class repr 64 e06874a6094ab5ee
 class cache 5 0f4bb9d81a500ee9
 class wire 1 b17ff52505aeaa23

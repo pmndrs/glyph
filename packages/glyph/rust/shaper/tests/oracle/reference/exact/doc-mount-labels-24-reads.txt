@@ -490,12 +490,12 @@ stage plan value 23 c6523e7d1d42caf9
 stage plan identity 7 a71e9ed47760afac
 stage doc value 3 3953c7aa5d3e7fca
 step 01 edit the last paragraph
-class value 4189 405a5e979c7e3548
-class identity 282 922f9023d4eeab8b
+class value 4189 c95a67b07753e0c9
+class identity 282 0d2dfd93ad22591e
 class repr 984 9245468bbe8399a7
 class wire 1 325067f0d0619eaa
 step 02 nothing changes
-class value 4189 e313291397c039f8
-class identity 282 3f53fc18f22bf3ea
+class value 4189 de66d9d95bf2c528
+class identity 282 27a16196435768a1
 class repr 984 9245468bbe8399a7
 class wire 1 28cabc547af1be5b

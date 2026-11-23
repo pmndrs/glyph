@@ -32,20 +32,20 @@ stage gpu value 3 5686758c6120b794
 stage plan value 23 b2daa6968fb58d90
 stage plan identity 7 866edd8eab6cbbe3
 step 01 insert in the first region
-class value 304 40805bed2aa182cd
-class identity 29 90152dc0dcc23bdd
+class value 304 5f1914ece4e317a3
+class identity 29 ddc7a099cef48fa2
 class repr 64 2379d0948b6f7f60
 class cache 5 faa5d7dd8818379f
 class wire 1 65cd8d638d373f90
 step 02 delete in a later region
-class value 304 a4d28b2e5eae8679
-class identity 29 cc94285825e14d05
+class value 304 0b2a3b72960d5a7f
+class identity 29 18e3b6cd451dbadc
 class repr 64 99bfb8ce74660201
 class cache 5 0e0cea5403453a72
 class wire 1 b73a117cd9ae3761
 step 03 narrower measure
-class value 304 13832257c6aa1fb5
-class identity 29 b5d8f9c490969d76
+class value 304 cbdd674ae1a9d189
+class identity 29 8a5278f257640b30
 class repr 64 55e5a49e07c2940e
 class cache 5 9b097fd633bd2469
 class wire 1 72b380e5f64887da
@@ -56,20 +56,20 @@ class repr 64 400f0b92d441caf4
 class cache 5 3f58398be228604b
 class wire 1 b80ea3fe03c3e55b
 step 05 three columns, wider gap
-class value 304 c25b7d37501a1458
-class identity 29 5079218cd6fe21e2
+class value 304 2225c8d198134b43
+class identity 29 a2cfc921fbc7f8ee
 class repr 64 db89f606cf2c4080
 class cache 5 3bb8914380a9ff21
 class wire 1 65e08d957ec56e8d
 step 06 one region
-class value 304 ad0990c49dab21d6
-class identity 29 5384eff039627849
+class value 304 adabcaaef23afe18
+class identity 29 39ea7b5cda67e4c6
 class repr 64 10bfb5a7c17bf5a3
 class cache 5 771fd592c628b6df
 class wire 1 ac125c0cdd85bd69
 step 07 the starting regions
-class value 304 a4d28b2e5eae8679
-class identity 29 73a85e3f7d08ecdf
+class value 304 0b2a3b72960d5a7f
+class identity 29 b0051493727fe5f6
 class repr 64 99bfb8ce74660201
 class cache 5 771fd592c628b6df
 class wire 1 47e4e1b4cd7c3c8e
