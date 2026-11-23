@@ -15,20 +15,27 @@ const { resourceLease } = (await import(
 )) as typeof import('@pmndrs/glyph/core');
 let nextHandle = 1;
 
+const viewport = { width: 640, height: 480 } as const;
+
 // This host records CPU adapter work; it does not measure GPU execution.
 function createTypeGpuLabels(count: number) {
   const gpuGlobals = globalThis as typeof globalThis & {
     GPUBufferUsage?: Readonly<{ COPY_DST: number; STORAGE: number; VERTEX: number }>;
   };
   gpuGlobals.GPUBufferUsage ??= { COPY_DST: 8, STORAGE: 128, VERTEX: 32 };
-  const stats = { publications: 0, uniformWrites: 0 };
+  // A position reaches the GPU as a per-Text uniform (direct draws) or as one transform-table record (batched
+  // draws). Either way it is one two-float write whose y is the label's; the 640x480 viewport write never matches.
+  const stats = { publications: 0, movedY: Number.NaN, positionWrites: 0 };
+  const recordWrite = (value: ArrayLike<number>) => {
+    if (value.length === 2 && value[1] === stats.movedY) stats.positionWrites++;
+  };
   const root = {
     createUniform() {
       return {
         buffer: { destroy() {} },
         value: [0, 0],
         write(value: readonly [number, number]) {
-          stats.uniformWrites++;
+          recordWrite(value);
           this.value = [...value];
         },
       };
@@ -38,8 +45,9 @@ function createTypeGpuLabels(count: number) {
         return { bytes: new Uint8Array(size), destroy() {}, size, usage };
       },
       queue: {
-        writeBuffer(target: { readonly bytes: Uint8Array }, offset: number, bytes: Uint8Array) {
-          target.bytes.set(bytes, offset);
+        writeBuffer(target: { readonly bytes: Uint8Array }, offset: number, data: ArrayBufferView) {
+          if (data instanceof Float32Array) recordWrite(data);
+          target.bytes.set(new Uint8Array(data.buffer, data.byteOffset, data.byteLength), offset);
         },
       },
     },
@@ -60,11 +68,17 @@ function createTypeGpuLabels(count: number) {
         dispose: () => renderer.dispose(),
       };
     },
+    // Direct draws (Slug, and MSDF before batching) prepare one draw per Text; indexed draws (MSDF and bitmap
+    // since batching) bind once per buffer set. A stub without `bind` makes indexed spans take the direct path,
+    // which has no per-Text transform to position by.
     resolve: () =>
       resourceLease(
         {
           prepare(..._arguments: unknown[]) {
             return { draw() {} };
+          },
+          bind() {
+            return { watchedLanes: [], variant: () => 0, draw() {} };
           },
           dispose() {},
         },
@@ -81,8 +95,8 @@ function createTypeGpuLabels(count: number) {
     }),
   );
   glyph.shape();
+  handle.draw({} as never, viewport);
   stats.publications = 0;
-  stats.uniformWrites = 0;
   return { handle, labels, stats };
 }
 
@@ -92,17 +106,20 @@ group('TypeGPU adapter CPU publication @publication', () => {
     const created = createTypeGpuLabels(count);
     let y = 0;
 
+    // One frame: move every label, publish, and draw, which uploads transforms that publication left pending.
     const move = () => {
       const publicationCount = created.stats.publications;
-      const uniformWriteCount = created.stats.uniformWrites;
       y = y === 1 ? 2 : 1;
+      created.stats.movedY = y;
+      created.stats.positionWrites = 0;
       for (let index = 0; index < created.labels.length; index++) {
         created.labels[index]!.update({ position: [index, y] });
       }
       glyph.shape();
+      created.handle.draw({} as never, viewport);
       return {
         publications: created.stats.publications - publicationCount,
-        uniformWrites: created.stats.uniformWrites - uniformWriteCount,
+        positionWrites: created.stats.positionWrites,
       };
     };
     move();
@@ -110,7 +127,7 @@ group('TypeGPU adapter CPU publication @publication', () => {
     try {
       if (process.env.GLYPH_LABS_ARTIFACT_ROLE === 'baseline') assert.equal(result.publications <= 1, true);
       else assert.equal(result.publications, 0);
-      assert.equal(result.uniformWrites, count);
+      assert.equal(result.positionWrites, count);
     } finally {
       created.handle.dispose();
     }

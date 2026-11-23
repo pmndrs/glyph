@@ -4,11 +4,16 @@ const MAX_U32 = 0xffff_ffff;
 
 interface NamedGlyphId {
   readonly canonical: string;
+  readonly key: string;
+  readonly value: number;
   permanent: boolean;
   scopeCount: number;
 }
 
+/** Live registrations by `kind:value`, the identity engine records and wire buffers carry. */
 const namedIds = new Map<string, NamedGlyphId>();
+/** The same registrations by canonical name, so a name keeps the value it was first given while it is registered. */
+const idsByCanonical = new Map<string, NamedGlyphId>();
 
 const glyphIdKinds = new Set([
   'generic',
@@ -83,13 +88,12 @@ export class GlyphIdScope {
 
   id<const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> {
     if (this.#disposed) throw new Error('glyph ID scope has been disposed');
-    const derived = deriveGlyphId(kind, name);
-    const registered = registerGlyphId(derived, false);
-    if (!this.#keys.has(derived.key)) {
-      this.#keys.add(derived.key);
+    const registered = registerGlyphId(kind, name, false);
+    if (!this.#keys.has(registered.key)) {
+      this.#keys.add(registered.key);
       registered.scopeCount += 1;
     }
-    return derived.value;
+    return registered.value as GlyphId<Kind>;
   }
 
   retain<const Kind extends GlyphIdKind>(value: unknown, kind: Kind, label: string): boolean {
@@ -112,7 +116,7 @@ export class GlyphIdScope {
       throw new Error('glyph ID scope lost an owned registration');
     }
     registered.scopeCount -= 1;
-    if (!registered.permanent && registered.scopeCount === 0) namedIds.delete(key);
+    if (!registered.permanent && registered.scopeCount === 0) unregisterGlyphId(registered);
   }
 
   dispose(): void {
@@ -126,7 +130,7 @@ export class GlyphIdScope {
         continue;
       }
       registered.scopeCount -= 1;
-      if (!registered.permanent && registered.scopeCount === 0) namedIds.delete(key);
+      if (!registered.permanent && registered.scopeCount === 0) unregisterGlyphId(registered);
     }
     this.#keys.clear();
     if (failure !== undefined) throw failure;
@@ -172,37 +176,54 @@ export function assertGlyphId<const Kind extends GlyphIdKind>(
   return value as GlyphId<Kind>;
 }
 
-interface DerivedGlyphId<Kind extends GlyphIdKind> {
-  readonly canonical: string;
-  readonly key: string;
-  readonly value: GlyphId<Kind>;
-}
-
-function deriveGlyphId<const Kind extends GlyphIdKind>(kind: Kind, name: string): DerivedGlyphId<Kind> {
+/**
+ * Registers `name` under its hashed value; a name keeps the value it holds while registered. A codec buffer ID is
+ * public (`id.buffer(name)`) and must be the hash itself, so a buffer collision throws. Every other kind is minted by
+ * package-owned runtime state and never leaves it, so when another live name already holds the hashed value the next
+ * free value is taken instead: live runtime IDs of one kind never collide, and a name still receives its hash
+ * whenever that value is free.
+ */
+function registerGlyphId(kind: GlyphIdKind, name: string, permanent: boolean): NamedGlyphId {
   if (typeof kind !== 'string' || !glyphIdKinds.has(kind)) throw new TypeError('glyph ID kind is not supported');
   if (typeof name !== 'string' || name.length === 0) throw new TypeError('glyph ID name must be a nonempty string');
   const canonical = JSON.stringify(['glyph-id-v1', kind, name]);
-  const hash = renderWireId(canonical);
-  const value = (kind === 'buffer' ? (hash % 0xfffe) + 1 : hash) as GlyphId<Kind>;
-  return { canonical, key: `${kind}:${value}`, value };
-}
-
-function registerGlyphId(derived: DerivedGlyphId<GlyphIdKind>, permanent: boolean): NamedGlyphId {
-  const registered = namedIds.get(derived.key);
-  if (registered !== undefined) {
-    if (registered.canonical !== derived.canonical) {
-      throw new TypeError(`glyph ID collision between ${registered.canonical} and ${derived.canonical}`);
-    }
-    if (permanent) registered.permanent = true;
-    return registered;
+  const existing = idsByCanonical.get(canonical);
+  if (existing !== undefined) {
+    if (permanent) existing.permanent = true;
+    return existing;
   }
-  const created = { canonical: derived.canonical, permanent, scopeCount: 0 };
-  namedIds.set(derived.key, created);
+  const hash = renderWireId(canonical);
+  const value = kind === 'buffer' ? (hash % 0xfffe) + 1 : freeGlyphIdValue(kind, hash);
+  const held = namedIds.get(`${kind}:${value}`);
+  if (held !== undefined) {
+    throw new TypeError(`glyph ID collision between ${held.canonical} and ${canonical}`);
+  }
+  const created: NamedGlyphId = { canonical, key: `${kind}:${value}`, value, permanent, scopeCount: 0 };
+  namedIds.set(created.key, created);
+  idsByCanonical.set(canonical, created);
   return created;
 }
 
+/** The first value of `kind` at or after the hash that no live name holds, wrapping past 2^32 - 1 to 1. */
+function freeGlyphIdValue(kind: GlyphIdKind, hash: number): number {
+  let value = hash;
+  for (let probes = 0; probes < MAX_U32; probes++) {
+    if (!namedIds.has(`${kind}:${value}`)) return value;
+    value = value === MAX_U32 ? 1 : value + 1;
+  }
+  throw new RangeError(`every ${kind} glyph ID is registered`);
+}
+
+function unregisterGlyphId(registered: NamedGlyphId): void {
+  namedIds.delete(registered.key);
+  idsByCanonical.delete(registered.canonical);
+}
+
+/** @internal How many IDs are registered across every scope, for tests that prove the registry stays bounded. */
+export function registeredGlyphIdCount(): number {
+  return namedIds.size;
+}
+
 export function permanentGlyphId<const Kind extends GlyphIdKind>(kind: Kind, name: string): GlyphId<Kind> {
-  const derived = deriveGlyphId(kind, name);
-  registerGlyphId(derived, true);
-  return derived.value;
+  return registerGlyphId(kind, name, true).value as GlyphId<Kind>;
 }
