@@ -16,7 +16,7 @@ against the `experiments/segment-indexed-layout` package and recorded with its r
 | [08](08-drop-cap-layout-export.md)              | `DropCapLayout` is not exported from the root entry                       | should-fix   | fixed                      |
 | [09](09-coverage-at-rename-warnings.md)         | A second `shader.coverageAt` call floods renamed-declaration warnings     | should-fix   | open                       |
 | [10](10-bake-check-missing-output.md)           | `glyph bake --check` raw ENOENT; `--yes` unused                           | should-fix   | open                       |
-| [11](11-r3f-text-ref-first-effect.md)           | R3F `<Text ref>` is null in the consumer's first effect                   | should-fix   | open                       |
+| [11](11-r3f-text-ref-first-effect.md)           | R3F `<Text ref>` is null in the consumer's first effect                   | should-fix   | fixed                      |
 | [12](12-release-docs-corrections.md)            | Release docs state removed or wrong behaviour                             | ship-blocker | open                       |
 | [13](13-per-glyph-material-identity.md)         | No per-glyph identity or per-instance input in materials                  | later        | planned (design)           |
 | [14](14-split-cost-and-resync.md)               | `split()` cost and no re-sync after an edit                               | later        | planned (design)           |

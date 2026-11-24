@@ -18,7 +18,7 @@ generated:
 # Issue 11: R3F `<Text ref>` is null in the consumer's first effect
 
 - **Severity:** should-fix (the documented way to reach the `Text` for `split()`, carets or `measure()`)
-- **Status:** open
+- **Status:** fixed — `Text` and `TextGroup` own the object store and expose it with `useImperativeHandle`; the adapter test checks the first layout and passive effects and that unmount clears the refs
 
 ## What happens
 
@@ -54,8 +54,11 @@ layout and passive effects for that commit run with `null`. The object reaches t
 
 ## Chosen fix
 
-Option 1 for `Text` and `TextGroup`: the memoized host ref callback publishes to the internal store and assigns the
-forwarded ref (and clears it on detach).
+Option 1 in its `useImperativeHandle` form for `Text` and `TextGroup`: the stable host ref callback records the
+object and publishes it to the internal store, and `useImperativeHandle` hands it to the caller's ref in the same
+layout phase. Assigning the caller's ref inside the host ref callback was tried first; it makes the host ref's
+identity follow the caller's ref, so an inline callback ref detached and reattached the host (and re-rendered
+`TextObject`) on every parent render.
 
 ## Test that will prove it
 
