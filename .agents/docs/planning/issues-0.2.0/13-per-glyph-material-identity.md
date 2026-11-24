@@ -18,7 +18,7 @@ generated:
 # Issue 13: no per-glyph identity or per-instance input in the material context
 
 - **Severity:** later (design; public API addition needs Justin's approval)
-- **Status:** planned — not implemented
+- **Status:** approved (Justin, 2026-11-24): add `glyphIndex` and the glyph's origin to the material context. The index is the linear layout order, not an identity; `split()` is how identity is frozen. Not implemented yet
 
 ## What happens
 
