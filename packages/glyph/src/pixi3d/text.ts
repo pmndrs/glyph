@@ -81,8 +81,6 @@ export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelect
   #preparedAnchor: LayoutPoint = zeroAnchor;
   #acceptedAnchor: LayoutPoint = zeroAnchor;
   #publicationError: { readonly error: unknown } | undefined;
-  /** Receives a rejected publication once; the last accepted native meshes remain live. */
-  onError: ((error: unknown) => void) | undefined;
 
   constructor(
     fonts: GlyphHandleFonts,
@@ -109,15 +107,16 @@ export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelect
     return this.#disposed;
   }
 
-  /** Most recent rejected publication for this text's root; cleared after its next accepted publication. */
+  /**
+   * Most recent rejected publication for this text's root, which `glyph.shape()` threw; cleared after the root's
+   * next accepted publication. The last accepted native meshes remain live meanwhile.
+   */
   get error(): unknown {
     return this.#publicationError?.error;
   }
-  /** @internal Publish every participant's error state before delivering notifications. */
-  rejectPublication(error: unknown): boolean {
-    const notify = this.#publicationError === undefined || !Object.is(this.#publicationError.error, error);
+  /** @internal Record the root's rejected publication; `glyph.shape()` throws it. */
+  rejectPublication(error: unknown): void {
     this.#publicationError = { error };
-    return notify;
   }
   /** @internal Stage placement before renderer preparation; omitted anchors do not issue a query. */
   preparePublication(): void {

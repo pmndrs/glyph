@@ -9,6 +9,7 @@ import { schema } from './internal/bindings.js';
 import { codecDescriptor } from './internal/codec.js';
 import { createResource } from './internal/resources.js';
 import { Renderer, TypeGpuTransform } from './internal/renderer.js';
+import { RenderFailures } from '../render-failures.js';
 import {
   createText,
   type TypeGpuFontSelection,
@@ -59,7 +60,12 @@ export interface TypeGpuFontFormats {
 export interface TypeGpuDraw {
   /** Returns a new draw view; the last group for a layout wins. Does not mutate this view or own caller resources. */
   with(bindGroup: TgpuBindGroup): TypeGpuDraw;
-  /** Records current accepted text with these bindings. Never submits or ends the caller-owned pass. */
+  /**
+   * Records current accepted text with these bindings. Never submits or ends the caller-owned pass. After
+   * recording, throws once what the root's texts failed with since its last draw: a refused paragraph or an
+   * exception from a layout callback (an `AggregateError` when there are several). A failed text records nothing
+   * until its input changes.
+   */
   draw(
     pass: TgpuRenderPass | GPURenderPassEncoder,
     viewport: { readonly width: number; readonly height: number },
@@ -71,13 +77,17 @@ export interface TypeGpuRoot extends GlyphRoot, TypeGpuDraw {
 export type TypeGpuHandle = GlyphHandle<TypeGpuRoot>;
 export type TypeGpuGlyphConfig = GlyphConfigFor<typeof schema, TypeGpuRoot, void, Codec, TypeGpuFontFormats>;
 
-function createDraw(renderer: Renderer, bindGroups: readonly TgpuBindGroup[]): TypeGpuDraw {
+function createDraw(renderer: Renderer, failures: RenderFailures, bindGroups: readonly TgpuBindGroup[]): TypeGpuDraw {
   return {
     with(bindGroup) {
-      return createDraw(renderer, [...bindGroups.filter((group) => group.layout !== bindGroup.layout), bindGroup]);
+      return createDraw(renderer, failures, [
+        ...bindGroups.filter((group) => group.layout !== bindGroup.layout),
+        bindGroup,
+      ]);
     },
     draw(pass, viewport) {
       renderer.draw(pass, viewport.width, viewport.height, bindGroups);
+      failures.throwFound();
     },
   };
 }
@@ -103,12 +113,14 @@ export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyph
       create(context) {
         const renderer = new Renderer(options.root);
         const texts = new Map<TypeGpuText, TypeGpuTextPublication>();
+        const failures = new RenderFailures();
         let disposed = false;
         const dispose = (): void => {
           if (disposed) return;
           disposed = true;
           for (const text of texts.keys()) text.dispose();
           texts.clear();
+          failures.clear();
           renderer.dispose();
         };
         try {
@@ -122,7 +134,7 @@ export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyph
                 const transform = new TypeGpuTransform(renderer.transformChanged);
                 let text: TypeGpuText<Selection>;
                 const publication = validatingInput([], () =>
-                  createText(context.fonts!, context.services, transform, textOptions, () => {
+                  createText(context.fonts!, context.services, transform, textOptions, failures, () => {
                     texts.delete(text);
                   }),
                 );
@@ -130,7 +142,7 @@ export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyph
                 texts.set(text, publication);
                 return text;
               },
-              ...createDraw(renderer, []),
+              ...createDraw(renderer, failures, []),
             },
             {
               boundary: undefined,

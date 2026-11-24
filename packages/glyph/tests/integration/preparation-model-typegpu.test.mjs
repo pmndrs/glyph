@@ -37,12 +37,13 @@ preparationModel('TypeGPU', async (labels) => {
       onLayout: (listener) => {
         text.onLayout = (_text, layout) => listener(layout);
       },
-      onError: (listener) => {
-        text.onError = listener;
-      },
       dispose: () => text.dispose(),
     })),
-    frame: () => glyph.shape(),
+    // A TypeGPU frame publishes, then draws; the draw throws what the frame found.
+    frame: () => {
+      glyph.shape();
+      handle.draw({}, { width: 640, height: 240 });
+    },
     prepare: () => glyph.prepare(),
     unmount: () => {
       handle.dispose();

@@ -21,6 +21,7 @@ import { defineThreeConfig, ThreeConfig } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 import { loadFont } from '../../dist/loader.js';
 import { createFontCache, timeout } from '../support/text-mutation-lanes.mjs';
+import { renderScene } from '../support/three-render.mjs';
 
 const fonts = createFontCache({ inter: { file: 'inter-bitmap-16.font.glb', raster: bitmap({ strikes: [16] }) } });
 const run = promisify(execFile);
@@ -39,7 +40,7 @@ async function createScene(t, config = ThreeConfig) {
     scene.add(text);
     return text;
   };
-  return { add, scene, frame: () => scene.updateMatrixWorld(true) };
+  return { add, scene, frame: () => scene.updateMatrixWorld(true), render: () => renderScene(scene) };
 }
 
 const layoutOf = (text) => {
@@ -113,19 +114,17 @@ test('a read that traps restarts the engine and answers', { timeout }, async (t)
 
 for (const call of ['engine_prepare_batch', 'engine_update_batch']) {
   test(`a frame whose ${call} traps is retried by the next frame`, { timeout }, async (t) => {
-    const { add, frame } = await createScene(t);
+    const { add, frame, render } = await createScene(t);
     const texts = Array.from({ length: 20 }, (_, index) => add({ text: `label ${String(index)}` }));
     frame();
-    const errors = [];
-    texts[3].onError = (error) => errors.push(error);
     for (const [index, text] of texts.entries()) text.text = `value ${String(index)}`;
     const instances = shaperInstanceCount();
     trapNextCall(new RegExp(call, 'u'));
     assert.doesNotThrow(frame, 'a trap never escapes scene traversal');
     assert.equal(shaperInstanceCount(), instances + 1);
     assert.equal(texts[3].commitState().status, 'failed');
-    assert.equal(errors.length, 1, 'the failure is reported once');
-    assert.match(String(errors[0].message), /trapped and was restarted/u);
+    assert.throws(render, /trapped and was restarted/u, 'the render that follows throws the trap');
+    assert.doesNotThrow(render, 'and throws it once');
     // No setter and no read in between: the next frame restates every text on the new instance.
     frame();
     const cold = await createScene(t);

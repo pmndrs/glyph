@@ -282,14 +282,6 @@ test('a rejected renderer publication retains the last mesh and does not retry u
     glyph.shape();
     const sibling = handle.createText({ font, text: 'sibling' });
     glyph.shape();
-    let notifications = 0;
-    text.onError = (error) => {
-      notifications++;
-      assert.equal(sibling.error, error, 'root participants receive state before notifications');
-      assert.throws(() => sibling.dispose(), 'publication callbacks cannot mutate engine lifetime');
-      assert.equal(sibling.disposed, false, 'rejected lifetime mutation preserves active membership');
-      throw new Error('notification must not replace the material failure');
-    };
     const accepted = text.children[0];
     const acceptedPosition = [accepted.position.x, accepted.position.y];
     reject = true;
@@ -297,7 +289,7 @@ test('a rejected renderer publication retains the last mesh and does not retry u
     text.text = 'TWO';
     assert.throws(() => glyph.shape(), /intentional material rejection/);
     assert.match(text.error.message, /intentional material rejection/);
-    assert.equal(notifications, 1);
+    assert.equal(sibling.error, text.error, 'every text of the rejected root keeps its error');
     assert.equal(text.children[0], accepted);
     assert.deepEqual(
       [accepted.position.x, accepted.position.y],
@@ -308,8 +300,7 @@ test('a rejected renderer publication retains the last mesh and does not retry u
     const rejectedCalls = calls;
     text.position.x = 73;
     assert.doesNotThrow(() => glyph.shape());
-    assert.equal(calls, rejectedCalls, 'a rejected frame is not compiled repeatedly');
-    assert.equal(notifications, 1, 'a rejected publication reports once');
+    assert.equal(calls, rejectedCalls, 'a rejected frame is not compiled repeatedly, so it is thrown once');
     assert.equal(text.position.x, 73);
     reject = false;
     text.text = 'THREE';

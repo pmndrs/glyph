@@ -18,6 +18,8 @@ const inline = createElement(Text, { style: { color: '#ff00ff' } }, 'span');
 const label = createElement(Text<typeof bitmap>, { font: bitmapFont, material, pixelSnapping: true }, 'Typed ', inline);
 const labels = createElement(TextGroup, { material, pixelSnapping: true }, label);
 const selected = createElement(Text, { font: selectedStack }, 'Selected at runtime');
+// @ts-expect-error A render failure is thrown from the canvas render; Text has no onError prop.
+createElement(Text, { font: selectedStack, onError: () => undefined }, 'No callback');
 const selectedFace = createElement(
   Text,
   { font: msdfFace.msdf },

@@ -6,6 +6,7 @@ import { glyph } from '@pmndrs/glyph';
 import { Text } from '@pmndrs/glyph/react';
 import { adapterFont } from '../support/adapter-behavior.mjs';
 import { preparationModel } from '../support/preparation-model.mjs';
+import { renderScene } from '../support/three-render.mjs';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 globalThis.self ??= globalThis;
@@ -17,7 +18,6 @@ preparationModel('React', async (labels) => {
   const font = await adapterFont();
   const objects = [];
   const layoutListeners = [];
-  const errorListeners = [];
   const renderer = await create(
     createElement(
       Suspense,
@@ -32,7 +32,6 @@ preparationModel('React', async (labels) => {
               if (value !== null) objects[index] = value;
             },
             onLayout: (_text, layout) => layoutListeners[index]?.(layout),
-            onError: (error) => errorListeners[index]?.(error),
           },
           text,
         ),
@@ -61,13 +60,9 @@ preparationModel('React', async (labels) => {
       onLayout: (listener) => {
         layoutListeners[index] = listener;
       },
-      onError: (listener) => {
-        errorListeners[index] = listener;
-      },
     })),
     prepare: () => glyph.prepare(),
-    // The traversal `renderer.render(scene, camera)` performs once per frame.
-    frame: () => renderer.scene.instance.updateMatrixWorld(true),
+    frame: () => renderScene(renderer.scene.instance),
     unmount: async () => {
       await renderer.unmount();
       font.dispose();

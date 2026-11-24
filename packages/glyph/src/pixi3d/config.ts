@@ -46,9 +46,7 @@ export function definePixi3DConfig(): Pixi3DGlyphConfig {
         if (context.fonts === undefined) throw new TypeError('Pixi3D config must declare raster fonts');
         const renderer = new Pixi3DRenderer();
         const texts = new Set<{
-          readonly disposed: boolean;
-          onError: ((error: unknown) => void) | undefined;
-          rejectPublication(error: unknown): boolean;
+          rejectPublication(error: unknown): void;
           preparePublication(): void;
           acceptPublication(): void;
           dispose(): void;
@@ -79,16 +77,9 @@ export function definePixi3DConfig(): Pixi3DGlyphConfig {
             },
             unchanged: accept,
             accepted: accept,
+            // The engine throws the rejection from `glyph.shape()`; each text keeps it as its `error`.
             rejected: (error) => {
-              const notify = [...texts].filter((text) => text.rejectPublication(error));
-              for (const text of notify) {
-                if (text.disposed) continue;
-                try {
-                  text.onError?.(error);
-                } catch {
-                  // A notification cannot replace the renderer failure being reported.
-                }
-              }
+              for (const text of texts) text.rejectPublication(error);
             },
           },
           dispose: () => {

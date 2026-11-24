@@ -1,9 +1,9 @@
 // One description of the preparation model, run against every integration.
 //
 // A host mounts labels through its integration and exposes each as `{ value, set, setStyle, read,
-// committed, paint, move, onLayout, onError }`, plus `frame()`, the step its renderer performs once
-// per frame, and `prepare()`, the explicit `glyph.prepare()`. `onLayout(listener)` and
-// `onError(listener)` attach through the integration's own surface: a property, a prop or an event.
+// committed, paint, move, onLayout }`, plus `frame()`, the render its renderer performs once per frame
+// (which throws what the frame found), and `prepare()`, the explicit `glyph.prepare()`.
+// `onLayout(listener)` attaches through the integration's own surface: a property, a prop or an event.
 // Every statement here is about what an author observes; the engine calls behind it are budgeted
 // separately.
 import assert from 'node:assert/strict';
@@ -165,28 +165,32 @@ export function preparationModel(name, mount) {
     },
   );
 
-  scenario('a layout callback that throws is reported and stops nothing', ['first', 'second'], async (host) => {
-    const [first, second] = host.texts;
-    const failure = new Error('layout callback failed');
-    const reported = [];
-    let secondCalls = 0;
-    first.onError((error) => reported.push(error));
-    first.onLayout(() => {
-      throw failure;
-    });
-    second.onLayout(() => {
-      secondCalls += 1;
-    });
-    await host.frame();
-    assert.deepEqual(reported, [failure]);
-    assert.equal(secondCalls, 1, 'the other callback still ran');
-    if (first.committed !== undefined) {
-      assert.equal(first.committed(), true, 'the frame still published');
-      assert.equal(second.committed(), true);
-    }
-    await host.frame();
-    assert.equal(reported.length, 1, 'the same summary is not handed over again');
-  });
+  scenario(
+    'a layout callback that throws propagates from that frame, once, after the frame published',
+    ['first', 'second'],
+    async (host) => {
+      const [first, second] = host.texts;
+      const failure = new Error('layout callback failed');
+      let secondCalls = 0;
+      first.onLayout(() => {
+        throw failure;
+      });
+      second.onLayout(() => {
+        secondCalls += 1;
+      });
+      await assert.rejects(
+        async () => host.frame(),
+        (error) => error === failure,
+      );
+      assert.equal(secondCalls, 1, 'the other callback still ran');
+      if (first.committed !== undefined) {
+        assert.equal(first.committed(), true, 'the frame still published');
+        assert.equal(second.committed(), true);
+      }
+      await host.frame();
+      assert.equal(secondCalls, 1, 'the same summary is not handed over again, so nothing is thrown');
+    },
+  );
 
   scenario(
     'a text disposed inside a layout callback ends the frame cleanly',

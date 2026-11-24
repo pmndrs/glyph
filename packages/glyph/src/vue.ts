@@ -123,12 +123,10 @@ export interface VueTextProps<Technique extends RasterFormatMetadata> {
   readonly rasterPixelRatio?: number;
   readonly material?: ThreeTextMaterial;
   readonly pixelSnapping?: boolean;
-  readonly onError?: ((error: unknown) => void) | undefined;
   readonly [passThrough: string]: unknown;
 }
 
 export interface VueTextGroupProps extends TextGroupOptions {
-  readonly onError?: ((error: unknown) => void) | undefined;
   readonly [passThrough: string]: unknown;
 }
 
@@ -485,11 +483,17 @@ function resolveVueTextFont(
   return face;
 }
 
-// Missing loads start together so nested fonts never form a waterfall.
-function createFontLoadTracker(reportError: (error: unknown) => void) {
+/**
+ * Missing loads start together so nested fonts never form a waterfall. A load that fails is thrown once, from a
+ * watcher, so it reaches `onErrorCaptured` and `app.config.errorHandler` while the component keeps rendering what
+ * it rendered.
+ */
+function createFontLoadTracker() {
   const revision = shallowRef(0);
   const requested = new WeakSet<FontFaceSelection>();
-  // The face store forgets a rejected load, so an unmarked failure would refetch and re-emit on every re-render.
+  const failures: unknown[] = [];
+  const failureRevision = shallowRef(0);
+  // The face store forgets a rejected load, so an unmarked failure would refetch and rethrow on every re-render.
   let failed = new WeakSet<FontFaceSelection>();
   let failedHandle: ThreeHandle | undefined;
   let active = true;
@@ -518,11 +522,20 @@ function createFontLoadTracker(reportError: (error: unknown) => void) {
           (error: unknown) => {
             requested.delete(selection);
             marks.add(selection);
-            if (active) reportError(error);
+            if (!active) return;
+            failures.push(error);
+            failureRevision.value += 1;
           },
         );
       }
       return ready;
+    },
+    failureRevision,
+    /** Throws the loads that failed since it last ran, once. */
+    throwFailures(): void {
+      const found = failures.splice(0);
+      if (found.length === 1) throw found[0];
+      if (found.length > 1) throw new AggregateError(found, 'Glyph FontFace loads failed');
     },
   };
 }
@@ -634,8 +647,6 @@ export const Text: TextComponent = defineComponent({
   inheritAttrs: false,
   props: textPropDefinitions,
   emits: {
-    /** A publication failure of this text, and any prop that is not valid input (which is also rethrown). */
-    error: (_error: unknown) => true,
     /**
      * The text and what its `measure()` returns, after it is first prepared and whenever that summary changes,
      * before the frame that draws it. A handler may move other objects; writing a layout input of any text throws.
@@ -647,7 +658,6 @@ export const Text: TextComponent = defineComponent({
     const tres = useTresContext();
     const { invalidate } = tres.renderer;
     const instance = shallowRef<ThreeText<RasterFormatMetadata> | undefined>();
-    const reportError = (error: unknown): void => emit('error', error);
     const reportLayout = (text: ThreeText<RasterFormatMetadata>, layout: ParagraphLayoutSummary): void =>
       emit('layout', text, layout);
     // Only a text someone listens to keeps its summary current and waits for its handler before it is drawn.
@@ -659,7 +669,8 @@ export const Text: TextComponent = defineComponent({
       if (root !== undefined) releaseFrame = retainGlyphFrame(root, tres.scene.value, invalidate);
     });
     onBeforeUnmount(() => releaseFrame?.());
-    const loads = createFontLoadTracker(reportError);
+    const loads = createFontLoadTracker();
+    watch(loads.failureRevision, loads.throwFailures);
     const leases = createFontLeases();
     let publication: TextPublication | undefined;
     let desired: DesiredVueText | undefined;
@@ -670,16 +681,8 @@ export const Text: TextComponent = defineComponent({
       const object = instance.value;
       if (object === undefined || publication === undefined || desired === undefined) return;
       object.onLayout = observesLayout() ? reportLayout : undefined;
-      let changed: boolean;
-      try {
-        changed = updateTextFromFramework(object, desiredTextUpdate(desired));
-      } catch (error) {
-        // Vue has no error boundary: the component stays mounted with its previous value, its `error` event
-        // says why, and the rethrow still reaches `onErrorCaptured` and `app.config.errorHandler`.
-        reportError(error);
-        throw error;
-      }
-      if (changed) invalidate();
+      // An invalid prop throws to `onErrorCaptured` and `app.config.errorHandler`; the text keeps its previous value.
+      if (updateTextFromFramework(object, desiredTextUpdate(desired))) invalidate();
       leases.prune(desiredSelections);
     };
     onMounted(apply);
@@ -722,9 +725,7 @@ export const Text: TextComponent = defineComponent({
         key: publication.key,
         args: publication.args,
         ref: (node: unknown) => {
-          const object = node instanceof ThreeText ? (node as ThreeText<RasterFormatMetadata>) : undefined;
-          if (object !== undefined) object.onError = reportError;
-          instance.value = object;
+          instance.value = node instanceof ThreeText ? (node as ThreeText<RasterFormatMetadata>) : undefined;
         },
       });
     };
@@ -793,14 +794,10 @@ export const TextGroup: TextGroupComponent = defineComponent({
     material: { type: null as unknown as PropType<ThreeTextMaterial>, required: false },
     pixelSnapping: { type: null as unknown as PropType<boolean>, required: false },
   },
-  emits: {
-    error: (_error: unknown) => true,
-  },
-  setup(props, { slots, attrs, emit, expose }) {
+  setup(props, { slots, attrs, expose }) {
     const context = useSelectedGlyphContext();
     const { invalidate } = useTresContext().renderer;
     const instance = shallowRef<ThreeTextGroup | undefined>();
-    const reportError = (error: unknown): void => emit('error', error);
     let publication: Readonly<{ key: string; args: TextGroupConstructorArguments }> | undefined;
     expose({ instance });
 
@@ -843,9 +840,7 @@ export const TextGroup: TextGroupComponent = defineComponent({
           key,
           args: publication.args,
           ref: (node: unknown) => {
-            const object = node instanceof ThreeTextGroup ? node : undefined;
-            if (object !== undefined) object.onError = reportError;
-            instance.value = object;
+            instance.value = node instanceof ThreeTextGroup ? node : undefined;
           },
         },
         slots.default?.(),
