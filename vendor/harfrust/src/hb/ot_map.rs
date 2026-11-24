@@ -271,7 +271,9 @@ impl<'a> hb_ot_map_builder_t<'a> {
         false
     }
 
-    #[inline]
+    // pmndrs/glyph fork: out of line. Plan building calls this from dozens of sites, and each
+    // inlined copy carried the `Vec` push; plans are built once and cached.
+    #[inline(never)]
     pub fn add_feature(&mut self, tag: hb_tag_t, flags: hb_ot_map_feature_flags_t, value: u32) {
         if !tag.is_null() {
             let seq = self.feature_infos.len();
