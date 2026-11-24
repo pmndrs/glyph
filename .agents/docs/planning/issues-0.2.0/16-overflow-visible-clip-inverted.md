@@ -15,7 +15,7 @@ generated:
 # Issue 16: `overflow: 'visible'` drops lines past the box while `'clip'` lays them all out
 
 - **Severity:** should-fix (decide before 0.2.0 whether to keep the names; behaviour change is engine work)
-- **Status:** approved (Justin, 2026-11-24): swap the two. `clip` stops at the box and drops lines that do not fit; `visible` lays out and draws every line. Breaking; changelog and migration note; lane `experiments/sil-overflow`
+- **Status:** approved (Justin, 2026-11-24): `clip` draws only the lines that fully fit; `visible` draws those plus the one line that straddles the box's block-end edge; lines entirely outside the box are never laid out or drawn. No pixel mask. Lane `experiments/sil-overflow`
 
 ## What happens
 
