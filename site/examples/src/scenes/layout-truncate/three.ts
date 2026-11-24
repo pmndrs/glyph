@@ -9,8 +9,10 @@ import { CAPPED, OVERFLOWS } from './scene';
 
 /**
  * The imperative twin. The ellipsis is U+2026 shaped through the font stack,
- * so the stack needs a face that has it. `measure().overflowed` reports that
- * content did not fit, whichever `overflow` hides it.
+ * so the stack needs a face that has it. Under the fixed height, `visible`
+ * keeps the lines that fit and the one that crosses the foot of the box,
+ * while `clip` and `ellipsis` keep only the lines that fit.
+ * `measure().overflowed` reports that content did not fit under every value.
  */
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();

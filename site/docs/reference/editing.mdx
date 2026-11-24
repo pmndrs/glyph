@@ -288,7 +288,7 @@ Where a caret is drawn. Returned by [`caret()`](#caret).
 | `line` | `number` | Index of the line the caret is on, from `0`. |
 | `level` | `number` | Bidirectional embedding level of the grapheme the caret attaches to, or of the paragraph on an empty line. Even is left to right, odd is right to left. |
 | `secondary` | `LayoutBox \| undefined` | At a direction boundary, the rectangle of the other affinity at the same offset: the second half of a split caret. `width` is `0`. `undefined` elsewhere, including at a soft wrap. |
-| `clipped` | `boolean` | `true` when the offset is in text the layout did not draw (after a line limit or an ellipsis). `rect` is then at the end of the last drawn line. |
+| `clipped` | `boolean` | `true` when the offset is in text the layout did not draw (past a line limit, a height limit or an ellipsis). `rect` is then at the end of the last drawn line. |
 
 ## TextMovement
 

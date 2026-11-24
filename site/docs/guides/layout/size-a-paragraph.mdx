@@ -61,7 +61,7 @@ the other wrap modes.
 ## Set a height
 
 `constraints.height` takes the same three modes. A height never changes where lines wrap. It decides how many lines
-fit.
+fit: a line fits when its line box ends at or above the foot of the box.
 
 ```ts
 const card = three.createText({
@@ -80,12 +80,13 @@ const { height, contentHeight, overflowed } = card.measure();
 | `height.mode` | Lines kept | `measure().height` |
 | --- | --- | --- |
 | `'unconstrained'` (the default) | All of them. | The height of all lines, plus `spaceBefore` and `spaceAfter`. |
-| `'at-most'` | The lines that fit in `size`. | The height of the lines kept, never more than `size`. |
-| `'exact'` | The lines that fit in `size`. | `size`, whatever the text. |
+| `'at-most'` | The lines that fit in `size`, and with `overflow: 'visible'` the one line that crosses the foot. | The height of the lines kept, never more than `size`. |
+| `'exact'` | The lines that fit in `size`, and with `overflow: 'visible'` the one line that crosses the foot. | `size`, whatever the text. |
 
 When lines do not fit, `measure().overflowed` is `true` and `contentHeight` still reports the height the whole text
-needs at this width. What happens to the lines that do not fit is the paragraph's `overflow` policy; see
-[Truncate text](/guides/layout/truncate).
+needs at this width. The default `overflow: 'visible'` keeps the line that crosses the foot of the box, so it is
+drawn partly below the box; `'clip'` and `'ellipsis'` drop it. Lines that start at or below the foot are not laid
+out under any value. See [Truncate text](/guides/layout/truncate).
 
 ## Read the resolved box
 

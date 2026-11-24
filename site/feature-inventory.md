@@ -11,7 +11,7 @@ Status values:
 - **Demo**: the scene slug under `site/examples/src/scenes/`, `none` where a demo is still missing, or `n/a` where a
   live scene would not clarify or cannot run on the docs host.
 - **Verified**: `yes` when `site:verify-pages` has driven the demo live on its docs page in Chromium with no console
-  error (last run 2026-11-24); `n/a` without a demo.
+  error (last run 2026-11-24, after merging `sil-green-69`); `n/a` without a demo.
 
 ## Information architecture
 

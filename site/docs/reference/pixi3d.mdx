@@ -117,9 +117,10 @@ const text: Pixi3DText = root.createText(options);
 
 Creating a text makes no layout engine call. The returned node has no meshes until the next `glyph.shape()`.
 
-Throws `TypeError` if `options` is not an object, if `text` is neither a string nor formatted text, or if `material`
-is not a `Pixi3DTextMaterial`. Other invalid values throw the validator's `TypeError` or `RangeError`. This renderer
-does not wrap input errors in `GlyphInputError`.
+Throws [`GlyphInputError`](/reference/errors#glyphinputerror) for invalid input. Its `path` is `['text']` when
+`text` is neither a string nor formatted text, `['material']` when `material` is not a `Pixi3DTextMaterial`,
+`['font']` when the font cannot be used, and `[]` when `options` is not an object or a `style`, `layout`,
+`constraints` or `flow` value is refused. Its `cause` is the validator's `TypeError` or `RangeError`.
 
 ## Pixi3DText
 
@@ -164,8 +165,9 @@ text.update(update);
 `Pixi3DTextUpdate` is every option of `createText` except `material`, all optional. A property that is present
 replaces the previous value as a whole.
 
-Throws `TypeError` if the argument is not an object or contains `material`. Invalid values throw the validator's
-`TypeError` or `RangeError`, and the text keeps its previous state. Throws `Error` on a disposed text.
+Throws `GlyphInputError` if the argument is not an object, contains `material`, or carries an invalid value, and
+the text keeps its previous state. `path` names the property when the update has exactly one key, and is `[]`
+otherwise. Throws `Error` on a disposed text.
 
 ### measure and measureInk
 
@@ -426,7 +428,7 @@ because GLSL ES 3.0 rejects derivative functions in a vertex shader.
 
 | Failure | Thrown from | Value |
 | --- | --- | --- |
-| Invalid input to `createText`, `update` or a setter | That call | `TypeError` or `RangeError` |
+| Invalid input to `createText`, `update` or a setter | That call | `GlyphInputError`; `cause` is the validator's `TypeError` or `RangeError` |
 | An offset that is not a grapheme boundary | The editing method | `TextOffsetError` |
 | A paragraph the engine refuses | `glyph.shape()`, once | `GlyphError` with `code: 'engine-failed'`; its message quotes the text |
 | A material factory that throws or returns an invalid material | `glyph.shape()`, once | The factory's exception or `TypeError` |
@@ -446,7 +448,6 @@ error callback.
 | MSDF atlas | The whole baked atlas is uploaded, and glyph cells are drawn untrimmed. |
 | Bitmap pixel snapping | Not available |
 | Default material | Lit `Material3D`; three.js text is unlit. |
-| `GlyphInputError` | Not thrown for invalid input; see [Errors](#errors). |
 
 ## See also
 

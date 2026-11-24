@@ -1,4 +1,4 @@
-import type { ParagraphLayout } from '@pmndrs/glyph';
+import type { DropCapLayout } from '@pmndrs/glyph';
 import { Text, useMsdf } from '@pmndrs/glyph/react';
 
 import { INTER } from '../../fonts';
@@ -32,7 +32,7 @@ export const CAPS = [
       ],
     },
   ],
-] as const satisfies readonly (readonly [string, NonNullable<ParagraphLayout['dropCap']>])[];
+] as const satisfies readonly (readonly [string, DropCapLayout])[];
 
 export default function LayoutDropCap() {
   const inter = useMsdf(INTER);

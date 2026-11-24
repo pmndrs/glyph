@@ -84,8 +84,11 @@ if (inkBounds !== undefined) {
 }
 ```
 
-`overflowed` is `true` when the content did not fit the box under the layout's
-[overflow](/guides/layout/truncate) setting.
+`overflowed` is `true` when the content did not fit the box, under every
+[overflow](/guides/layout/truncate) value. `lineCount`, `lines`, `glyphCount` and `inkBounds` describe the lines
+that were laid out, which are the lines drawn: under a height limit that is the lines that fit, plus the one line
+that crosses the foot of the box when `overflow` is `'visible'`. `contentHeight` still reports the height all of
+the text needs. To read every line of a text that overflows, measure it with an unconstrained height.
 
 ## Read the baselines
 

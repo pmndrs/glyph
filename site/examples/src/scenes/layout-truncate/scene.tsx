@@ -11,10 +11,13 @@ import { PROSE } from '../layout-kit/prose';
 
 /**
  * Text that does not fit. Top row: one paragraph in a box whose exact height
- * breathes. `visible` keeps only the lines that fit whole, `clip` lays out
- * every line and cuts the drawing at the box, `ellipsis` ends the last line
- * that fits with an ellipsis. Bottom row: a line cap, and a single unwrapped
- * line whose ellipsis sits at the end of the paragraph direction.
+ * breathes. A line fits when its line box ends at or above the foot of the
+ * box. `visible` keeps the lines that fit and the one line that crosses the
+ * foot, `clip` keeps only the lines that fit, and `ellipsis` keeps the same
+ * lines as `clip` and ends the last one with an ellipsis. The count beside
+ * each caption is `lineCount` from `onLayout`. Bottom row: a line cap, and a
+ * single unwrapped line whose ellipsis sits at the end of the paragraph
+ * direction.
  */
 export const OVERFLOWS = ['visible', 'clip', 'ellipsis'] as const;
 
@@ -34,6 +37,7 @@ export default function LayoutTruncate() {
   // Inter first; the ellipsis face is consulted only for the character Inter lacks.
   const font = useMemo(() => createFontStack(inter, ellipsis), [inter, ellipsis]);
   const [phase, setPhase] = useState(0);
+  const [lineCounts, setLineCounts] = useState<readonly number[]>(() => OVERFLOWS.map(() => 0));
 
   useFrame(({ elapsed }) => {
     setPhase(Math.sin(elapsed * 0.5));
@@ -46,6 +50,9 @@ export default function LayoutTruncate() {
       {OVERFLOWS.map((overflow, index) => (
         <group key={overflow} position={[column(index), 2.35, 0]}>
           <Label at={[0, -0.34]} size={0.18}>{`overflow: '${overflow}'`}</Label>
+          <Label at={[WIDTH, -0.34]} size={0.18} color={ACCENT} anchor={{ x: 'right' }}>
+            {`lines: ${String(lineCounts[index] ?? 0)}`}
+          </Label>
           <Fill box={[0, 0, WIDTH, height]} />
           <Outline box={[0, 0, WIDTH, height]} color={ACCENT} />
           <Text
@@ -53,6 +60,13 @@ export default function LayoutTruncate() {
             style={STYLE}
             layout={{ overflow }}
             constraints={{ width: { mode: 'exact', size: WIDTH }, height: { mode: 'exact', size: height } }}
+            onLayout={(_text, layout) =>
+              setLineCounts((counts) =>
+                counts[index] === layout.lineCount
+                  ? counts
+                  : counts.map((count, at) => (at === index ? layout.lineCount : count)),
+              )
+            }
           >
             {PROSE}
           </Text>

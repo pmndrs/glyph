@@ -134,8 +134,9 @@ See [Group and batch text](/guides/scene/group-and-batch).
 
 ## Read and write through a ref
 
-The ref of `<Text>` is the three.js `Text` object, with every method on [Text](/reference/three-text). Reads lay the
-text out first if needed, so they are current as soon as the ref is set.
+The ref of `<Text>` is the three.js `Text` object, with every method on [Text](/reference/three-text). It is set in
+the commit that mounts the `<Text>`, so your component's first effect can use it. Reads lay the text out first if
+needed, so they are current as soon as the ref is set.
 
 ```tsx
 import type { msdf } from '@pmndrs/glyph';

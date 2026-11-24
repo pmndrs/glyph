@@ -40,8 +40,14 @@ Decisions made here, for review:
 - The docs are built with `--base-path /docs`, so the composed `dist/` serves as deployed: landing at `/`, docs at
   `/docs/`, examples at `/examples/`.
 
-Package behaviours the writers found while verifying claims against source, not changed here: `order` on Three text
-properties is not read by the adapter; `Pixi3DText` throws `TypeError`/`RangeError` where the other renderers throw
-`GlyphInputError`; `overflow: 'clip'` does not clip pixels in the three.js renderer; a subset bake drops discretionary
-OpenType features; `packages/glyph/MIGRATION-0.2.md` still says culling is manual; a font resource released by its last
-React user can be handed, disposed, to a component that mounts in the next commit.
+The package behaviours the writers found while verifying claims against source became the issue records in
+[issues-0.2.0](../planning/issues-0.2.0/index.md). After the integration branch fixed them, the branch was merged in
+and the pages follow it: the overflow rule (`'clip'` keeps only fitting lines, `'visible'` adds the one straddling
+line in the last region, no clip ids), no `order` on Three text, no `--yes`, `GlyphInputError` from `Pixi3DText`, the
+`DropCapLayout` export, and `onInvalidate` for material and group changes. The OpenType-features guide marks the
+features a subset bake drops as pending the bake-option change.
+
+The landing page shipped a wordmark font baked by a September package, which the 0.2.0 loader rejects as invalid.
+It is rebaked by `site:bake-wordmark`, the landing sources are checked in under `site/landing/sources/`, a site test
+validates every shipped font artifact against the package validator, and `site:verify-browser` loads the landing page
+and fails on any console error or warning.

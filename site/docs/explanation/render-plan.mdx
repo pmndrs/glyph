@@ -97,7 +97,7 @@ changing what is bound. A replacement display list that keeps the same storage, 
 ## How draws form
 
 One draw can cover many texts. The engine merges adjacent spans into one draw while they agree on everything a draw
-binds: the technique and program, the font resource, the material, the clip, the depth key and the order, and, in a
+binds: the technique and program, the font resource, the material, the depth key and the order, and, in a
 config that uses direct transforms, the transform. A span that differs in any of these starts a new draw.
 
 "Adjacent" matters. Batching follows draw order, so two labels with the same material separated by one with a

@@ -30,7 +30,7 @@ To measure your own font, add `--json` to `glyph bake`. The report's `rasters` a
 
 `--unicodes` prepares a smaller source font before anything is baked. The shaping tables and every raster then hold
 only the glyphs those code points need, including the glyphs that shaping substitutes for them (ligatures, contextual
-forms).
+forms). TrueType and CFF (`.otf`) sources can both be subset.
 
 1. List the code points as comma-separated `U+XXXX` values or `U+XXXX-YYYY` ranges:
 

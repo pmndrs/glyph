@@ -57,6 +57,16 @@ indented by its width.
 The cap is the first character of the text. If separating it from the next character would change how the text is
 shaped, for example inside a ligature, the cap extends to the nearest point where the text can be split safely.
 
+To share one setting between paragraphs, type it as `DropCapLayout`:
+
+```ts
+import type { DropCapLayout } from '@pmndrs/glyph';
+
+const initial: DropCapLayout = { lines: 3, marginInline: 0.06 };
+
+text.layout = { wrap: 'word', dropCap: initial };
+```
+
 ## Size the cap to the lines
 
 For a cap that drops `lines` lines, its capital height must reach from the top of the capitals on the first line to

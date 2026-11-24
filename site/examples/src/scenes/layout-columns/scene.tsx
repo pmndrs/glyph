@@ -10,8 +10,9 @@ import { LONG_PROSE } from '../layout-kit/prose';
 /**
  * One paragraph in three columns while the exact height breathes. Text fills
  * the first column to the bottom before it starts the next, so a tall box
- * leaves the last column short or empty, and a short box drops the lines
- * that do not fit and reports `overflowed`.
+ * leaves the last column short or empty. A short box reports `overflowed`:
+ * under the default `overflow: 'visible'` the last column keeps the one line
+ * that crosses its foot, and the lines after it are not laid out.
  */
 export const WIDTH = 9.9;
 export const COLUMNS = { count: 3, gap: 0.45 } as const;

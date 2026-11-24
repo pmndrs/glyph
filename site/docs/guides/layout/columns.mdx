@@ -16,7 +16,8 @@ short form for the common case. For columns of different sizes, or boxes that ar
 <glyph-proxy fit="cover" root="scenes" data-scene="layout-columns" aria-label="One paragraph in three columns while the box height changes" aspect="16 / 9" />
 
 One paragraph in three columns while the height of the box changes. Each column fills to the bottom before the next
-one starts.
+one starts. When the box is too short for the text, the last column keeps one line that crosses its foot, which is
+the default `overflow: 'visible'`.
 
 ## Set the columns
 
@@ -80,9 +81,12 @@ second, and so on. The consequences:
 
 - If the text is short, the last columns are short or empty.
 - If the height is `at-most` and larger than the text needs, or `unconstrained`, everything stays in the first column.
-- If the text does not fit in all the columns, the rest is not drawn and `measure().overflowed` is `true`. The
-  `overflow` policy applies to the last line of the last column, so `overflow: 'ellipsis'` ends that line with an
-  ellipsis; see [Truncate text](/guides/layout/truncate).
+- A line that does not fit above the foot of a column moves to the next column. That holds for every column but the
+  last, under every `overflow` value.
+- If the text does not fit in all the columns, `measure().overflowed` is `true` and `overflow` decides what the last
+  column shows. The default `'visible'` keeps the one line that crosses the foot of the last column. `'clip'` drops
+  it, so no column draws below the box. `'ellipsis'` drops it and ends the last line that fits with an ellipsis.
+  Lines after that one are not laid out under any value; see [Truncate text](/guides/layout/truncate).
 
 To get columns of roughly equal length, choose the height yourself. Measure the text in a single column of the
 column width, then divide.
@@ -114,9 +118,9 @@ This assumes every line has the same height, which holds for text in one font si
 
 ## Combine with other layout properties
 
-`align`, `justify`, `maxLines` and `overflow` work per line as they do in a single column, against the column width.
+`align`, `justify` and `maxLines` work per line as they do in a single column, against the column width.
 `firstLineIndent` and `spaceBefore` apply once, to the first line of the first column. `maxLines` counts lines across
-all columns.
+all columns. `overflow` applies to the last column. Columns do not add draws under any `overflow` value.
 
 `measure().width` and `measure().height` describe the whole box, not one column. `measure().contentWidth` is the
 widest line.
@@ -125,6 +129,7 @@ widest line.
 
 - In `text.glyphs()`, the first glyph of a line in the second column has `x` equal to `columnWidth + gap`.
 - `text.measure().overflowed` turns `true` when you reduce the height below what the text needs.
+- With `overflow: 'clip'`, no line in `text.measure().lines` ends below the height of the box.
 - `text.measure().lineCount` counts the lines of all columns.
 
 ## See also

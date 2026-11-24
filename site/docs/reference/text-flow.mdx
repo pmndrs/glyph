@@ -88,9 +88,9 @@ order. A new value that is equal to the current one after normalization does not
 | `regions` | `readonly TextFlowRegion[]` | The regions, in flow order. At least one. |
 
 Text fills `regions[0]` from its top, continues at the top of `regions[1]` when the next line does not fit, and so
-on. Regions are not balanced. Content left after the last region is not laid out, and `measure().overflowed` is
-`true`; [`ParagraphLayout.overflow`](/reference/paragraph-layout#overflow) applies to the last line of the last
-region.
+on. Regions are not balanced. When content does not fit in the last region, `measure().overflowed` is `true` and
+[`ParagraphLayout.overflow`](/reference/paragraph-layout#overflow) decides whether the line that straddles the foot
+of the last region is kept. Lines after it are not laid out.
 
 When a text has a flow:
 
@@ -105,7 +105,7 @@ When a text has a flow:
 | --- | --- | --- | --- |
 | `key` | `string` | Required | Identity of the region across updates. Nonempty, unique among the flow's regions. Array order is flow order, not identity. |
 | `shape` | [`TextFlowShape`](#textflowshape) | Required | The area lines are placed in. |
-| `clip` | `TextFlowBounds` | The bounds of `shape` | Clip rectangle for the region's lines when `ParagraphLayout.overflow` is `'clip'`. |
+| `clip` | `TextFlowBounds` | The bounds of `shape` | A rectangle stored with the region. It is validated and takes part in comparing two flows for equality. It does not change which lines are laid out or drawn. |
 | `exclusions` | `readonly TextFlowExclusion[]` | None | Shapes this region's lines avoid. |
 
 A line occupies the inline span that the shape provides over the line's whole block extent. In a polygon with
@@ -114,10 +114,6 @@ slanted edges, lines therefore stay inside both edges.
 > [!CAUTION]
 > A rectangle region with a negative `blockStart` passes validation, but the engine refuses the paragraph: the first
 > read that prepares the text throws `GlyphEngineStatusError`. Negative inline coordinates are accepted.
-
-> [!NOTE]
-> The three.js renderer does not cut glyphs at `clip`; see
-> [`overflow`](/reference/paragraph-layout#overflow).
 
 ## TextFlowExclusion
 

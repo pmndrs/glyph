@@ -105,6 +105,12 @@ glyph bake --input Inter-Regular.ttf --output public/fonts/inter.font.glb --unic
 STALE_OUTPUT: baked font is not byte-identical to the requested output (public/fonts/inter.font.glb)
 ```
 
+When the output does not exist yet, `--check` fails the same way without baking:
+
+```sh
+STALE_OUTPUT: no font exists at the requested output; run without --check to create it (public/fonts/inter.font.glb)
+```
+
 A bake is deterministic: the same source, flags and package version produce the same bytes.
 
 ## Bake every font a project declares

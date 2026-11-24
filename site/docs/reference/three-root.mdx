@@ -192,8 +192,9 @@ disposed.
 
 ### onInvalidate
 
-A callback the root calls when one of its texts needs a new frame: a `Text` is created, a `Text` setter records a
-changed value, or a `Text` is disposed. An on-demand render loop requests a frame here.
+A callback the root calls when it needs a new frame: a `Text` is created, a `Text` setter records a changed value, a
+`Text` is disposed, `root.material` changes, or a `TextGroup` of the root has its `material` or `batching` set or is
+disposed. An on-demand render loop requests a frame here.
 
 ```ts
 let scheduled = false;
@@ -212,8 +213,8 @@ It is called once per change, so coalesce as above. Assigning a value equal to t
 exception thrown by the callback is swallowed.
 
 It is not called for changes the root only observes during a render: `position`, `rotation`, `scale`, `visible` and
-`renderOrder` of a text or an ancestor, adding a text to the scene or moving it, `root.material`, and `TextGroup`
-`material` or `batching`. After one of those, request the frame yourself. See
+`renderOrder` of a text or an ancestor, and adding a text to the scene or moving it. After one of those, request the
+frame yourself. See
 [Use Glyph with three.js](/guides/renderers/three#render-on-demand).
 
 ### dispose()

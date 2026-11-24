@@ -202,8 +202,8 @@ function frame(): void {
 Each failure is thrown once. A text the engine refuses draws nothing until its input changes. A text whose material
 could not be built keeps its last drawn state. Other texts are published normally.
 
-Invalid input throws from the setter, `update()` or `createText()`, and the text keeps its previous value. On this
-renderer those errors are plain `TypeError` and `RangeError`, not `GlyphInputError`. The editing methods throw
+Invalid input throws [`GlyphInputError`](/reference/errors#glyphinputerror) from the setter, `update()` or
+`createText()`, as on the other renderers, and the text keeps its previous value. The editing methods throw
 [`TextOffsetError`](/reference/errors) as they do everywhere else.
 
 ## Differences from the three.js renderer

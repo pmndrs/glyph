@@ -50,10 +50,6 @@ Two cases are easy to hit by accident:
   input and throws at `['text']`.
 - A lone surrogate is not invalid. It is drawn as U+FFFD, the replacement character.
 
-> [!NOTE]
-> `Pixi3DText` validates in the same places, but throws the plain `TypeError` or `RangeError` instead of wrapping it
-> in `GlyphInputError`.
-
 ## Catch invalid offsets
 
 The editing methods never snap or clip an offset. If you want snapping, catch the error and use the boundaries it

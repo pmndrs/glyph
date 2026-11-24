@@ -92,7 +92,7 @@ The schema turns engine identities into renderer objects.
 | `BatchIdentity`                 | type     | Opaque identity of a batch.                                                                  |
 | `InstanceIdentity`              | type     | Opaque identity of a root instance.                                                          |
 | `InstanceSpanIdentity`          | type     | Opaque identity of an instance span.                                                         |
-| `ClipIdentity`                  | type     | Opaque identity of a clip.                                                                   |
+| `ClipIdentity`                  | type     | Opaque identity of a clip. No overflow value marks a clip boundary, so `clip` on a draw input and on an instance span is always `undefined`. |
 | `SemanticIdentity`              | type     | Opaque identity of a semantic record.                                                        |
 
 ## Render plan and renderer

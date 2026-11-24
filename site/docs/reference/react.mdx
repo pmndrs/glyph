@@ -168,8 +168,9 @@ function Panel() {
 ### The ref
 
 The ref is the three.js object, so every method of [`Text`](/reference/three-text) is available: `measure()`,
-`glyphs()`, `split()`, the editing methods, and the setters. It is assigned after the object is created, in a layout
-effect. Writing through the ref (`ref.current.text = 'new'`) requests a frame, so it also draws under
+`glyphs()`, `split()`, the editing methods, and the setters. It is set in the commit that mounts the component, so
+the first layout effect and the first effect of the component that renders the `<Text>` already read the object,
+and it is cleared on unmount. The ref of `TextGroup` is set the same way. Writing through the ref (`ref.current.text = 'new'`) requests a frame, so it also draws under
 `frameloop="demand"`. A later prop change overwrites what was written through the ref.
 
 ## TextGroup

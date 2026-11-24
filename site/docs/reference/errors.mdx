@@ -122,11 +122,12 @@ Thrown by:
 - Vue: an invalid prop. It reaches `onErrorCaptured` and `app.config.errorHandler`.
 - TypeGPU: `createText()` and `TypeGpuText.update()`, including `style.decoration`, which that renderer does not
   support.
+- PixiJS 3D: `createText()`, `Pixi3DText.update()`, every `Pixi3DText` property setter, and `replace()` for an
+  `insert` that is not a string.
 - A text longer than the config's `maxTextUnits` (default 65,536 UTF-16 code units), at `['text']`.
 - A setter that names a font that has been disposed, at `['font']`.
 
-Not thrown by `Pixi3DText`, which throws the plain `TypeError` or `RangeError` for invalid input. Root limits other
-than `maxTextUnits` also throw plain `RangeError`.
+Root limits other than `maxTextUnits` throw plain `RangeError`.
 
 ## GlyphLayoutPhaseError
 
@@ -420,7 +421,7 @@ Constructor: `new FontArtifactValidationError(issues)`.
 | `Error` with message `onLayout of Glyph text "…" threw: …` | Your layout callback threw. `cause` is your exception. Thrown from the render call, once. |
 | An internal `GlyphError` subclass named `GlyphEngineRestartError` (`code: 'engine-failed'`) | The engine crashed and was replaced. Thrown from the render call that found it, once. The next frame retries. |
 | `RangeError` | An index out of range in `glyphAt`, `outlineAt` and the matrix methods of `Glyphs`; a fixed buffer capacity exceeded (from the render call); root limits other than `maxTextUnits`. |
-| `TypeError`, `RangeError` | Invalid options to `defineTextMaterial`, `defineTypeGpuConfig` and `Pixi3DTextMaterial`; invalid input to `Pixi3DText`. |
+| `TypeError`, `RangeError` | Invalid options to `defineTextMaterial`, `defineTypeGpuConfig` and `Pixi3DTextMaterial`. |
 | `Error` | Use of a disposed text, root or handle; `glyph.handle()` before `glyph.init()` has resolved. |
 | The error your code threw | A custom material factory that throws rejects the frame's publication; the exception is thrown from the render call, once. |
 

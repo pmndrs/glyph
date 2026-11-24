@@ -38,14 +38,16 @@ interface ParagraphLayout {
   };
   readonly lastLine?: 'auto' | 'justify';
   readonly columns?: { readonly count: number; readonly gap?: number };
-  readonly dropCap?: {
-    readonly lines: number;
-    readonly align?: 'text-top' | 'baseline';
-    readonly side?: 'inline-start' | 'inline-end';
-    readonly marginInline?: number;
-    readonly marginBlock?: number;
-    readonly contour?: readonly (readonly [number, number])[];
-  };
+  readonly dropCap?: DropCapLayout;
+}
+
+interface DropCapLayout {
+  readonly lines: number;
+  readonly align?: 'text-top' | 'baseline';
+  readonly side?: 'inline-start' | 'inline-end';
+  readonly marginInline?: number;
+  readonly marginBlock?: number;
+  readonly contour?: readonly (readonly [number, number])[];
 }
 ```
 
@@ -81,7 +83,7 @@ the new value does not state return to their defaults.
 | [`justify`](#justify) | `object` | No bounds | See below |
 | [`lastLine`](#lastline) | `'auto' \| 'justify'` | `'auto'` | |
 | [`columns`](#columns) | `{ count, gap? }` | One column | See below |
-| [`dropCap`](#dropcap) | `object` | No drop cap | See below |
+| [`dropCap`](#dropcap) | `DropCapLayout` | No drop cap | See below |
 
 ### wrap
 
@@ -116,21 +118,33 @@ region when the width constraint is `'exact'`. The base direction comes from `Te
 What happens to content that does not fit the line limit (`maxLines`), the height constraint, or the last column or
 region.
 
-| Value | Meaning |
+Under a height limit, a line is judged by its line box (its line height, not its ink) against the foot of the box:
+the block end of the height constraint, of the last column, or of the last region of a flow.
+
+| Line | Condition |
 | --- | --- |
-| `'visible'` | Lines past the limit are not laid out or drawn. A line wider than its box extends past it. |
-| `'ellipsis'` | As `'visible'`, and the last line kept is shortened so that it and an ellipsis fit the line's width. The ellipsis is at the line's end in the paragraph's base direction. |
-| `'clip'` | Lines are assigned to their region's clip bounds. |
+| Fits | Its line box ends at or above the foot. |
+| Straddles | Its line box starts above the foot and ends below it. |
+| Outside | Its line box starts at or below the foot. |
 
-The ellipsis is U+2026, shaped through the font selection of the text it follows at that text's size: the first font
-in the stack that has the character, otherwise the last font's missing glyph.
+| Value | Lines that fit | The straddling line | A line wider than its box |
+| --- | --- | --- | --- |
+| `'visible'` | Laid out and drawn. | Laid out and drawn; it extends past the foot. | Extends past the box. |
+| `'clip'` | Laid out and drawn. | Not laid out. | Extends past the box. |
+| `'ellipsis'` | Laid out and drawn. The last one is shortened so that it and an ellipsis fit the line's width. | Not laid out. | Shortened so that it and an ellipsis fit. |
 
-`measure().overflowed` is `true` under every value when content did not fit.
+- An outside line is never laid out or drawn. An `'unconstrained'` height lays out all of the text.
+- In every column or region but the last, a line that does not fit moves to the next one, under every value.
+- Lines past `maxLines` are not laid out, under every value. Under `'ellipsis'` the last line kept ends with the
+  ellipsis.
+- `'clip'` removes whole lines. No value cuts glyphs at the edge of the box, and no value adds a draw: columns and
+  regions do not split a paragraph's draws.
+- The ellipsis is at the line's end in the paragraph's base direction. It is U+2026, shaped through the font
+  selection of the text it follows at that text's size: the first font in the stack that has the character,
+  otherwise the last font's missing glyph.
 
-> [!NOTE]
-> The three.js renderer does not cut glyphs at clip bounds. Under `'clip'` it draws the lines `'visible'` draws. Under
-> a height constraint, `measure()` and `glyphs()` report all lines for `'clip'` and only the kept lines for
-> `'visible'`.
+`measure().overflowed` is `true` under every value when content did not fit, and `contentHeight` reports the height
+all of the text needs. `measure()`, `glyphs()` and the editing methods describe the lines that were laid out.
 
 ### maxLines
 
@@ -190,7 +204,8 @@ Ignored when the text has a [`flow`](/reference/text-flow), except that these re
 ### dropCap
 
 Takes the first character of the paragraph out of the first line and reserves body lines beside it. The character
-keeps the style of its own span; `dropCap` does not enlarge it.
+keeps the style of its own span; `dropCap` does not enlarge it. The type of the value is `DropCapLayout`, exported
+from `@pmndrs/glyph`.
 
 | Field | Type | Default | Constraint | Meaning |
 | --- | --- | --- | --- | --- |

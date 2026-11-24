@@ -136,9 +136,9 @@ another line and is not a split caret. Drawing both bars is optional; many edito
 
 ## Handle text that was not drawn
 
-When a paragraph is truncated with `maxLines` or an ellipsis, some of the string has no place on screen. `caret`
-still answers for an offset in that text: it parks the rectangle at the end of the last drawn line and sets
-`clipped` to `true`.
+When a paragraph is truncated with `maxLines`, a height limit or an ellipsis, some of the string has no place on
+screen. `caret` still answers for an offset in that text: it parks the rectangle at the end of the last drawn line
+and sets `clipped` to `true`.
 
 ```ts
 import type { TextPosition } from '@pmndrs/glyph';

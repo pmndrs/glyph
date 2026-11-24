@@ -119,19 +119,20 @@ has no rule for it. Two things decide whether the rule is there.
 
 **The source font.** Not every font has small capitals or old-style figures. Check the font's documentation.
 
-**The bake.** Baking with a code-point subset (`--unicodes` on the command line, `unicodeRanges` in `bakeFont`) removes
-unused glyphs and, with them, layout features outside a default set. A subset bake keeps the features a shaper
-applies without being asked, including `liga`, `kern`, `calt`, `locl`, `ccmp`, `mark`, `mkmk`, `rlig`, and also
-`frac`, `numr` and `dnom`. It drops discretionary features such as `smcp`, `onum`, `tnum`, `zero` and the stylistic
-sets. A bake without a code-point subset keeps every feature.
+**The bake.** A bake without a code-point subset keeps every feature of the source font. A bake with a code-point
+subset (`--unicodes` on the command line, `unicodeRanges` in `bakeFont`) removes unused glyphs, and which features
+survive that depends on the build:
 
-| Bake | `liga`, `kern`, `frac` | `smcp`, `onum`, `zero`, `ss01` |
-| --- | --- | --- |
-| `glyph bake --input Font.ttf --msdf` | Kept | Kept |
-| `glyph bake --input Font.ttf --unicodes U+0020-007E --msdf` | Kept | Removed |
+> [!NOTE]
+> This describes the current build, and it is expected to change before 0.2.0 is final. Today a subset bake keeps
+> only the features a shaper applies without being asked, including `liga`, `kern`, `calt`, `locl`, `ccmp`, `mark`,
+> `mkmk` and `rlig`, and also `frac`, `numr` and `dnom`. It removes discretionary features such as `smcp`, `onum`,
+> `tnum`, `zero` and the stylistic sets, together with their alternate glyphs, and there is no bake option to choose
+> the features. A change to which features a subset keeps, with an option to name them, is pending. Check
+> [the result](#check-the-result) on your own font after you upgrade.
 
-To keep discretionary features and still ship a small file, bake the whole font and narrow only the raster with the
-format's `coverage` option, which `msdf` and `bitmap` support. The scene above does this: Source Serif 4 is baked
+Until then, to use a discretionary feature and still ship a small file, bake the whole font and narrow only the
+raster with the format's `coverage` option, which `msdf` and `bitmap` support. The scene above does this: Source Serif 4 is baked
 without a subset, and its MSDF atlas holds only the 40 glyphs the rows use. Coverage is part of the raster's
 identity, so the same value is passed when the font is loaded.
 

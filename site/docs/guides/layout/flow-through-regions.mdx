@@ -109,8 +109,10 @@ does not fit above the bottom of the region, it starts at the top of the next re
 
 Regions are not balanced. A region is filled before the next one receives anything.
 
-Text left over after the last region is not drawn, and `measure().overflowed` is `true`. `overflow: 'ellipsis'`
-ends the last line of the last region with an ellipsis; see [Truncate text](/guides/layout/truncate).
+When the text does not fit in all the regions, `measure().overflowed` is `true` and `layout.overflow` decides what
+the last region shows. The default `'visible'` keeps the one line that crosses the bottom of the last region.
+`'clip'` drops it, so nothing is drawn below the region. `'ellipsis'` drops it and ends the last line that fits with
+an ellipsis. Lines after that one are not laid out under any value; see [Truncate text](/guides/layout/truncate).
 
 ## How layout and constraints apply
 
@@ -146,12 +148,9 @@ above, the regions are drawn 4.95 to the left of and 2.25 above where their coor
 
 ## Clip bounds
 
-A region may carry `clip: [inlineStart, blockStart, inlineEnd, blockEnd]`, the rectangle its lines are clipped to
-when `layout.overflow` is `'clip'`. It defaults to the bounds of the shape.
-
-> [!NOTE]
-> The three.js renderer in this release does not cut glyphs at clip bounds. See the note in
-> [Truncate text](/guides/layout/truncate).
+A region may carry `clip: [inlineStart, blockStart, inlineEnd, blockEnd]`. It is validated and stored with the
+region, and it has no effect on which lines are laid out or drawn: `overflow: 'clip'` drops the lines that do not
+fit in the last region's shape, and no renderer cuts glyphs at a rectangle. Leave it out.
 
 ## Check the result
 

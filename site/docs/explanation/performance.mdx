@@ -63,7 +63,7 @@ are neither: the integration synchronizes them without the engine.
 
 Each draw the renderer submits has a fixed overhead, so a thousand labels should not be a thousand draws. The engine
 merges adjacent instance spans into one draw while they agree on everything a draw binds: the raster format and
-program, the font, the material, clipping, depth key and render order.
+program, the font, the material, depth key and render order.
 
 Three things in your code decide how well that works.
 

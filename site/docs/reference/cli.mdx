@@ -76,13 +76,12 @@ Any combination may be given, each once. With none, MSDF with default settings i
 | --- | --- |
 | `--split` | Write each raster to its own file beside the output: `<name>.<format>.glb`, where `<name>` is the output name without `.font.glb` or `.glb`. The output then holds the shaping data and references the raster files by name. Without it, every raster is embedded in the output. |
 | `--force` | Bake even when the output is up to date. |
-| `--yes` | Accepted for use in scripts. This version of the command never prompts. |
 
 ### Output options
 
 | Option | Description |
 | --- | --- |
-| `--check` | Direct mode only. Bake to temporary storage and compare with the existing output byte for byte, and the glyph map too when `--glyph-map` is given. Nothing is written. Fails with `STALE_OUTPUT` or `STALE_GLYPH_MAP` on a difference. |
+| `--check` | Direct mode only. Bake to temporary storage and compare with the existing output byte for byte, and the glyph map too when `--glyph-map` is given. Nothing is written. Fails with `STALE_OUTPUT` or `STALE_GLYPH_MAP` on a difference, or, before baking, when the output or the glyph map does not exist. |
 | `--json` | Print the complete bake report as JSON instead of the summary lines. |
 
 ### Discovery options
@@ -151,8 +150,8 @@ Failures are printed as `REASON: message (path)`.
 
 | Reason | Cause |
 | --- | --- |
-| `STALE_OUTPUT` | `--check`: the existing output differs from a fresh bake. (A missing output fails with the file system's own error.) |
-| `STALE_GLYPH_MAP` | `--check` with `--glyph-map`: the existing map differs. |
+| `STALE_OUTPUT` | `--check`: the existing output differs from a fresh bake, or no file exists at the output path. |
+| `STALE_GLYPH_MAP` | `--check` with `--glyph-map`: the existing map differs, or no file exists at the map path. |
 | `AMBIGUOUS_GLYPH_NAME` | `--glyph-map`: one glyph name maps to two code points in the selected set. Narrow `--unicodes`. |
 | `OUTPUT_OVERLAPS_INPUT` | The output, or the glyph map, is the input file. |
 | `OUTPUT_CONFLICT` | Two outputs resolve to the same path. |

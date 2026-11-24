@@ -143,7 +143,7 @@ The paragraph-level metrics. Extends [`BaselineMetrics`](#baselinemetrics) and
 | `fontMetrics` | [`LineFontMetrics`](#linefontmetrics) | Font metrics of the first line. |
 | `inkBounds` | `LayoutBox \| undefined` | Union of every glyph's ink box, in paragraph space. A paragraph with no glyphs reports a zero-size box. `undefined` means the query did not position glyphs, never that the ink is empty. |
 | `anchorOffset` | [`LayoutPoint`](#layoutpoint) | Translation that places `constraints.anchor` on the text's origin. `{ x: 0, y: 0 }` without an anchor. The other fields are not shifted by it. |
-| `overflowed` | `boolean` | Whether the content exceeded the box under the layout's overflow setting. |
+| `overflowed` | `boolean` | Whether the content did not fit the box. `true` under every `overflow` value, including when `'visible'` keeps the line that straddles the foot of the box. |
 
 `width`, `height`, `contentWidth` and `contentHeight` are rounded outward. A measured width passed back as an
 `'exact'` width therefore never makes the text wrap differently.
@@ -154,7 +154,7 @@ A script or italic face draws outside its advances, so the two differ.
 ## ParagraphIntrinsicWidths
 
 The widths the paragraph would take with no width constraint. Part of
-[`ParagraphLayoutSummary`](#paragraphlayoutsummary). Both are rounded outward. Column splits and clipping do not
+[`ParagraphLayoutSummary`](#paragraphlayoutsummary). Both are rounded outward. Column splits and the `overflow` value do not
 affect them.
 
 | Property | Type | Description |

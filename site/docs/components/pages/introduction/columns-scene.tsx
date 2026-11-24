@@ -29,7 +29,7 @@ export function ColumnsScene({ onReady }: GlyphSceneProps) {
           width: { mode: 'exact', size: viewport.width * 0.78 },
         }}
         font={font}
-        layout={{ align: 'start', columns: { count: 2, gap: 0.35 }, overflow: 'clip', wrap: 'word' }}
+        layout={{ align: 'start', columns: { count: 2, gap: 0.35 }, wrap: 'word' }}
         position={[-viewport.width * 0.39, paragraphTopFromCenter(paragraphHeight), 0]}
         rasterPixelRatio={bitmapScale.rasterPixelRatio}
         style={{ color: '#fde68a', fontSize: bitmapScale.fontSize, lineHeight: 1.25 }}

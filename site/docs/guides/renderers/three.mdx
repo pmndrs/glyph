@@ -146,7 +146,8 @@ See [Handle errors](/guides/project/handle-errors).
 ## Render on demand
 
 To render only when something changed, drop the animation loop and request a frame from `onInvalidate`. The root
-calls it when a text is created, when a setter records a changed value, and when a text is disposed.
+calls it when a text is created, when a setter records a changed value, when a text is disposed, and when the
+material of the root or the material or batching of a `TextGroup` changes.
 
 ```ts
 let scheduled = false;
@@ -168,8 +169,8 @@ requestFrame();
 ```
 
 `onInvalidate` does not fire for changes that are plain three.js state or that the root only observes while
-rendering: transforms, `visible`, `renderOrder`, adding or moving a text in the scene, `root.material`, and
-`TextGroup` settings. Call your `requestFrame` after those, as you do for any other object in the scene.
+rendering: transforms, `visible`, `renderOrder`, and adding or moving a text in the scene. Call your `requestFrame`
+after those, as you do for any other object in the scene.
 
 Each root has its own `onInvalidate`. If you use named roots, set it on each one.
 

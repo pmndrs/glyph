@@ -14,15 +14,17 @@ the last line with an ellipsis, and reads back whether anything was cut and wher
 
 <glyph-proxy fit="cover" root="scenes" data-scene="layout-truncate" aria-label="A paragraph in a box of changing height under each overflow policy, above three line-capped texts" aspect="16 / 9" />
 
-Top row: one paragraph in a box whose height changes, under each `overflow` value. Bottom row: a two-line cap, and a
-single unwrapped line in a left-to-right and a right-to-left paragraph.
+Top row: one paragraph in a box whose height changes, under each `overflow` value, with the number of lines laid
+out. `'visible'` shows one line more than `'clip'` whenever a line crosses the foot of the box. Bottom row: a
+two-line cap, and a single unwrapped line in a left-to-right and a right-to-left paragraph.
 
 ## Limit the lines
 
 There are two limits, and the first one reached applies.
 
 - `layout.maxLines` caps the number of lines. It is a positive integer.
-- `constraints.height` with mode `'at-most'` or `'exact'` caps the height. Only whole lines that fit are kept.
+- `constraints.height` with mode `'at-most'` or `'exact'` caps the height. A line fits when its line box (its line
+  height, not its ink) ends at or above the foot of the box.
 
 ```ts
 const teaser = three.createText({
@@ -34,8 +36,36 @@ const teaser = three.createText({
 });
 ```
 
-With the default `overflow: 'visible'`, the lines past the limit are left out. The last line kept ends wherever it
-happened to wrap, with nothing to show that more text follows.
+Lines past `maxLines` are left out under every `overflow` value. With the default `overflow: 'visible'`, the last
+line kept ends wherever it happened to wrap, with nothing to show that more text follows.
+
+## Choose what happens at the foot of the box
+
+Under a height limit, `layout.overflow` decides what happens to the one line that starts inside the box and ends
+past its foot:
+
+- `'visible'`, the default, keeps it. The line is drawn and crosses the foot of the box.
+- `'clip'` drops it. Only the lines that fit are laid out and drawn, so nothing is drawn below the box.
+- `'ellipsis'` drops it and ends the last line that fits with an ellipsis.
+
+```ts
+const card = three.createText({
+  font: Inter,
+  text: 'A long description that keeps going well past the space a card has for it.',
+  style: { fontSize: 0.2, lineHeight: 1.35 },
+  layout: { wrap: 'word', overflow: 'clip' },
+  constraints: {
+    width: { mode: 'exact', size: 3.2 },
+    height: { mode: 'exact', size: 0.7 }, // room for two lines and part of a third
+  },
+});
+
+card.measure().lineCount; // 2; with overflow: 'visible' it is 3
+```
+
+A line that starts at or below the foot is never laid out, whatever the value. To lay out all of the text, leave
+the height unconstrained. In a box shorter than one line, `'clip'` and `'ellipsis'` draw nothing and `'visible'`
+draws the first line.
 
 ## End with an ellipsis
 
@@ -101,17 +131,19 @@ direction comes from `style.direction`; see [Bidirectional text](/guides/text/bi
 
 ## Know what each overflow value does
 
-| `overflow` | Lines past the limit | A line wider than the box |
-| --- | --- | --- |
-| `'visible'` (the default) | Not drawn. | Runs past the edge of the box. |
-| `'ellipsis'` | Not drawn; the last line kept ends with an ellipsis. | Shortened to fit, with an ellipsis. |
-| `'clip'` | Not drawn. | Runs past the edge of the box. |
+| `overflow` | Lines past `maxLines` | The line that crosses the foot of a height limit | A line wider than the box |
+| --- | --- | --- | --- |
+| `'visible'` (the default) | Not drawn. | Drawn; it crosses the foot. | Runs past the edge of the box. |
+| `'clip'` | Not drawn. | Not drawn. | Runs past the edge of the box. |
+| `'ellipsis'` | Not drawn; the last line kept ends with an ellipsis. | Not drawn; the last line that fits ends with an ellipsis. | Shortened to fit, with an ellipsis. |
+
+With [columns](/guides/layout/columns) or a [flow](/guides/layout/flow-through-regions), the rule applies to the
+last column or region only. In an earlier one, a line that does not fit moves to the next under every value.
 
 > [!NOTE]
-> `'clip'` marks the paragraph's lines for clipping to their region. The three.js renderer in this release does not
-> cut glyphs at the box edge, so `'clip'` draws the same lines as `'visible'`, as the demo shows. The measurements
-> differ in one case: under a height limit, `measure()` and `glyphs()` keep reporting every line under `'clip'`, and
-> only the lines kept under `'visible'`.
+> `'clip'` removes whole lines. It does not cut glyphs at the edge of the box: a tall glyph of a line that fits, or a
+> line wider than the box, is drawn in full. `measure()`, `glyphs()` and the editing methods describe the lines that
+> are laid out, which are the lines drawn, under every value.
 
 ## Detect truncation
 
@@ -135,6 +167,7 @@ Use this to show a "more" control, to put the full text in a tooltip, or to grow
 ## Check the result
 
 - `text.measure().lineCount` is at most `maxLines`.
+- Under a height limit that cuts a line, `lineCount` is one higher with `'visible'` than with `'clip'`.
 - `text.measure().overflowed` is `true` for text that was cut and `false` for text that fits.
 - The last line of a truncated text ends with `…`. An empty box in its place means the font has no U+2026.
 

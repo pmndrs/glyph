@@ -47,6 +47,8 @@ They follow typed method references. Review `any` receivers, computed keys, dest
 | `text.error`, `group.error`, and the `'failed'` status of `commitState()` | Nothing to read. The thrown message quotes the failed text; a refused text's state is `'pending'`. |
 | `DetachedGlyph.sourceIndex`, `ThreeGlyphMeasurement.sourceIndex` | Use the detached object's own indices (step 5). |
 | `Text.caretForOffset(offset)` (never released, present in pre-release builds) | `text.caret({ offset, affinity })`. |
+| `order` on the three.js `Text` properties and on the React and Vue `Text` props | Delete it. It was typed and never read. Set `renderOrder` on the `Text` or its `TextGroup`. |
+| `glyph bake --yes` | Delete the flag. The command never prompted, and it is now an unknown argument. |
 
 ## 3. Move error handling
 
@@ -183,7 +185,28 @@ default), or pass `frustumCulled: false`. Otherwise glyphs can disappear while s
 Every material context now also carries `position` (the final draw-local position) and `paragraphPosition` (the
 paragraph-local position before the anchor, +X right, +Y up). See [Custom materials](/guides/scene/custom-materials).
 
-## 8. Check behavior that changes without a code change
+## 8. Check fixed-height text
+
+`layout.overflow` decides what happens when text does not fit a fixed `height`: the last column with `columns`, or
+the last region of a `flow`. A line is judged by its line box, not its ink. It fits when it ends at or above the
+foot of the box, straddles the foot when it starts inside the box and ends past it, and is outside when it starts at
+or below the foot.
+
+| `overflow` | 0.1.0 | 0.2.0 |
+| --- | --- | --- |
+| `'visible'` (the default) | Drew the lines that fit. | Draws the lines that fit and the one line that straddles the foot. |
+| `'clip'` | Drew the lines that fit. `measure().lines` and `glyphs()` reported every line, including those past the box. | Draws the lines that fit. `measure()` and `glyphs()` report the same lines. |
+| `'ellipsis'` | Drew the lines that fit, the last ending in an ellipsis. | Unchanged. |
+
+A default paragraph with a fixed height therefore shows one more line, crossing the foot of its box, whenever its
+text does not fit. Set `overflow: 'clip'` to keep what 0.1.0 drew. No value lays out a line that is wholly outside
+the box; if you read the lines of a `'clip'` paragraph to find the text past the box, measure the text with an
+unconstrained `height` instead. `measure().overflowed` and `contentHeight` are unchanged. With an `'at-most'`
+height, the measured `height` follows the lines laid out: under `'visible'` it can grow by the straddling line, up
+to the limit, and under `'clip'` it is the height of the lines that fit. See
+[Truncate text](/guides/layout/truncate).
+
+## 9. Check behavior that changes without a code change
 
 Compare a few screens before and after. These differ with no edit on your side:
 
@@ -205,6 +228,8 @@ Compare a few screens before and after. These differ with no edit on your side:
   (`ref.current.text = …`) now requests a frame.
 - Fonts baked with outlines decode them in the font baker module, which is loaded on demand. The first outline font
   fetches that module if nothing else has.
+- `glyph bake --check` against an output that does not exist fails with `STALE_OUTPUT`, where it printed the file
+  system's error.
 
 ## What is new
 
@@ -214,6 +239,7 @@ None of these require a change. They are listed because they replace patterns th
 - `fontMetrics` on measurements and lines, and glyph outlines through `outlineAt`: see
   [Glyph outlines](/guides/inspect/glyph-outlines).
 - `root.onInvalidate` and `root.attach(scene)` on a three.js root: see [ThreeRoot](/reference/three-root).
+- `DropCapLayout`, the type of `ParagraphLayout.dropCap`, is exported from `@pmndrs/glyph`.
 - `TextGroup.batching` and the `msdfAtlas: 'msdf' | 'sdf'` config option.
 - `GlyphErrorBoundary` in `@pmndrs/glyph/react`.
 - `@pmndrs/glyph/pixi3d`: see [Use Glyph with PixiJS 3D](/guides/renderers/pixi3d).
@@ -223,7 +249,8 @@ None of these require a change. They are listed because they replace patterns th
 1. Type-check. No use of the removed names should remain.
 2. Run the application with the console open. An uncaught `'Glyph text "…" was not drawn'` error means a paragraph
    was refused; it used to be reported through `onError`.
-3. Compare screens that use groups, anchors, custom materials and right-to-left text against 0.1.0.
+3. Compare screens that use groups, anchors, custom materials, fixed-height paragraphs and right-to-left text
+   against 0.1.0.
 4. If you use `split()`, test a string that contains spaces and confirm your per-glyph transforms still line up.
 
 ## Integrators
@@ -243,6 +270,8 @@ These changes affect only code written against `@pmndrs/glyph/core`, `@pmndrs/gl
 - `GlyphPlacements.caretAt`, `caretForOffset` and `selectionRects` are removed. Use `GlyphTextController.editing`.
 - `GlyphRootShapeHooks` gained `prepared()`, `layout()`, `unchanged()` and `invalidated()`. An integration that
   resolved anchors or read measurements inside a setter does it in `prepared()` now.
+- No overflow value draws outside its box, so none marks a clip boundary: `clip` on an instance span and on a draw
+  is always `undefined`, and a multi-column paragraph under `'clip'` is no longer split into one draw per column.
 - `controller.update()` no longer enters the engine and no longer throws engine status errors. During layout
   callbacks it throws `GlyphLayoutPhaseError` for a change to a layout input.
 

@@ -95,12 +95,14 @@ Each axis takes one of three modes. `size` is in paragraph-local units, the unit
 | `height.mode` | Lines kept | Resolved height (`measure().height`) |
 | --- | --- | --- |
 | `'unconstrained'` | All. | The height of all lines plus `spaceBefore` and `spaceAfter` (`contentHeight`). |
-| `'at-most'` | The lines that fit in `size`. | The height of the lines kept, at most `size`. |
-| `'exact'` | The lines that fit in `size`. | `size` |
+| `'at-most'` | The lines that fit in `size`. Under `overflow: 'visible'`, also the one line that straddles the foot. | The height of the lines kept, at most `size`. |
+| `'exact'` | The lines that fit in `size`. Under `overflow: 'visible'`, also the one line that straddles the foot. | `size` |
 
-When content does not fit, `measure().overflowed` is `true`. `contentWidth` and `contentHeight` report the extents
-of the content before the box clamps them. What becomes of the lines that do not fit is
-[`ParagraphLayout.overflow`](/reference/paragraph-layout#overflow).
+A line fits when its line box ends at or above the foot of the box, and straddles the foot when it starts above it
+and ends below it. When content does not fit, `measure().overflowed` is `true`. `contentWidth` and `contentHeight`
+report the extents of the content before the box clamps them. Whether the straddling line is kept is
+[`ParagraphLayout.overflow`](/reference/paragraph-layout#overflow); a line that starts at or below the foot is never
+laid out.
 
 Alignment (`ParagraphLayout.align`) takes place inside the resolved width.
 
