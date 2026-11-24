@@ -92,6 +92,7 @@ impl ParagraphState {
                 let styles = &self.styles.active().arena;
                 #[cfg(test)]
                 let before_window = crate::engine::work_attribution::snapshot();
+                let mut kern_table_flagged = None;
                 let shaped = shaper.with_shaped_range(
                     fallback.font_handle,
                     &self.text.pending().units,
@@ -113,6 +114,7 @@ impl ParagraphState {
                         flags: SHAPE_FLAGS,
                     },
                     |shaped| {
+                        kern_table_flagged = shaped.kern_table_flagged();
                         scratch.append(
                             source_run_index,
                             fallback.font_handle,
@@ -147,6 +149,15 @@ impl ParagraphState {
                         new_run.text_end,
                     ))
                     .then_some(ShapeAttempt::RetryWholeRun),
+                    VerifyWindows::Edit
+                        if !kern_table_flags_hold(
+                            self.shape.committed(),
+                            run_glyph_start..run_glyph_end,
+                            kern_table_flagged,
+                        ) =>
+                    {
+                        Some(ShapeAttempt::RetryWholeRun)
+                    }
                     VerifyWindows::Edit => {
                         let fresh = &self.boundary_shape_scratch;
                         let ends = edit_window_ends_hold(
@@ -323,10 +334,10 @@ pub(super) fn build_sparse_shape_windows(
             let group_end = glyph;
             let cluster = shape.clusters[glyph - 1];
             let mut group_start = glyph - 1;
-            let mut safe = shape.glyph_flags[group_start] & GLYPH_FLAG_UNSAFE_TO_CONCAT == 0;
+            let mut safe = unflagged(shape, group_start);
             while group_start > glyph_start && shape.clusters[group_start - 1] == cluster {
                 group_start -= 1;
-                safe &= shape.glyph_flags[group_start] & GLYPH_FLAG_UNSAFE_TO_CONCAT == 0;
+                safe &= unflagged(shape, group_start);
             }
             if cluster < source_run.text_start
                 || cluster >= source_run.text_end
@@ -347,9 +358,9 @@ pub(super) fn build_sparse_shape_windows(
             let group_start = glyph;
             let cluster = shape.clusters[glyph];
             let mut group_end = glyph + 1;
-            let mut safe = shape.glyph_flags[glyph] & GLYPH_FLAG_UNSAFE_TO_CONCAT == 0;
+            let mut safe = unflagged(shape, glyph);
             while group_end < glyph_end && shape.clusters[group_end] == cluster {
-                safe &= shape.glyph_flags[group_end] & GLYPH_FLAG_UNSAFE_TO_CONCAT == 0;
+                safe &= unflagged(shape, group_end);
                 group_end += 1;
             }
             if cluster < source_run.text_start
@@ -555,10 +566,10 @@ pub(super) fn sparse_shape_boundaries_are_safe(
 
 pub(super) fn concat_boundary_is_safe(shape: &ShapeArena, boundary: u32) -> bool {
     let mut found = false;
-    for (cluster, flags) in shape.clusters.iter().zip(&shape.glyph_flags) {
+    for (glyph, cluster) in shape.clusters.iter().enumerate() {
         if *cluster == boundary {
             found = true;
-            if flags & GLYPH_FLAG_UNSAFE_TO_CONCAT != 0 {
+            if !unflagged(shape, glyph) {
                 return false;
             }
         }
@@ -659,11 +670,9 @@ impl<'a> RunClusters<'a> {
             || position == self.len
             || (position..self.after(position)).all(|position| {
                 let glyph = self.glyph(position);
-                if of_more_than_pairs {
-                    !self.shape.beyond_pairs[glyph]
-                } else {
-                    self.shape.glyph_flags[glyph] & GLYPH_FLAG_UNSAFE_TO_CONCAT == 0
-                }
+                !self.shape.beyond_pairs[glyph]
+                    && (of_more_than_pairs
+                        || self.shape.glyph_flags[glyph] & GLYPH_FLAG_UNSAFE_TO_CONCAT == 0)
             })
     }
 
@@ -868,4 +877,34 @@ pub(super) fn edit_window_ends_hold(
         window.old_start == old_run.text_start || holds(window.old_start, 0, window.start_alone),
         window.old_end == old_run.text_end || holds(window.old_end, delta, window.end_alone),
     )
+}
+
+/// Whether a window of a run that kerns through a legacy `kern` table keeps the flags a cold
+/// shape has. HarfRust flags every glyph of a buffer unsafe to concatenate when a subtable of
+/// that table can match one of its glyphs, so the flag of a retained glyph depends on glyphs
+/// anywhere in the run. `probe` is what the fresh probe reported (`None` without such a table).
+///
+/// A flagged probe means the new run is flagged whole, so every retained glyph must carry the
+/// flag already. An unflagged probe means no glyph of the probe can match; the new run is then
+/// unflagged only when the old one was, which a retained glyph without the flag proves.
+#[inline(never)]
+pub(super) fn kern_table_flags_hold(
+    retained: &ShapeArena,
+    run_glyphs: core::ops::Range<usize>,
+    probe: Option<bool>,
+) -> bool {
+    let mut flagged = retained.glyph_flags[run_glyphs]
+        .iter()
+        .map(|flags| flags & GLYPH_FLAG_UNSAFE_TO_CONCAT != 0);
+    match probe {
+        None => true,
+        Some(true) => flagged.all(|flagged| flagged),
+        Some(false) => flagged.any(|flagged| !flagged),
+    }
+}
+
+/// Whether a glyph is neither unsafe to concatenate nor marked beyond pairs, which a stage
+/// HarfRust leaves unflagged (a `kern` state machine) sets alone.
+fn unflagged(shape: &ShapeArena, glyph: usize) -> bool {
+    shape.glyph_flags[glyph] & GLYPH_FLAG_UNSAFE_TO_CONCAT == 0 && !shape.beyond_pairs[glyph]
 }

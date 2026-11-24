@@ -208,19 +208,32 @@ pair: a `PairPos` match or miss with an empty second value record whose second g
 follows the first. Such a pair reads nothing but its two glyphs and writes nothing but their
 positions and flags. A second value record makes the lookup step over the second glyph, so the
 pairs it visits depend on every pair before it, and a skipped glyph between the two is read as
-well; both keep the flag. The legacy `kern` table keeps it too: it flags the whole buffer when any
-pair of it can match, which no piece of the text can know.
+well; both keep the flag.
+
+The legacy `kern` table has simple pairs too. A pair of a format 0, 2 or 3 subtable that is not
+cross-stream and whose second glyph directly follows the first changes only its two glyphs and
+depends only on them, so it is not marked; a pair with a skipped glyph between, a cross-stream
+subtable (it chains every glyph of the buffer) and a format 1 state machine (which upstream does not
+flag unsafe to concatenate at all) mark their ranges, without adding `UNSAFE_TO_CONCAT` where
+upstream does not set it. Upstream's own flag for this table is not per pair: it flags the whole
+buffer when a subtable's first-glyph set holds any glyph of the buffer. That stays as it is, and
+`GlyphBuffer::kern_table_flagged()` reports it: `None` when the plan does not kern through the
+table, otherwise whether the buffer was flagged whole. A buffer that holds another buffer's glyphs
+is flagged when the other is, which is what lets a caller that shaped a piece of the text know the
+flag of the whole.
 
 The flag is clear on a cluster exactly when nothing but simple pairs reaches across the boundary
 before it. It shares its bit (`0x4`) with `SAFE_TO_INSERT_TATWEEL` and is not produced when
 `PRODUCE_SAFE_TO_INSERT_TATWEEL` is set. Without the buffer flag nothing changes: the mask bit is
 never set and every other flag is as upstream sets it.
 
-| File                     | Change                                                                                                                                                                                                                             |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/lib.rs`             | `BufferFlags::PRODUCE_UNSAFE_TO_CONCAT_BEYOND_PAIRS`; `BufferFlags::DEFINED` is `0x1FF`.                                                                                                                                           |
-| `src/hb/buffer.rs`       | `GlyphFlags::UNSAFE_TO_CONCAT_BEYOND_PAIRS`; `unsafe_to_break`, `unsafe_to_concat` and their `_from_outbuffer` forms add it to the range's interior; `unsafe_to_break_pair` and `unsafe_to_concat_pair` are the forms that do not. |
-| `src/hb/ot/gpos/pair.rs` | `PairPosFormat1` and `PairPosFormat2` call the `_pair` forms for a simple pair (`simple_pair`), and for a first glyph with nothing after it yet.                                                                                   |
+| File                     | Change                                                                                                                                                                                                                                    |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib.rs`             | `BufferFlags::PRODUCE_UNSAFE_TO_CONCAT_BEYOND_PAIRS`; `BufferFlags::DEFINED` is `0x1FF`.                                                                                                                                                  |
+| `src/hb/buffer.rs`       | `GlyphFlags::UNSAFE_TO_CONCAT_BEYOND_PAIRS`; `unsafe_to_break`, `unsafe_to_concat` and their `_from_outbuffer` forms add it to the range's interior; `unsafe_to_break_pair` and `unsafe_to_concat_pair` are the forms that do not.        |
+| `src/hb/ot/gpos/pair.rs` | `PairPosFormat1` and `PairPosFormat2` call the `_pair` forms for a simple pair (`simple_pair`), and for a first glyph with nothing after it yet.                                                                                          |
+| `src/hb/kerning.rs`      | `machine_kern` flags the whole buffer through `unsafe_to_concat_pair` and marks only pairs that are not simple; the cross-stream chain and `apply_state_machine_kerning` call `unsafe_beyond_pairs`; the two scratch flags below are set. |
+| `src/hb/buffer.rs`       | `unsafe_beyond_pairs`, `HB_BUFFER_SCRATCH_FLAG_KERN_TABLE`, `HB_BUFFER_SCRATCH_FLAG_KERN_TABLE_FLAGGED` and `GlyphBuffer::kern_table_flagged`.                                                                                            |
 
 ## Checks
 

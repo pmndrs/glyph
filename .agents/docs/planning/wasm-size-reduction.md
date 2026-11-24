@@ -1065,6 +1065,66 @@ merge: 605 reference cases equal and 56,400 differential requests equal to cold 
 nothing re-frozen. The speed and size rows above were measured before that merge; the merged shaper is 1,329,880 raw
 and 526,742 gzip -9.
 
+### 2026-11-24 edit windows for legacy `kern` tables
+
+Branch `experiments/sil-kern` on `sil-green-69`, the follow-up Justin approved on the last row of the options table
+above: fonts that kern through a legacy `kern` table reshaped the whole run on every edit, because HarfRust flags
+their whole buffer unsafe to concatenate.
+
+**Published flags did not change and no reference was re-frozen.** The approved route was per-pair flags with a
+re-freeze of `glyph.flags`. It was not needed: the per-pair information lives in the mark the previous pass added
+(`beyond_pairs`, beside the flags), and the one thing a window could get wrong, the whole-buffer flag itself, is
+checked instead of changed. Cold shapes of all 61 survey fonts are byte-identical to `sil-green-69`'s (ids, clusters,
+advances, offsets and both published flag bits, with and without the fork's buffer flag), and the oracle references
+are equal as they stand.
+
+What changed:
+
+- Fork (`vendor/harfrust/GLYPH-FORK.md`). In `machine_kern` an adjacent pair of a format 0, 2 or 3 subtable that is not
+  cross-stream is a simple pair and is no longer marked beyond pairs; a pair with a skipped glyph between, a
+  cross-stream subtable and a format 1 state machine mark their ranges. `GlyphBuffer::kern_table_flagged()` says
+  whether the plan kerns through the table and whether this buffer was flagged whole.
+- Engine. An edit's window in such a run is taken only when the whole-buffer flag of the new run is known to be the
+  retained one (`kern_table_flags_hold`): a flagged probe means the new run is flagged whole, so every retained glyph
+  must already carry the flag; an unflagged probe means no glyph of the probe starts a pair, so the new run is
+  unflagged only if the old one was, which one retained glyph without the flag proves. Anything else reshapes the run
+  whole. Boundaries no glyph flags now also need the beyond-pairs mark clear, in the multi-edit path too, because a
+  state machine sets the mark without the flag.
+
+Why it equals a cold shape: the argument of the previous section, with a `kern` pair in place of a `PairPos` pair.
+The pair of X0's last glyph and X1's first reads only those two glyphs and writes only their positions (half the
+kerning on each, and the second glyph's offset) and their unsafe-to-break flag, and it is the same pair in the old
+text, the new text and the probe. The whole-buffer flag is the one non-local output, and the check above settles it.
+
+Survey replay (`glyph-scratch/kern/survey`, 79,837 insertions and deletions over 61 fonts): every splice equals a
+cold shape. Mean share of an 822-unit run one edit shapes, before → after: Times New Roman 100% → 2.0%, Verdana
+1.3%, Trebuchet MS 2.4%, Helvetica 2.2%, Times 2.2%, Open Sans (the surveyed copy) 1.4%, Cherry Cream Soda 5.0%,
+Helvetica Neue 27.9% (an unflagged probe in a flagged run cannot decide and falls back in 27% of edits). Geeza Pro
+goes the other way, 28% → 100%: its `kern` table is a state machine, which upstream leaves unflagged and the fork
+now marks; windows there were never proven. Classes are now 54 windowed, 5 partly, 2 whole-run of 61; the table is
+in the [font survey](../log/2026-11-24-font-window-survey.md).
+
+Speed, package harness as above, candidate over `sil-green-69`, one run of 600 / 2,000 / 8,000 units. The fonts are
+baked whole, because `--unicodes` drops the `kern` table from the shaping font (so a subsetted bake of these fonts
+has no kerning at all; that is the baker's, not changed here). macOS Helvetica cannot be baked (`morx`).
+
+| Font              | Type at the end    | Insert in the middle | Same-length edit   |
+| ----------------- | ------------------ | -------------------- | ------------------ |
+| Times New Roman   | 0.83 / 0.72 / 0.71 | 0.84 / 0.76 / 0.73   | 0.73 / 0.69 / 0.64 |
+| Verdana           | 0.85 / 0.73 / 0.71 | 0.86 / 0.75 / 0.73   | 0.76 / 0.65 / 0.54 |
+| Trebuchet MS      | 0.87 / 0.76 / 0.76 | 0.97 / 0.78 / 0.78   | 0.95 / 0.73 / 0.69 |
+| Cherry Cream Soda | 0.86 / 0.77 / 0.73 | 0.91 / 0.77 / 0.76   | 0.74 / 0.66 / 0.55 |
+
+Whole-text replacement in these fonts is 1.00 (0.998 to 1.002). All 34 rows of Inter are 0.986 to 1.007 and of
+Fredoka 0.981 to 1.018, so unchanged.
+
+Shaper wasm: 1,329,880 → 1,330,280 raw (+400), 526,740 → 526,846 gzip -9 (+106), 422,546 → 422,735 Brotli (+189).
+
+Gates on the tip, with the integration branch at `sil-green-69`: `cargo fmt --check`, clippy with `-D warnings`,
+`cargo test --features oracle`, the fork's parity tests, native and wasm oracle with the adversarial fonts (605 cases
+equal, 56,400 differential requests equal to cold, none rejected, none listed), `pnpm --filter @pmndrs/glyph test`,
+`pnpm check`. Kimun on `packages/glyph/rust` is C+ 76.4.
+
 ### Not now: estimates
 
 - **Data-driven syllabic interpreter (research step 7).** The Indic, Khmer, Myanmar and USE shapers plus vowel constraints
