@@ -367,6 +367,25 @@ test('direct bake writes and checks a glyph-name lookup for its selected Unicode
   assert.equal(await readFile(glyphMap, 'utf8'), '{}\n');
 });
 
+test('a Unicode subset of a CFF font keeps its outlines', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-cff-subset-cli-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const input = fileURLToPath(
+    new URL('../../../../benches/fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf', import.meta.url),
+  );
+  const output = join(root, 'dancing.font.glb');
+  const bake = captureIo();
+  assert.equal(
+    await runCli(
+      ['bake', '--input', input, '--output', output, '--unicodes', 'U+0020-007E', '--bitmap', '16'],
+      bake.io,
+    ),
+    0,
+    bake.stderr(),
+  );
+  assert.ok((await readFile(output)).byteLength > 0);
+});
+
 test('the CLI check reports a missing output or glyph map as stale without baking', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-check-missing-cli-'));
   t.after(() => rm(root, { recursive: true, force: true }));

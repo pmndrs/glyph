@@ -18,7 +18,7 @@ generated:
 # Issue 02: a subset bake drops discretionary OpenType features
 
 - **Severity:** ship-blocker (every documented app bake uses `--unicodes`; `fontFeatures` silently does nothing on it)
-- **Status:** open
+- **Status:** fix ready and tested, not committed — held for Justin's decision on shipped asset size (below)
 
 ## What happens
 
@@ -61,6 +61,33 @@ caller of `fontFeatures` needs.
 - The committed `--unicodes` app assets (`apps/r3f-hello-world/assets/*.font.glb`,
   `apps/typegpu-hello-world/assets/inter-latin.font.glb`) are rebaked with their own `bake:*` scripts, explained by
   this change; their `bake:check` scripts prove the rebake is deterministic.
+
+## Measured cost, and why it is held
+
+The fix (`IntSet::<Tag>::empty()` inverted in place of `DEFAULT_LAYOUT_FEATURES`) was implemented and tested in this
+lane: the subset's GSUB feature set then equals `hb-subset --unicodes=20-7e --layout-features='*'` (HarfBuzz 14.2.0)
+exactly for Source Serif 4 and Inter, and the glyph counts match (330 and 484). Every glyph in the prepared font gets a
+raster, so the cost lands in the shipped asset:
+
+| ASCII subset (`U+0020-007E`)                                   | default features (today) | discretionary numerals/case/small caps | every feature      |
+| -------------------------------------------------------------- | ------------------------ | -------------------------------------- | ------------------ |
+| Inter glyphs                                                   | 178                      | 313                                    | 484                |
+| Source Serif 4 glyphs                                          | 167                      | 330                                    | 330                |
+| `apps/*/assets/inter-latin.font.glb` (bitmap 32 + MSDF + Slug) | 2,355,620 B              | not baked                              | 8,743,692 B (3.7×) |
+
+The middle column is hb-subset with `--layout-features+=smcp,c2sc,onum,lnum,pnum,tnum,zero,case,sups,subs,ordn,sinf,
+dnom,numr`. A 3.7× larger hello-world asset is a product decision, so the change and the rebake of the three committed
+`--unicodes` assets are not committed. The decision for Justin:
+
+1. **Every feature** (correct for any `fontFeatures` tag; largest).
+2. **Default plus the discretionary numeric/case/small-caps list** (covers the findings' `smcp`, `onum`, `tnum`,
+   `zero`; still drops `ssXX`/`cvXX`/`salt`, which would then need documenting).
+3. **Keep today's default and document** that a subset bake keeps only default-on features, and that discretionary
+   features need a bake without `--unicodes`.
+
+Recommendation: option 1, because a silent no-op `fontFeatures` is the worse failure and apps that want small assets
+can narrow `--unicodes`; adding a CLI option to choose features would be a new public surface. The Rust test for the
+chosen option is ready (reference feature sets and glyph counts above).
 
 ## Risk
 

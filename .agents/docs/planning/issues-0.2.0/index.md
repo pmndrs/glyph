@@ -8,7 +8,7 @@ against the `experiments/segment-indexed-layout` package and recorded with its r
 | ----------------------------------------------- | ------------------------------------------------------------------------- | ------------ | -------------------------- |
 | [01](01-overflow-clip-pixels.md)                | `overflow: 'clip'` does not clip pixels in Three                          | should-fix   | planned (engine)           |
 | [02](02-subset-drops-discretionary-features.md) | A subset bake drops discretionary OpenType features                       | ship-blocker | open                       |
-| [03](03-cff-unicode-subset.md)                  | `glyph bake --unicodes` loses the outlines of every CFF font              | ship-blocker | open                       |
+| [03](03-cff-unicode-subset.md)                  | `glyph bake --unicodes` loses the outlines of every CFF font              | ship-blocker | fixed                      |
 | [04](04-pixi3d-input-errors.md)                 | `Pixi3DText` throws `TypeError`/`RangeError` instead of `GlyphInputError` | should-fix   | fixed                      |
 | [05](05-react-disposed-font-resource.md)        | React can hand a disposed font resource to a mounting component           | should-fix   | not reproduced; planned    |
 | [06](06-three-order-unread.md)                  | `order` on Three text properties is typed but never read                  | should-fix   | fixed                      |

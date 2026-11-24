@@ -15,7 +15,7 @@ generated:
 # Issue 03: `glyph bake --unicodes` loses the outlines of every CFF font
 
 - **Severity:** ship-blocker (CFF sources are documented as supported; CJK fonts, the main reason to subset, are CFF)
-- **Status:** open
+- **Status:** fixed — CFF/CFF2 sources subset with retained glyph IDs and keep their source outline table; Rust and CLI tests cover name-keyed and CID-keyed fonts
 
 ## What happens
 
@@ -55,8 +55,9 @@ outline table.
 
 ## Test that will prove it
 
-- Rust (`source_font.rs` tests): subset NotoSansCJKjp (CID-keyed) and DancingScript (name-keyed) and assert the prepared
-  font still has an outline format and that a selected code point maps to a glyph with a non-empty outline.
+- Rust (`source_font.rs` tests): subset NotoSansCJKjp (CID-keyed; `A`, `あ`, `日`) and DancingScript (name-keyed; `A`,
+  `g`) and assert the prepared font is smaller, still has an outline format, and draws each selected character with
+  exactly the outline commands of the source glyph.
 - Integration (`tests/integration/node-bake.test.mjs`): `glyph bake --unicodes … --bitmap 16` on the DancingScript OTF
   succeeds.
 
@@ -64,4 +65,4 @@ outline table.
 
 - Behaviour: CFF subset bakes now succeed; glyph IDs in CFF subsets equal source IDs (TrueType subsets unchanged).
 - API: none. Performance: one extra table copy at bake time. Size: CFF subset sources are larger than a true CFF
-  subset would be; the baker Wasm grows by the `FontBuilder` path only if skera had not already linked it.
+  subset would be; `font-baker.wasm` grows 1,160,418 → 1,162,251 bytes (gzip −9: 425,318 → 425,498).
