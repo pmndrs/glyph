@@ -1,0 +1,310 @@
+---
+title: FontFace
+description: Reference for FontFace declarations, their format selections, the loaded Font value, FontMetrics, FontFaceSource, FontFaceConfig and the types for transferring a font between realms.
+nav: 701
+sourcecode: packages/glyph/src/font-face.ts
+---
+
+A `FontFace` is a font declaration: a source plus the raster formats declared for it. It loads on request, hands
+loaded fonts to text, and can be sent to another realm. This page documents `FontFace`, the selections that are its
+members, the `Font` value text is bound to, and the related types. All are exported from `@pmndrs/glyph`; all but
+`GlyphFontError` are types.
+
+A `FontFace` is created only by [`glyph.fontFace()`](/reference/glyph). It has no constructor.
+
+## FontFaceSource
+
+```ts
+import type { FontFaceSource, SerializedFontFace } from '@pmndrs/glyph';
+
+type Source = string | URL | Blob | SerializedFontFace;
+const check: FontFaceSource = '/fonts/inter.font.glb' satisfies Source;
+```
+
+| Form | Interpreted as |
+| --- | --- |
+| `string`, `URL` whose path ends in `.glb` | A baked font. Relative URLs resolve against the page location. |
+| Other `string`, `URL` | A source font (TTF or OTF). The sibling baked file is requested first: the extension `.ttf`, `.otf`, `.woff` or `.woff2` is replaced by `.font.glb`, or `.font.glb` is appended when there is no such extension. If that request returns 404 or 410, the source is fetched and baked at runtime. |
+| `Blob` (including `File`) | A source font when `name` ends in `.ttf` or `.otf`, or `type` is `font/ttf`, `font/otf`, `application/x-font-ttf` or `application/x-font-otf` (case-insensitive). Otherwise the bytes of a baked font. The bytes are read once and copied. |
+| `SerializedFontFace` | A face produced by `clone()`, usually in another realm. Its buffers are consumed by the call. |
+
+See [Bake fonts at runtime](/guides/fonts/runtime-baking) for the source-font path.
+
+## FontFaceConfig
+
+```ts
+import type { FontFaceConfig } from '@pmndrs/glyph';
+import { bitmap, msdf } from '@pmndrs/glyph';
+
+const config: FontFaceConfig = { family: 'Inter', format: [msdf, bitmap({ strikes: [16, 32] })] };
+```
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `family` | `string` | Generated: `Font1`, `Font2`, ... | A name unique among live faces. Trimmed; must contain a non-space character. Text can select the face by this name. |
+| `format` | `FontFaceFormat` or a non-empty readonly array of them | none | The formats the face declares. |
+
+No other key is accepted.
+
+### FontFaceFormat
+
+One entry of `format`:
+
+| Entry | Example | Meaning |
+| --- | --- | --- |
+| A format | `msdf`, `slug` | That format with default options. Not allowed for `bitmap`, whose options are required. |
+| A format request | `bitmap({ strikes: [16, 32] })`, `msdf({ emSize: 32, pixelRange: 6 })` | That format with these options. The options must equal the options the file was baked with. |
+| A format key | `'msdf'`, `'slug'` | The built-in format with that key and default options. The member is typed without a specific raster format. Prefer the format object. |
+
+Each format may be declared once per face. The declared member's name is the format's `kind`: `bitmap`, `msdf`,
+`slug`.
+
+## FontFace
+
+```ts
+import type { FontFace } from '@pmndrs/glyph';
+import type { msdf, slug } from '@pmndrs/glyph';
+
+declare const Face: FontFace<typeof msdf | typeof slug>;
+const title = Face.slug;
+```
+
+`FontFace<Formats>` is generic over the union of declared formats. A face is frozen.
+
+### Properties
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `family` | `string` | The face's family name. |
+| `format` | declared format or `undefined` | The default format: the first declared one, or `undefined` when none was declared. |
+| `face` | `FontFace` | The face itself. |
+| `default` | `FontFace` | The face itself. A face used as a font selects its default format. |
+| `disposed` | `boolean` | `true` after `dispose()`. |
+| `bitmap`, `msdf`, `slug`, ... | `FontFaceSelection` | One member per declared format, named by the format's kind. Present only for declared formats. |
+
+### FontFace.load()
+
+```ts
+const loaded = await Inter.load(); // resolves with Inter
+```
+
+Loads every declared format and every other raster the baked file advertises, then resolves with the face.
+
+- Calls share one promise until it settles. After success, later calls return the same resolved promise.
+- After a rejection the next call starts again.
+- Rejects with `GlyphFontError` (see [Errors](#glyphfonterror)). `FONT_FACE_FORMAT_REQUIRED` means no format was
+  declared and the file advertises none, which is always the case for a source font.
+- Rejects with a `DOMException` named `AbortError` if the face is disposed while loading.
+
+### FontFace.isLoaded()
+
+```ts
+const ready: boolean = Inter.isLoaded();
+```
+
+`true` once `load()` on the face has resolved. Synchronous; starts nothing.
+
+### FontFace.formats()
+
+```ts
+const kinds: readonly string[] = await Inter.formats(); // for example ['bitmap', 'msdf', 'slug']
+```
+
+Resolves with the format keys the baked file advertises, in the file's order. It fetches the main file if needed but
+loads no raster. Rejects as `load()` does when the file cannot be opened.
+
+### FontFace.clone()
+
+```ts
+declare const worker: Worker;
+
+const [serialized, transfer] = await Inter.clone();
+worker.postMessage(serialized, transfer);
+```
+
+Loads the face if needed, then copies it into a `FontFaceTransfer`: a `SerializedFontFace` and the list of its
+`ArrayBuffer`s to transfer. The copy is independent; the face stays usable. See
+[Transfer types](#transfer-types).
+
+### FontFace.dispose()
+
+```ts
+Inter.dispose();
+```
+
+Aborts loads in progress, releases every font the face loaded, and frees the family name. Idempotent. After it,
+`load()`, `formats()` and `isLoaded()` throw `TypeError`, and `clone()` rejects with it. Text created earlier keeps its own font and
+continues to draw. `dispose()` exists on the declaration only, not on its format members.
+
+## FontFaceSelection
+
+A member of a face: one declared format.
+
+```ts
+import type { FontFaceSelection } from '@pmndrs/glyph';
+import type { slug } from '@pmndrs/glyph';
+
+const selection: FontFaceSelection<typeof slug> = Inter.slug;
+```
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `family` | `string` | The owning face's family. |
+| `format` | the declared format | The format or format request this member was declared with. |
+| `face` | `FontFace` | The owning face. |
+| `load()` | `() => Promise<FontFaceSelection>` | Loads only this format. Resolves with the selection. Rejects with `GlyphFontError` `FONT_FACE_FORMAT_UNAVAILABLE` when the file does not carry the format with these options. |
+| `isLoaded()` | `() => boolean` | Whether this format is loaded, by this member or by the face's `load()`. |
+| `clone()` | `() => Promise<FontFaceTransfer>` | Loads this format if needed and serializes the face with this raster only. |
+
+A selection is frozen. Pass it, or the face, as `font` to `createText` or to a React or Vue `Text`.
+
+### Related types
+
+| Type | Description |
+| --- | --- |
+| `FontFaceFormatDeclaration` | What `FontFaceConfig.format` accepts: one `FontFaceFormat` or a non-empty readonly tuple. |
+| `FontFaceDeclaredFormat<Declaration>` | The union of formats in a declaration. |
+| `FontFaceRasterOf<Selection>` | The raster format type a selection carries; the general `RasterFormatMetadata` for string and undeclared selections. |
+
+## Font
+
+A `Font<Format>` is one loaded font in one raster format. It is what a `Text` is bound to and what
+[`createFontStack`](/reference/font-stack) takes. The React hooks return it; in three.js, `text.font` holds it after
+`createText({ font: Face.msdf })`.
+
+```ts
+import type { Font, FontMetrics } from '@pmndrs/glyph';
+import type { msdf } from '@pmndrs/glyph';
+
+declare const font: Font<typeof msdf>;
+const metrics: FontMetrics = font.metrics;
+```
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `metrics` | `FontMetrics` | The font's vertical metrics, in font units. |
+| `glyphCount` | `number` | Number of glyphs in the baked font. |
+| `raster` | `Format` | The raster format: the `bitmap`, `msdf` or `slug` object. `font.raster.kind` is its key. |
+| `disposed` | `boolean` | `true` after `dispose()`. |
+| `dispose()` | `() => void` | Releases this lease. The underlying data is freed when no text, face or other lease uses it. |
+
+A `Font` is immutable and cannot be constructed by application code: functions that take one throw `TypeError` for
+any object the package did not create, and for a disposed font.
+
+### FontMetrics
+
+All values are in font units. Divide by `unitsPerEm` and multiply by a font size to get a length in text units.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `unitsPerEm` | `number` | Font units per em (commonly 1000 or 2048). |
+| `ascender` | `number` | Position of the top of the font's line box relative to the baseline, as the font stores it: normally a positive number. |
+| `descender` | `number` | Position of the bottom of the font's line box relative to the baseline, as the font stores it: normally a negative number. |
+| `lineGap` | `number` | Extra spacing the font recommends between lines. |
+| `underlinePosition` | `number` | Offset of the underline from the baseline. |
+| `underlineThickness` | `number` | Thickness of the underline. |
+| `strikeoutPosition` | `number` | Offset of the strikethrough from the baseline. |
+| `strikeoutSize` | `number` | Thickness of the strikethrough. |
+
+```ts
+const underlineThickness = (inter.metrics.underlineThickness / inter.metrics.unitsPerEm) * 16; // at fontSize 16
+```
+
+## Transfer types
+
+`clone()` produces these. They let a worker or another window create an equivalent face without fetching.
+
+```ts
+import { glyph, type FontFaceTransfer, type SerializedFontFace } from '@pmndrs/glyph';
+
+// Receiving side:
+self.addEventListener('message', (event: MessageEvent<SerializedFontFace>) => {
+  const Face = glyph.fontFace(event.data);
+  void Face.load();
+});
+```
+
+### FontFaceTransfer
+
+`readonly [fontFace: SerializedFontFace, transfer: Transferable[]]`. Pass the two elements to `postMessage` as the
+message and the transfer list.
+
+### SerializedFontFace
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `kind` | `'glyph-font-face'` | Discriminator. |
+| `version` | `1` | Serialization version. |
+| `data` | `ArrayBuffer` | The complete main font file. |
+| `artifactFingerprint` | `string` | Content fingerprint of `data`. |
+| `rasters` | `readonly SerializedFontFaceRaster[]` | The rasters carried. |
+| `resources` | `readonly SerializedFontFaceResource[]` | External resources, deduplicated across rasters. |
+
+### SerializedFontFaceRaster
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `rasterKey` | `string` | Identity of the raster: format and options. |
+| `kind` | `string` | Format key, for example `'msdf'`. |
+| `extension` | `string` | Name of the glTF extension that stores the raster. |
+| `version` | `number` | Format version. |
+| `data` | `ArrayBuffer`, optional | The raster's own file. Absent when the raster is embedded in the main file. |
+| `artifactFingerprint` | `string`, optional | Content fingerprint of `data`. |
+| `resources` | `readonly SerializedFontFaceResourceIdentity[]` | The external resources this raster uses. |
+
+### SerializedFontFaceResource and SerializedFontFaceResourceIdentity
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `artifactFingerprint` | `string` | Content fingerprint of the resource. |
+| `byteLength` | `number` | Size in bytes. |
+| `data` | `ArrayBuffer` | The resource bytes. `SerializedFontFaceResource` only. |
+
+`glyph.fontFace()` takes ownership of the buffers of the `SerializedFontFace` it is given: they are detached in the
+object you passed, so one serialized face makes one `FontFace`. Declared without `format`, the new face's `load()`
+loads the rasters the serialized face carries.
+
+## GlyphFontError
+
+Thrown and rejected by font loading. Extends `GlyphError` with `code` `'resource-unavailable'`.
+
+```ts
+import { GlyphFontError } from '@pmndrs/glyph';
+
+declare const error: unknown;
+if (error instanceof GlyphFontError) console.warn(error.reason, error.url, error.cause);
+```
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `code` | `'resource-unavailable'` | The `GlyphError` category. |
+| `reason` | `string` | A specific cause; see below. |
+| `url` | `string \| undefined` | The URL involved, when there is one. |
+| `cause` | `unknown` | The underlying error, when there is one. |
+
+| `reason` | Meaning |
+| --- | --- |
+| `BAKED_FONT_MISSING` | A `.glb` URL returned 404 or 410. |
+| `BAKED_FONT_FETCH` | The request for a baked font failed or returned an error status. |
+| `BAKED_FONT_INVALID` | The response is not a valid baked font. |
+| `BAKED_FONT_INCOMPATIBLE` | The file's font format version is not the one this package reads. |
+| `FONT_SOURCE_FETCH` | The request for a source font failed. |
+| `RUNTIME_BAKER_UNAVAILABLE` | A source font needed baking and the runtime baker could not be imported. |
+| `FONT_FACE_FORMAT_REQUIRED` | `load()` found no declared and no advertised format. |
+| `FONT_FACE_FORMAT_UNAVAILABLE` | A declared format, with its exact options, is not in the file; or a format key names no known format. |
+| `FONT_FACE_FORMAT_AMBIGUOUS` | The file advertises more than one variant of a format and the face did not declare which. |
+| `FONT_FACE_FORMAT_NOT_LOADED` | The face was used for text before the format was loaded. |
+| `FONT_FACE_NOT_FOUND` | A family name used as `font` matches no live face. |
+| `FONT_RESOURCE_LIMIT` | The file exceeds the loader's size limits. |
+| `RASTER_FETCH` | The request for an external raster file failed. |
+| `INVALID_FONT_ASSET`, `INVALID_RASTER_ASSET` | The file parsed but its contents are inconsistent. |
+
+Other reasons exist for internal consistency checks; treat an unknown `reason` as a failed load.
+
+## See also
+
+- [glyph](/reference/glyph)
+- [Formats](/reference/formats)
+- [Font stack](/reference/font-stack)
+- [Load a font](/guides/fonts/load-a-font)
+- [Errors](/reference/errors)

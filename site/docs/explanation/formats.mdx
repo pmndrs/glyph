@@ -1,0 +1,152 @@
+---
+title: Raster formats
+description: How the Bitmap, MSDF and Slug formats differ in what they store, what their shaders compute, their memory use, their sharpness under scale and their effects, and which to choose.
+nav: 802
+sourcecode: packages/glyph/src/raster/msdf.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="fonts" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+A font file describes each glyph as an outline: a set of curves. A GPU cannot fill curves directly, so the outline
+has to become something a fragment shader can evaluate for each pixel. A raster format is one answer to that
+problem: a way to store glyph shapes in a baked font, paired with a shader that turns the stored data into coverage,
+the fraction of a pixel the glyph covers.
+
+The package has three formats. They make the trade between work done at bake time and work done per pixel in three
+different places, and the rest of this page follows from where each one puts it.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="techniques" aria-label="The same word in Bitmap, MSDF and Slug at three sizes" aspect="16 / 9" />
+
+The same word from one baked file, in each format, at three sizes.
+
+## What stays the same
+
+The format changes only how glyphs are drawn. Shaping and layout come from the font's shaping tables, which a baked
+file stores once and every raster in it shares. A paragraph measures the same and breaks its lines in the same places
+whichever format draws it. That is why one font file can carry several formats, why a format can be chosen per text,
+and why fonts of different formats can be mixed in one [font stack](/guides/fonts/fallback-stacks).
+
+Because the stored data differs, a raster is identified by its format together with the options it was baked with.
+Loading asks for that exact raster. A file baked with one set of options does not answer a request for another.
+
+## Bitmap: finished pixels
+
+A Bitmap raster stores what the screen will show. For each requested size, called a strike, the baker fills every
+glyph's outline at that size and keeps the result as an 8-bit coverage image in an atlas. Antialiasing is done once,
+at bake time, by the rasterizer.
+
+The shader has almost nothing to do: it samples the atlas and uses the value as alpha. For each text the engine picks
+the strike nearest to the size the text is drawn at, in physical pixels.
+
+When the drawn size equals a strike and the glyph lands exactly on the pixel grid, each stored texel maps to one
+screen pixel and the result is the rasterizer's own output, untouched. That is the sharpest and cheapest text the
+engine draws, and it is how pixel fonts keep their hard edges. Away from that condition the image is resampled: at
+another size, under rotation, or half a pixel off the grid, neighboring texels are blended and the text softens.
+
+Memory is one byte per texel per strike. Small strikes are small; cost grows with the square of the size and with
+the number of strikes. The format has no information beyond the finished pixels, so it cannot produce outlines or
+shadows.
+
+## MSDF: a distance field
+
+A distance field stores, for each texel, how far that point is from the glyph's edge, with a sign for inside or
+outside. Distance changes smoothly across a glyph, so it survives interpolation in a way an edge does not: sampled
+between texels, it still says where the edge is. The shader reads the distance and converts it to coverage by
+comparing it with the size of a screen pixel at that fragment, which it gets from screen-space derivatives. The edge
+is therefore redrawn, antialiased, at whatever size the glyph appears.
+
+A single distance per texel rounds off sharp corners, because near a corner the nearest edge changes abruptly. A
+multi-channel field stores three distances, arranged so that their median reconstructs corners. The package bakes a
+fourth channel too, the true single distance, which is the right quantity for effects that follow the shape at an
+offset. One baked field at 64 texels per em covers a wide range of sizes.
+
+Because the shader knows the distance to the edge, it can draw more than the fill. An outline is another threshold on
+the same distance, and a shadow is a second sample at an offset. MSDF is the format that supports
+[outline and shadow](/guides/text/outline-and-shadow).
+
+The limits come from the texel grid. A feature of the glyph thinner than a texel cannot be represented, which shows
+in very small or very intricate glyphs. The field only encodes distances within a fixed range of the edge, which
+bounds how far an effect can reach. Under large magnification, the interpolation between texels becomes visible as
+slightly wavy or rounded edges.
+
+Memory is four bytes per texel, which makes MSDF the largest of the three on disk: the atlas grows with the square of
+the em size and with the number of glyphs. The three.js renderer does not upload the whole baked atlas; it copies the
+glyphs that text actually draws into its own atlas, so GPU memory follows use rather than the size of the font.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="zoom" aria-label="One 32 pixel raster per format under continuous magnification from 1x to 4x" aspect="16 / 9" />
+
+The same 32 px word in each format, magnified by the scene transform. The Bitmap strike blurs as its pixels are
+stretched, the distance field holds its edge, and Slug recomputes its edge at every scale.
+
+## Slug: the outline itself
+
+A Slug raster stores the curves. The baker converts each outline to quadratic Bézier curves (TrueType outlines
+already are; the cubic curves of CFF outlines are each fitted with several quadratics) and sorts every glyph's curves
+into horizontal and vertical bands.
+
+The shader computes coverage from the curves directly. For a pixel inside a glyph's quad it finds the band the pixel
+falls in, walks the curves listed for that band, and works out how much of the pixel lies inside the outline. Nothing
+is sampled from an image, so there is no resolution to run out of: the edge is computed from the outline at 8 px and
+at 800 px, under any scale or perspective.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="slug-anatomy" aria-label="One Slug glyph with its bands, the two bands a pixel walks, and the computed edge drawn over it" aspect="16 / 9" />
+
+One glyph with its bands drawn over it. For each pixel the shader visits one horizontal and one vertical band and
+only the curves listed there.
+
+The cost moves from memory to the fragment shader. Stored data is small, a few numbers per curve, and does not depend
+on how large the text will be drawn. Each covered pixel runs a loop over curves, though, so the work grows with the
+screen area the text covers and with the complexity of the glyphs. A screen of body text in Slug costs more GPU time
+than the same text in MSDF; a few headings cost little in total.
+
+Slug in this package draws fills. It does not provide the outline and shadow effects.
+
+## Side by side
+
+| | Bitmap | MSDF | Slug |
+| --- | --- | --- | --- |
+| Stored per glyph | Coverage image per strike | Four-channel distance image | Quadratic curves and band tables |
+| Antialiasing happens | At bake time | In the shader, from distance | In the shader, from the curves |
+| Sharp at | The baked sizes, on the pixel grid | A wide range of sizes | Every size |
+| When magnified | Blurs | Holds, then shows rounded detail | Unchanged |
+| Fine detail at small sizes | As good as the rasterizer at that strike | Limited by texels per em | Computed from the outline |
+| Outline and shadow | No | Yes | No |
+| Fragment cost | One texture sample | A few samples and arithmetic | A loop over curves |
+| Size on disk | Small, per strike | Largest | Small |
+| Options that shape it | Strikes | Em size, pixel range | Cubic subdivisions |
+
+For scale, Inter Regular reduced to Basic Latin (95 characters) bakes to about 0.17 MB as Bitmap at strikes 16 and
+32, 2.1 MB as MSDF at default settings, and 0.14 MB as Slug. Exact options and limits are in the
+[format reference](/reference/formats).
+
+<glyph-proxy fit="cover" root="scenes" data-scene="text-ladder" aria-label="A ladder of sizes from 8 pixels upward, one format per column" aspect="16 / 9" />
+
+One column per format, from 8 px upward on a pixel-unit stage. Read each format's useful range off its column.
+
+## Choosing
+
+MSDF is the default of the renderer entries, and a reasonable one: it is sharp across the sizes most interfaces and
+3D labels use, it is cheap per pixel, and it is the only format with outline and shadow. Its weaknesses are file size,
+which subsetting addresses, and the extremes of scale.
+
+Slug fits the extremes. Text that is zoomed into, drawn very large, viewed at steep angles, or expected to hold its
+shape at any distance has no fixed resolution to fall back on, and Slug needs none. Its small files also make it the
+practical choice for fonts with very many glyphs and for fonts baked at runtime, where MSDF generation is slow. The
+price is fragment work, so it suits headings, labels and hero text better than dense pages.
+
+Bitmap fits the opposite case: text at a few known pixel sizes, parallel to the screen, on the pixel grid. Pixel
+fonts, HUDs and fixed-size interface text get exact pixels and the cheapest shader. It is the wrong tool for text
+that scales or moves in depth.
+
+The choice does not have to be made once. A file can carry several rasters and a scene can use each where it fits: a
+Bitmap HUD over MSDF body text with a Slug title, or an MSDF text font that falls back to a Slug icon font.
+
+## See also
+
+- [Format reference](/reference/formats)
+- [Load a font](/guides/fonts/load-a-font)
+- [Subset a font](/guides/fonts/subset-coverage)
+- [Draw pixel-perfect bitmap text](/guides/fonts/pixel-perfect-bitmap)
+- [How it works](/explanation/how-it-works)

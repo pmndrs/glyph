@@ -1,0 +1,176 @@
+---
+title: Bake fonts at runtime
+description: Load a TTF or OTF directly and let the browser bake it in a worker, for fonts that cannot be baked ahead of time.
+nav: 106
+sourcecode: packages/glyph/src/runtime-bake.ts
+---
+
+Fonts are normally baked at build time. Some cannot be: a font the user uploads, a font picked from a catalog at
+runtime, or a prototype where a build step is in the way. For those, give `glyph.fontFace` the source font itself.
+The same baker that runs in the `glyph` command runs in a web worker and hands the result to the loader. This guide
+shows the two ways in, what the bake costs, and when not to use it.
+
+## Choose between runtime and ahead-of-time baking
+
+| | Ahead of time ([Bake fonts](/guides/fonts/bake-fonts)) | At runtime |
+| --- | --- | --- |
+| When the bake runs | Once, in your build | In each visitor's browser, the first time the font is loaded |
+| Download | The `.font.glb`, already subset | The whole source font, the baker (JavaScript and WebAssembly) and a worker |
+| Time to first text | Fetch and decode | Fetch, then bake every glyph of the font |
+| Subsetting | `--unicodes` | Not available through `glyph.fontFace` |
+| Use for | Every font you know at build time | User-supplied fonts, quick experiments |
+
+Bake ahead of time whenever the font is known when you build.
+
+## Bake from a URL
+
+Declare the face with the URL of the source font and the format to bake. `format` is required: a source font carries
+no rasters, so there is nothing to load without one.
+
+```ts
+import { glyph, msdf } from '@pmndrs/glyph';
+
+const Custom = glyph.fontFace('/fonts/Inter-Regular.ttf', { format: msdf });
+await Custom.load();
+
+const sample = three.createText({ font: Custom, text: 'Baked in the browser' });
+```
+
+`load()` does this:
+
+1. Requests the sibling baked file first: the same URL with the extension replaced by `.font.glb`
+   (`/fonts/Inter-Regular.font.glb`). If it exists, it is loaded and nothing is baked.
+2. If the sibling is missing (HTTP 404 or 410), fetches the source font. In development the console shows
+   `No baked font asset was found at ...; using the runtime baker.` once per URL.
+3. Imports the worker host on demand and bakes the shaping data and the declared Bitmap, MSDF and Slug rasters in the
+   worker.
+4. Registers the result exactly as it would a downloaded `.font.glb`.
+
+Because of step 1, the same declaration works in both modes. Ship the source font during development, then run
+`glyph bake` (which writes that sibling file) for production, without changing application code.
+
+## Bake a file the user picked
+
+A `File` or `Blob` is a source font when its name ends in `.ttf` or `.otf`, or its MIME type is `font/ttf`,
+`font/otf`, `application/x-font-ttf` or `application/x-font-otf`. There is no sibling to request, so the bake starts
+at once.
+
+```ts
+import { glyph, GlyphError, slug, type FontFace } from '@pmndrs/glyph';
+
+declare const input: HTMLInputElement; // <input type="file" accept=".ttf,.otf">
+
+let current: FontFace<typeof slug> | undefined;
+
+input.addEventListener('change', async () => {
+  const file = input.files?.[0];
+  if (file === undefined) return;
+
+  const next = glyph.fontFace(file, { format: slug });
+  try {
+    await next.load();
+  } catch (error) {
+    next.dispose();
+    // A load failure is a GlyphFontError; a failed bake is a GlyphError with code 'bake-failed'.
+    if (error instanceof GlyphError) console.warn(`could not use ${file.name}: ${error.code}`, error.message);
+    else throw error;
+    return;
+  }
+
+  const preview = three.createText({ font: next, text: 'The quick brown fox' });
+  scene.add(preview);
+  current?.dispose();
+  current = next;
+});
+```
+
+A `Blob` that is not recognized as a source font is treated as the bytes of a baked `.font.glb`.
+
+In React the hooks accept the same sources. Keep the `File` object stable between renders (in state), because the
+hook caches by source:
+
+```tsx
+import { Text, useSlug } from '@pmndrs/glyph/react';
+
+function Preview({ file }: { readonly file: File }) {
+  const font = useSlug(file);
+  return <Text font={font}>The quick brown fox</Text>;
+}
+```
+
+The component suspends for the whole bake. Show progress or a placeholder from the surrounding `Suspense` fallback.
+
+## What it costs
+
+- **Time.** Rasterizing is the slow part. A runtime bake through `glyph.fontFace` bakes every glyph of the font, and
+  MSDF is by far the slowest format. Measured with the same baker in Node.js on one desktop machine, Inter Regular
+  (2,937 glyphs) took 29 seconds to rasterize as MSDF at default settings and under 0.1 seconds as Slug. Expect a
+  browser worker to be no faster. Prefer Slug for runtime-baked fonts.
+- **Bytes.** The worker host, the worker, the core baker and one baker per format are fetched on demand, only when a
+  source font is actually baked. An application that loads only `.glb` files never downloads them.
+- **One at a time.** Bakes are queued through a single worker. Two fonts bake one after the other.
+- **Main thread.** Baking runs in the worker. Decoding the result and uploading it to the GPU happen on the main
+  thread, as for any font.
+
+## Caching
+
+The worker stores the finished file in the browser's Cache Storage and reuses it on later visits, keyed by the source
+bytes and the requested rasters.
+
+- The entry lives as long as the source response says it may: its `Cache-Control: max-age` (counted from the
+  response's `Date`) or its `Expires` header.
+- A source served with `no-store` or `no-cache`, or with no freshness information, is not stored. It bakes again on
+  the next page load.
+- A `File` or `Blob` has no response headers, so its bake is never stored.
+- Cache Storage needs an `http:` or `https:` origin. Where it is unavailable the bake runs again.
+
+## Limits
+
+- A baked `.font.glb` is never baked further. If a `.glb` lacks a declared format, `load()` rejects with
+  `FONT_FACE_FORMAT_UNAVAILABLE`; bake that format into the file instead.
+- The worker script must be reachable. The package loads it from its own `dist/` folder by URL, as a module worker
+  with its own imports and WebAssembly files. A bundler that copies only the worker's entry file breaks it; if
+  `load()` rejects with `RUNTIME_BAKER_UNAVAILABLE` or the worker fails to start, serve the package's `dist/` files
+  unbundled or bake ahead of time.
+- Collections (`.ttc`, `.otc`): the runtime path bakes face 0.
+- Glyph outlines (`--outlines`) are not kept by a runtime bake.
+
+## Report progress with the worker host
+
+`@pmndrs/glyph/runtime-bake` exports the worker host that the loader uses, `bakeFontInWorker`. Call it yourself when
+you need progress events or the baked bytes.
+
+```ts
+import type { BakeProgress } from '@pmndrs/glyph';
+import { bakeFontInWorker } from '@pmndrs/glyph/runtime-bake';
+
+declare const file: File;
+
+const controller = new AbortController();
+const bytes = await bakeFontInWorker({
+  source: new Uint8Array(await file.arrayBuffer()),
+  sourceUrl: `memory://${file.name}`,
+  signal: controller.signal,
+  onProgress({ stage, phase, completed, total }: BakeProgress) {
+    console.log(`${stage} ${phase} ${completed}/${total}`);
+  },
+});
+```
+
+`onProgress` is first called synchronously with `{ stage: 'font', phase: 'queued', completed: 0, total: 1 }`, then
+from the worker as the bake moves through `loading`, `baking`, `rasterizing`, `packaging`, `transferring` and
+`complete`. The promise resolves with the bytes of a `.font.glb`. A failed bake rejects with `FontBakeError`, a
+`GlyphError` whose `code` is `'bake-failed'`.
+
+> [!NOTE]
+> A direct call bakes the rasters named in the request's `rasters` list. The entries of that list carry an internal
+> raster key that the package does not export a function to compute, so a direct call made from application code
+> produces shaping data without rasters. To get a font you can draw with, load the source through `glyph.fontFace`,
+> which fills in the list. Loading through `glyph.fontFace` does not report progress.
+
+## See also
+
+- [Runtime bake reference](/reference/runtime-bake)
+- [Bake fonts](/guides/fonts/bake-fonts)
+- [Load a font](/guides/fonts/load-a-font)
+- [Handle errors](/guides/project/handle-errors)

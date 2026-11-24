@@ -1,0 +1,198 @@
+---
+title: Bake fonts
+description: Turn a TTF or OTF into a .font.glb with the glyph CLI, choose its raster formats and packaging, and bake every font a project declares.
+nav: 101
+sourcecode: packages/glyph/src/node/cli.ts
+---
+
+The runtime does not read TTF or OTF files directly. A font is baked once into a `.font.glb`: a glTF binary that holds
+the shaping tables and one or more rasters (the stored glyph shapes for a format). This guide bakes a font with the
+`glyph` command, checks the result, and sets up baking for a whole project.
+
+The command ships with the package. Run it through your package manager, for example `pnpm exec glyph` or
+`npx glyph`. It needs Node.js.
+
+## Bake one font
+
+1. Pick the code points you will draw. Baking a whole font is slow and large; see
+   [Subset a font](/guides/fonts/subset-coverage).
+2. Pick the formats. `--msdf` suits most text, `--slug` large or zoomed text, `--bitmap` fixed pixel sizes. See
+   [Raster formats](/explanation/formats).
+3. Run `glyph bake` with `--input`, `--output` and the format flags:
+
+```sh
+glyph bake --input Inter-Regular.ttf --output public/fonts/inter.font.glb \
+  --unicodes U+0020-007E --bitmap 16,32 --msdf --slug
+```
+
+The command prints the input and output paths and the time taken:
+
+```sh
+Inter-Regular.ttf -> public/fonts/inter.font.glb
+Baked 1 font in 4554.70 ms.
+```
+
+Format flags and their settings:
+
+| Flag | Bakes | Settings |
+| --- | --- | --- |
+| `--bitmap 16,32` | One alpha atlas per listed size (a strike), in pixels per em | The strike list is required |
+| `--msdf` | A multi-channel distance field | `--msdf em-size=32,pixel-range=6` (defaults 64 and 8) |
+| `--slug` | Glyph outlines as curves | `--slug cubic-subdivisions=8` (default 4; affects CFF/OTF sources only) |
+
+With no format flag, MSDF with default settings is baked.
+
+> [!IMPORTANT]
+> The settings you bake with are the settings you load with. A font baked with `--bitmap 16,32` loads with
+> `bitmap({ strikes: [16, 32] })`; one baked with `--msdf em-size=32,pixel-range=6` loads with
+> `msdf({ emSize: 32, pixelRange: 6 })`. See [Load a font](/guides/fonts/load-a-font).
+
+## Name the output
+
+`--output` is optional. Without it the file is written beside the input with a URL-safe name and a `.glb` extension:
+`My Font.ttf` becomes `my-font.glb`.
+
+Name the file `<source-name>.font.glb` when you want the loader to find it from the source URL. A `FontFace` declared
+with `/fonts/Inter-Regular.ttf` requests `/fonts/Inter-Regular.font.glb` first.
+
+## Skip work that is already done
+
+Running the same command again does not bake again. The command compares the source, the code points and the requested
+rasters with what the existing output records:
+
+```sh
+public/fonts/inter.font.glb is up to date — every requested raster is already baked from this exact source
+```
+
+Pass `--force` to bake regardless.
+
+## Choose packaging
+
+By default every raster is embedded in the one output file. One request loads the font, and every format in it is
+downloaded whether or not the page uses it.
+
+`--split` writes each raster to its own file beside the core:
+
+```sh
+glyph bake --input Inter-Regular.ttf --output public/fonts/inter.font.glb --unicodes U+0020-007E --msdf --slug --split
+```
+
+```sh
+public/fonts/inter.font.glb    # shaping tables only
+public/fonts/inter.msdf.glb    # the MSDF raster
+public/fonts/inter.slug.glb    # the Slug raster
+```
+
+The application still declares `inter.font.glb`. The loader fetches a raster file only when that format is loaded, so
+a page that draws MSDF never downloads the Slug file. Keep the files together: the core refers to its rasters by file
+name, relative to its own URL.
+
+| Packaging | Files | Choose it when |
+| --- | --- | --- |
+| Embedded (default) | One `.font.glb` | The font carries one format, or every page uses every format. |
+| External (`--split`) | Core plus one `.<format>.glb` per raster | The font carries several formats and pages use different ones. |
+
+## Verify in CI
+
+`--check` bakes into temporary storage and compares the result with the existing output byte for byte. It writes
+nothing and exits with status 1 when they differ:
+
+```sh
+glyph bake --input Inter-Regular.ttf --output public/fonts/inter.font.glb --unicodes U+0020-007E --msdf --check
+```
+
+```sh
+STALE_OUTPUT: baked font is not byte-identical to the requested output (public/fonts/inter.font.glb)
+```
+
+A bake is deterministic: the same source, flags and package version produce the same bytes.
+
+## Bake every font a project declares
+
+Run `glyph bake` with no direct font options and it scans the project instead:
+
+```sh
+glyph bake
+```
+
+Discovery reads the source files under `src/` and finds each `glyph.fontFace(...)` call whose `glyph` is imported
+from `@pmndrs/glyph`. For each call it:
+
+1. Reads the source argument. It must be a string the scanner can resolve statically, such as
+   `'/fonts/Inter-Regular.ttf'`. A source ending in `.glb` is already baked and is skipped.
+2. Resolves that path inside an asset root. The default asset root is `public/`.
+3. Reads the `format` option to decide which rasters to bake. A call with no `format` gets Bitmap at strikes 8 and
+   16, MSDF and Slug.
+4. Writes `<name>.font.glb` beside the source, with every raster embedded.
+
+```ts
+import { glyph, msdf } from '@pmndrs/glyph';
+
+// `glyph bake` finds this call, reads public/fonts/Inter-Regular.ttf,
+// and writes public/fonts/Inter-Regular.font.glb with an MSDF raster at these settings.
+export const Inter = glyph.fontFace('/fonts/Inter-Regular.ttf', {
+  format: msdf({ emSize: 32, pixelRange: 6 }),
+});
+```
+
+```sh
+/fonts/Inter-Regular.ttf -> public/fonts/Inter-Regular.font.glb
+Baked 1 font in 29009.25 ms.
+```
+
+Discovery options:
+
+| Option | Effect |
+| --- | --- |
+| `--project-root <path>` | Project to scan. Default: the current directory. |
+| `--entry <path>` | Scan this file instead of everything under `src/`. Repeatable. |
+| `--asset-root <path>` | Directory that URL paths resolve in. Repeatable. Default: `public`. |
+| `--output-root <path>` | Write outputs under this directory, mirroring each source's path inside its asset root. |
+
+A call the scanner cannot resolve (a computed URL, a missing file, options that are not literals) is reported on
+standard error with a code such as `dynamic-font-source` or `missing-font-source`, and the command exits with status 1
+after baking the rest.
+
+> [!NOTE]
+> Discovery bakes the whole font: it has no code point selection, and it bakes on every run. For a subset, or to skip
+> unchanged fonts, bake each font directly with `--input` and `--unicodes`.
+
+Direct font options and discovery options cannot be combined in one command.
+
+## Bake from a script
+
+The same operations are functions in `@pmndrs/glyph/bake`. Use them when a build script needs the report or bakes
+several fonts with different settings.
+
+```ts
+import { bakeFont } from '@pmndrs/glyph/bake';
+import { bitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
+import { msdfBaker } from '@pmndrs/glyph/bakers/msdf';
+
+const report = await bakeFont({
+  input: 'fonts/Inter-Regular.ttf',
+  output: 'public/fonts/inter.font.glb',
+  font: { fontFaceIndex: 0 },
+  unicodeRanges: [{ start: 0x20, end: 0x7e }],
+  rasters: [
+    { baker: bitmapBaker, packaging: { artifact: 'embedded' }, options: { strikes: [16, 32] } },
+    { baker: msdfBaker, packaging: { artifact: 'embedded' }, options: { emSize: 32, pixelRange: 6 } },
+  ],
+});
+
+console.log(report.execution.outputs.map(({ file, bytes }) => `${file}: ${bytes} bytes`));
+```
+
+## Check the result
+
+- The output file exists and the command exited with status 0.
+- `await face.formats()` in the application lists the formats you baked.
+- `--json` prints the full report, including each raster's size and the file's gzip and Brotli sizes.
+
+## See also
+
+- [CLI reference](/reference/cli)
+- [Bake API reference](/reference/bake)
+- [Subset a font](/guides/fonts/subset-coverage)
+- [Bake fonts at runtime](/guides/fonts/runtime-baking)
+- [Raster formats](/explanation/formats)

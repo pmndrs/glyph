@@ -1,0 +1,317 @@
+---
+title: Formats
+description: Reference for the three raster formats - bitmap, msdf and slug - with every option, default, constraint, descriptor and data type, and the generic format types.
+nav: 703
+sourcecode: packages/glyph/src/raster/msdf.ts
+---
+
+A raster format defines how glyph shapes are stored in a baked font and drawn by a shader. The package ships three:
+`bitmap`, `msdf` and `slug`, exported from `@pmndrs/glyph`. Each export is one object that is both the format's
+identity and a function that binds options to it. This page lists every option of each, and the types that describe
+formats in general. For how the formats differ and when to choose which, see
+[Raster formats](/explanation/formats).
+
+## Summary
+
+| | `bitmap` | `msdf` | `slug` |
+| --- | --- | --- | --- |
+| `kind` (the format key) | `'bitmap'` | `'msdf'` | `'slug'` |
+| `id` | `'pmndrs.bitmap'` | `'pmndrs.msdf'` | `'pmndrs.slug'` |
+| glTF extension | `PMNDRS_font_bitmap` | `PMNDRS_font_distance_field` | `PMNDRS_font_slug` |
+| `version` | `0` | `0` | `0` |
+| Options | `strikes` (required), `coverage` | `emSize`, `pixelRange`, `coverage` | `cubicSubdivisions` |
+| Usable without options | No | Yes | Yes |
+| `textEffects` | none | `'outline'`, `'shadow'` | none |
+| CLI flag | `--bitmap 16,32` | `--msdf [em-size=N,pixel-range=N]` | `--slug [cubic-subdivisions=N]` |
+
+## Using a format
+
+A format appears in three places, always with the same options:
+
+```ts
+import { bitmap, glyph, msdf, slug } from '@pmndrs/glyph';
+
+// 1. Declaring a face: the format object, or a request made by calling it with options.
+const Face = glyph.fontFace('/fonts/inter.font.glb', {
+  format: [msdf, slug({ cubicSubdivisions: 8 }), bitmap({ strikes: [16, 32] })],
+});
+
+// 2. As type parameters: the raster format a Font or Text carries.
+type Body = typeof msdf;
+
+// 3. As metadata.
+const key: 'msdf' = msdf.kind;
+const effects: readonly ('outline' | 'shadow')[] = msdf.textEffects;
+```
+
+Calling a format returns a frozen `RasterFormatRequest`: `{ raster, options }`. Calling it with no argument, where
+that is allowed, is the same as using the format object.
+
+> [!IMPORTANT]
+> Options are part of a raster's identity. The options a face declares must describe the same raster as the options
+> the file was baked with, or loading rejects with `GlyphFontError` `FONT_FACE_FORMAT_UNAVAILABLE`. Options at their
+> default value are equivalent to leaving them out.
+
+## bitmap
+
+Glyphs rasterized to 8-bit coverage at fixed pixel sizes. Exact at a baked size, resampled at any other.
+
+```ts
+import { bitmap, glyph } from '@pmndrs/glyph';
+
+const Hud = glyph.fontFace('/fonts/hud.font.glb', { format: bitmap({ strikes: [16, 32] }) });
+```
+
+### Options: BitmapFormatOptions
+
+| Option | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `strikes` | `readonly [number, ...number[]]` | required | Each a positive integer no greater than 1022 (pixels per em). No duplicates. At least one. Order is not significant: the list is sorted. |
+| `coverage` | [`RasterCoverage`](#rastercoverage) | every glyph of the font | Limits the raster to selected glyphs. |
+
+`bitmap(options)` validates when the request is used and throws `TypeError` for a missing or empty `strikes`, a
+non-integer, a value out of range, a duplicate, or an unknown option.
+
+`BitmapOptions<Strikes>` is the same shape with `strikes` typed as a literal tuple; a `strikes` whose element type is
+plain `number` (a `number[]` variable) is rejected at compile time.
+
+### Strike selection
+
+For each text, the strike used is the one whose `ppem` is nearest to `fontSize * rasterPixelRatio`. Of two equally
+near strikes the smaller is used. `rasterPixelRatio` is a text property with default 1. The glyph is drawn at
+`fontSize` whichever strike is chosen. See
+[Draw pixel-perfect bitmap text](/guides/fonts/pixel-perfect-bitmap).
+
+### Descriptor: BitmapDescriptor
+
+The canonical record stored in the file and compared at load.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `generatorVersion` | `'0.0.0'` | Version of the bitmap generator. |
+| `strikes` | `readonly number[]` | The strikes, ascending. |
+| `coverage` | `RasterCoverage`, optional | Present when coverage was given. |
+
+### Data: BitmapData
+
+What a decoded Bitmap font holds. Renderer integrations read it; applications rarely do.
+
+| Type | Property | Type | Description |
+| --- | --- | --- | --- |
+| `BitmapData` | `strikes` | `readonly BitmapStrikeData[]` | One entry per strike. |
+| | `coverage` | `Uint8Array`, optional | One bit per glyph id, when coverage was given. |
+| `BitmapStrikeData` | `ppem` | `number` | The strike's size in pixels per em. |
+| | `planeUnitsPerEm` | `number` | Units per em of the glyph rectangles in `records`. |
+| | `records` | `Uint8Array` | Fixed-size per-glyph records: bearings, size, atlas rectangle, page. |
+| | `pages` | `readonly BitmapPageData[]` | The strike's atlas pages. |
+| `BitmapPageData` | `width`, `height` | `number` | Page size in texels. |
+| | `bytes` | `Uint8Array` | `width * height` coverage bytes. |
+| | `format` | `'r8unorm'` | One 8-bit channel. |
+| | `resource` | `RasterResourceId` | Identity of the GPU resource the page belongs to. |
+
+In the three.js renderer each strike is one texture array with a layer per page. A strike whose padded atlas would
+exceed 256 MiB throws `RangeError` when the font's GPU resources are built.
+
+## msdf
+
+A multi-channel signed distance field: each texel stores distances to the glyph's edge, and the shader reconstructs
+the edge at the size drawn. The baked field has four channels (three for the multi-channel distance, one for the true
+distance).
+
+```ts
+import { glyph, msdf } from '@pmndrs/glyph';
+
+const Body = glyph.fontFace('/fonts/inter.font.glb', { format: msdf });
+const Small = glyph.fontFace('/fonts/inter-small.font.glb', { format: msdf({ emSize: 32, pixelRange: 6 }) });
+```
+
+### Options: MsdfOptions
+
+| Option | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `emSize` | `number` | `64` | Integer from 1 to 1022. Atlas texels per font em. |
+| `pixelRange` | `number` | `8` | Integer from 1 to 1020. Width, in atlas texels, of the band around each edge in which distance is encoded. |
+| `coverage` | [`RasterCoverage`](#rastercoverage) | every glyph of the font | Limits the raster to selected glyphs. |
+
+All options are optional, and so is the options object: `msdf`, `msdf()` and
+`msdf({ emSize: 64, pixelRange: 8 })` name the same raster. An invalid value or an unknown option throws `TypeError`.
+
+- Atlas memory and file size grow with `emSize` squared.
+- The field encodes distances only within `pixelRange` texels of an edge. Anything drawn from the field at a
+  distance from the edge, such as an outline, is limited to that band. A larger range needs more padding around every
+  glyph, so it also grows the atlas.
+
+### Text effects
+
+`msdf.textEffects` is `['outline', 'shadow']`: an MSDF font renders `TextStyle.outline` and `TextStyle.shadow`. See
+[Outline and shadow](/guides/text/outline-and-shadow).
+
+### Descriptor: MsdfDescriptor
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `generatorVersion` | `'0.0.0'` | Version of the distance-field generator. |
+| `emSize` | `number`, optional | Present together with `pixelRange`, and only when either differs from its default. |
+| `pixelRange` | `number`, optional | See `emSize`. |
+| `coverage` | `RasterCoverage`, optional | Present when coverage was given. |
+
+### Data: MsdfData
+
+| Type | Property | Type | Description |
+| --- | --- | --- | --- |
+| `MsdfData` | `emSize` | `number` | The baked em size. |
+| | `pixelRange` | `number` | The baked pixel range. |
+| | `planeUnitsPerEm` | `number` | Units per em of the glyph rectangles in `records`. |
+| | `records` | `Uint8Array` | Fixed-size per-glyph records: bearings, size, atlas rectangle, page. |
+| | `pages` | `readonly MsdfPageData[]` | The atlas pages. |
+| | `binding` | `MsdfBinding` | `{ width, height, layers }`: the extent the glyph records address and the page count. |
+| | `resource` | `RasterResourceId` | Identity of the atlas resource. |
+| | `coverage` | `Uint8Array`, optional | One bit per glyph id, when coverage was given. |
+| `MsdfPageData` | `width`, `height` | `number` | Page size in texels. |
+| | `bytes` | `Uint8Array` | `width * height * 4` bytes. |
+| | `format` | `'rgba8unorm'` | Four 8-bit channels. |
+| `MsdfConfiguration` | `emSize`, `pixelRange`, `planeUnitsPerEm` | `number` | The resolved generation settings of a descriptor. |
+
+### Renderer note
+
+The three.js configuration option `msdfAtlas: 'sdf'` keeps only the true-distance channel on the GPU: a quarter of
+the atlas memory, with corners rounded at large sizes. It does not change the baked file or the format declared. See
+[ThreeConfig](/reference/three-config).
+
+## slug
+
+Glyph outlines stored as quadratic Bézier curves, with a per-glyph table of bands that tells the shader which curves
+can affect a pixel. The shader computes each pixel's coverage from the curves themselves, at whatever size the glyph
+is drawn.
+
+```ts
+import { glyph, slug } from '@pmndrs/glyph';
+
+const Title = glyph.fontFace('/fonts/title.font.glb', { format: slug });
+```
+
+### Options: SlugOptions
+
+| Option | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `cubicSubdivisions` | `number` | `4` | Integer from 1 to 16. The number of quadratic curves fitted to each cubic curve of a CFF (OpenType `.otf`) outline. |
+
+The options object is optional: `slug`, `slug()` and `slug({ cubicSubdivisions: 4 })` name the same raster. A value
+out of range throws `TypeError`.
+
+- TrueType outlines are already quadratic. For them the option changes nothing about the curves, but a non-default
+  value still names a different raster, so declare what you baked.
+- A higher value follows cubic outlines more closely and increases file size and per-pixel shader work.
+
+Slug has no `coverage` option. To reduce a Slug font, subset the whole font with Unicode ranges at bake time.
+
+### Descriptor: SlugDescriptor
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `generatorVersion` | `'0.0.0'` | Version of the Slug generator. |
+| `cubicSubdivisions` | `number`, optional | Present only when it differs from the default. |
+
+### Data: SlugData
+
+| Type | Property | Type | Description |
+| --- | --- | --- | --- |
+| `SlugData` | `planeUnitsPerEm` | `number` | Units per em of the glyph rectangles in `records` (2048). |
+| | `records` | `Uint8Array` | Fixed-size per-glyph records (40 bytes): bounds, band counts, table offsets, page. |
+| | `pages` | `readonly SlugPageData[]` | The pages of curve data. |
+| `SlugPageData` | `resource` | `RasterResourceId` | Identity of the page's GPU resource group. |
+| | `curveWidth`, `curveHeight`, `curveBytes` | `number`, `number`, `Uint8Array` | The curve control points, as 16-bit float RGBA texels. |
+| | `headerCount`, `headerWidth`, `headerHeight`, `headerBytes` | `number` x 3, `Uint8Array` | The band headers: for each band of a glyph, a count and an offset into the references. |
+| | `referenceCount`, `referenceWidth`, `referenceHeight`, `referenceBytes` | `number` x 3, `Uint8Array` | Glyph-local curve references (16-bit) listed per band. |
+
+## RasterCoverage
+
+Selects the glyphs a Bitmap or MSDF raster holds. The font's shaping tables are not affected.
+
+```ts
+import type { RasterCoverage, RasterUnicodeRange } from '@pmndrs/glyph';
+
+const ascii: RasterUnicodeRange = { start: 0x20, end: 0x7e };
+const coverage: RasterCoverage = { unicodeRanges: [ascii], text: '€£¥', glyphIds: [412] };
+```
+
+| Property | Type | Constraints |
+| --- | --- | --- |
+| `unicodeRanges` | `readonly RasterUnicodeRange[]` | At most 1,024 ranges selecting at most 65,536 code points in total. Ranges must not overlap. |
+| `text` | `string` | At most 65,536 code points. No lone surrogates. |
+| `glyphIds` | `readonly number[]` | At most 65,535 ids. Each an integer from 0 to 65535. No duplicates. |
+
+At least one property must be present and non-empty; an empty array or string counts as absent. Unknown properties
+are rejected.
+
+`RasterUnicodeRange` is `{ start: number; end: number }`: inclusive Unicode scalar values with `start <= end`,
+neither inside nor spanning the surrogate range `U+D800` to `U+DFFF`. It has exactly these two properties.
+
+`unicodeRanges` and `text` select the glyph each code point maps to directly. Glyphs that only shaping produces
+(ligatures, contextual alternates) are selected by `glyphIds`.
+
+Invalid coverage throws `TypeError` (wrong shape or type) or `RangeError` (a limit, an overlap, a duplicate, a value
+out of range). See [Subset a font](/guides/fonts/subset-coverage).
+
+## Generic format types
+
+These describe any raster format, including one defined outside the package. See
+[Add a custom format](/guides/project/custom-format).
+
+| Type | Description |
+| --- | --- |
+| `RasterFormatMetadata` | The identity every format has: `id`, `kind`, `extension`, `version`, `textEffects`. The constraint used by `Font<Format>` and `Text<Format>`. |
+| `RasterFormat<Id, Kind, Options, Descriptor, Data>` | A complete format: the metadata, the call signature that binds options, and `descriptor(options)`, `decode(font, raster, signal?)`, `dispose(data)`, optional `runtimeBaker`. |
+| `RasterFormatRequest<Format>` | A format bound to options: `{ raster, options }`. |
+| `RasterFormatRequestMetadata` | The identity-only view of a request: `{ raster }`. |
+| `RasterFormatInput<Format>` | What is accepted where a format is declared: the format or a request when its options are optional, a request only when they are required. |
+| `RasterOptionsOf<Format>` | The options type of a format, for example `RasterOptionsOf<typeof msdf>` is `MsdfOptions \| undefined`. |
+| `RasterFormatDescriptorOf<Format>` | The descriptor type of a format. |
+| `RasterDataOf<Format>` | The decoded data type of a format. |
+| `RasterFormatTypesOf<Format>` | The three above as one record: `{ options, descriptor, data }`. |
+| `RasterTextEffect` | `'outline' \| 'shadow'`. |
+| `RasterFormatId`, `RasterResourceId` | Branded strings for a format's `id` and for a renderer resource's identity. |
+
+```ts
+import type { RasterDataOf, RasterOptionsOf } from '@pmndrs/glyph';
+import type { bitmap, msdf } from '@pmndrs/glyph';
+
+type BitmapOptionsType = RasterOptionsOf<typeof bitmap>; // BitmapFormatOptions
+type MsdfDataType = RasterDataOf<typeof msdf>; // MsdfData
+```
+
+### Format methods
+
+Every format object also has the methods of `RasterFormat`. They are called by the loader.
+
+| Method | Description |
+| --- | --- |
+| `descriptor(options)` | Returns the canonical descriptor for `options`. Throws `TypeError` for invalid options. |
+| `decode(font, raster, signal?)` | Decodes a raster artifact into the format's data. Returns a promise. |
+| `dispose(data)` | Releases decoded data. |
+| `runtimeBaker()` | Imports the format's baker for a runtime bake. Present on the three built-in formats. |
+
+```ts
+import { msdf } from '@pmndrs/glyph';
+
+const descriptor = msdf.descriptor({ emSize: 32, pixelRange: 6 });
+// { emSize: 32, generatorVersion: '0.0.0', pixelRange: 6 }
+```
+
+## Renderer support
+
+| Renderer entry | `bitmap` | `msdf` | `slug` | Default format |
+| --- | --- | --- | --- | --- |
+| `@pmndrs/glyph/three` | yes | yes | yes | `msdf` (`defaultFontFormat`) |
+| `@pmndrs/glyph/typegpu` | yes | yes | yes | `msdf` (`defaultFontFormat`) |
+
+The default format is the one used for a face declared without `format`. For the React, Vue and PixiJS entries see
+their reference pages.
+
+## See also
+
+- [Raster formats](/explanation/formats)
+- [FontFace](/reference/font-face)
+- [Bakers](/reference/bakers)
+- [CLI](/reference/cli)
+- [Draw pixel-perfect bitmap text](/guides/fonts/pixel-perfect-bitmap)

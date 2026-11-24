@@ -1,0 +1,155 @@
+---
+title: Use fallback fonts
+description: Build a font stack with createFontStack so characters a font lacks are drawn from the next one, and detect glyphs no font covers.
+nav: 103
+sourcecode: packages/glyph/src/loaded-font.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="fonts" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+No single font covers every script, and a subset font covers very little. A font stack is an ordered list of loaded
+fonts used as one selection: each piece of text is drawn from the first font in the list that has glyphs for it. This
+guide builds a stack, orders it for several scripts, and finds the characters nothing in the stack can draw.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="fonts-fallback" aria-label="The string 'glyph 字形 אות Ω' drawn with Inter alone and with a three-font stack" aspect="16 / 9" />
+
+The same string twice. Inter alone has Latin only, so six characters are missing (the gold boxes mark them). With the
+stack, Japanese and Hebrew come from the fallback fonts and only the omega, which none of the three fonts has, is
+still missing.
+
+## Build a stack
+
+`createFontStack(primary, ...fallback)` takes loaded `Font` values, primary first, and returns a `FontStack`. Pass the
+stack wherever a font is accepted.
+
+In React, the font hooks return `Font` values. Memoize the stack so it is created once per set of fonts:
+
+```tsx
+import { createFontStack } from '@pmndrs/glyph';
+import { Text, useMsdf } from '@pmndrs/glyph/react';
+import { useMemo } from 'react';
+
+function Greeting() {
+  const latin = useMsdf('/fonts/inter-latin.font.glb');
+  const japanese = useMsdf('/fonts/noto-jp.font.glb');
+  const hebrew = useMsdf('/fonts/noto-hebrew.font.glb');
+  const stack = useMemo(() => createFontStack(latin, japanese, hebrew), [latin, japanese, hebrew]);
+
+  return <Text font={stack}>glyph 字形 אות</Text>;
+}
+```
+
+In three.js, a stack is assigned like a font:
+
+```ts
+import { createFontStack, type Font, type msdf } from '@pmndrs/glyph';
+
+declare const japanese: Font<typeof msdf>;
+declare const hebrew: Font<typeof msdf>;
+
+const stack = createFontStack(inter, japanese, hebrew);
+const greeting = three.createText({ font: stack, text: 'glyph 字形 אות' });
+text.font = stack; // or replace the font of an existing text
+```
+
+> [!NOTE]
+> `createFontStack` needs `Font` values, not `FontFace` declarations. The React hooks return them. In three.js, a
+> `Text` created from a `FontFace` member holds the `Font` it bound, readable as `text.font`; that font stays valid
+> while the text is alive.
+
+`createFontStack` throws `TypeError` when a member was not created by the package, has been disposed, or appears
+twice. The returned stack is frozen; build a new one to change the order.
+
+## How a font is chosen
+
+Selection works on grapheme clusters. A grapheme cluster is what a reader sees as one character: a base letter with
+its combining marks, or an emoji sequence.
+
+- For each cluster, the engine tries the fonts in stack order and uses the first one that has a glyph for every code
+  point of the cluster.
+- A cluster is never split between fonts. If the first font has the base letter but not its combining mark, the whole
+  cluster moves to the next font.
+- A cluster that no font covers is drawn with glyph 0 (`.notdef`, the font's "missing" glyph, often an empty box or
+  nothing at all).
+
+The stack decides which font draws each cluster. It does not change shaping rules: set `language` and `direction` in
+the text style when a script needs them. See [Languages and scripts](/guides/text/languages-and-scripts).
+
+## Order the stack
+
+Put the font whose design you want to dominate first, then one font per script.
+
+- The primary should cover the characters shared between scripts that you want in one design: digits, punctuation
+  and spaces. A digit present in both the Latin and the Arabic font is drawn from whichever comes first.
+- Order the fallbacks by preference where they overlap. Fonts for different CJK languages share code points with
+  different shapes, so the first one in the stack wins for all of them.
+- Members may use different raster formats, for example an MSDF text font with a Slug icon font. The text is then
+  drawn with one draw per format.
+
+For full control over one stretch of text, give it its own font instead of relying on fallback order. In React, nest a
+`Text`:
+
+```tsx
+import type { Font, msdf } from '@pmndrs/glyph';
+import { Text } from '@pmndrs/glyph/react';
+
+declare const japanese: Font<typeof msdf>;
+
+<Text font={inter}>
+  Tokyo <Text font={japanese} style={{ language: 'ja' }}>東京</Text>
+</Text>;
+```
+
+## Find missing glyphs
+
+`measure()` returns `missingGlyphCount`: the number of positioned glyphs that are `.notdef`. It is 0 when the
+selection covers the whole string.
+
+```ts
+const { missingGlyphCount } = text.measure();
+if (missingGlyphCount > 0) {
+  console.warn(`${missingGlyphCount} glyph(s) have no font: ${text.text}`);
+}
+```
+
+To find which characters are missing, read the glyphs and look for glyph id 0. `cluster` is the UTF-16 offset of the
+cluster in the text:
+
+```ts
+const missing = text.readGlyphs((glyphs) => {
+  const offsets: number[] = [];
+  for (let index = 0; index < glyphs.glyphCount; index += 1) {
+    const glyph = glyphs.glyphAt(index);
+    if (glyph.glyphId === 0) offsets.push(glyph.cluster);
+  }
+  return offsets;
+});
+```
+
+In React, the same count arrives in `onLayout`:
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text font={inter} onLayout={(_text, layout) => console.log(layout.missingGlyphCount)}>
+  glyph 字形
+</Text>;
+```
+
+Check the count in development or in a test over every string the application can show. A missing glyph is not an
+error at runtime: the text still lays out and draws.
+
+## Check the result
+
+- Every script in the string is drawn in the font you intended.
+- `measure().missingGlyphCount` is 0.
+
+## See also
+
+- [Font stack reference](/reference/font-stack)
+- [Subset a font](/guides/fonts/subset-coverage)
+- [Use an icon font](/guides/fonts/icons)
+- [Languages and scripts](/guides/text/languages-and-scripts)
+- [Measure text](/guides/inspect/measure-text)

@@ -1,0 +1,160 @@
+---
+title: Runtime bake
+description: Reference for @pmndrs/glyph/runtime-bake - bakeFontInWorker, its request, the BakeProgress events, caching and errors.
+nav: 743
+sourcecode: packages/glyph/src/runtime-bake.ts
+---
+
+`@pmndrs/glyph/runtime-bake` exports one function, `bakeFontInWorker`: the host of the web worker that bakes a source
+font in the browser. The font loader imports this entry on demand when a `FontFace` is declared with a source font
+(TTF or OTF) and no baked file is found. Import it yourself to observe progress or to obtain the baked bytes.
+
+For the usual way to bake at runtime, through `glyph.fontFace`, see
+[Bake fonts at runtime](/guides/fonts/runtime-baking).
+
+## bakeFontInWorker()
+
+Bakes a source font in a dedicated module worker and resolves with the bytes of the baked font.
+
+```ts
+import { bakeFontInWorker } from '@pmndrs/glyph/runtime-bake';
+
+declare const source: Uint8Array; // the bytes of a TTF or OTF
+
+const bytes = await bakeFontInWorker({
+  source,
+  sourceUrl: 'memory://upload.ttf',
+  onProgress: ({ stage, phase, completed, total }) => console.log(stage, phase, completed, total),
+});
+```
+
+### Syntax
+
+```ts
+import { bakeFontInWorker } from '@pmndrs/glyph/runtime-bake';
+
+type Request = Parameters<typeof bakeFontInWorker>[0];
+type Result = ReturnType<typeof bakeFontInWorker>; // Promise<ArrayBufferView>
+```
+
+The request type is not exported by name; derive it as shown.
+
+### Parameters
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `source` | `Uint8Array` | required | The source font bytes. They are copied before being sent to the worker; the array you pass stays usable. |
+| `sourceUrl` | `string` | required | A label for the source, used in diagnostics. The loader passes the font's URL, or `memory://font-source` for bytes. |
+| `bakedUrl` | `string` | none | The URL the baked file would have had. Informational. |
+| `cache` | `{ expiresAt: number }` | none | Allows the result to be stored in Cache Storage until `expiresAt` (milliseconds since the epoch). Without it, or with a time in the past, nothing is read from or written to the cache. |
+| `unicodeRanges` | `readonly { start: number; end: number }[]` | the whole font | Inclusive code point ranges to keep. Normalized before the bake. |
+| `rasters` | `readonly { kind, extension, version, rasterKey, descriptor }[]` | none | The rasters to bake into the result. Each entry identifies a format and its canonical descriptor. Only `bitmap`, `msdf` and `slug` are baked in the worker. |
+| `signal` | `AbortSignal` | none | Aborts the request. |
+| `onProgress` | `(progress: BakeProgress) => void` | none | Called with progress events. |
+
+> [!NOTE]
+> A `rasters` entry needs the `rasterKey` that the package derives from the format and its descriptor. The worker
+> rejects an entry whose key does not match. No public function computes the key, so application code cannot build
+> this list; the loader builds it when a source font is loaded through `glyph.fontFace`. A direct call without
+> `rasters` produces a font with shaping data and no raster.
+
+### Return value
+
+A promise that resolves with the bytes of one `.font.glb` (an `ArrayBufferView`; in this implementation a
+`Uint8Array`). Rasters are always embedded.
+
+### Behavior
+
+- The worker is created on the first call and reused. It is a module worker named `pmndrs-glyph-font-baker`, loaded
+  from `runtime-bake-worker.js` in the package's `dist/` folder.
+- Requests are processed one at a time, in call order.
+- The worker fetches the core baker's WebAssembly module, and one baker module per requested format, on first use.
+- The face baked is index 0. Glyph outlines are not stored.
+- The result is not validated with the glTF validator that `bakeFont` runs in Node.js.
+
+### Exceptions
+
+| Rejection | When |
+| --- | --- |
+| `FontBakeError` (`GlyphError` with `code` `'bake-failed'`) | The bake failed in the worker. `reason` is the baker's code, or `RUNTIME_BAKE_FAILED` for an error without one. |
+| The signal's abort reason | `signal` was aborted. |
+
+`FontBakeError` is exported from `@pmndrs/glyph/bake`, a Node.js entry. In a browser, test for
+`error instanceof GlyphError && error.code === 'bake-failed'` with `GlyphError` from `@pmndrs/glyph`.
+
+## BakeProgress
+
+The argument of `onProgress`. Exported as a type from `@pmndrs/glyph` and `@pmndrs/glyph/baker`.
+
+```ts
+import type { BakeProgress, BakeProgressListener, BakeProgressPhase } from '@pmndrs/glyph';
+
+const listener: BakeProgressListener = (progress: BakeProgress) => {
+  const phase: BakeProgressPhase = progress.phase;
+  const fraction = progress.total === 0 ? 0 : progress.completed / progress.total;
+  console.log(progress.stage, phase, fraction);
+};
+```
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `stage` | `'font' \| 'raster'` | Whether the event concerns the font as a whole or a raster being baked. |
+| `phase` | `BakeProgressPhase` | The current phase; see below. |
+| `completed` | `number` | Units of work finished in this phase. |
+| `total` | `number` | Units of work in this phase. |
+
+| `phase` | `stage` | Meaning |
+| --- | --- | --- |
+| `'queued'` | `font` | The request was accepted. Emitted synchronously by `bakeFontInWorker` with `completed: 0, total: 1`, before the worker is contacted. |
+| `'loading'` | `font` | The worker is loading the baker modules. |
+| `'baking'` | `font` | The modules are loaded and the bake has started. |
+| `'rasterizing'` | `raster` | A raster baker is rasterizing glyphs. `completed` and `total` count that baker's progress. |
+| `'packaging'` | `font` | The result is being assembled into one file. |
+| `'transferring'` | `font` | The bytes are being sent back. |
+| `'complete'` | `font` | Finished, with `completed: 1, total: 1`. A result served from the cache emits only `'queued'` and `'complete'`. |
+
+`completed / total` is meaningful within one phase, mainly `'rasterizing'`. It is not a fraction of the whole bake.
+
+## Caching
+
+When the request carries `cache.expiresAt` in the future, the worker looks the request up in Cache Storage before
+baking and stores the result afterwards.
+
+| Aspect | Value |
+| --- | --- |
+| Storage | The Cache Storage API (`caches`), in a cache whose name includes the font format version and the baker version. An upgrade of either starts a new cache. |
+| Key | A fingerprint of the source bytes, the face index, the Unicode ranges and the raster list. |
+| Lifetime | Until `expiresAt`. Expired or damaged entries are deleted when read. |
+| Availability | Only on `http:` and `https:` origins where `caches` exists. Otherwise the bake runs without a cache. |
+| Failures | A storage error never fails the bake. |
+
+The loader sets `cache.expiresAt` from the response that delivered the source font: from `Cache-Control: max-age`
+counted from the response's `Date` header, or else from `Expires`. A response with `no-store` or `no-cache`, or with
+no freshness information, and any font given as bytes (`Blob`, `File`), gets no cache entry.
+
+## What the loader does
+
+When `load()` runs on a `FontFace` whose source is a source font, the loader:
+
+1. Requests the sibling `.font.glb`, if the source is a URL. A hit ends here.
+2. Imports this entry. A failed import rejects `load()` with `GlyphFontError` `RUNTIME_BAKER_UNAVAILABLE`.
+3. Calls `bakeFontInWorker` with the source bytes and a `rasters` entry for each declared `bitmap`, `msdf` and `slug`
+   format. It passes no `onProgress` and no `unicodeRanges`.
+4. Registers the returned bytes as the font.
+
+A declared format that is not one of the three built-in formats is baked on the main thread through that format's
+own `runtimeBaker`.
+
+## Requirements
+
+- A browser with module workers and WebAssembly.
+- The package's `dist/` files reachable by URL, with their relative layout intact: the worker script imports sibling
+  modules and fetches `.wasm` files relative to itself.
+- A content security policy that allows the worker script and WebAssembly compilation.
+
+## See also
+
+- [Bake fonts at runtime](/guides/fonts/runtime-baking)
+- [Bake API](/reference/bake)
+- [Bakers](/reference/bakers)
+- [FontFace](/reference/font-face)

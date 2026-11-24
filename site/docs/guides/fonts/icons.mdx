@@ -1,0 +1,157 @@
+---
+title: Use an icon font
+description: Bake a few icons from an icon font, draw them as text, and mix them into labels with a font stack or a nested span.
+nav: 104
+sourcecode: packages/glyph/src/node/cli.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="fonts" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+An icon font is an ordinary font whose glyphs are pictures. Each icon sits on a code point in a Unicode private-use
+area (most often `U+E000` to `U+F8FF`), a range reserved for meanings that applications define. Drawing an icon is
+drawing the one-character string for its code point. This guide bakes a small icon subset and uses it alone and
+inside labels.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="fonts-icons" aria-label="Six icons with their code points, a row of labels with inline icons, and a label with a colored icon" aspect="16 / 9" />
+
+Top: six icons, each a `Text` of one character. Middle: icons and words in one string through a font stack. Bottom:
+an icon in a nested span with its own color.
+
+## Bake the icons you use
+
+An icon font holds hundreds or thousands of glyphs. Bake only the ones the application draws.
+
+1. Find the code points. `glyph glyphs` lists a font's glyph names; `--name` selects by name and `--unicode-set`
+   prints the result in the form `--unicodes` takes:
+
+```sh
+glyph glyphs fa-solid-900.ttf --name rocket --name bolt
+# U+26A1  572  bolt
+# U+F0E7  572  bolt
+# U+F135  630  rocket
+```
+
+   Some glyphs are mapped from more than one code point. Here `bolt` is reachable from `U+26A1` and from the
+   private-use `U+F0E7`. Pick one and use it consistently. If both are in the baked set, `--glyph-map` fails with
+   `AMBIGUOUS_GLYPH_NAME`, because the name would map to two code points.
+
+2. Bake those code points. `--glyph-map` also writes a JSON file from glyph name to code point:
+
+```sh
+glyph bake --input fa-solid-900.ttf --output public/fonts/icons.font.glb \
+  --unicodes U+F0E7,U+F135 --glyph-map src/icons.json --msdf
+```
+
+```json
+{
+  "bolt": 61671,
+  "rocket": 61749
+}
+```
+
+   Font Awesome Solid with these two icons bakes to a 44 KB file.
+
+Glyph names come from the font. A font that stores no names lists `-` in the name column, and `--name` cannot select
+from it; use its documentation to find the code points.
+
+## Draw an icon
+
+Load the subset like any font and set the text to the icon's code point.
+
+```ts
+import { glyph, msdf } from '@pmndrs/glyph';
+
+const Icons = glyph.fontFace('/fonts/icons.font.glb', { format: msdf });
+await Icons.load();
+
+const rocket = three.createText({
+  font: Icons,
+  text: String.fromCodePoint(0xf135), // or the escape ''
+  style: { fontSize: 2, color: '#e7ecf6' },
+});
+scene.add(rocket);
+```
+
+With the glyph map, select by name:
+
+```ts
+declare const icons: Readonly<Record<string, number>>; // the parsed JSON written by --glyph-map
+
+const icon = (name: string): string => {
+  const codePoint = icons[name];
+  if (codePoint === undefined) throw new Error(`unknown icon: ${name}`);
+  return String.fromCodePoint(codePoint);
+};
+
+text.text = icon('rocket');
+```
+
+An icon is sized by `fontSize` and colored by `color` like any glyph. It sits on the text baseline, and its advance
+(the horizontal space it takes) is whatever the icon font defines.
+
+## Put icons inside labels
+
+### With a font stack
+
+Make the icon font a fallback of the text font. The text font has no glyph for a private-use code point, so those
+characters fall through to the icon font. The label stays one string.
+
+```tsx
+import { createFontStack } from '@pmndrs/glyph';
+import { Text, useMsdf } from '@pmndrs/glyph/react';
+import { useMemo } from 'react';
+
+function LaunchButton() {
+  const inter = useMsdf('/fonts/inter.font.glb');
+  const icons = useMsdf('/fonts/icons.font.glb');
+  const font = useMemo(() => createFontStack(inter, icons), [inter, icons]);
+
+  return <Text font={font}>{' Launch'}</Text>;
+}
+```
+
+The two fonts may use different formats: a Bitmap or MSDF text font can fall back to a Slug icon font.
+
+### With a nested span
+
+Give the icon its own span when it needs a different color or size from the words around it.
+
+```tsx
+import type { Font, msdf } from '@pmndrs/glyph';
+import { Text } from '@pmndrs/glyph/react';
+
+declare const icons: Font<typeof msdf>;
+
+<Text font={inter}>
+  Charging{' '}
+  <Text font={icons} style={{ color: '#ffd166' }}>
+    {''}
+  </Text>{' '}
+  82%
+</Text>;
+```
+
+A nested `Text` is a span of the outer paragraph, not a separate object: it wraps, aligns and measures with the rest
+of the line. See [Rich text](/guides/text/rich-text).
+
+## Check the result
+
+- Each icon appears where its character is in the string.
+- `measure().missingGlyphCount` is 0. A count above 0 means a code point is not in the baked subset or the font is
+  not in the stack.
+
+## Troubleshooting
+
+- **Nothing is drawn for an icon.** The code point is not in the subset, or the format options at load do not match
+  the bake. Compare with `glyph glyphs <font> --name <icon>` and the `--msdf` settings.
+- **The icon sits too high or too low next to text.** Icon fonts differ in where they place glyphs relative to the
+  baseline. Draw the icon as its own `Text` and position it, or choose an icon font designed to sit beside text.
+
+## See also
+
+- [Use fallback fonts](/guides/fonts/fallback-stacks)
+- [Subset a font](/guides/fonts/subset-coverage)
+- [CLI reference](/reference/cli)
+- [Rich text](/guides/text/rich-text)

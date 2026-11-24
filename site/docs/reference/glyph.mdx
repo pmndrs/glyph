@@ -1,0 +1,212 @@
+---
+title: glyph
+description: Reference for the glyph singleton exported by @pmndrs/glyph - engine initialization, renderer handles, font declarations and the prepare and shape calls.
+nav: 700
+sourcecode: packages/glyph/src/glyph.ts
+---
+
+`glyph` is the one runtime object of the package. It owns the WebAssembly text engine, the renderer handles created
+from it, and the catalog of font declarations. It is exported from the root entry, with its type `Glyph`.
+
+```ts
+import { glyph, type Glyph } from '@pmndrs/glyph';
+
+const runtime: Glyph = glyph;
+```
+
+There is one `glyph` per JavaScript realm (page or worker). It cannot be constructed or disposed.
+
+## Members
+
+| Member | Kind | Summary |
+| --- | --- | --- |
+| [`init(options?)`](#glyphinit) | method | Loads the engine. Required before `handle`, `prepare` and `shape`. |
+| [`initialized`](#glyphinitialized) | property | Whether the engine is ready. |
+| [`handle(name, config)`](#glyphhandle) | method | Creates a renderer handle from a configuration such as `ThreeConfig`. |
+| [`fontFace(source, config?)`](#glyphfontface) | method | Declares a font. Does not need `init`. |
+| [`prepare()`](#glyphprepare) | method | Lays out every changed text without publishing. |
+| [`shape()`](#glyphshape) | method | Lays out every changed text and publishes it to its renderer. |
+
+## glyph.init()
+
+Loads and instantiates the engine's WebAssembly module.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+
+await glyph.init();
+```
+
+### Syntax
+
+```ts
+import type { Glyph } from '@pmndrs/glyph';
+
+type Init = Glyph['init']; // (options?: { readonly wasm?: BufferSource | WebAssembly.Module }) => Promise<void>
+```
+
+### Parameters
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `wasm` | `BufferSource \| WebAssembly.Module` | The package's own `text-shaper.wasm`, fetched by URL relative to the package | The engine module to instantiate, as bytes or as a compiled module. Supply it when the default URL is not reachable, for example behind a strict content security policy or in a bundle that inlines assets. |
+
+### Return value
+
+A `Promise<void>` that resolves when the engine is ready.
+
+### Behavior
+
+- Initialization is attempted once. Every call returns the same promise; the options of later calls are ignored.
+- A failed initialization is not retried: later calls return the same rejected promise. Reload the realm to try
+  again.
+- `options` must be an object. Anything else rejects with `TypeError`.
+
+### Example: supply the module yourself
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+
+declare const wasmUrl: string; // where your build serves its copy of text-shaper.wasm
+
+const response = await fetch(wasmUrl);
+await glyph.init({ wasm: await response.arrayBuffer() });
+```
+
+The package exports the file as `@pmndrs/glyph/text-shaper.wasm`, so a bundler's asset import can resolve it.
+
+## glyph.initialized
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+
+const ready: boolean = glyph.initialized;
+```
+
+`true` once the promise returned by `init()` has resolved, `false` before that and after a failed initialization.
+Read-only.
+
+## glyph.handle()
+
+Creates a handle: the object through which one renderer integration creates and draws text. The configuration decides
+the renderer; the handle type follows from it.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+
+await glyph.init();
+const three = glyph.handle('main', ThreeConfig);
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `name` | `string` | A name unique among live handles. Must not be empty or whitespace. |
+| `config` | `GlyphConfig` | A renderer configuration: `ThreeConfig` or the result of `defineThreeConfig()` from `@pmndrs/glyph/three`, or the equivalent from another renderer entry. |
+
+### Return value
+
+A `GlyphHandle` for the configuration's root type; for `ThreeConfig`, a `ThreeHandle`. A handle is at once:
+
+- its own anonymous root, with the root's methods (`createText`, `createTextGroup`, ...);
+- a function `(name: string) => root` that returns the named root, creating it on first use;
+- an owner with `disposed` and `dispose()`. Disposing a handle frees its name.
+
+See [ThreeRoot](/reference/three-root) and [ThreeConfig](/reference/three-config).
+
+### Exceptions
+
+| Error | When |
+| --- | --- |
+| `Error` | `glyph.init()` has not resolved. |
+| `TypeError` | `name` is not a non-empty string, or `config` is not a complete `GlyphConfig`. |
+| `Error` | A live handle already has this name. |
+
+### Notes
+
+The React and Vue entries create their own default handle. Call `glyph.handle` yourself only for plain three.js or
+when you pass a handle to `GlyphProvider`.
+
+## glyph.fontFace()
+
+Declares a font from a source and returns a `FontFace`. Nothing is fetched until `load()` is called on the result.
+This method works before `init()`.
+
+```ts
+import { bitmap, glyph, msdf } from '@pmndrs/glyph';
+
+const Plain = glyph.fontFace('/fonts/inter.font.glb');
+const Typed = glyph.fontFace('/fonts/inter.font.glb', {
+  family: 'Inter',
+  format: [msdf, bitmap({ strikes: [16, 32] })],
+});
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `source` | `FontFaceSource` | `string`, `URL`, `Blob` or `SerializedFontFace`. See [FontFaceSource](/reference/font-face). |
+| `config.family` | `string`, optional | Name for selecting the face by string. Trimmed; must not be empty. Default: a generated name `Font1`, `Font2`, ... |
+| `config.format` | a format, or a non-empty array of formats; optional | The raster formats the face declares. Each entry is a format (`msdf`, `slug`), a format request (`bitmap({ strikes })`, `msdf({ emSize })`), or a format key string (`'msdf'`). |
+
+### Return value
+
+A `FontFace` whose type records the declared formats: `FontFace<typeof msdf | typeof bitmap>` has the members `.msdf`
+and `.bitmap`. With no `format`, the type is `FontFace<never>` and the face has no format members. See
+[FontFace](/reference/font-face).
+
+### Exceptions
+
+| Error | When |
+| --- | --- |
+| `TypeError` | `source` is not a string, `URL`, `Blob` or `SerializedFontFace`. |
+| `TypeError` | `config` is not an object, has a key other than `family` and `format`, or `family` is empty. |
+| `TypeError` | `format` is an empty array, an empty string, not a format, or names the same format twice. |
+| `Error` | A live face already uses `family`. |
+
+## glyph.prepare()
+
+Lays out every text that changed since it was last laid out, across all handles, in one engine call. Nothing is
+published to a renderer.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+
+glyph.prepare();
+const widths = [text.measure().contentWidth]; // answered from the prepared layout
+```
+
+Every read (`measure()`, `glyphs()`, the editing queries) prepares its own text when needed, so `prepare()` is never
+required for correctness. Call it before reading many changed texts in a row so they are laid out together instead of
+one engine call each.
+
+Returns `undefined`. Throws `Error` before `init()` has resolved.
+
+## glyph.shape()
+
+Prepares whatever is still changed, then publishes every changed root to its renderer, so the next render draws the
+current state.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+
+text.text = 'Updated';
+glyph.shape();
+renderer.render(scene, camera);
+```
+
+The three.js integration also prepares and publishes during `renderer.render()`, so calling `shape()` each frame is
+optional there. Call it to do the layout work at a moment you choose, for example right after creating a scene.
+
+Returns `undefined`. Throws `Error` before `init()` has resolved. See
+[When layout runs](/explanation/when-layout-runs).
+
+## See also
+
+- [FontFace](/reference/font-face)
+- [ThreeConfig](/reference/three-config)
+- [ThreeRoot](/reference/three-root)
+- [When layout runs](/explanation/when-layout-runs)

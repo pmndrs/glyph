@@ -1,0 +1,266 @@
+---
+title: CLI
+description: Reference for the glyph command - glyph bake and glyph glyphs, with every option, default, output format and exit status.
+nav: 740
+sourcecode: packages/glyph/src/node/cli.ts
+---
+
+The `glyph` command is installed with `@pmndrs/glyph` (the package's `bin`). It bakes source fonts into `.font.glb`
+files and inspects the glyphs of a font. It runs on Node.js. Invoke it through your package manager, for example
+`pnpm exec glyph`, `npx glyph`, or a `package.json` script.
+
+## Synopsis
+
+```sh
+glyph <command> [options]
+glyph --help | -h
+glyph --version | -v
+```
+
+| Command | Purpose |
+| --- | --- |
+| [`glyph bake`](#glyph-bake) | Bake one font directly, or every font a project declares. |
+| [`glyph glyphs <font>`](#glyph-glyphs) | List a font's code points, glyph ids and glyph names. |
+
+| Global option | Effect |
+| --- | --- |
+| `-h`, `--help` | Print usage. Also printed when no command is given. After a command, prints that command's usage. |
+| `-v`, `--version` | Print `@pmndrs/glyph <version>`. |
+
+### Exit status
+
+| Status | Meaning |
+| --- | --- |
+| `0` | Success, including a bake skipped because the output is up to date. |
+| `1` | The operation failed, a `--check` found a difference, or project discovery reported a diagnostic. The reason is written to standard error as `REASON: message (path)`. |
+| `2` | Usage error: an unknown command or option, a missing value, or options that cannot be combined. The message and the usage text are written to standard error. |
+
+## glyph bake
+
+```sh
+glyph bake --input <font> [--output <font.glb>] [options]
+glyph bake [discovery options]
+```
+
+The first form bakes one font (direct mode). The second scans a project for `glyph.fontFace()` declarations
+(discovery mode). With no option at all, discovery runs on the current directory. Options of the two modes cannot be
+mixed; `--json` and `--help` are valid in both.
+
+### Direct font options
+
+| Option | Value | Default | Description |
+| --- | --- | --- | --- |
+| `--input` | path | required in direct mode | Source font: TTF, OTF, TTC or OTC. |
+| `--output` | path | Beside the input, URL-safe name, `.glb` extension | Output file. `My Font.ttf` becomes `my-font.glb`: the name is lowercased, accents are removed and every run of other characters becomes `-`. Must not be the input file. |
+| `--font-face-index` | integer, 0 or more | `0` | Which face of a collection (TTC, OTC) to bake. |
+| `--unicodes` | set | the whole font | Code points to keep. Comma-separated `U+XXXX` values and `U+XXXX-YYYY` ranges (the second `U+` is optional), 1 to 6 hex digits, ascending within a range, at most `U+10FFFF`. The source is reduced to these code points and the glyphs shaping needs for them before anything is baked. |
+| `--outlines` | flag | off | Also store every glyph's outline, for `outlineAt()` on `glyphs()` and `readGlyphs()`. |
+| `--glyph-map` | path | none | Also write a JSON object from glyph name to code point, for the named glyphs in the selected Unicode set, sorted by name. |
+
+Each of these may be given once.
+
+### Raster options
+
+| Option | Value | Description |
+| --- | --- | --- |
+| `--bitmap` | `ppem,...` (required) | Bake the Bitmap format at these strikes: comma-separated positive integers, at most 1022, no duplicates. Example: `--bitmap 16,32`. |
+| `--msdf` | `[settings]` | Bake the MSDF format. Optional settings follow as comma-separated `key=value`: `em-size` (default 64, 1 to 1022) and `pixel-range` (default 8, 1 to 1020). Example: `--msdf em-size=32,pixel-range=6`. |
+| `--slug` | `[settings]` | Bake the Slug format. Optional setting: `cubic-subdivisions` (default 4, 1 to 16; changes the curves of CFF sources only). Example: `--slug cubic-subdivisions=8`. |
+
+Any combination may be given, each once. With none, MSDF with default settings is baked. The settings of `--msdf` and
+`--slug` are the next argument when it does not start with `-`.
+
+### Packaging options
+
+| Option | Description |
+| --- | --- |
+| `--split` | Write each raster to its own file beside the output: `<name>.<format>.glb`, where `<name>` is the output name without `.font.glb` or `.glb`. The output then holds the shaping data and references the raster files by name. Without it, every raster is embedded in the output. |
+| `--force` | Bake even when the output is up to date. |
+| `--yes` | Accepted for use in scripts. This version of the command never prompts. |
+
+### Output options
+
+| Option | Description |
+| --- | --- |
+| `--check` | Direct mode only. Bake to temporary storage and compare with the existing output byte for byte, and the glyph map too when `--glyph-map` is given. Nothing is written. Fails with `STALE_OUTPUT` or `STALE_GLYPH_MAP` on a difference. |
+| `--json` | Print the complete bake report as JSON instead of the summary lines. |
+
+### Discovery options
+
+| Option | Value | Default | Description |
+| --- | --- | --- | --- |
+| `--project-root` | path | current directory | The project to scan. |
+| `--entry` | path, repeatable | every `.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs`, `.mts`, `.cts` file under `src/` | Files to scan, relative to the project root. |
+| `--asset-root` | path, repeatable | `public` (when it exists) | Directories in which a declaration's URL path is looked up. |
+| `--output-root` | path | beside each source | Directory to write outputs under, keeping each source's path relative to its asset root. |
+
+### The up-to-date check
+
+In direct mode without `--check` or `--force`, the command first compares the request with the existing output and
+skips the bake when all of these match: the source bytes after applying `--unicodes` and `--font-face-index`, the
+version of the core baker, whether outlines are stored, the exact set of rasters with their settings, each raster's
+format version, and the packaging (embedded or split). It then prints:
+
+```sh
+inter.font.glb is up to date — every requested raster is already baked from this exact source
+```
+
+Discovery mode does not make this check.
+
+### Standard output
+
+Direct mode, on success:
+
+```sh
+Inter-Regular.ttf -> inter.font.glb
+Baked 1 font in 4554.70 ms.
+```
+
+Discovery mode prints one `<url path> -> <output file>` line per declaration and a final count. Diagnostics go to
+standard error as `<code>: <message> (<source file>)`.
+
+With `--json`, direct mode prints a [`NodeFontBakeReport`](/reference/bake) and discovery mode a
+[`ProjectBakeReport`](/reference/bake).
+
+### Discovery rules
+
+A call is recognized when it is `glyph.fontFace(...)` and `glyph` is imported from `@pmndrs/glyph`.
+
+| Part of the call | Rule |
+| --- | --- |
+| Source argument | Must be a string the scanner can evaluate statically: a literal or constant URL path such as `'/fonts/Inter.ttf'`, or a path relative to the declaring module. A source whose path ends in `.glb` is skipped. |
+| Source file | The path is resolved in each asset root; it must exist in one. |
+| No config, or no `format` | Bitmap with strikes 8 and 16, MSDF and Slug are baked. |
+| `format` | One format or a literal array. Each entry is a format key string (`'bitmap'`, `'msdf'`, `'slug'`), an imported format (`msdf`), or a call of one with literal options (`bitmap({ strikes: [16, 32] })`). |
+| Output | `<source name>.font.glb`, the font extension replaced, beside the source or under `--output-root`. All rasters are embedded. The whole font is baked (face 0, no Unicode selection). |
+
+Declarations of the same source are merged into one output. A source may declare each format once.
+
+| Diagnostic code | Cause |
+| --- | --- |
+| `dynamic-font-source` | The source argument is missing or not statically known. |
+| `missing-font-source` | No asset root contains the file. |
+| `ambiguous-font-source` | More than one asset root contains the file. |
+| `invalid-font-source` | The source string is not a usable path. |
+| `invalid-raster-options` | `format` or its options are not literals the scanner can read. |
+| `invalid-raster-manifest` | The package that provides a format could not be resolved from the scanned file, or does not declare a baker for it. |
+
+### Errors
+
+Failures are printed as `REASON: message (path)`.
+
+| Reason | Cause |
+| --- | --- |
+| `STALE_OUTPUT` | `--check`: the existing output differs from a fresh bake. (A missing output fails with the file system's own error.) |
+| `STALE_GLYPH_MAP` | `--check` with `--glyph-map`: the existing map differs. |
+| `AMBIGUOUS_GLYPH_NAME` | `--glyph-map`: one glyph name maps to two code points in the selected set. Narrow `--unicodes`. |
+| `OUTPUT_OVERLAPS_INPUT` | The output, or the glyph map, is the input file. |
+| `OUTPUT_CONFLICT` | Two outputs resolve to the same path. |
+| `OUTPUT_TARGET_TYPE` | An existing output path is not a regular file. |
+| `RASTER_EXTENSION_DUPLICATE` | Discovery: one source declares the same format twice with different options. |
+| `INVALID_RASTER_BAKER` | Discovery: a format's baker module is not a valid baker. |
+
+Errors from the bakers themselves (an unreadable font, an invalid option value) are printed with their own reason
+codes.
+
+### Examples
+
+```sh
+# All three formats in one file
+glyph bake --input Inter-Regular.ttf --output inter.font.glb --bitmap 16,32 --msdf --slug
+
+# Basic Latin only
+glyph bake --input Inter-Regular.ttf --output inter-latin.font.glb --unicodes U+0020-007E --msdf
+
+# An icon subset with a name-to-code-point map
+glyph bake --input fa-solid-900.ttf --output icons.font.glb --unicodes U+F0E7,U+F135 --glyph-map icons.json --msdf
+
+# A smaller distance field
+glyph bake --input Inter-Regular.ttf --output inter-small.font.glb --msdf em-size=32,pixel-range=6
+
+# One file per raster
+glyph bake --input Inter-Regular.ttf --output inter.font.glb --msdf --slug --split
+
+# Every declaration in the project, written under public/generated
+glyph bake --project-root . --output-root public/generated
+
+# CI: fail when the checked-in file is stale
+glyph bake --input Inter-Regular.ttf --output inter.font.glb --msdf --check
+```
+
+## glyph glyphs
+
+```sh
+glyph glyphs <font> [options]
+```
+
+Lists every code point the font maps, with the glyph id it maps to and the glyph's name when the font stores names
+(in its `post` or `CFF` table).
+
+| Option | Value | Default | Description |
+| --- | --- | --- | --- |
+| `<font>` | path | required | The source font. Given once. |
+| `--font-face-index` | integer, 0 or more | `0` | Which face of a collection to inspect. |
+| `--name` | glyph name, repeatable | all glyphs | Keep only glyphs with exactly this name. Fails with `GLYPH_NAME_NOT_FOUND` when a name matches nothing. |
+| `--json` | flag | off | Print `{ input, fontFaceIndex, glyphs: [{ unicode, codePoint, glyphId, name? }] }`. |
+| `--unicode-set` | flag | off | Print the code points as one compressed set in the form `--unicodes` accepts. |
+
+`--json` and `--unicode-set` cannot be combined.
+
+### Output
+
+The default output is one line per code point: the code point as `U+XXXX`, the glyph id, and the name or `-`,
+separated by tabs.
+
+```sh
+glyph glyphs fa-solid-900.ttf --name rocket --name bolt
+```
+
+```sh
+U+26A1	572	bolt
+U+F0E7	572	bolt
+U+F135	630	rocket
+```
+
+```sh
+glyph glyphs fa-solid-900.ttf --name rocket --name bolt --unicode-set
+```
+
+```sh
+U+26A1,U+F0E7,U+F135
+```
+
+```sh
+glyph glyphs fa-solid-900.ttf --name rocket --json
+```
+
+```json
+{
+  "input": "fa-solid-900.ttf",
+  "fontFaceIndex": 0,
+  "glyphs": [
+    {
+      "unicode": "U+F135",
+      "codePoint": 61749,
+      "glyphId": 630,
+      "name": "rocket"
+    }
+  ]
+}
+```
+
+A glyph that no code point maps to (reachable only through shaping) is not listed.
+
+### Errors
+
+| Reason | Cause |
+| --- | --- |
+| `FONT_INSPECTION_FAILED` | The file could not be read or is not a font the baker can parse. |
+| `GLYPH_NAME_NOT_FOUND` | A `--name` value matches no glyph. |
+
+## See also
+
+- [Bake fonts](/guides/fonts/bake-fonts)
+- [Subset a font](/guides/fonts/subset-coverage)
+- [Bake API](/reference/bake)
+- [Formats](/reference/formats)

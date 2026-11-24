@@ -1,0 +1,265 @@
+---
+title: Bakers
+description: Reference for the raster bakers in @pmndrs/glyph/bakers/bitmap, /msdf and /slug, and for rasterBake, defineRasterBaker and the baker types in @pmndrs/glyph/baker.
+nav: 742
+sourcecode: packages/glyph/src/bake.ts
+---
+
+A baker turns a source font into the raster of one format. The package has one baker per built-in format, each in its
+own entry so that a build script imports only the ones it uses, and a small entry, `@pmndrs/glyph/baker`, with the
+types and helpers a baker and a bake plan are made of.
+
+| Entry | Exports |
+| --- | --- |
+| `@pmndrs/glyph/bakers/bitmap` | `bitmapBaker` (also the default export), `BitmapBakerOptions`, `BitmapBakeError`, and the low-level constructors |
+| `@pmndrs/glyph/bakers/msdf` | `msdfBaker` (also the default export), `MsdfBakerOptions`, `MsdfBakeError`, and the low-level constructors |
+| `@pmndrs/glyph/bakers/slug` | `slugBaker` (also the default export), `SlugBakerOptions`, `SlugBakeError`, and the low-level constructors |
+| `@pmndrs/glyph/baker` | `rasterBake`, `defineRasterBaker`, and the baker, plan, progress and report types |
+
+Bakers run in Node.js and in browsers. Each loads its own WebAssembly module on first use: from disk under Node.js,
+with `fetch` elsewhere.
+
+## Using a baker
+
+A baker is passed to [`bakeFont`](/reference/bake) inside a raster plan. You do not call it yourself.
+
+```ts
+import { bakeFont } from '@pmndrs/glyph/bake';
+import { bitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
+import { msdfBaker } from '@pmndrs/glyph/bakers/msdf';
+import { slugBaker } from '@pmndrs/glyph/bakers/slug';
+
+await bakeFont({
+  input: 'fonts/Inter-Regular.ttf',
+  output: 'public/fonts/inter.font.glb',
+  font: { fontFaceIndex: 0 },
+  rasters: [
+    { baker: bitmapBaker, packaging: { artifact: 'embedded' }, options: { strikes: [16, 32] } },
+    { baker: msdfBaker, packaging: { artifact: 'embedded' }, options: undefined },
+    { baker: slugBaker, packaging: { artifact: 'embedded' }, options: { cubicSubdivisions: 8 } },
+  ],
+});
+```
+
+## bitmapBaker
+
+`RasterBakerModule<'bitmap', BitmapBakerOptions, BitmapDescriptor>`. Rasterizes every selected glyph to 8-bit coverage
+at each strike and packs the results into atlas pages.
+
+| Option (`BitmapBakerOptions`) | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `strikes` | `readonly [number, ...number[]]` | required | Positive integers no greater than 1022 (pixels per em), no duplicates. |
+| `coverage` | `RasterCoverage` | every glyph | See [RasterCoverage](/reference/formats). |
+
+The matching runtime declaration is `bitmap({ strikes, coverage })` with the same values.
+
+## msdfBaker
+
+`RasterBakerModule<'msdf', MsdfBakerOptions, MsdfDescriptor>`. Generates a four-channel signed distance field
+(multi-channel distance plus true distance) for every selected glyph.
+
+`MsdfBakerOptions` is `MsdfOptions | undefined`:
+
+| Option | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `emSize` | `number` | `64` | Integer from 1 to 1022. Atlas texels per em. |
+| `pixelRange` | `number` | `8` | Integer from 1 to 1020. Encoded distance range in atlas texels. |
+| `coverage` | `RasterCoverage` | every glyph | See [RasterCoverage](/reference/formats). |
+
+The matching runtime declaration is `msdf` for `options: undefined`, otherwise `msdf(options)`.
+
+## slugBaker
+
+`RasterBakerModule<'slug', SlugBakerOptions, SlugDescriptor>`. Converts glyph outlines to quadratic curves and builds
+the per-glyph band tables the Slug shader reads.
+
+`SlugBakerOptions` is `SlugOptions | undefined`:
+
+| Option | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `cubicSubdivisions` | `number` | `4` | Integer from 1 to 16. Quadratic curves fitted per cubic curve of a CFF outline. |
+
+The matching runtime declaration is `slug` for `options: undefined`, otherwise `slug(options)`.
+
+## Baker errors
+
+Each baker entry exports an error class: `BitmapBakeError`, `MsdfBakeError`, `SlugBakeError`. All extend `GlyphError`
+with `code` `'bake-failed'`.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `code` | `'bake-failed'` | The `GlyphError` category. |
+| `reason` | `string` | The baker's own code for the failure. |
+| `path` | `string \| undefined` | The part of the request or font the failure refers to, when known. |
+
+Invalid options are rejected before the baker runs, with `TypeError` or `RangeError` from the format's option
+validation.
+
+```ts
+import { bakeFont } from '@pmndrs/glyph/bake';
+import { MsdfBakeError, msdfBaker } from '@pmndrs/glyph/bakers/msdf';
+
+try {
+  await bakeFont({
+    input: 'fonts/Inter-Regular.ttf',
+    output: 'public/fonts/inter.font.glb',
+    font: { fontFaceIndex: 0 },
+    rasters: [{ baker: msdfBaker, packaging: { artifact: 'embedded' }, options: undefined }],
+  });
+} catch (error) {
+  if (error instanceof MsdfBakeError) console.error(error.reason, error.message);
+  else throw error;
+}
+```
+
+## Low-level constructors
+
+Each baker entry also exports the pieces `bitmapBaker`, `msdfBaker` and `slugBaker` are built from. Use them to supply
+the baker's WebAssembly module yourself, for example from a bundler asset or a cache.
+
+| Bitmap | MSDF | Slug | Description |
+| --- | --- | --- | --- |
+| `createBitmapBaker(source)` | `createMsdfBaker(source)` | `createSlugBaker(source)` | Instantiates the baker from `BufferSource \| WebAssembly.Module`. Returns a promise of a core. |
+| `createBitmapBakerFromInstance(instance)` | `createMsdfBakerFromInstance(instance)` | `createSlugBakerFromInstance(instance)` | Wraps an instantiated `WebAssembly.Instance`. Returns a core. |
+| `bitmapBakerFromCore(core)` | `msdfBakerFromCore(core)` | `slugBakerFromCore(core)` | Wraps a core as a `RasterBakerModule` usable in a raster plan. |
+| `BitmapBakerCore` | `MsdfBakerCore` | `SlugBakerCore` | The core: `bake({ source, request, onProgress? })`, synchronous, returns a `RasterBakeArtifact`. |
+| `BitmapBakerRequest` | `MsdfBakerRequest` | `SlugBakerRequest` | The core's request: `sourceFingerprint`, `fontFaceIndex`, `glyphCount`, `shapingFingerprint`, `rasterKey`, `packaging`, `descriptor`. |
+| `BitmapBakerWasmSource` | `MsdfBakerWasmSource` | `SlugBakerWasmSource` | `BufferSource \| WebAssembly.Module`. |
+
+The package exports the modules as `@pmndrs/glyph/bitmap-baker.wasm`, `@pmndrs/glyph/mtsdf-baker.wasm` and
+`@pmndrs/glyph/slug-baker.wasm`.
+
+```ts
+import { readFile } from 'node:fs/promises';
+import { bakeFont } from '@pmndrs/glyph/bake';
+import { createSlugBaker, slugBakerFromCore } from '@pmndrs/glyph/bakers/slug';
+
+declare const slugWasmPath: string; // your copy of slug-baker.wasm
+
+const baker = slugBakerFromCore(await createSlugBaker(await readFile(slugWasmPath)));
+await bakeFont({
+  input: 'fonts/Inter-Regular.ttf',
+  output: 'public/fonts/inter.font.glb',
+  font: { fontFaceIndex: 0 },
+  rasters: [{ baker, packaging: { artifact: 'embedded' }, options: undefined }],
+});
+```
+
+## rasterBake()
+
+Builds a raster plan from a baker and its options, inferring the option type from the baker. Exported from
+`@pmndrs/glyph/baker`.
+
+```ts
+import { rasterBake } from '@pmndrs/glyph/baker';
+import { bitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
+
+const plan = rasterBake(bitmapBaker, { packaging: { artifact: 'external' }, options: { strikes: [16, 32] } });
+```
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `baker` | a `RasterBakerModule` | The baker. |
+| `options.packaging` | `RasterPackaging` | `{ artifact: 'embedded' }` or `{ artifact: 'external' }`. |
+| `options.options` | the baker's options | Checked against the baker's option type at compile time. |
+
+Returns a `RasterBakePlan`: `{ baker, packaging, options }`, the same object an inline plan literal is. The function
+performs no validation at run time; options are validated when the plan is baked.
+
+## defineRasterBaker()
+
+Declares a baker for a custom format. It returns its argument, typed, and exists for inference.
+
+```ts
+import { defineRasterBaker, type RasterBakeArtifact, type RasterBakeRequest } from '@pmndrs/glyph/baker';
+
+interface DotsOptions {
+  readonly radius: number;
+}
+type DotsDescriptor = { readonly generatorVersion: '1'; readonly radius: number };
+
+declare function bakeDots(request: RasterBakeRequest<DotsDescriptor>): Promise<RasterBakeArtifact<'dots'>>;
+
+export default defineRasterBaker({
+  kind: 'dots',
+  extension: 'ACME_font_dots',
+  version: 0,
+  descriptor: (options: DotsOptions): DotsDescriptor => ({ generatorVersion: '1', radius: options.radius }),
+  bake: bakeDots,
+});
+```
+
+### RasterBakerModule
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `kind` | `string` | The format key. Must equal the `kind` of the runtime format. |
+| `extension` | `string` | Name of the glTF extension the raster is stored under. |
+| `version` | `number` | Format version. A raster loads only into a runtime format of the same version. |
+| `descriptor(options)` | function | Returns the canonical, JSON-serializable descriptor of `options`. Equal rasters must produce equal descriptors; the raster's identity is derived from it. Should throw for invalid options. |
+| `bake(request)` | function | Bakes the raster. Returns a promise of a `RasterBakeArtifact`. |
+
+### RasterBakeRequest
+
+What `bake` receives.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `font` | `RasterBakeFontContext` | `source` (the font bytes, after any Unicode selection), `sourceFingerprint`, `fontFaceIndex`, `glyphCount`, `shapingFingerprint`. |
+| `rasterKey` | `RasterKey` | The identity to stamp into the artifact. |
+| `packaging` | `RasterPackaging` | Whether the raster will be embedded or written as its own file. |
+| `descriptor` | the baker's descriptor | The result of `descriptor(options)`. |
+| `signal` | `AbortSignal`, optional | Abort request. |
+| `onProgress` | `BakeProgressListener`, optional | Progress callback. |
+
+### RasterBakeArtifact
+
+What `bake` returns.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `rasterKey` | `RasterKey` | The request's `rasterKey`. |
+| `kind`, `extension`, `version` | `string`, `string`, `number` | The baker's identity. |
+| `artifacts` | `readonly BakeArtifact[]` | The files produced: `role` (`'font'` or `'raster'`), `id`, `bytes`, `fingerprint`. |
+| `report` | `RasterPayloadReport` | `metadataBytes`, `serializedBytes`, `gpuBytes` and `pages` (`width`, `height`, `format`, `gpuBytes`, `encodedBytes` each). |
+
+For `glyph bake` discovery to find a custom baker, the package that exports the format lists it in its
+`package.json` under `pmndrs.glyph`. The key is the name under which the package exports the runtime format, which
+must also be the baker's `kind`. The value is an exported ESM subpath whose default export is the baker:
+
+```json
+{
+  "name": "acme-glyph-dots",
+  "type": "module",
+  "exports": { ".": "./index.js", "./baker": "./baker.js" },
+  "pmndrs": { "glyph": { "dots": "./baker" } }
+}
+```
+
+With this manifest, `import { dots } from 'acme-glyph-dots'` followed by `glyph.fontFace(url, { format: dots })` is
+baked by the default export of `acme-glyph-dots/baker`.
+
+See [Add a custom format](/guides/project/custom-format) for the runtime half.
+
+## Types in @pmndrs/glyph/baker
+
+| Type | Description |
+| --- | --- |
+| `RasterBakerModule<Kind, Options, Descriptor>` | A baker. |
+| `RasterBakePlan<Module>` | `{ baker, packaging, options }` for a given baker type. |
+| `RasterBakeOptionsOf<Module>`, `RasterBakeDescriptorOf<Module>` | The option and descriptor types of a baker. |
+| `RasterPackaging` | `{ artifact: 'embedded' \| 'external' }`. |
+| `RasterBakeRequest<Descriptor>`, `RasterBakeFontContext` | The input of `bake`. |
+| `RasterBakeArtifact<Kind>`, `BakeArtifact` | The output of `bake`. |
+| `RasterPayloadReport`, `RasterPagePayloadReport`, `FontPayloadReport` | Size reports. |
+| `BakeProgress`, `BakeProgressPhase`, `BakeProgressListener` | Progress events; see [Runtime bake](/reference/runtime-bake). |
+| `BakeWarning`, `SerializedBakeError` | `{ code, message, path? }` records. |
+
+The same types are also exported from the root entry `@pmndrs/glyph`.
+
+## See also
+
+- [Bake API](/reference/bake)
+- [Formats](/reference/formats)
+- [CLI](/reference/cli)
+- [Add a custom format](/guides/project/custom-format)

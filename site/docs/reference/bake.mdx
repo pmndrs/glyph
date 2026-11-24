@@ -1,0 +1,350 @@
+---
+title: Bake API
+description: Reference for @pmndrs/glyph/bake - bakeFont, bakeProject, inspectFont, fontIsUpToDate, validateFontArtifact, their options, reports and errors.
+nav: 741
+sourcecode: packages/glyph/src/node/bake.ts
+---
+
+`@pmndrs/glyph/bake` is the Node.js API behind the `glyph` command. It reads source fonts from disk, bakes them and
+writes `.font.glb` files. Use it from build scripts. It imports Node built-ins and cannot be bundled for a browser;
+for baking in a browser see [Runtime bake](/reference/runtime-bake).
+
+```ts
+import {
+  bakeFont,
+  bakeProject,
+  fontIsUpToDate,
+  inspectFont,
+  validateFontArtifact,
+} from '@pmndrs/glyph/bake';
+```
+
+## Exports
+
+| Export | Kind | Summary |
+| --- | --- | --- |
+| [`bakeFont`](#bakefont) | function | Bake one source font to one output, with any rasters. |
+| [`bakeProject`](#bakeproject) | function | Find `glyph.fontFace()` declarations in a project and bake each source. |
+| [`inspectFont`](#inspectfont) | function | List a source font's code points, glyph ids and glyph names. |
+| [`fontIsUpToDate`](#fontisuptodate) | function | Decide whether an existing output already matches a bake request. |
+| [`validateFontArtifact`](#validatefontartifact) | function | Validate the bytes of a baked font. |
+| [`NodeBakeError`](#errors), [`FontBakeError`](#errors), [`FontArtifactValidationError`](#errors) | classes | Errors thrown by this module. |
+| `createFontBaker`, `createFontBakerFromInstance`, `fontBakerWasmUrl` | functions, string | The core baker over a WebAssembly module you supply, and the URL of the package's module. See [Core baker](#core-baker). |
+
+Path parameters accept a string path or a `file:` `URL`. Another URL scheme throws `NodeBakeError` with reason
+`NON_FILE_URL`.
+
+## bakeFont()
+
+Bakes one font: reads the source, optionally reduces it to a Unicode selection, bakes the shaping data and each
+requested raster, validates the result and writes the output files.
+
+```ts
+import { bakeFont } from '@pmndrs/glyph/bake';
+import { msdfBaker } from '@pmndrs/glyph/bakers/msdf';
+import { slugBaker } from '@pmndrs/glyph/bakers/slug';
+
+const report = await bakeFont({
+  input: 'fonts/Inter-Regular.ttf',
+  output: 'public/fonts/inter.font.glb',
+  font: { fontFaceIndex: 0 },
+  unicodeRanges: [{ start: 0x20, end: 0x7e }],
+  rasters: [
+    { baker: msdfBaker, packaging: { artifact: 'embedded' }, options: { emSize: 32, pixelRange: 6 } },
+    { baker: slugBaker, packaging: { artifact: 'external' }, options: undefined },
+  ],
+});
+```
+
+### Parameters: NodeBakeOptions
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `input` | `string \| URL` | required | The source font: TTF, OTF, TTC or OTC. |
+| `output` | `string \| URL` | required | The main output file. Must not be the input. |
+| `font` | `{ fontFaceIndex: number; outlines?: boolean }` | required | `fontFaceIndex`: the face of a collection, 0 for a single font. `outlines`: also store glyph outlines (default `false`). |
+| `unicodeRanges` | `readonly { start: number; end: number }[]` | the whole font | Inclusive code point ranges to keep. The source is reduced to them, and to the glyphs shaping needs for them, before baking. |
+| `rasters` | readonly array of [raster plans](#raster-plans) | `[]` | The rasters to bake. With none, the output holds shaping data only and cannot draw text. |
+| `signal` | `AbortSignal` | none | Aborts the bake. Checked between phases and before files are written. |
+
+### Raster plans
+
+Each entry of `rasters` is a `RasterBakePlan`:
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `baker` | a baker module | `bitmapBaker`, `msdfBaker` or `slugBaker` from [`@pmndrs/glyph/bakers/*`](/reference/bakers), or a custom baker. |
+| `packaging` | `{ artifact: 'embedded' \| 'external' }` | `'embedded'` stores the raster inside the output. `'external'` writes it to `<name>.<kind>.glb` beside the output, where `<name>` is the output name without `.font.glb` or `.glb`. |
+| `options` | the baker's options | Type-checked against `baker`. `undefined` for the defaults of `msdfBaker` and `slugBaker`. |
+
+`rasterBake(baker, { packaging, options })` from `@pmndrs/glyph/baker` builds the same object with inference.
+
+### Return value
+
+A promise of a [`NodeFontBakeReport`](#nodefontbakereport).
+
+### Behavior
+
+- All output files are written together. If one cannot be written, the files already replaced are restored.
+- The result is validated with [`validateFontArtifact`](#validatefontartifact) before anything is written.
+- The same input bytes, options and package version produce the same output bytes.
+
+### Exceptions
+
+| Error | When |
+| --- | --- |
+| `NodeBakeError` `OUTPUT_OVERLAPS_INPUT` | `output` is, or is a link to, `input`. |
+| `NodeBakeError` `OUTPUT_TARGET_TYPE` | An existing output path is not a regular file. |
+| `NodeBakeError` `OUTPUT_CONFLICT` | Two artifacts resolve to the same file. |
+| `FontBakeError`, `BitmapBakeError`, `MsdfBakeError`, `SlugBakeError` | A baker rejected the font or its options. `reason` holds the baker's code. |
+| `FontArtifactValidationError` | The composed output failed validation. |
+| `TypeError` | A raster's options are invalid. |
+| The signal's abort reason | `signal` was aborted. |
+| A Node.js file system error | The input cannot be read or an output cannot be written. |
+
+## bakeProject()
+
+Scans a project's source files for `glyph.fontFace()` calls and bakes every source font they name. This is
+`glyph bake` without direct options. The discovery rules are listed in the [CLI reference](/reference/cli).
+
+```ts
+import { bakeProject } from '@pmndrs/glyph/bake';
+
+const report = await bakeProject({ projectRoot: '.', outputRoot: 'public/generated' });
+for (const { publicPathname, outputFile } of report.mappings) console.log(publicPathname, '->', outputFile);
+if (report.diagnostics.length > 0) process.exitCode = 1;
+```
+
+### Parameters: ProjectBakeOptions
+
+All optional.
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `projectRoot` | `string \| URL` | `process.cwd()` | The project to scan. |
+| `entries` | `readonly (string \| URL)[]` | every JavaScript and TypeScript file under `src/` | Files to scan, relative to the project root. |
+| `assetRoots` | `readonly (string \| URL)[]` | `['public']` when that directory exists | Directories in which declared URL paths are resolved. |
+| `outputRoot` | `string \| URL` | beside each source | Where to write outputs, mirroring each source's path inside its asset root. Relative to the project root. |
+| `signal` | `AbortSignal` | none | Aborts between fonts. |
+
+### Return value: ProjectBakeReport
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `fonts` | `readonly NodeFontBakeReport[]` | One report per baked source, ordered by source path. |
+| `mappings` | `readonly ProjectBakeMapping[]` | One entry per declaration and declared format: `expression` (the source text of the call), `sourceFile`, `assetRoot`, `publicPathname` (the URL path), `outputFile`. |
+| `diagnostics` | `readonly ProjectBakeDiagnostic[]` | Declarations that could not be baked: `code`, `message`, `path`, `sourceFile`, `expression`. |
+
+A declaration that cannot be resolved becomes a diagnostic; it does not throw. Sources are baked whole (face 0, no
+Unicode selection) with every raster embedded, each time the function is called.
+
+### Exceptions
+
+| Error | When |
+| --- | --- |
+| `NodeBakeError` `OUTPUT_CONFLICT` | Two sources map to one output, or one source to two outputs. |
+| `NodeBakeError` `RASTER_EXTENSION_DUPLICATE` | One source declares the same format twice with different options. |
+| `NodeBakeError` `INVALID_RASTER_BAKER` | A format's baker module does not export a baker of the declared kind. |
+| `NodeBakeError` `SOURCE_OUTSIDE_ASSET_ROOT` | A resolved source is not inside its asset root. |
+| Any error of `bakeFont` | While baking one of the sources. |
+
+## inspectFont()
+
+Reads a source font and lists the code points it maps.
+
+```ts
+import { inspectFont } from '@pmndrs/glyph/bake';
+
+const inspection = await inspectFont({ input: 'fonts/fa-solid-900.ttf' });
+const rocket = inspection.glyphs.find((glyph) => glyph.name === 'rocket');
+```
+
+### Parameters: NodeFontInspectOptions
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `input` | `string \| URL` | required | The source font. |
+| `fontFaceIndex` | `number` | `0` | The face of a collection. |
+
+### Return value: FontInspection
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `formatVersion` | `0` | Version of this report. |
+| `fontFaceIndex` | `number` | The inspected face. |
+| `glyphCount` | `number` | Number of glyphs in the face. |
+| `glyphNameSource` | `'post' \| 'cff' \| 'none'` | The table the names came from, or `'none'` when the font stores no names. |
+| `glyphs` | `readonly GlyphInspection[]` | One entry per mapped code point: `codePoint`, `glyphId`, and `name` when the font has one. |
+
+Rejects with a file system error when the input cannot be read and with `FontBakeError` when it is not a font the
+baker can parse.
+
+## fontIsUpToDate()
+
+Compares an existing output with a bake request without rasterizing anything. `glyph bake` uses it to skip work.
+
+```ts
+import { fontIsUpToDate } from '@pmndrs/glyph/bake';
+
+const { fresh, reason } = await fontIsUpToDate({
+  input: 'fonts/Inter-Regular.ttf',
+  output: 'public/fonts/inter.font.glb',
+  fontFaceIndex: 0,
+  rasters: [],
+  split: false,
+});
+```
+
+### Parameters
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `input` | `string` | required | Path of the source font. |
+| `output` | `string` | required | Path of the existing main output. |
+| `fontFaceIndex` | `number` | required | The face that would be baked. |
+| `outlines` | `boolean` | `false` | Whether the bake would store outlines. |
+| `unicodeRanges` | `readonly { start: number; end: number }[]` | none | The Unicode selection that would be applied. |
+| `rasters` | `readonly { rasterKey: string; kind: string; version: number }[]` | required | The identity of every raster that would be baked. |
+| `split` | `boolean` | required | Whether rasters would be written as separate files. |
+
+The `rasterKey` of a raster is derived by the package from the baker and its options. It is not exposed by a public
+function, so application code can call this function meaningfully only with an empty `rasters` list (a shaping-only
+output). For a complete check use `glyph bake`, which reports `up to date`, or `glyph bake --check`.
+
+### Return value: FontFreshness
+
+`{ fresh: boolean; reason: string }`. `reason` is a sentence for a log, for example `no font at the output path`,
+`the source font, face, or unicode ranges changed`, or
+`every requested raster is already baked from this exact source`.
+
+`fresh` is `true` only when the source fingerprint, the core baker version, the presence of outlines, the exact set
+of rasters, each raster's compatibility fingerprint and the packaging all match. A missing or unparsable output is
+not fresh; it does not throw. A missing input rejects with a file system error.
+
+## validateFontArtifact()
+
+Validates the bytes of a main baked font file.
+
+```ts
+import { readFile } from 'node:fs/promises';
+import { FontArtifactValidationError, validateFontArtifact } from '@pmndrs/glyph/bake';
+
+try {
+  const font = await validateFontArtifact(new Uint8Array(await readFile('public/fonts/inter.font.glb')));
+  console.log(font.glyphCount, font.sourceFingerprint);
+} catch (error) {
+  if (error instanceof FontArtifactValidationError) console.error(error.issues);
+  else throw error;
+}
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `bytes` | `Uint8Array` | The complete contents of a `.font.glb`. |
+
+### Return value: ValidatedFontArtifact
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `document` | `Readonly<Record<string, unknown>>` | The file's glTF JSON. |
+| `glyphCount` | `number` | Number of glyphs. |
+| `sourceFingerprint` | `Fingerprint` | Fingerprint of the (subset) source the font was baked from. |
+| `shapingFingerprint` | `Fingerprint` | Fingerprint of the shaping data. |
+| `shapingSfnt` | `Uint8Array` | The shaping tables. |
+| `glyphExtents`, `glyphExtentsAvailability` | `Uint8Array` | Per-glyph extents and the bitset of glyphs that have them. |
+| `khronos` | `KhronosValidationReport` | The report of the Khronos glTF Validator: `mimeType`, `validatorVersion`, `issues` (counts and `messages`), `info`. |
+
+### Checks
+
+The file is parsed as a glTF binary, checked with the Khronos glTF Validator, checked against the schema of the
+`PMNDRS_font` extension, and checked for internal consistency.
+
+Rejects with `FontArtifactValidationError`, whose `issues` is an array of `{ code, message, path? }`.
+
+## Reports
+
+### NodeFontBakeReport
+
+Returned by `bakeFont` and printed by `glyph bake --json`. Sizes are in bytes.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `source` | `{ bytes: number }` | Size of the source that was baked, after the Unicode selection. |
+| `shared` | record | Data shared by every raster. `shared.shaping` lists the shaping tables and `rawBytes`; `shared.outlines` is present when outlines were stored. |
+| `rasters` | array | One entry per raster: `kind`, `metadataBytes`, `serializedBytes` (its size in the file), `gpuBytes` (its texture memory), and `pages` (`width`, `height`, `format`, `gpuBytes`, `encodedBytes` per atlas page). |
+| `containers` | array | One entry per output file: `artifactId`, `role` (`'font'` or `'raster'`), `jsonBytes`, `paddingBytes`, `totalBytes`. |
+| `transport` | array | Three entries per output file: its size as `format` `'raw'`, `'gzip'` (level 9) and `'brotli'` (quality 11). |
+| `preparation` | `PreparedFontReport`, optional | Present when `unicodeRanges` was given: `sourceBytes`, `preparedBytes`, `glyphCount`, `fingerprint`. |
+| `execution` | `NodeBakeExecutionReport` | Timings, memory and the files written. |
+
+`NodeBakeExecutionReport`:
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `timingsMs` | record of `number` | Milliseconds spent in `read`, `coreBake`, `rasterBake`, `compose`, `validate`, `transport` (computing the compressed sizes), `write`, and `total`. |
+| `memory` | record of `number` | `rssBeforeBytes`, `rssAfterBytes`, and `processMaxRssBytes` (the peak of the whole Node.js process, not of this bake). |
+| `outputs` | array | The files written: `role`, `file` (path), `bytes`, `fingerprint`. |
+
+```ts
+import type { NodeFontBakeReport } from '@pmndrs/glyph/bake';
+
+declare const report: NodeFontBakeReport;
+const brotli = report.transport.filter((entry) => entry.format === 'brotli').reduce((sum, entry) => sum + entry.bytes, 0);
+```
+
+## Errors
+
+All three extend `GlyphError`.
+
+| Class | `code` | Extra properties | Thrown for |
+| --- | --- | --- | --- |
+| `NodeBakeError` | `'bake-failed'` | `reason: string`, `path: string \| undefined` | File and project problems. Reasons: `NON_FILE_URL`, `OUTPUT_OVERLAPS_INPUT`, `OUTPUT_TARGET_TYPE`, `OUTPUT_CONFLICT`, `UNSAFE_ARTIFACT_ID`, `SOURCE_OUTSIDE_ASSET_ROOT`, `RASTER_EXTENSION_DUPLICATE`, `INVALID_RASTER_BAKER`. The command line adds `STALE_OUTPUT`, `STALE_GLYPH_MAP`, `AMBIGUOUS_GLYPH_NAME`, `GLYPH_NAME_NOT_FOUND` and `FONT_INSPECTION_FAILED`. |
+| `FontBakeError` | `'bake-failed'` | `reason: string`, `path: string \| undefined` | The core baker rejected the source or the request. `reason` is the baker's code. |
+| `FontArtifactValidationError` | `'artifact-invalid'` | `issues: readonly FontArtifactValidationIssue[]` | A baked file failed validation. |
+
+```ts
+import { bakeFont, NodeBakeError } from '@pmndrs/glyph/bake';
+
+try {
+  await bakeFont({ input: 'a.ttf', output: 'a.ttf', font: { fontFaceIndex: 0 } });
+} catch (error) {
+  if (error instanceof NodeBakeError) console.error(error.reason, error.path); // OUTPUT_OVERLAPS_INPUT
+  else throw error;
+}
+```
+
+## Core baker
+
+For environments where the package cannot load its own WebAssembly file, the core baker is available over a module
+you supply. It works on bytes and writes no files.
+
+| Export | Description |
+| --- | --- |
+| `fontBakerWasmUrl` | `string`. URL of the package's `font-baker.wasm`. |
+| `createFontBaker(source)` | Compiles and instantiates the baker from `BufferSource \| WebAssembly.Module`. Returns `Promise<FontBakeCore>`. |
+| `createFontBakerFromInstance(instance)` | Wraps an already instantiated module. Returns `FontBakeCore`. |
+| `FontBakeCore` | `bake({ source, descriptor })` returns a `FontBakeResult` (`artifacts`, `report`, `warnings`); `prepare({ source, selection })` returns the subset source and its report; `inspect({ source, descriptor })` returns a `FontInspection`. All synchronous; all throw `FontBakeError`. |
+| `FontBakeDescriptor` | `{ formatVersion: 0; fontFaceIndex: number; outlines?: boolean }`. |
+
+```ts
+import { readFile } from 'node:fs/promises';
+import { createFontBaker, fontBakerWasmUrl } from '@pmndrs/glyph/bake';
+
+const baker = await createFontBaker(await readFile(new URL(fontBakerWasmUrl)));
+const inspection = baker.inspect({
+  source: new Uint8Array(await readFile('fonts/Inter-Regular.ttf')),
+  descriptor: { formatVersion: 0, fontFaceIndex: 0 },
+});
+```
+
+The core baker produces shaping data only. Rasters are added by `bakeFont`.
+
+## See also
+
+- [Bakers](/reference/bakers)
+- [CLI](/reference/cli)
+- [Bake fonts](/guides/fonts/bake-fonts)
+- [Runtime bake](/reference/runtime-bake)
+- [Errors](/reference/errors)

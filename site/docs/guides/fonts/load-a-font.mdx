@@ -1,0 +1,251 @@
+---
+title: Load a font
+description: Declare a font with glyph.fontFace, choose its raster format, load it in three.js or React, and handle a failed load.
+nav: 100
+sourcecode: packages/glyph/src/font-face.ts
+---
+
+A font reaches the engine as a `FontFace`: a declaration made from a source (usually the URL of a baked `.font.glb`)
+and the raster formats you intend to draw with. This guide declares one, loads it, uses it for text in three.js and in
+React, and shows what a failed load looks like.
+
+A raster format is how glyph shapes are stored and drawn: `bitmap`, `msdf` or `slug`. See
+[Raster formats](/explanation/formats) for how they differ.
+
+## Declare the face
+
+Call `glyph.fontFace(source, config)`. The call is synchronous and fetches nothing.
+
+```ts
+import { glyph, msdf } from '@pmndrs/glyph';
+
+const Body = glyph.fontFace('/fonts/inter.font.glb', { format: msdf });
+```
+
+The source can be any of these:
+
+| Source | Meaning |
+| --- | --- |
+| `string` or `URL` ending in `.glb` | A baked font. Fetched as it is. |
+| Any other `string` or `URL` (for example `.ttf`, `.otf`) | A source font. The loader first requests the sibling `.font.glb` and, if it is missing, bakes the source in a worker. See [Bake fonts at runtime](/guides/fonts/runtime-baking). |
+| `Blob` or `File` | A source font when its name ends in `.ttf` or `.otf`, or its MIME type is `font/ttf`, `font/otf`, `application/x-font-ttf` or `application/x-font-otf`. Otherwise the bytes of a baked `.font.glb`. |
+| `SerializedFontFace` | A loaded face sent from another realm with `clone()`. See [FontFace](/reference/font-face). |
+
+`format` states which rasters the face must provide. Give one format or an array. Leave it out and `load()` loads
+whatever the baked file carries; text created from such a face is drawn with the renderer's default format, MSDF. If
+the file has no MSDF raster, declare the format it does have.
+
+## Choose formats at load
+
+Each declared format becomes a member of the face, named after the format: `Face.msdf`, `Face.slug`, `Face.bitmap`.
+The first declared format is the face's default.
+
+```ts
+import { bitmap, glyph, msdf, slug } from '@pmndrs/glyph';
+
+const Face = glyph.fontFace('/fonts/inter.font.glb', {
+  format: [msdf, slug, bitmap({ strikes: [16, 32] })],
+});
+
+await Face.slug.load(); // fetches and decodes Slug only
+await Face.load(); // every declared format, then every other format the file carries
+```
+
+A format's options are part of its identity. `bitmap` needs the exact strike list the file was baked with, and `msdf`
+needs the same `emSize` and `pixelRange` when the bake changed them. A mismatch rejects with
+`FONT_FACE_FORMAT_UNAVAILABLE`.
+
+```ts
+import { glyph, msdf } from '@pmndrs/glyph';
+
+// Baked with: glyph bake --input icons.ttf --msdf em-size=32,pixel-range=6
+const Icons = glyph.fontFace('/fonts/icons.font.glb', { format: msdf({ emSize: 32, pixelRange: 6 }) });
+```
+
+To see what a file carries without loading any raster, read `formats()`:
+
+```ts
+const carried = await Inter.formats(); // for example ['bitmap', 'msdf', 'slug']
+```
+
+## Use the face in three.js
+
+`load()` must settle before a `Text` is created from the face. Pass the face, or one of its members, as `font`.
+
+```ts
+await Inter.load();
+
+const body = three.createText({ font: Inter, text: 'Body copy' }); // the default format
+const title = three.createText({ font: Inter.slug, text: 'Title', style: { fontSize: 3 } });
+scene.add(body, title);
+```
+
+`createText` on a face that is not loaded throws `GlyphFontError` with `reason` `FONT_FACE_FORMAT_NOT_LOADED`.
+
+A face with a `family` can also be selected by name:
+
+```ts
+import { glyph, msdf } from '@pmndrs/glyph';
+
+const Ui = glyph.fontFace('/fonts/inter.font.glb', { family: 'Inter UI', format: msdf });
+await Ui.load();
+
+const label = three.createText({ font: 'Inter UI', text: 'Save' });
+```
+
+A family name is unique among live faces: declaring a second face with the same `family` throws until the first is
+disposed. Without `family`, the face gets a generated name (`Font1`, `Font2`, ...).
+
+## Use the face in React
+
+The hooks in `@pmndrs/glyph/react` declare, load and release a face for you. Each takes the same source and suspends
+the component until the font is ready, so render the scene inside a `Suspense` boundary. Each returns a loaded `Font`.
+
+```tsx
+import { Text, useBitmap, useFont, useMsdf, useSlug } from '@pmndrs/glyph/react';
+import { slug } from '@pmndrs/glyph';
+
+function Labels() {
+  const body = useMsdf('/fonts/inter.font.glb');
+  const title = useSlug('/fonts/inter.font.glb');
+  const hud = useBitmap('/fonts/inter.font.glb', { strikes: [16, 32] });
+  const same = useFont('/fonts/inter.font.glb', { format: slug }); // the general form
+
+  return (
+    <>
+      <Text font={title} style={{ fontSize: 3 }}>Title</Text>
+      <Text font={body}>Body copy</Text>
+      <Text font={hud} style={{ fontSize: 16 }}>HP 100</Text>
+      <Text font={same}>Also Slug</Text>
+    </>
+  );
+}
+```
+
+| Hook | Format | Options argument |
+| --- | --- | --- |
+| `useMsdf(source, options?)` | `msdf` | `MsdfOptions`, optional |
+| `useSlug(source, options?)` | `slug` | `SlugOptions`, optional |
+| `useBitmap(source, options)` | `bitmap` | `BitmapFormatOptions`, required (`strikes`) |
+| `useFont(source, { format })` | any | the format or format request |
+
+To start the download before the component mounts, call `preload` at module scope. It takes the same arguments as the
+hook and returns a promise.
+
+```ts
+import { useMsdf } from '@pmndrs/glyph/react';
+
+void useMsdf.preload('/fonts/inter.font.glb');
+```
+
+`clear` with the same arguments releases a preloaded font that nothing has mounted.
+
+### Name faces for a subtree
+
+`GlyphProvider` takes a `fontFaces` table. Text inside it selects a face by the table's key. A provider with
+`fontFaces` wraps its children in a `Suspense` boundary that shows `fallback` while those faces load.
+
+```tsx
+import { GlyphProvider, Text } from '@pmndrs/glyph/react';
+import { slug } from '@pmndrs/glyph';
+
+const faces = {
+  Body: '/fonts/inter.font.glb',
+  Title: { src: '/fonts/playwrite.font.glb', format: slug },
+};
+
+function Page() {
+  return (
+    <GlyphProvider fontFaces={faces} fallback={null}>
+      <Text font="Title" style={{ fontSize: 3 }}>Hello</Text>
+      <Text font="Body">Hello</Text>
+    </GlyphProvider>
+  );
+}
+```
+
+Define the table outside the component. The provider's `fontFaces` cannot change after the first render; remount the
+provider to replace them.
+
+## Handle a failed load
+
+`load()` rejects with `GlyphFontError` when the file cannot be fetched, is not a valid baked font, or does not carry a
+declared format. `error.reason` names the cause and `error.url` the file, when one is known.
+
+```ts
+import { glyph, GlyphFontError, slug } from '@pmndrs/glyph';
+
+const Title = glyph.fontFace('/fonts/title.font.glb', { format: slug });
+try {
+  await Title.load();
+} catch (error) {
+  if (error instanceof GlyphFontError) {
+    console.warn(`font failed (${error.reason})`, error.url);
+  } else {
+    throw error;
+  }
+}
+```
+
+Common reasons:
+
+| `reason` | Cause |
+| --- | --- |
+| `BAKED_FONT_MISSING` | The `.glb` URL returned 404 or 410. |
+| `BAKED_FONT_FETCH` | The request for the `.glb` failed or returned another error status. |
+| `BAKED_FONT_INVALID` | The response is not a valid baked font. |
+| `BAKED_FONT_INCOMPATIBLE` | The file was baked for a different font format version. Bake it again. |
+| `FONT_FACE_FORMAT_UNAVAILABLE` | The file does not carry the declared format with these exact options. |
+| `FONT_FACE_FORMAT_REQUIRED` | A face with no `format` was loaded from a file that advertises no raster. |
+| `FONT_FACE_FORMAT_NOT_LOADED` | The face was used for text before its `load()` settled. |
+| `FONT_FACE_NOT_FOUND` | A family name given as `font` matches no live face. Thrown by `createText` and by the React `Text`. |
+
+A failed `load()` can be called again; the face keeps no failed state.
+
+In React, a failed hook throws to the nearest error boundary. `GlyphProvider` has one built in for font failures:
+
+```tsx
+import { GlyphProvider, Text, useMsdf } from '@pmndrs/glyph/react';
+
+function Label() {
+  const font = useMsdf('/fonts/inter.font.glb');
+  return <Text font={font}>Hello</Text>;
+}
+
+function Scene() {
+  return (
+    <GlyphProvider
+      fallback={null}
+      errorFallback={(error, dismiss) => (
+        <mesh name={error.reason} onClick={dismiss}>
+          <planeGeometry args={[1, 1]} />
+          <meshBasicMaterial color="red" />
+        </mesh>
+      )}
+    >
+      <Label />
+    </GlyphProvider>
+  );
+}
+```
+
+`errorFallback` receives only `GlyphFontError`; any other error continues to the next boundary. Call `dismiss` after
+fixing the cause to render the children again.
+
+## Release the face
+
+`dispose()` on the declaration releases every font it loaded and frees its family name. Text already created keeps
+its own font until that text is disposed.
+
+```ts
+text.dispose();
+Inter.dispose();
+```
+
+## See also
+
+- [FontFace reference](/reference/font-face)
+- [Format reference](/reference/formats)
+- [Bake fonts](/guides/fonts/bake-fonts)
+- [Handle errors](/guides/project/handle-errors)
+- [React reference](/reference/react)

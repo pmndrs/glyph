@@ -1,0 +1,129 @@
+---
+title: Font stack
+description: Reference for createFontStack, FontStack and FontSelection - an ordered list of loaded fonts used as one font with per-cluster fallback.
+nav: 702
+sourcecode: packages/glyph/src/loaded-font.ts
+---
+
+A font stack is an ordered, immutable list of loaded fonts that is used wherever a single font is accepted. For each
+grapheme cluster of the text, the first font in the list that covers the cluster draws it. `createFontStack` and the
+types `FontStack` and `FontSelection` are exported from `@pmndrs/glyph`.
+
+## createFontStack()
+
+Creates a stack from loaded fonts.
+
+```ts
+import { createFontStack, type Font } from '@pmndrs/glyph';
+import type { msdf, slug } from '@pmndrs/glyph';
+
+declare const latin: Font<typeof msdf>;
+declare const arabic: Font<typeof msdf>;
+declare const icons: Font<typeof slug>;
+
+const stack = createFontStack(latin, arabic, icons);
+```
+
+### Syntax
+
+```ts
+import { createFontStack, type Font, type FontStack } from '@pmndrs/glyph';
+import type { msdf } from '@pmndrs/glyph';
+
+declare const primary: Font<typeof msdf>;
+declare const fallback: Font<typeof msdf>;
+
+const one: FontStack<typeof msdf> = createFontStack(primary);
+const two: FontStack<typeof msdf> = createFontStack(primary, fallback);
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `primary` | `Font<Format>` | The first font tried for every cluster. |
+| `...fallback` | `Font<Format>[]` | Zero or more fonts tried in order after the primary. |
+
+Every argument must be a live `Font` created by the package: the value a React or Vue font hook returns, or the font a
+`Text` is bound to. A `FontFace` or one of its format members is not a `Font`. See [Font](/reference/font-face).
+
+Members may have different raster formats.
+
+### Return value
+
+A frozen `FontStack`. Its type parameter is the union of the members' raster formats:
+`createFontStack(msdfFont, slugFont)` is a `FontStack<typeof msdf | typeof slug>`.
+
+### Exceptions
+
+| Error | When |
+| --- | --- |
+| `TypeError` | An argument is not a `Font` created by the package. |
+| `TypeError` | An argument has been disposed. |
+| `TypeError` | The same `Font` appears more than once. |
+
+## FontStack
+
+```ts
+import type { Font, FontStack } from '@pmndrs/glyph';
+import type { msdf } from '@pmndrs/glyph';
+
+declare const stack: FontStack<typeof msdf>;
+const [primary, ...fallback]: readonly Font<typeof msdf>[] = stack.fonts;
+```
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `fonts` | `readonly [Font, ...Font[]]` | The members in fallback order. Frozen; never empty. |
+
+A `FontStack` holds no lease of its own. It is valid while every member is live: using a stack with a disposed member
+throws `TypeError`. An object with a `fonts` array that `createFontStack` did not return is rejected with
+`TypeError`.
+
+## FontSelection
+
+```ts
+import type { Font, FontSelection, FontStack } from '@pmndrs/glyph';
+import type { msdf } from '@pmndrs/glyph';
+
+type Selection = Font<typeof msdf> | FontStack<typeof msdf>;
+declare const selection: FontSelection<typeof msdf>;
+const same: Selection = selection;
+```
+
+`FontSelection<Format>` is `Font<Format> | FontStack<Format>`: what a text's `font` holds once it is bound, and what
+`span()` accepts. `Text.font` in `@pmndrs/glyph/three` has this type.
+
+## Fallback behavior
+
+- Fallback is decided per grapheme cluster (a base character with its combining marks, or an emoji sequence).
+- A cluster goes to the first font of the stack that has a glyph for every code point in it. It is never split
+  between two fonts.
+- A cluster covered by no member is drawn as glyph 0 (`.notdef`) and counted in
+  [`missingGlyphCount`](/reference/measurement).
+- Members with different raster formats are drawn in separate draws.
+- A single `Font` behaves as a stack of one.
+
+## Example: read what is missing
+
+```ts
+import { createFontStack, type Font } from '@pmndrs/glyph';
+import type { msdf } from '@pmndrs/glyph';
+
+declare const cjk: Font<typeof msdf>;
+
+text.font = createFontStack(inter, cjk);
+const { missingGlyphCount } = text.measure();
+```
+
+## Renderer support
+
+Stacks belong to the renderer-neutral core: `FontSelection` is the type of `font` in the shared text properties, so a
+stack is accepted wherever a renderer entry takes a loaded `Font`.
+
+## See also
+
+- [Use fallback fonts](/guides/fonts/fallback-stacks)
+- [Use an icon font](/guides/fonts/icons)
+- [FontFace and Font](/reference/font-face)
+- [Measurement](/reference/measurement)

@@ -1,0 +1,167 @@
+---
+title: Draw pixel-perfect bitmap text
+description: Bake bitmap strikes at the sizes you draw, match strike selection to the device pixel ratio, and snap text to the pixel grid.
+nav: 105
+sourcecode: packages/glyph/src/raster/bitmap.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="fonts" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+The Bitmap format stores each glyph as finished pixels at fixed sizes. Drawn at exactly one of those sizes, on the
+pixel grid, the screen shows the baked pixels one for one: the sharpest small text the engine can produce, and the
+right choice for pixel fonts and HUDs. This guide sets up the three things that have to line up: the strikes, the
+pixel ratio and the position.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="fonts-bitmap-strikes" aria-label="Bitmap text drifting with and without pixel snapping, and a ladder of sizes showing the strike each one uses" aspect="16 / 9" />
+
+Both rows on the left drift sideways by fractions of a pixel. Without `pixelSnapping` the text smears; with it the
+text stays sharp and steps one pixel at a time. On the right, sizes that are a baked strike are exact, and the others
+are the nearest strike resampled.
+
+## Bake the sizes you draw
+
+A strike is one baked size, given in pixels per em (ppem): the height of the font's em square in pixels. A strike of
+16 is the raster for `fontSize: 16` on a screen with a device pixel ratio of 1.
+
+1. List every size the interface uses, in physical pixels. For each CSS size and each device pixel ratio you
+   support, that is `fontSize * devicePixelRatio`. A 16 px label on 1x and 2x screens needs strikes 16 and 32.
+2. Bake them:
+
+```sh
+glyph bake --input VT323-Regular.ttf --output public/fonts/vt323.font.glb --unicodes U+0020-007E --bitmap 16,24,32
+```
+
+3. Declare the same list when loading. The strike list is part of the format's identity:
+
+```ts
+import { bitmap, glyph } from '@pmndrs/glyph';
+
+const Pixel = glyph.fontFace('/fonts/vt323.font.glb', { format: bitmap({ strikes: [16, 24, 32] }) });
+await Pixel.load();
+```
+
+Strikes are positive integers up to 1022, with no duplicates. Their order does not matter. In TypeScript the list
+must be a literal tuple, not a `number[]` variable; add `as const` to a list defined elsewhere.
+
+## Tell the text its pixel ratio
+
+For each text, the engine picks the strike whose ppem is nearest to `fontSize * rasterPixelRatio`. When two strikes
+are equally near, the smaller one is used. `rasterPixelRatio` defaults to 1, so on a 2x screen a 16 px label would
+pick strike 16 and be magnified. Set it to the renderer's pixel ratio:
+
+```ts
+import { bitmap, glyph } from '@pmndrs/glyph';
+
+const Pixel = glyph.fontFace('/fonts/vt323.font.glb', { format: bitmap({ strikes: [16, 24, 32] }) });
+await Pixel.load();
+
+const score = three.createText({
+  font: Pixel,
+  text: 'SCORE 00420',
+  style: { fontSize: 16 },
+  rasterPixelRatio: renderer.getPixelRatio(),
+  pixelSnapping: true,
+});
+```
+
+`rasterPixelRatio` is a property of the text and can change later, for example when the window moves to another
+screen:
+
+```ts
+text.rasterPixelRatio = renderer.getPixelRatio();
+```
+
+It must be positive and finite; any other value throws `GlyphInputError`. It affects only which strike is selected.
+Layout and the size of the text in the scene do not change.
+
+In React it is a prop:
+
+```tsx
+import { Text, useBitmap } from '@pmndrs/glyph/react';
+import { useThree } from '@react-three/fiber/webgpu';
+
+function Score() {
+  const pixel = useBitmap('/fonts/vt323.font.glb', { strikes: [16, 24, 32] });
+  const dpr = useThree((state) => state.viewport.dpr);
+
+  return (
+    <Text font={pixel} style={{ fontSize: 16 }} rasterPixelRatio={dpr} pixelSnapping>
+      SCORE 00420
+    </Text>
+  );
+}
+```
+
+## Make one unit one pixel
+
+A strike is copied one for one only when the text covers exactly as many screen pixels as the strike has. That needs
+a camera in which one world unit is one CSS pixel at the text, and no scale or rotation on the text or its parents.
+An orthographic camera sized to the canvas does this:
+
+```ts
+import { OrthographicCamera } from 'three/webgpu';
+
+declare const width: number; // canvas size in CSS pixels
+declare const height: number;
+
+const pixels = new OrthographicCamera(-width / 2, width / 2, height / 2, -height / 2, -1000, 1000);
+```
+
+With this camera `fontSize: 16` is 16 CSS pixels tall, and `position` is in CSS pixels from the center of the canvas.
+
+A fractional device pixel ratio (1.25, 1.5) cannot map CSS pixels onto whole physical pixels. Use sizes for which
+`fontSize * devicePixelRatio` is a whole number that you baked, or accept resampling on those screens.
+
+## Snap to the pixel grid
+
+A strike drawn at the right size but half a pixel off is still blurred: every baked pixel is spread across two screen
+pixels. `pixelSnapping` moves the corners of each Bitmap glyph to the nearest physical pixel in the vertex shader.
+
+Set it when creating a standalone text:
+
+```ts
+const label = three.createText({ font: interBitmap, text: 'HP 100', style: { fontSize: 16 }, pixelSnapping: true });
+```
+
+Or set it once on a `TextGroup` for everything inside:
+
+```ts
+const hud = three.createTextGroup({ pixelSnapping: true });
+hud.add(
+  three.createText({ font: interBitmap, text: 'HP 100', style: { fontSize: 16 } }),
+  three.createText({ font: interBitmap, text: 'MP 40', style: { fontSize: 16 } }),
+);
+scene.add(hud);
+```
+
+- A group's stated `pixelSnapping` (`true` or `false`) overrides the value of the texts inside it. The nearest
+  ancestor group that states one wins.
+- The value is fixed when the text or group is created. It defaults to `false`.
+- Snapping applies to the Bitmap format. MSDF and Slug text is antialiased at any position and ignores it.
+- Snapped text moves in whole-pixel steps. Leave snapping off for text that animates smoothly, and turn it on for
+  text that rests.
+
+## Check the result
+
+- A screenshot at 100% zoom shows the font's pixels with hard edges and no gray fringe.
+- For each size, `fontSize * rasterPixelRatio` equals one of the baked strikes.
+- The text does not shimmer or soften when the camera or the text moves by small amounts.
+
+## Troubleshooting
+
+- **Text is soft at every position.** The size does not match a strike, or `rasterPixelRatio` is still 1 on a
+  high-density screen.
+- **Text is sharp only at some positions.** `pixelSnapping` is off, or an ancestor group states `false`.
+- **`load()` rejects with `FONT_FACE_FORMAT_UNAVAILABLE`.** The strike list in `bitmap({ strikes })` differs from the
+  list the file was baked with.
+- **Setting `outline` or `shadow` throws.** The Bitmap format supports neither effect, and a style that asks for one
+  is rejected. Use MSDF for those effects; see [Raster formats](/explanation/formats).
+
+## See also
+
+- [Format reference: bitmap](/reference/formats)
+- [Raster formats](/explanation/formats)
+- [Bake fonts](/guides/fonts/bake-fonts)
+- [TextGroup reference](/reference/three-text-group)

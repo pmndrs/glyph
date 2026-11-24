@@ -1,0 +1,170 @@
+---
+title: Subset a font
+description: Keep baked fonts small by baking only the code points you draw, and limit a single raster further with RasterCoverage.
+nav: 102
+sourcecode: packages/glyph/src/raster-coverage.ts
+---
+
+A baked font grows with the number of glyphs it holds, and an MSDF raster grows fastest. This guide cuts a font down to
+what the application draws, in two ways: a Unicode subset of the whole font at bake time, and a narrower coverage for
+one raster.
+
+## Measure first
+
+These are file sizes for Inter Regular 4.1 (2,900 glyphs in the source), before HTTP compression:
+
+| Bake | File size |
+| --- | --- |
+| Whole font, MSDF at default settings (em size 64, pixel range 8) | 39.3 MB |
+| Whole font, MSDF at em size 32, pixel range 6 | 13.3 MB |
+| Whole font, Slug | 3.4 MB |
+| Basic Latin (`U+0020-007E`), MSDF at default settings | 2.1 MB |
+| Basic Latin, MSDF at em size 32, pixel range 6 | 761 KB |
+| Basic Latin, Bitmap at strikes 16 and 32 | 191 KB |
+| Basic Latin, Slug | 157 KB |
+
+To measure your own font, add `--json` to `glyph bake`. The report's `rasters` array gives each raster's
+`serializedBytes` and `gpuBytes`, and `transport` gives the file's raw, gzip and Brotli sizes.
+
+## Subset the whole font with Unicode ranges
+
+`--unicodes` prepares a smaller source font before anything is baked. The shaping tables and every raster then hold
+only the glyphs those code points need, including the glyphs that shaping substitutes for them (ligatures, contextual
+forms).
+
+1. List the code points as comma-separated `U+XXXX` values or `U+XXXX-YYYY` ranges:
+
+```sh
+glyph bake --input Inter-Regular.ttf --output public/fonts/inter-latin.font.glb \
+  --unicodes U+0020-007E,U+00A0-00FF --msdf
+```
+
+2. Load the result like any other font. No option at load time refers to the subset.
+
+```ts
+import { glyph, msdf } from '@pmndrs/glyph';
+
+const Latin = glyph.fontFace('/fonts/inter-latin.font.glb', { format: msdf });
+await Latin.load();
+```
+
+In a build script, pass the same ranges as `unicodeRanges`. Both ends are inclusive Unicode scalar values:
+
+```ts
+import { bakeFont } from '@pmndrs/glyph/bake';
+import { msdfBaker } from '@pmndrs/glyph/bakers/msdf';
+
+await bakeFont({
+  input: 'fonts/Inter-Regular.ttf',
+  output: 'public/fonts/inter-latin.font.glb',
+  font: { fontFaceIndex: 0 },
+  unicodeRanges: [
+    { start: 0x20, end: 0x7e },
+    { start: 0xa0, end: 0xff },
+  ],
+  rasters: [{ baker: msdfBaker, packaging: { artifact: 'embedded' }, options: undefined }],
+});
+```
+
+A character outside the subset has no glyph in the font. It shapes to the font's missing-glyph glyph (`.notdef`) and
+counts in `measure().missingGlyphCount`, or falls through to the next font of a
+[fallback stack](/guides/fonts/fallback-stacks).
+
+### Find the code points you need
+
+For a fixed set of strings, collect their code points in the build script:
+
+```ts
+const strings = ['Start', 'Options', 'Quit', 'Score: 0123456789'];
+const codePoints = [...new Set(strings.join(''))].map((character) => character.codePointAt(0) ?? 0);
+const unicodeRanges = codePoints.sort((a, b) => a - b).map((point) => ({ start: point, end: point }));
+```
+
+For glyphs known by name, such as icons, `glyph glyphs` prints the set in the form `--unicodes` takes:
+
+```sh
+glyph glyphs fa-solid-900.ttf --name rocket --name bolt --unicode-set
+# U+26A1,U+F0E7,U+F135
+```
+
+## Limit one raster with coverage
+
+`RasterCoverage` narrows a single Bitmap or MSDF raster without changing the font's shaping tables. Use it when one
+font file needs full shaping but a particular raster is only ever drawn for a few glyphs: for example a large Bitmap
+strike used only for digits.
+
+A coverage object has up to three seeds. Give at least one:
+
+| Seed | Type | Selects |
+| --- | --- | --- |
+| `unicodeRanges` | `readonly RasterUnicodeRange[]` | The glyph each code point in the inclusive ranges maps to |
+| `text` | `string` | The glyph each character of the string maps to |
+| `glyphIds` | `readonly number[]` | These glyph ids of the font directly (0 to 65535) |
+
+`unicodeRanges` and `text` select each code point's own glyph only. They do not follow shaping: a ligature or an
+alternate form that the shaper substitutes is a different glyph. Add those by `glyphIds`.
+
+1. Bake with the coverage in the raster's options:
+
+```ts
+import type { RasterCoverage } from '@pmndrs/glyph';
+import { bakeFont } from '@pmndrs/glyph/bake';
+import { bitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
+import { msdfBaker } from '@pmndrs/glyph/bakers/msdf';
+
+const digits: RasterCoverage = { text: '0123456789:.' };
+
+await bakeFont({
+  input: 'fonts/Inter-Regular.ttf',
+  output: 'public/fonts/inter.font.glb',
+  font: { fontFaceIndex: 0 },
+  unicodeRanges: [{ start: 0x20, end: 0x7e }],
+  rasters: [
+    { baker: msdfBaker, packaging: { artifact: 'embedded' }, options: undefined },
+    { baker: bitmapBaker, packaging: { artifact: 'embedded' }, options: { strikes: [64], coverage: digits } },
+  ],
+});
+```
+
+2. Declare the same coverage when loading. Coverage is part of the format's identity, like the strike list:
+
+```ts
+import { bitmap, glyph, msdf } from '@pmndrs/glyph';
+
+const Inter = glyph.fontFace('/fonts/inter.font.glb', {
+  format: [msdf, bitmap({ strikes: [64], coverage: { text: '0123456789:.' } })],
+});
+await Inter.load();
+
+const timer = three.createText({ font: Inter.bitmap, text: '12:45.3', style: { fontSize: 64 } });
+```
+
+A glyph outside a raster's coverage is still shaped and still takes its advance, but that raster holds no image for
+it. Keep text set in a covered raster inside its coverage.
+
+The `glyph` command has no coverage flag; coverage is set through `bakeFont`. Slug takes no coverage: subset a Slug
+font with `--unicodes`.
+
+Limits: at most 1,024 ranges selecting at most 65,536 code points, ranges must not overlap, `text` holds at most
+65,536 code points, and `glyphIds` must be unique.
+
+## Other ways to cut size
+
+- Lower the MSDF resolution: `--msdf em-size=32,pixel-range=6` is about a third of the default size and is enough for
+  text that stays small on screen. See the [format reference](/reference/formats).
+- Bake only the formats you draw. Every embedded raster is downloaded with the file.
+- Use `--split` when different pages use different formats. See [Bake fonts](/guides/fonts/bake-fonts).
+- Serve `.glb` files with Brotli or gzip. The Basic Latin file with all three formats is 2.4 MB raw, 568 KB with gzip
+  and 382 KB with Brotli.
+
+## Check the result
+
+- The file size dropped, and `glyph bake --json` shows the expected glyph count under `preparation.glyphCount`.
+- Text drawn with the font reports `measure().missingGlyphCount === 0` for every string the application shows.
+
+## See also
+
+- [Bake fonts](/guides/fonts/bake-fonts)
+- [Use fallback fonts](/guides/fonts/fallback-stacks)
+- [Format reference](/reference/formats)
+- [CLI reference](/reference/cli)
