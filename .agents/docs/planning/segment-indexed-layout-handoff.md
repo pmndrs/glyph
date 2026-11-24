@@ -18,7 +18,7 @@ named below.
 ## 1. Where things stand
 
 - **Integration branch** `experiments/segment-indexed-layout`, worktree `/Volumes/Depot/Developer/glyph-held-rope-wip`,
-  pushed to `origin`. Last verified tag: **`sil-green-59`**. It sits on `experiments/held-rope-ascii-anchor-wip`
+  pushed to `origin`. Last verified tag: **`sil-green-60`**. It sits on `experiments/held-rope-ascii-anchor-wip`
   (`8176a24e0a3f`; draft PRs #292 → #301 → #302 → #310). It ships as **0.2.0**, a breaking release.
 - **Oracle:** 596 frozen cases, 928 differential runs (~55,700 requests) comparing incremental against cold in every
   stage and lane class, natively and in wasm. 0 unlisted divergences. `KNOWN-DIVERGENCES` may only shrink.
@@ -95,7 +95,7 @@ its upload from 695 kB to 1.7 kB per keystroke.
 ## 4. Decisions waiting on Justin
 
 1. **Frame-time failures:** `TextFrameError` is to be removed (Justin, 2026-11-23). Open: whether failures found inside `render()` throw (once, from the root's next render; rethrown into React/Vue boundaries) instead of going to `onError`.
-2. `TypeGpuResource` is internal: type it as a prepare-or-bind union (no decision needed).
+2. Done at `sil-green-60`: the dead TypeGPU direct path is deleted and `bind` is required.
 3. **When to open the ship PR** (one draft PR on top of #310).
 
 ## 5. Path to release
