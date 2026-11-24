@@ -33,8 +33,10 @@ publication-time failures.
   callback runs before the frame publishes; the first frame's exceptions are thrown after it.
 - **Calls are unchanged.** Setters, reads and editing calls throw as before (`GlyphInputError`,
   `GlyphLayoutPhaseError`, `TextOffsetError`), and `<GlyphErrorBoundary>` stays for them.
-- **GPU errors.** Where Three only logs (a shader that does not compile, a lost device), Glyph adds no throw and no
-  routing of its own.
+- **GPU errors copy Three's semantics exactly** (confirmed by Justin, 2026-11-23). Where Three only logs (a shader
+  that does not compile, a lost device), Glyph logs the same way, through Three, and does not throw: its draws are Three
+  draws, so Three reports them, and Glyph adds no throw and no routing of its own. No Glyph code routed GPU or device
+  errors to `onError`, so nothing was removed for this rule.
 - **Reads stay.** `Text.error`, `TextGroup.error`, `commitState()`, `TypeGpuText.error` and `Pixi3DText.error` name
   which text failed, which the thrown value does not.
 
