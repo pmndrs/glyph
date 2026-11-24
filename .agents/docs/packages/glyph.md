@@ -163,7 +163,7 @@ generated:
 
 ## Active held refactor: preparation before publication
 
-A length-changing edit inside one shaping run reshapes a window of that run: from a cluster boundary before the edit to one after it that the retained shape does not flag unsafe to concatenate, checked again on the fresh shape, with the whole run as the fallback. This replaced the ASCII-anchor experiment (a font screen and a fixed two-anchor window for single-font printable-ASCII paragraphs), which was deleted with its font screen, nominal-glyph bootstrap, printable-ASCII facts and registration serial on 2026-11-24. See the [HELD rope ASCII-anchor WIP checkpoint](../log/2026-11-20-held-rope-ascii-anchor-wip.md) for the experiment and the [retention-tier sections](../planning/wasm-size-reduction.md) for the measurements.
+One edit inside one shaping run reshapes a window of that run and splices it between the retained glyphs. The window runs from a cluster boundary before the edit to one after it; a refused end is moved out and probed again up to three times, and the whole run is the fallback. A boundary qualifies when no glyph of the retained shape flags it unsafe to concatenate, or when it lies between two clusters outside the edit that stand alone: nothing but a pair adjustment of two adjacent glyphs reaches into or out of either (the HarfRust fork's `UNSAFE_TO_CONCAT_BEYOND_PAIRS`, kept in `ShapeArena::beyond_pairs` beside the published glyph flags, never in them). The fresh shape has to agree: the same boundary unflagged, or the same two clusters standing alone with the same glyphs. Fonts that kern through a legacy `kern` table, and Arabic in fonts that flag every cluster, still reshape the whole run. This replaced the ASCII-anchor experiment (a font screen and a fixed two-anchor window for single-font printable-ASCII paragraphs), deleted on 2026-11-24 with its font screen, nominal-glyph bootstrap, printable-ASCII facts and registration serial. See the [edit windows section](../planning/wasm-size-reduction.md) for the argument and measurements, the [font survey](../log/2026-11-24-font-window-survey.md) for which fonts get windows, and the [HELD rope ASCII-anchor WIP checkpoint](../log/2026-11-20-held-rope-ascii-anchor-wip.md) for the experiment.
 
 The accepted [preparation/publication decision](../planning/decisions/retained-prepare-publish.md) is the contract for
 current ropes work, except for the setter rule, which the [deferred, never-stale preparation
@@ -1948,8 +1948,9 @@ equal positions, and records only the changed islands for downstream invalidatio
 retained clusters derives every dirty window and glyph cursor for both LTR and RTL runs. One scope-driven executor then
 handles bounded windows or a whole run and collapses its chunks back into the canonical retained shaped run. Window
 splicing is admitted only when retained and new HarfRust `UNSAFE_TO_CONCAT` flags prove the boundaries safe with full
-source-run context; font fallback, unsafe boundaries, topology changes, and unequal lengths use the broad scopes or
-existing fallback pipeline. The existing canonical cluster comparison also produces coalesced layout dirt when source
+source-run context, or, for one edit of any length, when the clusters beside the boundary stand alone in both shapes;
+font fallback, boundaries the fresh shape keeps refusing, and topology changes use the broad scopes or existing
+fallback pipeline. The existing canonical cluster comparison also produces coalesced layout dirt when source
 coordinates, counts and safe boundaries remain compatible. The shared flow/placement executor uses those intervals to
 retain converged clean line islands; shaping windows no longer independently determine layout invalidation. Missing
 correspondence, unsafe corrected boundaries, changed base direction, geometry/metrics or ellipsis retain full flow.
