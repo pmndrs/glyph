@@ -163,7 +163,7 @@ generated:
 
 ## Active held refactor: preparation before publication
 
-The current WIP ASCII-anchor experiment adds an optional bounded shaping item for screened single-font Latn/LTR printable-ASCII length edits. Actual registered-font lifetime, authoritative prepared text facts and immutable anchors authorize this route; unsupported cases retain the existing producer. The packed raw arena is reconstructed and downstream layout/query/publication stages retain their ownership and work. It changes no public call contract and has no verified complete-operation speed or full-suite parity result. See the [HELD rope ASCII-anchor WIP checkpoint](../log/2026-11-20-held-rope-ascii-anchor-wip.md) in the append-only log.
+A length-changing edit inside one shaping run reshapes a window of that run: from a cluster boundary before the edit to one after it that the retained shape does not flag unsafe to concatenate, checked again on the fresh shape, with the whole run as the fallback. This replaced the ASCII-anchor experiment (a font screen and a fixed two-anchor window for single-font printable-ASCII paragraphs), which was deleted with its font screen, nominal-glyph bootstrap, printable-ASCII facts and registration serial on 2026-11-24. See the [HELD rope ASCII-anchor WIP checkpoint](../log/2026-11-20-held-rope-ascii-anchor-wip.md) for the experiment and the [retention-tier sections](../planning/wasm-size-reduction.md) for the measurements.
 
 The accepted [preparation/publication decision](../planning/decisions/retained-prepare-publish.md) is the contract for
 current ropes work, except for the setter rule, which the [deferred, never-stale preparation

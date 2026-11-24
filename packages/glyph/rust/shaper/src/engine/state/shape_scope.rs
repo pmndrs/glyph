@@ -69,6 +69,12 @@ impl ParagraphState {
                     (cursor_text, window.old_start, window.old_glyph_start)
                 };
                 if retained_start < retained_end {
+                    // Text after a window that changed the run's length moved with it.
+                    let moved = if retained_start >= window.old_end {
+                        delta
+                    } else {
+                        0
+                    };
                     let (pending, committed) = self.shape.derive_mut();
                     pending.append_glyph_range_from(
                         committed,
@@ -78,7 +84,7 @@ impl ParagraphState {
                         retained_end,
                         cursor_glyph,
                         retained_glyph_end,
-                        0,
+                        moved,
                     )?;
                 }
                 self.boundary_shape_scratch.clear();
@@ -204,6 +210,15 @@ impl ParagraphState {
                 (cursor_text, old_run.text_end)
             };
             if retained_start < retained_end {
+                let moved = if self
+                    .shape_window_scratch
+                    .last()
+                    .is_some_and(|window| retained_start >= window.old_end)
+                {
+                    delta
+                } else {
+                    0
+                };
                 let (pending, committed) = self.shape.derive_mut();
                 pending.append_glyph_range_from(
                     committed,
@@ -213,7 +228,7 @@ impl ParagraphState {
                     retained_end,
                     cursor_glyph,
                     run_glyph_end,
-                    0,
+                    moved,
                 )?;
             }
             self.shape.pending_mut().collapse_appended_runs(
@@ -244,10 +259,19 @@ pub(super) fn build_sparse_shape_windows(
     let mut previous_end =
         usize::try_from(source_run.text_start).map_err(|_| EngineError::ResultTooLarge)?;
     let run_end = usize::try_from(source_run.text_end).map_err(|_| EngineError::ResultTooLarge)?;
+    // One edit may change the run's length: its window then keeps a cluster of the retained
+    // shape on each side, so an insertion or a deletion never leaves an empty window.
+    let grown = match edits {
+        [edit] if !edit.is_same_length() => i64::try_from(edit.new_end - edit.new_start)
+            .ok()
+            .zip(i64::try_from(edit.old_end - edit.old_start).ok())
+            .map(|(new, old)| new - old)
+            .ok_or(EngineError::ResultTooLarge)?,
+        _ => 0,
+    };
     for edit in edits.iter().copied() {
-        if !edit.is_same_length()
+        if (grown == 0 && (!edit.is_same_length() || edit.old_start == edit.old_end))
             || edit.old_start != edit.new_start
-            || edit.old_start == edit.old_end
             || edit.old_start < previous_end
             || edit.old_end > run_end
         {
@@ -273,9 +297,12 @@ pub(super) fn build_sparse_shape_windows(
     let mut builder = SparseWindowBuilder {
         edits,
         next_edit: 0,
-        previous_boundary: source_run.text_start,
+        recent_boundaries: [source_run.text_start; PROBE_MARGIN],
+        probe_margin: if grown == 0 { 1 } else { PROBE_MARGIN },
+        probe_boundaries_due: 0,
         previous_safe: run_start,
         window_start: run_start,
+        resized_run: (grown != 0).then_some((source_run.text_start, source_run.text_end)),
         rtl,
         windows,
     };
@@ -340,8 +367,27 @@ pub(super) fn build_sparse_shape_windows(
     {
         window.probe_end = source_run.text_end;
     }
+    if grown != 0 {
+        // The walk above ran in the retained shape's text; the window's end and the probe's
+        // end lie after the edit, in the new text.
+        let [window] = windows.as_mut_slice() else {
+            windows.clear();
+            return Ok(false);
+        };
+        window.new_end = shifted_text_offset(window.new_end, grown)?;
+        window.probe_end = shifted_text_offset(window.probe_end, grown)?;
+        if window.new_end <= window.new_start {
+            windows.clear();
+            return Ok(false);
+        }
+    }
     Ok(!windows.is_empty())
 }
+
+/// Clusters of the retained shape a length-changing window's probe shapes on each side. A
+/// lookup that looks past the end of the probe flags its last clusters unsafe to concatenate,
+/// so the probe has to end further out than fonts look ahead.
+pub(super) const PROBE_MARGIN: usize = 4;
 
 /// A cluster boundary no glyph of the retained shape flags unsafe to concatenate across.
 #[derive(Clone, Copy)]
@@ -355,10 +401,17 @@ pub(super) struct SafeBoundary {
 pub(super) struct SparseWindowBuilder<'a> {
     pub(super) edits: &'a [TextEdit],
     pub(super) next_edit: usize,
-    /// The boundary of the last visit, safe or not.
-    pub(super) previous_boundary: u32,
+    /// The boundaries of the last visits, safe or not, latest first.
+    pub(super) recent_boundaries: [u32; PROBE_MARGIN],
+    /// How many clusters of the retained shape the probe shapes on each side of a window.
+    pub(super) probe_margin: usize,
+    /// How many boundaries past the last window's end its probe still has to reach.
+    pub(super) probe_boundaries_due: usize,
     pub(super) previous_safe: SafeBoundary,
     pub(super) window_start: SafeBoundary,
+    /// The run's text when its one edit changes its length: the window then starts before
+    /// the edit and ends after it, unless the edit touches that end of the run.
+    pub(super) resized_run: Option<(u32, u32)>,
     pub(super) rtl: bool,
     pub(super) windows: &'a mut Vec<ShapeWindow>,
 }
@@ -373,9 +426,14 @@ impl SparseWindowBuilder<'_> {
             && window.probe_end == 0
             && boundary > window.new_end
         {
-            window.probe_end = boundary;
+            self.probe_boundaries_due -= 1;
+            if self.probe_boundaries_due == 0 {
+                window.probe_end = boundary;
+            }
         }
-        let preceding = core::mem::replace(&mut self.previous_boundary, boundary);
+        let preceding = self.recent_boundaries[self.probe_margin - 1];
+        self.recent_boundaries.rotate_right(1);
+        self.recent_boundaries[0] = boundary;
         if !safe {
             return Ok(());
         }
@@ -388,11 +446,18 @@ impl SparseWindowBuilder<'_> {
             let edit_start =
                 u32::try_from(edit.old_start).map_err(|_| EngineError::ResultTooLarge)?;
             let edit_end = u32::try_from(edit.old_end).map_err(|_| EngineError::ResultTooLarge)?;
-            if boundary <= edit_start {
+            let (before, inside) = match self.resized_run {
+                Some((run_start, run_end)) => (
+                    boundary < edit_start || (boundary == edit_start && boundary == run_start),
+                    boundary < edit_end || (boundary == edit_end && boundary != run_end),
+                ),
+                None => (boundary <= edit_start, boundary < edit_end),
+            };
+            if before {
                 self.window_start = here;
                 break;
             }
-            if boundary < edit_end {
+            if inside {
                 break;
             }
             self.push_window(boundary, glyph_boundary)?;
@@ -437,11 +502,13 @@ impl SparseWindowBuilder<'_> {
             previous.old_glyph_start = previous.old_glyph_start.min(old_glyph_start);
             previous.old_glyph_end = previous.old_glyph_end.max(old_glyph_end);
             previous.probe_end = 0;
+            self.probe_boundaries_due = self.probe_margin;
             return Ok(());
         }
         self.windows
             .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
+        self.probe_boundaries_due = self.probe_margin;
         self.windows.push(ShapeWindow {
             old_start: start,
             old_end: end,

@@ -129,7 +129,6 @@ impl ParagraphState {
         }
         self.unicode.discard_candidate();
         self.unicode_reused_for_text_edit = false;
-        self.pending_reused_ascii_facts = None;
         {
             let (committed, pending) = self.bidi.pair_mut();
             committed.clear();
@@ -155,8 +154,6 @@ impl ParagraphState {
             pending.clear();
         }
         self.shape.discard_candidate();
-        self.accepted_shape_font_instance = None;
-        self.pending_shape_font_instance = None;
         self.shape_window_scratch.clear();
         self.incremental_shape_source_run = None;
         self.incremental_shape_source_runs.clear();
@@ -431,7 +428,6 @@ impl ParagraphState {
         self.prepared_layout.commit();
         if let PreparedLayout::Inline(_) = self.prepared_layout.committed() {
             self.shape.pair_mut().0.clear();
-            self.accepted_shape_font_instance = None;
             self.clusters.pair_mut().0.clear();
             self.flow_layout.pair_mut().0.clear();
             self.positioned.pair_mut().0.clear();

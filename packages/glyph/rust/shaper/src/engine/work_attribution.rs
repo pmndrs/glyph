@@ -15,13 +15,7 @@ pub(crate) struct Work {
     /// Items the simple-text path shaped without HarfRust, outside the HarfRust meter.
     pub simple_text_calls: usize,
     pub simple_text_utf16_units: usize,
-    /// Separate first-use, fixed-size HarfRust nominal bootstrap; not a timed item.
-    pub ascii_nominal_bootstrap_calls: usize,
-    pub ascii_nominal_bootstrap_utf16_units: usize,
     /// Producer-specific counts within the inclusive HarfRust meter.
-    pub ascii_anchor_item_calls: usize,
-    pub ascii_anchor_item_utf16_units: usize,
-    pub ascii_anchor_splice_successes: usize,
     pub main_full_run_shape_calls: usize,
     pub main_full_run_shape_utf16_units: usize,
     pub incremental_window_shape_calls: usize,
@@ -215,11 +209,6 @@ std::thread_local! {
         harfrust_utf16_units: 0,
         simple_text_calls: 0,
         simple_text_utf16_units: 0,
-        ascii_nominal_bootstrap_calls: 0,
-        ascii_nominal_bootstrap_utf16_units: 0,
-        ascii_anchor_item_calls: 0,
-        ascii_anchor_item_utf16_units: 0,
-        ascii_anchor_splice_successes: 0,
         main_full_run_shape_calls: 0,
         main_full_run_shape_utf16_units: 0,
         incremental_window_shape_calls: 0,

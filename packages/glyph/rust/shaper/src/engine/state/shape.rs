@@ -42,7 +42,7 @@ impl ParagraphState {
             return Ok(());
         }
         if self.committed_inline().is_none()
-            && (self.try_prepare_incremental_shape(shaper, font_stacks, font_bindings)?
+            && (self.try_prepare_incremental_shape(shaper)?
                 || self.try_prepare_multi_run_shape(shaper)?
                 || self.try_prepare_realigned_shape(shaper, font_stacks, font_bindings)?)
         {
@@ -85,12 +85,6 @@ impl ParagraphState {
                 &mut self.fallback_span_scratch,
             )?;
             if !changed {
-                // The raw owner about to be accepted was produced with this
-                // registry's exact current font instance. A later dispose and
-                // same-handle registration cannot reuse this serial.
-                self.pending_shape_font_instance =
-                    whole_run_font_handle(runs, self.shape.pending(), &self.pending_fallback_spans)
-                        .and_then(|handle| shaper.font_instance(handle));
                 self.shape.mark_prepared();
                 return Ok(());
             }
@@ -126,8 +120,6 @@ impl ParagraphState {
     pub(super) fn try_prepare_incremental_shape(
         &mut self,
         shaper: &mut ShaperRegistry,
-        font_stacks: &[RegisteredFontStack],
-        font_bindings: &[RegisteredFontBinding],
     ) -> Result<bool, EngineError> {
         let Some(edit) = bounding_text_edit(&self.text_edits) else {
             return Ok(false);
@@ -194,34 +186,9 @@ impl ParagraphState {
             old_run,
             &mut self.shape_window_scratch,
         )?;
+        #[cfg(test)]
+        let sparse_scope = sparse_scope && !self.force_whole_run_shape;
         if !sparse_scope {
-            // The ordinary length-changing route would shape the complete run.
-            // Keep same-length sparse edits above on their existing path.
-            if self.try_prepare_ascii_anchor_shape(
-                shaper,
-                font_stacks,
-                font_bindings,
-                edit,
-                old_run,
-                new_run,
-                affected_shape_index,
-                fallback,
-            )? {
-                push_fallback_span(
-                    &mut self.pending_fallback_spans,
-                    FallbackSpan {
-                        text_end: new_run.text_end,
-                        ..fallback
-                    },
-                )?;
-                self.boundary_shape_scratch.clear();
-                // None selects the full cluster/RunLocal/layout preparation;
-                // this first candidate credits only full-run HarfRust work.
-                self.incremental_shape_source_run = None;
-                self.incremental_shape_source_runs.clear();
-                self.incremental_shape_replaced = None;
-                return Ok(true);
-            }
             set_whole_shape_window(
                 &mut self.shape_window_scratch,
                 affected_shape,
@@ -277,9 +244,6 @@ impl ParagraphState {
         }
         self.boundary_shape_scratch.clear();
         self.incremental_shape_source_run = Some(affected_source_run);
-        // The existing sparse/whole-window producer remains authoritative but
-        // does not mint this optional registration certificate.
-        self.pending_shape_font_instance = None;
         Ok(true)
     }
 
@@ -529,13 +493,11 @@ impl ParagraphState {
         self.move_fallback_spans(&edited, &shifts)?;
         self.incremental_shape_source_run = None;
         self.incremental_shape_source_runs = edited;
-        self.pending_shape_font_instance = None;
         Ok(true)
     }
 
     pub(super) fn discard_shape_candidate(&mut self) {
         self.shape.pending_mut().clear();
-        self.pending_shape_font_instance = None;
         self.shape_window_scratch.clear();
         self.pending_fallback_spans.clear();
         self.fallback_span_scratch.clear();
@@ -550,7 +512,6 @@ impl ParagraphState {
         if self.shape.is_prepared() {
             self.shape.commit();
             core::mem::swap(&mut self.fallback_spans, &mut self.pending_fallback_spans);
-            self.accepted_shape_font_instance = self.pending_shape_font_instance.take();
         }
         self.discard_shape_candidate();
     }
@@ -889,24 +850,4 @@ fn split_span_at_missing_clusters(
         )?;
     }
     Ok(changed)
-}
-
-/// The font of a shape that is one run shaped whole in its first font, whose instance the
-/// committed shape can then be keyed by.
-#[inline(always)]
-fn whole_run_font_handle(
-    runs: &[ShapingRun],
-    shape: &ShapeArena,
-    spans: &[FallbackSpan],
-) -> Option<u32> {
-    let [span] = spans else {
-        return None;
-    };
-    (runs.len() == 1
-        && shape.runs.len() == 1
-        && span.source_run == 0
-        && span.text_start == 0
-        && span.text_end == runs[0].text_end
-        && span.font_index == 0)
-        .then_some(span.font_handle)
 }

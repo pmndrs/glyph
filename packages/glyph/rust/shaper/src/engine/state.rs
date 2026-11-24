@@ -7,7 +7,7 @@ use core::{cell::RefCell, num::NonZeroU32};
 use crate::{
     STATUS_RESULT_TOO_LARGE, ShapeRangeRef, ShapeRunRef, ShaperRegistry,
     bidi::{BidiAnalysis, BidiError, DIRECTION_AUTO, analyze_into as analyze_bidi_into},
-    unicode::{PrintableAsciiFacts, UnicodeAnalysis, UnicodeError},
+    unicode::{UnicodeAnalysis, UnicodeError},
     valid_utf16_boundary,
 };
 
@@ -340,7 +340,6 @@ struct PreflightTextCandidate {
     paragraph_id: u32,
     buffers: CandidateBuffers,
     unicode_state: CandidateUnicode,
-    reused_ascii_facts: Option<PrintableAsciiFacts>,
     edit_start: usize,
     edit_end: usize,
     text: Vec<u16>,
@@ -588,8 +587,9 @@ struct ParagraphState {
     change_since_publication: ParagraphChange,
     #[cfg(test)]
     disable_inline: bool,
+    /// Reshape an edited run whole, as a cold shape would, instead of in windows.
     #[cfg(test)]
-    disable_ascii_anchor: bool,
+    force_whole_run_shape: bool,
     #[cfg(test)]
     fail_after_shape_once: bool,
     #[cfg(test)]
@@ -609,15 +609,10 @@ struct ParagraphState {
     unicode_reused_for_text_edit: bool,
     /// Text edits since a word or sentence query last read the boundary lanes.
     boundary_lane_idle_edits: u8,
-    pending_reused_ascii_facts: Option<PrintableAsciiFacts>,
     bidi: Staged<BidiAnalysis>,
     shaping_runs: Staged<ShapingRunArena>,
     prepared_layout: Staged<PreparedLayout>,
     shape: Staged<ShapeArena>,
-    /// Zero-free private registry serial for the accepted sole General raw run.
-    /// Exhaustion disables only this acceleration, never font registration.
-    accepted_shape_font_instance: Option<u64>,
-    pending_shape_font_instance: Option<u64>,
     shape_window_scratch: Vec<ShapeWindow>,
     layout_dirty: LayoutDirtyRanges,
     incremental_shape_source_run: Option<u32>,
@@ -7814,7 +7809,7 @@ mod tests {
     }
 
     #[test]
-    fn inter_4000_glyph_midpoint_isolates_whole_affected_run_and_matches_cold() {
+    fn inter_4000_glyph_midpoint_windows_the_affected_run_and_matches_cold() {
         const FONT: &[u8] =
             include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
         fn benchmark_styles(length: u32) -> (Vec<u8>, u32) {
@@ -7870,9 +7865,12 @@ mod tests {
         assert_eq!(original.as_bytes()[middle], b'\n');
         let grown = alloc::format!("{}x{}", &original[..middle], &original[middle..]);
         let (mut engine, mut shaper) = benchmark_engine(&original);
-        for (index, (value, old_end, new_end, shaped_units)) in [
-            (grown.as_str(), 2_456, 2_457, 351),
-            (original.as_str(), 2_457, 2_456, 350),
+        // The edit is at the end of the seventh paragraph's run. Its window starts at the last
+        // word, `candidates.`, whose first glyph the retained shape does not flag, and the
+        // probe four clusters before that.
+        for (index, (value, old_end, new_end, window_start, shaped_units)) in [
+            (grown.as_str(), 2_456, 2_457, 2_445, 16),
+            (original.as_str(), 2_457, 2_456, 2_445, 15),
         ]
         .into_iter()
         .enumerate()
@@ -7936,8 +7934,8 @@ mod tests {
             assert_eq!(candidate.incremental_shape_source_run, Some(6));
             assert_eq!(candidate.shape_window_scratch.len(), 1);
             let window = candidate.shape_window_scratch[0];
-            assert_eq!((window.old_start, window.old_end), (2_106, old_end));
-            assert_eq!((window.new_start, window.new_end), (2_106, new_end));
+            assert_eq!((window.old_start, window.old_end), (window_start, old_end));
+            assert_eq!((window.new_start, window.new_end), (window_start, new_end));
             assert_eq!(window.probe_end, new_end);
             engine.commit_update(prepared).unwrap();
             assert_eq!(
@@ -10156,37 +10154,6 @@ mod tests {
         assert_eq!(
             paragraph.unicode.active().grapheme_boundaries(),
             committed_boundaries
-        );
-    }
-
-    #[test]
-    fn reused_ascii_fact_is_visible_only_after_unicode_commit() {
-        let mut paragraph = ParagraphState::default();
-        paragraph
-            .unicode
-            .pair_mut()
-            .0
-            .analyze(&utf16("ab"))
-            .unwrap();
-        let old = paragraph.unicode.committed().printable_ascii_facts();
-        paragraph.text.pending_mut().units = utf16("az");
-        paragraph.text.mark_prepared();
-        let mut changed = old;
-        changed.include_unit('z' as u16);
-        let mut candidate = PreflightTextCandidate {
-            unicode_state: CandidateUnicode::ReuseCommitted,
-            reused_ascii_facts: Some(changed),
-            ..PreflightTextCandidate::default()
-        };
-        paragraph.prepare_unicode(Some(&mut candidate)).unwrap();
-        assert_eq!(paragraph.unicode.committed().printable_ascii_facts(), old);
-        paragraph.discard_unicode_candidate();
-        assert_eq!(paragraph.unicode.committed().printable_ascii_facts(), old);
-        paragraph.prepare_unicode(Some(&mut candidate)).unwrap();
-        paragraph.commit_unicode();
-        assert_eq!(
-            paragraph.unicode.committed().printable_ascii_facts(),
-            changed
         );
     }
 
@@ -14430,9 +14397,6 @@ mod tests {
     include!("state/refusal_tests.rs");
     include!("state/deferred_positioning_tests.rs");
     include!("state/run_local_prefix_tests.rs");
-    include!("state_ascii_anchor_runtime_oracle.rs");
-    include!("state_ascii_anchor_acceptance_tests.rs");
-    include!("state_ascii_anchor_policy_tests.rs");
-    include!("state_ascii_anchor_adversarial.rs");
+    include!("state/resized_window_tests.rs");
     include!("state_gather_equivalence_tests.rs");
 }
