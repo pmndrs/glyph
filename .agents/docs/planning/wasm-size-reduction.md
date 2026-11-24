@@ -946,6 +946,125 @@ running on the same host during all three.
   steps, and the package harness puts the operation at 0.995 and 1.004.
 - `benchmark:headline-bidi-edit` (4 rounds): 0.98 to 1.00.
 
+### 2026-11-24 edit windows (ASCII anchor replaced)
+
+Branch `experiments/sil-anchor` on `sil-green-67`. Owner decision (Justin, 2026-11-24) on the trade the
+[retention-tier pass](#2026-11-24-retention-tiers) left open: take the general window in place of the ASCII anchor,
+because it is faster on most fonts, then find out whether fonts of Fredoka's kind can be made fast again without
+giving up equality with a cold shape. Two commits: the replacement, then the change that makes Fredoka fast.
+
+| Shaper wasm, as `scripts/build.mjs` builds it       |       raw | gzip -9 |  Brotli | Δ raw vs `sil-green-67` |  Δ gzip | Δ Brotli |
+| --------------------------------------------------- | --------: | ------: | ------: | ----------------------: | ------: | -------: |
+| `sil-green-67`                                      | 1,356,129 | 536,256 | 430,266 |                         |         |          |
+| ASCII anchor replaced by the resized window         | 1,328,150 | 525,906 | 421,673 |                 −27,979 | −10,350 |   −8,593 |
+| Windows between clusters that stand alone, widening | 1,332,560 | 527,761 | 423,437 |                 −23,569 |  −8,495 |   −6,829 |
+
+All three rows are one build script and one `gzip -9` of `text-shaper.wasm` on this machine (the tag's own record says
+536,296 for the first row).
+
+**The replacement.** A length-changing edit inside one shaping run takes the path same-length edits already took: a
+window from a cluster boundary before the edit to one after it that the retained shape does not flag unsafe to
+concatenate, probed four clusters further on each side, checked again on the fresh shape, with the whole run as the
+fallback. The ASCII-anchor path is deleted with everything only it used: `ascii_anchor_policy` (font screen, nominal
+bootstrap, fixed window), the printable-ASCII facts of the Unicode analysis and their kernel scan, the font
+registration serial, and four test files, which became `state/resized_window_tests.rs` (the same edits, checked
+against a cold HarfRust shape and against the engine made to reshape the run whole).
+
+**Why every Fredoka glyph is flagged.** Not `calt`, not variations (the fixture has no `fvar`), not contextual GPOS.
+With `kern` off 11.8% of its glyphs are flagged (the `liga` candidates); with only `kern` on, 99.6%. Its second `kern`
+lookup is a `PairPos` whose first-glyph coverage holds the space (137 glyphs, one class by eleven), so every glyph of
+a paragraph starts a pair, and HarfRust flags both glyphs of every pair it looks at whether or not it kerns them. Inter's
+pair lookups do not cover the space, which is what leaves it boundaries. The flag is honest: each glyph's advance does
+depend on the next glyph. What it cannot say is that the dependence stops there.
+
+**Making Fredoka fast.** Options, each replayed in the survey tool over 61 fonts before anything was built:
+
+| Option                                                                                      | Keeps cold equality                                                                                                                                                    | Fredoka, units shaped per edit of an 822-unit run |       Size (raw, gzip) | Outcome           |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------: | ---------------------: | ----------------- |
+| A flag in the fork for "more than a simple pair", windows between clusters that stand alone | Yes: argument below; replay equal on 61 fonts; oracle clean                                                                                                            |                                       12.7 (1.5%) |         +4,410, +1,855 | **built**         |
+| Move a refused end out and probe again instead of reshaping the run                         | Yes: the same check on a wider window                                                                                                                                  | 821 alone (no boundary to move to); Inter 91 → 78 |      part of the above | **built** with it |
+| A window sized by the font's longest lookup context, edge glyphs compared with the retained | Not by itself: a contextual lookup can change a glyph beyond any margin and leave the glyphs between as they were, and a bound on context is a font screen (13 kB raw) |                                      not measured |          about +13,000 | not built         |
+| Split at spaces when no lookup reaches across one                                           | Needs the same screen; and Fredoka's `kern` does cover the space                                                                                                       |                                    does not apply |                        | not built         |
+| Keep the anchor, slimmed, for the fonts it helps                                            | Yes, by its font screen, which is where its bytes were (13 of 26 kB raw)                                                                                               |            not measured; it capped an item at 256 | whole: +25,975, +9,933 | superseded        |
+| Per-pair flags for the legacy `kern` table (Times New Roman, Verdana, Helvetica)            | Positions yes (replayed); the flags of a cold shape would have to change, so the `glyph.flags` references of kern-table fixtures would be re-frozen                    |                                    does not apply |                  small | owner's call      |
+
+What was built. HarfRust (fork, behind a buffer flag the shaper sets; `vendor/harfrust/GLYPH-FORK.md`) marks every
+range a stage examines as "beyond pairs" on all its clusters but the first, unless the range is a simple pair: a
+`PairPos` match or miss with no second value record whose second glyph directly follows the first. The mark is kept
+beside the shape's flags (`ShapeArena::beyond_pairs`), not in them, so published flags and oracle lanes are what they
+were. One edit's window may then end at a boundary between two clusters outside the edit that stand alone: nothing
+but simple pairs reaches into or out of either. The fresh shape must show the same two clusters standing alone with
+the same glyphs. An end the fresh shape refuses is moved out and probed again, up to three moves, before the run is
+reshaped whole.
+
+Why that equals a cold shape. A simple pair reads only its two glyphs and writes only their positions and flags;
+positions are never read while lookups match. Take the boundary between retained cluster X0 and reshaped cluster
+X1, both outside the edit. Nothing but simple pairs crosses either side of X0 or X1 in the retained shape or in the
+fresh one, so both are the glyphs their own text makes, in the old text, the new text and the probe alike. The one
+thing that crosses the boundary is the pair of X0's last glyph and X1's first, and it is the same pair in all
+three. So every retained glyph keeps the value a cold shape gives it, and every glyph taken from the probe has it
+too. A second value record is excluded because it makes the lookup step over the second glyph, which makes the pairs
+it visits depend on every pair before; a skipped glyph between the two is excluded because it is read. The legacy
+`kern` table is excluded because it flags the whole buffer when any pair of it can match, which a probe cannot know.
+
+Speed, package harness (`glyph-scratch/anchor/bench/pkgab.mjs`, the harness of the retention-tier pass: both arms in
+one Node process, steps alternated, 5 fresh-process rounds of 300 steps, 10th-percentile step time). Ratios are
+candidate over `sil-green-67`; a run is one paragraph of 600 / 2,000 / 4,000 / 8,000 units.
+
+| Font    | Row, one run              | Replacement               | Final tip                 |
+| ------- | ------------------------- | ------------------------- | ------------------------- |
+| Inter   | type at the end           | 0.68 / 0.47 / 0.45 / 0.43 | 0.61 / 0.45 / 0.42 / 0.42 |
+| Inter   | insert in the middle      | 0.69 / 0.52 / 0.50 / 0.47 | 0.64 / 0.49 / 0.47 / 0.46 |
+| Inter   | insert at rotating places | 0.66 / 0.51 / 0.48 / 0.46 | 0.59 / 0.48 / 0.46 / 0.46 |
+| Inter   | same-length edit, middle  | 1.01 / 1.00 / 1.01 / 1.01 | 0.43 / 0.33 / 0.27 / 0.25 |
+| Fredoka | type at the end           | 1.01 / 1.01 / 1.01 / 1.01 | 0.77 / 0.63 / 0.61 / 0.63 |
+| Fredoka | insert in the middle      | 1.30 / 1.50 / 1.53 / 1.55 | 1.01 / 1.00 / 1.00 / 1.00 |
+| Fredoka | insert at rotating places | 1.34 / 1.53 / 1.56 / 1.58 | 1.00 / 1.00 / 1.00 / 1.00 |
+| Fredoka | same-length edit, middle  | 1.00 / 1.00 / 1.00 / 1.01 | 0.65 / 0.60 / 0.55 / 0.54 |
+
+The other 18 rows of each font (26k glyphs in 100 runs, whole-text replacement, width sweeps, equivalent widths,
+moving exclusions, reorders) are 0.98 to 1.01 for the replacement. At the final tip they are 0.98 to 1.02, except
+that a same-length edit in a multi-run paragraph is faster (Inter 0.92 at 26k glyphs and 0.78 at 3k, Fredoka 0.94 at
+3k) and whole-text replacement in Inter is 1.008 (range 1.001 to 1.014): a cold shape now writes the extra flag.
+
+So the replacement alone makes Fredoka's inserts in the middle 1.30 to 1.58 times slower than the anchor did, as
+the tier pass measured, and the final tip gives that back (1.00) while typing at the end and same-length edits, which
+the anchor never covered, become 0.54 to 0.77. A same-length edit of one run was already windowed in Inter; it gets
+faster because its window is now the two clusters beside the edit instead of the stretch between unflagged
+boundaries (median 14 units against 58 in the survey).
+
+The other lanes, each against `sil-green-67` with only `text-shaper.wasm` differing:
+
+| Lane                                                             | Replacement                                                   | Final tip                                                                             |
+| ---------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Engine Labs (`--suite engine --wasm`, 4 rounds, 25th percentile) | 0.95 to 1.00 on all 16 rows                                   | `localized-edit` 0.92, `suffix-edit` and `localized-splice` 0.98, others 0.97 to 1.03 |
+| Browser headline (5 loads per arm, complete frames, medians)     | edits 0.96 to 1.06; sweeps 0.98, 1.13, 1.13; ASCII frame 0.97 | edits 0.94 to 1.05; sweeps 1.00, 1.07, 0.97; ASCII frame 1.09                         |
+| `benchmark:headline-bidi-edit` (4 rounds)                        | 0.97 to 1.03                                                  | 0.99 to 1.03                                                                          |
+
+The headline rows are 3 to 12 ms frames whose five loads spread by 10% to 40% within one arm, and its paragraphs are
+runs of about 300 units, where shaping is under 3% of an edit frame. The two rows that stand out do not repeat: the
+width sweeps at 1.13 for the replacement are 1.07 and 0.97 at the final tip and 1.00 in the package harness, and the
+ASCII frame at 1.09 for the final tip was 0.97 for the replacement; the package harness puts the cost of the extra
+flag on a cold shape at 1.008. The Labs and headline runs of the final tip followed its gates on the same host.
+
+Which fonts this reaches is in the [font survey](../log/2026-11-24-font-window-survey.md): of 61 fonts, an edit
+reshapes under a quarter of an 820-unit run in 45 with the replacement and in 47 at the final tip, where the median
+window is 10 to 20 units for every Latin font that has one. Still whole-run: fonts that kern through a legacy `kern`
+table (Times New Roman, Verdana, Helvetica, Trebuchet MS and the copy of Open Sans surveyed), because HarfRust flags
+the whole buffer for them, and Arabic in Amiri, where joining and marks reach across every boundary. The first is
+the last row of the options table and needs a decision; the second is the class accepted as slow.
+
+Gates at both commits: `cargo fmt --check`, clippy with `-D warnings`, `cargo test --features oracle`, native and wasm
+oracle with the adversarial fonts (every reference case equal, every differential request equal to cold or listed,
+KNOWN-DIVERGENCES unchanged, nothing re-frozen), `pnpm --filter @pmndrs/glyph test`, `pnpm check`; the fork's parity
+tests at the final tip. Kimun on `packages/glyph/rust` is C+ 76.3 before, 76.5 after the replacement and 76.3 at the
+final tip.
+
+The branch was then merged with the integration branch after its overflow change and the same gates re-run on the
+merge: 605 reference cases equal and 56,400 differential requests equal to cold on native and wasm, nothing listed,
+nothing re-frozen. The speed and size rows above were measured before that merge; the merged shaper is 1,329,880 raw
+and 526,742 gzip -9.
+
 ### Not now: estimates
 
 - **Data-driven syllabic interpreter (research step 7).** The Indic, Khmer, Myanmar and USE shapers plus vowel constraints

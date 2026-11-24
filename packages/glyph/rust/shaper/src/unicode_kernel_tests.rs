@@ -68,19 +68,6 @@ impl Pair {
             "scripts for {}",
             shown()
         );
-        let (dense, scalar) = (
-            self.dense.printable_ascii_facts(),
-            self.scalar.printable_ascii_facts(),
-        );
-        assert_eq!(
-            dense.printable(),
-            scalar.printable(),
-            "printable for {}",
-            shown()
-        );
-        if scalar.printable() {
-            assert_eq!(dense.used(), scalar.used(), "ASCII mask for {}", shown());
-        }
         self.checked += 1;
     }
 }
