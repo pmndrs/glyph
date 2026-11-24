@@ -1,3 +1,4 @@
+use crate::cold_growth::ColdGrowth as _;
 use alloc::vec::Vec;
 use core::slice;
 
@@ -545,7 +546,7 @@ impl AlignedArena {
         let target_blocks =
             usize::try_from(target).map_err(|_| STATUS_RESULT_TOO_LARGE)? / ARENA_ALIGNMENT;
         self.blocks
-            .try_reserve_exact(target_blocks - self.blocks.len())
+            .try_reserve_exact_cold(target_blocks - self.blocks.len())
             .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
         self.blocks
             .resize(target_blocks, ArenaBlock([0; ARENA_ALIGNMENT]));

@@ -1,5 +1,7 @@
 //! Staging and validating the semantic inputs of one update before any paragraph is prepared.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 pub(super) fn route_paragraph_records(
@@ -28,7 +30,7 @@ pub(super) fn route_paragraph_records(
             }
             ParagraphInputScope::Indexed => {
                 paragraphs
-                    .try_reserve(1)
+                    .try_reserve_cold(1)
                     .map_err(|_| EngineError::ResultTooLarge)?;
                 let mut spans = ParagraphInputSpans {
                     id,

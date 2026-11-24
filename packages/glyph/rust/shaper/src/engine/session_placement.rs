@@ -1,5 +1,7 @@
 //! Transactional root-level occurrence and x/y placement buffers.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 
 use super::{
@@ -360,7 +362,7 @@ fn allocate_buffer(generation: u32, capacity: u32) -> Result<SessionBuffer, Sess
         .ok_or(SessionPlacementError::ArithmeticOverflow)?;
     let mut bytes = Vec::new();
     bytes
-        .try_reserve_exact(length)
+        .try_reserve_exact_cold(length)
         .map_err(|_| SessionPlacementError::AllocationFailed)?;
     bytes.resize(length, 0);
     Ok(SessionBuffer {
@@ -642,7 +644,7 @@ fn commit_buffer(
 
 fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), SessionPlacementError> {
     values
-        .try_reserve(additional)
+        .try_reserve_cold(additional)
         .map_err(|_| SessionPlacementError::AllocationFailed)
 }
 

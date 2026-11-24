@@ -1,3 +1,4 @@
+use crate::cold_growth::ColdGrowth as _;
 use alloc::vec::Vec;
 use core::ops::Range;
 
@@ -338,7 +339,7 @@ impl FlowLayoutArena {
             last.end = last.end.max(range.end);
         } else {
             ranges
-                .try_reserve(1)
+                .try_reserve_cold(1)
                 .map_err(|_| EngineError::ResultTooLarge)?;
             ranges.push(range);
         }
@@ -412,14 +413,14 @@ fn flexible_inline_limit(constraint: &FlowConstraint) -> Option<f64> {
 /// Room for one more record, growing geometrically.
 fn reserve_amortized<T>(values: &mut Vec<T>) -> Result<(), EngineError> {
     values
-        .try_reserve(1)
+        .try_reserve_cold(1)
         .map_err(|_| EngineError::ResultTooLarge)
 }
 
 fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), EngineError> {
     if values.capacity().saturating_sub(values.len()) < additional {
         values
-            .try_reserve_exact(additional)
+            .try_reserve_exact_cold(additional)
             .map_err(|_| EngineError::ResultTooLarge)?;
     }
     Ok(())

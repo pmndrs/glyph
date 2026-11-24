@@ -468,6 +468,7 @@ impl<'a> RowSource<'a> {
     /// Flat input keeps its caller-authored rows and never takes the column path.
     pub(super) fn new(input: GatherInput<'a>) -> Option<Self> {
         match input {
+            #[cfg(test)]
             GatherInput::Flat(_) => None,
             GatherInput::Projected(input) => Some(Self::Projected(ProjectedRows::new(input))),
             GatherInput::Inline(input) => Some(Self::Inline(InlineRows {

@@ -75,7 +75,11 @@ mod tests {
                 .map(|tag| format!("{tag:x}"))
                 .collect::<Vec<_>>()
                 .join(","),
-            "line_break" => format!("{:x}", line_break::properties(code_point).unwrap()),
+            // The two-stage tables predate the `ALPHANUMERIC` bit, which has its own exhaustive test.
+            "line_break" => format!(
+                "{:x}",
+                line_break::properties(code_point).unwrap() & !line_break::ALPHANUMERIC
+            ),
             "bidi_class" => char::from_u32(code_point).map_or_else(
                 || "-".into(),
                 |character| {

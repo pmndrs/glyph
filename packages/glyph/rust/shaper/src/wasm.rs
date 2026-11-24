@@ -1,3 +1,4 @@
+use crate::cold_growth::ColdGrowth as _;
 use alloc::{boxed::Box, vec::Vec};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
@@ -255,7 +256,7 @@ pub unsafe extern "C" fn pmndrs_glyph_engine_register_font_stack(
             return STATUS_INVALID_REQUEST;
         };
         let mut fonts = Vec::new();
-        if fonts.try_reserve_exact(count as usize).is_err() {
+        if fonts.try_reserve_exact_cold(count as usize).is_err() {
             return STATUS_RESULT_TOO_LARGE;
         }
         for bytes in bytes.chunks_exact(4) {
@@ -1345,7 +1346,7 @@ pub extern "C" fn pmndrs_glyph_engine_borrow_paragraph_glyphs(
         let (engine, borrowed_glyphs) = (&state.engine, &mut state.borrowed_glyphs);
         if borrowed_glyphs.len() < count as usize {
             let additional = count as usize - borrowed_glyphs.len();
-            if borrowed_glyphs.try_reserve(additional).is_err() {
+            if borrowed_glyphs.try_reserve_cold(additional).is_err() {
                 return 0;
             }
             borrowed_glyphs.resize(count as usize, crate::engine::SemanticGlyph::default());
@@ -1521,11 +1522,11 @@ impl WasmState {
         if length > MAX_REQUEST_ALLOCATION_BYTES {
             return 0;
         }
-        if self.allocations.try_reserve(1).is_err() {
+        if self.allocations.try_reserve_cold(1).is_err() {
             return 0;
         }
         let mut bytes = Vec::<u8>::new();
-        if bytes.try_reserve_exact(length as usize).is_err() {
+        if bytes.try_reserve_exact_cold(length as usize).is_err() {
             return 0;
         }
         bytes.resize(length as usize, 0);

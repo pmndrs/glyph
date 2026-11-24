@@ -1,3 +1,4 @@
+use crate::cold_growth::ColdGrowth as _;
 use alloc::vec::Vec;
 
 use super::{
@@ -731,7 +732,7 @@ fn append_vertices(
 fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), EngineError> {
     if values.capacity().saturating_sub(values.len()) < additional {
         values
-            .try_reserve_exact(additional)
+            .try_reserve_exact_cold(additional)
             .map_err(|_| EngineError::ResultTooLarge)?;
     }
     Ok(())

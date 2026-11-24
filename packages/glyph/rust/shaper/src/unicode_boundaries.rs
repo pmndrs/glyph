@@ -11,6 +11,8 @@
 //! between the restart points around it (`unicode_resync.rs`), with the joint at each window end
 //! taken from the restart predicate.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::{boxed::Box, string::String, vec::Vec};
 
 use unicode_segmentation::UnicodeSegmentation;
@@ -228,7 +230,7 @@ impl BoundaryLanes {
             self.invalidate();
             self.lane.clear();
             self.lane
-                .try_reserve_exact(text.len() + 1)
+                .try_reserve_exact_cold(text.len() + 1)
                 .map_err(|_| UnicodeError::ResultTooLarge)?;
             self.lane.resize(text.len() + 1, 0);
         }
@@ -288,7 +290,7 @@ impl BoundaryLanes {
         let bit = segmentation.bit();
         self.window.clear();
         self.window
-            .try_reserve_exact(to - from + 1)
+            .try_reserve_exact_cold(to - from + 1)
             .map_err(|_| UnicodeError::ResultTooLarge)?;
         self.window.resize(to - from + 1, 0);
         let window = &text[from..to];

@@ -1,10 +1,13 @@
 //! Retaining the previous gather's rows: walking owners and their clean sources.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 impl CodecGatherWorkspace {
     /// Caller-authored Flat owners keep one transactional rope traversal for the whole
     /// stream: a failure in any owner leaves every source row as it was.
+    #[cfg(test)]
     pub(super) fn retain_flat_owners<'owner, 'binding>(
         &mut self,
         codec: &ValidatedCodec,
@@ -73,7 +76,7 @@ impl CodecGatherWorkspace {
                             None => owner.input.len(),
                         };
                         self.dirty_mask_ranges
-                            .try_reserve(reserve)
+                            .try_reserve_cold(reserve)
                             .map_err(|_| GatherError::AllocationFailed)?;
                         state.source_cursor = owner.range.start.source;
                         state.record_cursor = owner.range.start.record;
@@ -173,6 +176,7 @@ impl CodecGatherWorkspace {
             cached_font_handle: None,
             cached_binding: None,
             cached_program: None,
+            #[cfg(test)]
             input_plan: None,
         };
         let mut bound = None;
@@ -201,14 +205,11 @@ impl CodecGatherWorkspace {
                 })
                 .ok_or(GatherError::InvalidSemanticShape)?;
             self.dirty_mask_ranges
-                .try_reserve(reserve)
+                .try_reserve_cold(reserve)
                 .map_err(|_| GatherError::AllocationFailed)?;
             state.source_cursor = owner.range.start.source;
             state.record_cursor = owner.range.start.record;
-            state.cached_font_handle = None;
-            state.cached_binding = None;
-            state.cached_program = None;
-            state.input_plan = None;
+            state.forget_program();
             let retained_count = owner.range.source_count().min(source_count);
             let mut rows = RowSource::new(owner.input);
             // Only a paragraph-run glyph is covered by the declaration; the first chunk that

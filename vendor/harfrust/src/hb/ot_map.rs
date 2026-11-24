@@ -271,7 +271,9 @@ impl<'a> hb_ot_map_builder_t<'a> {
         false
     }
 
-    #[inline]
+    // pmndrs/glyph fork: out of line. Plan building calls this from dozens of sites, and each
+    // inlined copy carried the `Vec` push; plans are built once and cached.
+    #[inline(never)]
     pub fn add_feature(&mut self, tag: hb_tag_t, flags: hb_ot_map_feature_flags_t, value: u32) {
         if !tag.is_null() {
             let seq = self.feature_infos.len();
@@ -306,6 +308,8 @@ impl<'a> hb_ot_map_builder_t<'a> {
         self.add_pause(TableIndex::GPOS, pause);
     }
 
+    // pmndrs/glyph fork: out of line, for the reason `add_feature` is.
+    #[inline(never)]
     fn add_pause(&mut self, table_index: TableIndex, pause: Option<pause_func_t>) {
         self.stages[table_index].push(stage_info_t {
             index: self.current_stage[table_index],
@@ -497,7 +501,13 @@ impl<'a> hb_ot_map_builder_t<'a> {
             let mut stage_index = 0;
             let mut last_lookup = 0;
 
-            let variation_index = self.face.ot_tables.feature_variations[table_index as usize];
+            // pmndrs/glyph fork: without `variations` the index is always `None` (see `OtTables`);
+            // saying so here compiles the FeatureVariations substitution out.
+            let variation_index = if cfg!(feature = "variations") {
+                self.face.ot_tables.feature_variations[table_index as usize]
+            } else {
+                None
+            };
 
             for stage in 0..self.current_stage[table_index] {
                 if let Some(feature_index) = required_feature_index[table_index] {

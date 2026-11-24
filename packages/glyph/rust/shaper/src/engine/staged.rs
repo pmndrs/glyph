@@ -7,11 +7,27 @@
 /// A stage value that may have a prepared replacement waiting to commit.
 ///
 /// Commit retains the previous value as scratch; each arena owns its capacity policy.
-#[derive(Default)]
 pub(crate) struct Staged<T> {
     committed: T,
     pending: T,
     prepared: bool,
+}
+
+impl<T: Default> Default for Staged<T> {
+    fn default() -> Self {
+        Self {
+            committed: fresh(),
+            pending: fresh(),
+            prepared: false,
+        }
+    }
+}
+
+/// `T::default()` out of line, so a stage's two values share one copy of its initialization;
+/// inlined, the paragraph state's empty value carried every stage's stores twice.
+#[inline(never)]
+fn fresh<T: Default>() -> T {
+    T::default()
 }
 
 impl<T> Staged<T> {

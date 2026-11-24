@@ -1,3 +1,4 @@
+use crate::cold_growth::ColdGrowth as _;
 use alloc::{boxed::Box, vec::Vec};
 
 use super::id_map::IdMap;
@@ -804,7 +805,7 @@ fn shaper_error(status: u32) -> EngineError {
 fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
     if values.capacity() < capacity {
         values
-            .try_reserve_exact(capacity.saturating_sub(values.len()))
+            .try_reserve_exact_cold(capacity.saturating_sub(values.len()))
             .map_err(|_| EngineError::ResultTooLarge)?;
     }
     Ok(())

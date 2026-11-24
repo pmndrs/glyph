@@ -1,5 +1,7 @@
 //! The text and style stages of one paragraph.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 impl ParagraphState {
@@ -53,7 +55,7 @@ impl ParagraphState {
         self.ellipsis_shape_scratch.reserve(4)?;
         if self.ellipsis_text_scratch.capacity() == 0 {
             self.ellipsis_text_scratch
-                .try_reserve_exact(1)
+                .try_reserve_exact_cold(1)
                 .map_err(|_| EngineError::ResultTooLarge)?;
         }
         {
@@ -94,7 +96,7 @@ impl ParagraphState {
         if !unit_ids_mirrored {
             pending
                 .unit_ids
-                .try_reserve(committed.unit_ids.len())
+                .try_reserve_cold(committed.unit_ids.len())
                 .map_err(|_| EngineError::ResultTooLarge)?;
             pending.unit_ids.clear();
             pending.unit_ids.extend_from_slice(&committed.unit_ids);
@@ -147,7 +149,7 @@ impl ParagraphState {
                 && let Some(edit) = changed_identity_range(&committed.unit_ids, &pending.unit_ids)
             {
                 text_edits
-                    .try_reserve(1)
+                    .try_reserve_cold(1)
                     .map_err(|_| EngineError::ResultTooLarge)?;
                 text_edits.push(edit);
                 if mutations.len() > 1 {
@@ -321,7 +323,7 @@ pub(super) fn text_capacity(state: &ParagraphState) -> usize {
 
 pub(super) fn reserve_text_buffer(text: &mut Vec<u16>, capacity: usize) -> Result<(), EngineError> {
     if text.capacity() < capacity {
-        text.try_reserve_exact(capacity.saturating_sub(text.len()))
+        text.try_reserve_exact_cold(capacity.saturating_sub(text.len()))
             .map_err(|_| EngineError::ResultTooLarge)?;
     }
     Ok(())

@@ -20,6 +20,8 @@
 //! The exhaustive and fuzz tests in `unicode_kernel_tests.rs` are the proof of both the rules
 //! and the cuts.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 
 #[allow(clippy::unreadable_literal, dead_code)]
@@ -668,7 +670,7 @@ fn decide_block(
 fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), ()> {
     if values.capacity() < capacity {
         values
-            .try_reserve_exact(capacity.saturating_sub(values.len()))
+            .try_reserve_exact_cold(capacity.saturating_sub(values.len()))
             .map_err(|_| ())?;
     }
     Ok(())

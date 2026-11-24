@@ -3,6 +3,8 @@
 //! The public types in this module are available to native consumers. Wasm memory ownership and
 //! pointer validation stay in the target-gated transport module.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 
 mod cluster_state;
@@ -77,7 +79,7 @@ pub(crate) use state::{MeasuredParagraphs, PreparationTarget};
 fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
     if values.capacity() < capacity {
         values
-            .try_reserve_exact(capacity.saturating_sub(values.len()))
+            .try_reserve_exact_cold(capacity.saturating_sub(values.len()))
             .map_err(|_| EngineError::ResultTooLarge)?;
     }
     Ok(())

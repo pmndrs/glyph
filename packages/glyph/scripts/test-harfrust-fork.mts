@@ -1,18 +1,21 @@
 /* @workflow {
   "name": "glyph:harfrust-fork-tests",
-  "summary": "Shape the fixture fonts through the in-tree HarfRust fork and the crates.io release it was cut from, and require identical glyphs, with the fork built as Glyph consumes it and as upstream would ship it.",
+  "summary": "Shape the fixture fonts through the in-tree HarfRust fork and the crates.io release it was cut from, and require identical glyphs, with the fork built as Glyph consumes it and as upstream would ship it; then run the fork's own unit tests.",
   "requirements": "Repository-pinned stable Rust, the font fixtures, and the harfrust 0.12.0 crate from crates.io or the Cargo cache.",
   "writes": "Ignored Rust build outputs only."
 } */
 import { isMainModule, runCargo } from './support/command.mts';
 
 const parityManifest = '../../vendor/harfrust-parity/Cargo.toml';
+const forkManifest = '../../vendor/harfrust/Cargo.toml';
 
 export async function runHarfrustForkTests(filter: readonly string[] = []): Promise<void> {
   // Release mode: the sweep shapes every ordered character pair of the kern-only fonts.
   const test = ['test', '--release', '--manifest-path', parityManifest, '--locked'];
   await runCargo([...test, ...filter]);
   await runCargo([...test, '--features', 'fork-default-features', ...filter]);
+  // The fork's own unit tests, including the split Unicode table against upstream's at every code point.
+  await runCargo(['test', '--release', '--manifest-path', forkManifest, '--locked', '--lib', ...filter]);
 }
 
 if (isMainModule(import.meta.url)) {

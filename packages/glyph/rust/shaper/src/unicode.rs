@@ -1,3 +1,4 @@
+use crate::cold_growth::ColdGrowth as _;
 use alloc::{boxed::Box, string::String, vec::Vec};
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -1001,7 +1002,7 @@ pub fn script_extensions(code_point: u32) -> Option<&'static [u32]> {
 fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), UnicodeError> {
     if values.capacity() < capacity {
         values
-            .try_reserve_exact(capacity.saturating_sub(values.len()))
+            .try_reserve_exact_cold(capacity.saturating_sub(values.len()))
             .map_err(|_| UnicodeError::ResultTooLarge)?;
     }
     Ok(())

@@ -1,5 +1,7 @@
 //! Unit identities across a text edit: the changed range and the identities it mints.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 pub(super) fn changed_identity_range(previous: &[u32], next: &[u32]) -> Option<TextEdit> {
@@ -47,7 +49,7 @@ pub(super) fn split_identity_edit(
         if old < edit.old_end && new < edit.new_end && previous[old] == next[new] {
             if let Some(done) = open.take() {
                 edits
-                    .try_reserve(1)
+                    .try_reserve_cold(1)
                     .map_err(|_| EngineError::ResultTooLarge)?;
                 edits.push(done);
             }
@@ -75,14 +77,14 @@ pub(super) fn split_identity_edit(
     if !paired {
         edits.truncate(first);
         edits
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
         edits.push(edit);
         return Ok(());
     }
     if let Some(done) = open {
         edits
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
         edits.push(done);
     }
@@ -155,7 +157,7 @@ pub(super) fn collect_text_edits(
                         return Ok(());
                     }
                     edits
-                        .try_reserve(1)
+                        .try_reserve_cold(1)
                         .map_err(|_| EngineError::ResultTooLarge)?;
                     edits.push(TextEdit {
                         old_start: offset,
@@ -189,7 +191,7 @@ pub(super) fn collect_text_edits(
             }
             if start != old_end || start != new_end {
                 edits
-                    .try_reserve(1)
+                    .try_reserve_cold(1)
                     .map_err(|_| EngineError::ResultTooLarge)?;
                 edits.push(TextEdit {
                     old_start: start,
@@ -391,7 +393,7 @@ pub(super) fn apply_text_identity_edit(
     }
     if new_len > old_len {
         identities
-            .try_reserve(new_len - old_len)
+            .try_reserve_cold(new_len - old_len)
             .map_err(|_| EngineError::ResultTooLarge)?;
         identities.resize(new_len, 0);
     }

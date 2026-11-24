@@ -1,5 +1,7 @@
 //! One frame's update request: staging planner input, preparing paragraphs and the renderer plan.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 impl TextEngine {
@@ -373,7 +375,7 @@ fn collect_reorder_stable_ids(
 ) -> Result<(), EngineError> {
     let required = active_outlined_total(planner)?;
     stable_ids
-        .try_reserve(required)
+        .try_reserve_cold(required)
         .map_err(|_| EngineError::ResultTooLarge)?;
     for ordered in planner.active_order() {
         let paragraph = planner

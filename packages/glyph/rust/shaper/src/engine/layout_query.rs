@@ -3,6 +3,8 @@
 //! These records share the immutable frame publication for lifetime and transport only. They are
 //! not render-plan commands and render executors must not consume them.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 use core::iter::{Copied, Enumerate};
 
@@ -597,7 +599,7 @@ fn append_measurement_from_occurrences_source(
         .and_then(|count| count.checked_add(if include_glyphs { positioned_count } else { 0 }))
         .ok_or(EngineError::ResultTooLarge)?;
     target
-        .try_reserve(reserve)
+        .try_reserve_cold(reserve)
         .map_err(|_| EngineError::ResultTooLarge)?;
 
     let summary_index = target.len();

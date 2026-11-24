@@ -1,3 +1,4 @@
+use crate::cold_growth::ColdGrowth as _;
 use alloc::vec::Vec;
 use core::{
     cell::{Cell, RefCell},
@@ -254,7 +255,7 @@ impl LayoutDirtyRanges {
             last.end = range.end;
         } else {
             self.ranges
-                .try_reserve(1)
+                .try_reserve_cold(1)
                 .map_err(|_| EngineError::ResultTooLarge)?;
             self.ranges.push(range);
         }
@@ -287,7 +288,7 @@ impl LayoutRunArena {
 
     fn push(&mut self, run: LayoutRun) -> Result<(), EngineError> {
         self.runs
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.runs.push(run);
         Ok(())

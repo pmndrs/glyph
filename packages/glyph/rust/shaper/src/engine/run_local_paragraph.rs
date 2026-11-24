@@ -20,6 +20,8 @@
 //! from the previous geometry: every block before the first cluster the kernel would read
 //! differently, cut back to a block boundary, is copied, and the kernel resumes there.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 
 use crate::FontGlyphExtents;
@@ -309,15 +311,15 @@ fn copy_blocks(
     let index = &mut run_local.index;
     index
         .blocks
-        .try_reserve(blocks)
+        .try_reserve_cold(blocks)
         .map_err(|_| EngineError::ResultTooLarge)?;
     index
         .cluster_blocks
-        .try_reserve(cluster_count)
+        .try_reserve_cold(cluster_count)
         .map_err(|_| EngineError::ResultTooLarge)?;
     index
         .cluster_prefixes
-        .try_reserve(cluster_count)
+        .try_reserve_cold(cluster_count)
         .map_err(|_| EngineError::ResultTooLarge)?;
     let shift = |glyph: u32| (i64::from(glyph) + glyph_delta) as u32;
     for block in old_blocks {
@@ -375,7 +377,7 @@ fn push_record(
     };
     run_local
         .runs
-        .try_reserve(1)
+        .try_reserve_cold(1)
         .map_err(|_| EngineError::ResultTooLarge)?;
     run_local.runs.push(RunRecord {
         cluster_start: run.cluster_start,
@@ -514,7 +516,7 @@ fn layout(
     run_local.cover_blocks(first_block).map_err(error)?;
     run_local
         .runs
-        .try_reserve(1)
+        .try_reserve_cold(1)
         .map_err(|_| EngineError::ResultTooLarge)?;
     run_local.runs.push(RunRecord {
         cluster_start: run.cluster_start,
@@ -555,7 +557,7 @@ fn scale_spans(
                 return Err(EngineError::InvalidRequest);
             }
             spans
-                .try_reserve(1)
+                .try_reserve_cold(1)
                 .map_err(|_| EngineError::ResultTooLarge)?;
             spans.push(ScaleSpan {
                 glyph_end,

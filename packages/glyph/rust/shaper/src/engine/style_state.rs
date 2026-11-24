@@ -1,5 +1,7 @@
 //! Flat retained style storage and transactional mutation merge.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 #[cfg(test)]
 use core::cell::Cell;
@@ -253,7 +255,7 @@ impl ResolvedStyle {
 impl ResolvedStyleArena {
     pub(crate) fn reserve_default(&mut self) -> Result<(), EngineError> {
         self.segments
-            .try_reserve_exact(DEFAULT_STYLE_CAPACITY.saturating_mul(2))
+            .try_reserve_exact_cold(DEFAULT_STYLE_CAPACITY.saturating_mul(2))
             .map_err(|_| EngineError::ResultTooLarge)
     }
 
@@ -482,7 +484,7 @@ impl StyleArena {
             .ok_or(EngineError::ResultTooLarge)?;
         topology_scratch.clear();
         topology_scratch
-            .try_reserve(capacity)
+            .try_reserve_cold(capacity)
             .map_err(|_| EngineError::ResultTooLarge)?;
 
         let mut committed_index = 0;
@@ -586,13 +588,13 @@ impl StyleArena {
 
     pub(crate) fn reserve_default(&mut self) -> Result<(), EngineError> {
         self.records
-            .try_reserve_exact(DEFAULT_STYLE_CAPACITY)
+            .try_reserve_exact_cold(DEFAULT_STYLE_CAPACITY)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.languages
-            .try_reserve_exact(DEFAULT_LANGUAGE_CAPACITY)
+            .try_reserve_exact_cold(DEFAULT_LANGUAGE_CAPACITY)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.features
-            .try_reserve_exact(DEFAULT_FEATURE_CAPACITY)
+            .try_reserve_exact_cold(DEFAULT_FEATURE_CAPACITY)
             .map_err(|_| EngineError::ResultTooLarge)
     }
 
@@ -614,10 +616,10 @@ impl StyleArena {
         prepare_mutation_order(mutations, scratch, sort_pairs)?;
 
         self.records
-            .try_reserve(committed.records.len().saturating_add(scratch.len()))
+            .try_reserve_cold(committed.records.len().saturating_add(scratch.len()))
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.languages
-            .try_reserve(
+            .try_reserve_cold(
                 committed
                     .languages
                     .len()
@@ -625,7 +627,7 @@ impl StyleArena {
             )
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.features
-            .try_reserve(
+            .try_reserve_cold(
                 committed
                     .features
                     .len()
@@ -729,10 +731,10 @@ impl StyleArena {
         scope_scratch.clear();
         output
             .segments
-            .try_reserve(self.records.len().saturating_mul(2))
+            .try_reserve_cold(self.records.len().saturating_mul(2))
             .map_err(|_| EngineError::ResultTooLarge)?;
         scope_scratch
-            .try_reserve(self.records.len())
+            .try_reserve_cold(self.records.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         let root = containment_order
             .first()
@@ -1151,7 +1153,7 @@ fn validate_style_topology(
 ) -> Result<(), EngineError> {
     order_scratch.clear();
     order_scratch
-        .try_reserve(count)
+        .try_reserve_cold(count)
         .map_err(|_| EngineError::ResultTooLarge)?;
     // Two stable passes preserve cascade order while sorting by range containment.
     sort::prepare_pairs(sort_pairs, count)?;
@@ -1205,7 +1207,7 @@ fn validate_style_topology(
     }
     nesting_scratch.clear();
     nesting_scratch
-        .try_reserve(order_scratch.len())
+        .try_reserve_cold(order_scratch.len())
         .map_err(|_| EngineError::ResultTooLarge)?;
     for index in order_scratch.iter().copied() {
         let style = record_at(index).ok_or(EngineError::InvalidRequest)?;
@@ -1277,7 +1279,7 @@ fn prepare_mutation_order(
 ) -> Result<(), EngineError> {
     scratch.clear();
     scratch
-        .try_reserve(mutations.len())
+        .try_reserve_cold(mutations.len())
         .map_err(|_| EngineError::ResultTooLarge)?;
     for request_index in 0..mutations.len() {
         let mutation = mutations

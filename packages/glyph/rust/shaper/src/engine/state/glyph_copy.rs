@@ -1,5 +1,7 @@
 //! Copying one paragraph's positioned glyphs and decorations out for a caller.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 impl TextEngine {
@@ -56,10 +58,10 @@ impl TextEngine {
             let mut selected_sources = Vec::new();
             let mut selected_placement_slots = Vec::new();
             selected_sources
-                .try_reserve(requested.len())
+                .try_reserve_cold(requested.len())
                 .map_err(|_| EngineError::ResultTooLarge)?;
             selected_placement_slots
-                .try_reserve(requested.len())
+                .try_reserve_cold(requested.len())
                 .map_err(|_| EngineError::ResultTooLarge)?;
             for source in leaf.outlined_sources() {
                 let row = leaf
@@ -78,7 +80,7 @@ impl TextEngine {
             selected_placement_slots.dedup();
             let mut placement_rows = Vec::new();
             placement_rows
-                .try_reserve(selected_placement_slots.len())
+                .try_reserve_cold(selected_placement_slots.len())
                 .map_err(|_| EngineError::ResultTooLarge)?;
             for (slot, source_slot) in selected_placement_slots.iter().copied().enumerate() {
                 let translation = leaf
@@ -147,10 +149,10 @@ impl TextEngine {
         let mut selected_marks = Vec::new();
         let mut selected_placement_slots = Vec::new();
         selected_marks
-            .try_reserve(requested.len())
+            .try_reserve_cold(requested.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         selected_placement_slots
-            .try_reserve(requested.len())
+            .try_reserve_cold(requested.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         let mut outlined =
             positioned.outlined_cursor(source_context.clusters, &paragraph.state.boundary_shape);
@@ -173,7 +175,7 @@ impl TextEngine {
         selected_placement_slots.dedup();
         let mut placement_rows = Vec::new();
         placement_rows
-            .try_reserve(selected_placement_slots.len())
+            .try_reserve_cold(selected_placement_slots.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         for (slot, source_slot) in selected_placement_slots.iter().copied().enumerate() {
             let translation = positioned

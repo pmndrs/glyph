@@ -1,5 +1,7 @@
 //! Paragraph lifecycle requests: creation, upsert and removal, validated against the planner.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 impl PlannerState {
@@ -39,17 +41,17 @@ impl PlannerState {
             return Err(EngineError::InvalidRequest);
         }
         self.paragraphs
-            .try_reserve(creates)
+            .try_reserve_cold(creates)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.pending_ordered_paragraphs = ordered;
         if self.pending_ordered_paragraphs.len() != final_count {
             return Err(EngineError::InvalidRequest);
         }
         self.rank_sort_scratch
-            .try_reserve(final_count)
+            .try_reserve_cold(final_count)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.ranked_paragraphs
-            .try_reserve(final_count)
+            .try_reserve_cold(final_count)
             .map_err(|_| EngineError::ResultTooLarge)?;
 
         for index in 0..mutations.len() {
@@ -236,7 +238,7 @@ pub(super) fn validate_lifecycle_input(
     planner.lifecycle_id_scratch.clear();
     planner
         .lifecycle_id_scratch
-        .try_reserve(mutations.len().max(order_mutations.len()))
+        .try_reserve_cold(mutations.len().max(order_mutations.len()))
         .map_err(|_| EngineError::ResultTooLarge)?;
     for index in 0..mutations.len() {
         let mutation = mutations.get(index).ok_or(EngineError::InvalidRequest)?;
@@ -263,7 +265,7 @@ pub(super) fn validate_lifecycle_input(
     planner.lifecycle_membership_scratch.clear();
     planner
         .lifecycle_membership_scratch
-        .try_reserve(planner.ordered_paragraphs.len())
+        .try_reserve_cold(planner.ordered_paragraphs.len())
         .map_err(|_| EngineError::ResultTooLarge)?;
     planner
         .lifecycle_membership_scratch
@@ -317,7 +319,7 @@ pub(super) fn validate_lifecycle_input(
     planner.pending_ordered_paragraphs.clear();
     planner
         .pending_ordered_paragraphs
-        .try_reserve(final_count)
+        .try_reserve_cold(final_count)
         .map_err(|_| EngineError::ResultTooLarge)?;
     for current in &planner.ordered_paragraphs {
         let mutation_index = planner
@@ -398,7 +400,7 @@ pub(super) fn validate_lifecycle_input(
     planner.lifecycle_membership_scratch.clear();
     planner
         .lifecycle_membership_scratch
-        .try_reserve(final_count)
+        .try_reserve_cold(final_count)
         .map_err(|_| EngineError::ResultTooLarge)?;
     planner.lifecycle_membership_scratch.extend(
         planner
@@ -417,7 +419,7 @@ pub(super) fn validate_lifecycle_input(
     planner.lifecycle_id_scratch.clear();
     planner
         .lifecycle_id_scratch
-        .try_reserve(order_mutations.len())
+        .try_reserve_cold(order_mutations.len())
         .map_err(|_| EngineError::ResultTooLarge)?;
     for index in 0..order_mutations.len() {
         let mutation = order_mutations

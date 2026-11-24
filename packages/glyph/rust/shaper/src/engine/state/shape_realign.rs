@@ -1,5 +1,7 @@
 //! Incremental shaping that realigns an edited window: the general and ASCII-anchor variants.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 impl ParagraphState {
@@ -110,7 +112,7 @@ impl ParagraphState {
                 }
                 let source_run = to_u32(index)?;
                 spans
-                    .try_reserve(1)
+                    .try_reserve_cold(1)
                     .map_err(|_| EngineError::ResultTooLarge)?;
                 spans.push(FallbackSpan {
                     source_run,
@@ -160,7 +162,7 @@ impl ParagraphState {
         // Fallback spans in run order: those before, the reshaped runs', those after, moved.
         let middle_spans = core::mem::take(&mut spans);
         spans
-            .try_reserve(self.fallback_spans.len() + middle_spans.len())
+            .try_reserve_cold(self.fallback_spans.len() + middle_spans.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         for span in self.fallback_spans.iter().copied() {
             if span.source_run < old_first {
