@@ -1,6 +1,7 @@
 import { assert, bench, group } from '@pmndrs/labs';
 
 import {
+  endFrame,
   createLabels,
   createParagraph,
   disposeLabels,
@@ -36,7 +37,7 @@ group('first-time operations @cold', () => {
       created.paragraph.text = `edited ${String(iteration++)}`;
       const scene = attachToScene(created.textGroup);
       scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      endFrame(scene);
       committed = created.paragraph.commitState().status === 'committed';
       const result = created.textGroup.textCount;
       disposeParagraph(created);

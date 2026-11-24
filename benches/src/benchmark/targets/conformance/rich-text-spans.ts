@@ -20,6 +20,7 @@ import {
 import type { BenchmarkTarget } from '../../contracts';
 import { codecAttributeName, requiredCodecAttribute } from '../three-policy-buffer-evidence';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
+import { endFrame } from '../../../three-frame';
 
 type BitmapFormat = typeof bitmap;
 
@@ -307,13 +308,14 @@ function measureCase(
   try {
     group.add(text);
     // Target v1 publishes shaping, layout, and draws during the world-matrix update instead of through an awaited
-    // readiness promise, so failures surface on the object rather than as a rejected wait.
+    // readiness promise, so ending that frame throws what it found rather than rejecting a wait.
     scene.updateMatrixWorld(true);
     // Headless runs read this across a page boundary that cannot transfer a cause, so the case that failed and the
     // underlying reason both belong in the message.
-    const failure = group.error ?? text.error;
-    if (failure !== undefined) {
-      throw new Error(`${caseId} failed to publish: ${String(failure)}`, { cause: failure });
+    try {
+      endFrame(scene);
+    } catch (error) {
+      throw new Error(`${caseId} failed to publish: ${String(error)}`, { cause: error });
     }
     const layout = text.glyphs();
     if (layout === undefined) throw new Error(`${caseId} has no layout`);

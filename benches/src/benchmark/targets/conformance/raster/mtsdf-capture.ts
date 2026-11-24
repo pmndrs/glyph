@@ -26,6 +26,7 @@ import {
 } from '../../../../renderer/webgpu-renderer';
 import type { RasterConformanceSession } from './contracts';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../../three-root';
+import { endFrame } from '../../../../three-frame';
 
 const WIDTH = 512;
 const HEIGHT = 512;
@@ -218,7 +219,7 @@ async function createFlatMtsdfConformanceResources(options: {
     // The retained target binds, shapes, and commits during the world-matrix pass, so the layout the CPU
     // reference reads is only available after it runs.
     scene.updateMatrixWorld(true);
-    if (line.error !== undefined) throw line.error;
+    endFrame(scene);
     const camera = new THREE.OrthographicCamera(0, WIDTH, 0, -HEIGHT, 0.1, 1_000);
     camera.position.z = 500;
     camera.updateProjectionMatrix();

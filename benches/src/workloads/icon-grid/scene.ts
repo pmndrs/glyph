@@ -189,7 +189,7 @@ export function resizeIconGridEntries(
   root: THREE.Object3D,
 ): void {
   for (const entry of entries) entry.text.set({ style: { ...entry.text.style, fontSize: iconSize } });
-  publishWorkloadTexts(root, entries);
+  publishWorkloadTexts(root);
   for (const entry of entries) {
     if (entry.virtualIconIndex === undefined) continue;
     const column = entry.virtualIconIndex % layout.columns;
@@ -721,7 +721,7 @@ class RetainedIconGridWorkload implements IconGridWorkloadInstance {
     const publishStarted = iconGridTimingsEnabled ? performance.now() : 0;
     // The nominal icon-cell alignment above needs no synchronous layout query. Publish every staged string and its
     // already-final transform through one retained update.
-    publishWorkloadTexts(scene, this.#pendingEntries);
+    publishWorkloadTexts(scene);
     if (iconGridTimingsEnabled) {
       performance.measure('@pmndrs/benchmark icon-grid.publish', { start: publishStarted });
     }

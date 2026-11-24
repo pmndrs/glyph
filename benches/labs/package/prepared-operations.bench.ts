@@ -3,7 +3,7 @@ import { deepStrictEqual } from 'node:assert';
 
 import { assert, bench, group } from '@pmndrs/labs';
 
-import { createLabels, disposeLabels } from './fixture.ts';
+import { createLabels, disposeLabels, endFrame } from './fixture.ts';
 import { assertSpanLayout, coldLabelLayouts, prepareSpanTag } from './prepare-spans.ts';
 
 type Label = ReturnType<typeof createLabels>['labels'][number];
@@ -67,13 +67,13 @@ function coldMeasurements(
     const target = created.labels[0]!;
     target.text = initialText;
     created.scene.updateMatrixWorld(true);
-    if (created.textGroup.error !== undefined) throw created.textGroup.error;
+    endFrame(created.scene);
     if (warmRequestedRead) target.measure();
     target.text = text;
     // Retain the pre-publication answer before a later scene update can replace cached state.
     const beforePublication = structuredClone(target.measure());
     created.scene.updateMatrixWorld(true);
-    if (created.textGroup.error !== undefined) throw created.textGroup.error;
+    endFrame(created.scene);
     const afterPublication = structuredClone(target.measure());
     return { beforePublication, afterPublication };
   } finally {
@@ -101,7 +101,7 @@ export function* preparedOperation(
     const target = created.labels[0]!;
     target.text = initialText;
     created.scene.updateMatrixWorld(true);
-    if (created.textGroup.error !== undefined) throw created.textGroup.error;
+    endFrame(created.scene);
 
     // Warm the target cache only for requested reads; setter-only cases start with an unqueried target.
     if (shape.read) target.measure();
@@ -129,7 +129,7 @@ export function* preparedOperation(
       const measurement = shape.read ? target.measure() : undefined;
       if (shape.frame) {
         created.scene.updateMatrixWorld(true);
-        if (created.textGroup.error !== undefined) throw created.textGroup.error;
+        endFrame(created.scene);
       }
       return measurement;
     };

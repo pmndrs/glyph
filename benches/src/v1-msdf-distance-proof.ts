@@ -115,7 +115,6 @@ export async function proveMsdfDistanceMaterial(
       return material;
     });
     await renderer.renderAsync(scene, camera);
-    if (text.error !== undefined) throw text.error;
     const reconstructed = await renderer.readRenderTargetPixelsAsync(target, 0, 0, 256, 128);
     // Both paths produce an 8-bit render-target readback from separately compiled material graphs.
     // WebGPU implementations may quantize an edge to an adjacent byte or choose the neighboring
@@ -141,7 +140,6 @@ export async function proveMsdfDistanceMaterial(
         return material;
       });
       await renderer.renderAsync(scene, camera);
-      if (text.error !== undefined) throw text.error;
       const sided = await renderer.readRenderTargetPixelsAsync(target, 0, 0, 256, 128);
       if (drawsGlyphs) {
         const facing = comparePixelReadbacks(baseline, sided, 1, text.measure().glyphCount * 3);
@@ -167,7 +165,6 @@ export async function proveMsdfDistanceMaterial(
       return material;
     });
     await renderer.renderAsync(scene, camera);
-    if (text.error !== undefined) throw text.error;
     const glow = await renderer.readRenderTargetPixelsAsync(target, 0, 0, 256, 128);
     let glowPixelsOutsideCoverage = 0;
     for (let offset = 0; offset < glow.length; offset += 4) {

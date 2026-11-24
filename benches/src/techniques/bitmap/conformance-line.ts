@@ -4,6 +4,7 @@ import { type bitmap, type BitmapData } from '@pmndrs/glyph';
 import type { Text, ThreeRoot } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
+import { endFrame } from '../../three-frame';
 import { LIVE_TEXT_LINE_HEIGHT } from '../../workloads/shared/text-style';
 
 /** White, so every rendered channel carries the atlas coverage the exact CPU reference composites. */
@@ -52,7 +53,7 @@ export function createBitmapConformanceLine(
   scene.add(object);
   try {
     object.updateMatrixWorld(true);
-    if (object.error !== undefined) throw object.error;
+    endFrame(scene);
     const layout = object.glyphs();
     if (layout === undefined) throw new Error('target-v1 Text did not commit a bitmap layout');
     const missingGlyphCount = layout.glyphIds.reduce((count, glyphId) => count + (glyphId === 0 ? 1 : 0), 0);

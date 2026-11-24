@@ -73,7 +73,6 @@ function createParagraph(
   });
   textGroup.add(paragraph);
   textGroup.updateMatrixWorld(true);
-  if (textGroup.error !== undefined) throw textGroup.error;
   return { paragraph, root, textGroup };
 }
 

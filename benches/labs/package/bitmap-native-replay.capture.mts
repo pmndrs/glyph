@@ -218,7 +218,7 @@ try {
         assert.equal(label.text, value);
       }
       batch.scene.updateMatrixWorld(true);
-      if (batch.textGroup.error !== undefined) throw batch.textGroup.error;
+      fixture.endFrame(batch.scene);
       assert(batch.texts.every((text) => text.commitState().status === 'committed'));
       assert.equal(batch.textGroup.textCount, 1_024);
       assert(fixture.inspectDraws(batch.scene).glyphs > 0);

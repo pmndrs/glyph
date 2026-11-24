@@ -1,7 +1,7 @@
 import { assert, bench, group } from '@pmndrs/labs';
 
 import { createTrailingSpanPublicationWorkload } from './adapter-publication-workload.ts';
-import { borrowedChecksum, createLabels, disposeLabels, inspectDraws } from './fixture.ts';
+import { borrowedChecksum, createLabels, disposeLabels, endFrame, inspectDraws } from './fixture.ts';
 
 group('allocation-light adapter publication @publication', () => {
   bench('normalize 1000 equivalent retained label updates @cached', function* () {
@@ -16,7 +16,7 @@ group('allocation-light adapter publication @publication', () => {
         label.constraints = { ...label.constraints };
       }
       created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      endFrame(created.scene);
       return created.textGroup.textCount;
     };
     update();

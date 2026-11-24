@@ -41,6 +41,7 @@ import {
 } from '../shared/glyph-origin-presentation';
 import { slugDataConfiguration, type SlugRasterConfiguration } from './metadata';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../three-root';
+import { endFrame } from '../../three-frame';
 
 export interface SlugTextLiveStats {
   readonly technique: 'slug';
@@ -254,8 +255,8 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
   };
 
   /** Commits one validated generation; `Text.set()` leaves desired state unchanged when it rejects. */
-  const commitState = (activeLine: Text<typeof slug>, next: SlugTextState): void => {
-    applyState(activeLine, next);
+  const commitState = (activeLine: Text<typeof slug>, activeScene: THREE.Scene, next: SlugTextState): void => {
+    applyState(activeLine, activeScene, next);
     committedState = next;
   };
 
@@ -265,10 +266,19 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
   };
 
   const resizeScene = (viewport: PersistentRenderViewport): void => {
-    if (closing || disposed || line === undefined || camera === undefined || canvasSurface === undefined) return;
+    if (
+      closing ||
+      disposed ||
+      line === undefined ||
+      scene === undefined ||
+      camera === undefined ||
+      canvasSurface === undefined
+    )
+      return;
     const state = committedState;
     if (state === undefined) return;
     const activeLine = line;
+    const activeScene = scene;
     width = positiveViewportSize(viewport.width, 'Slug scene width');
     height = positiveViewportSize(viewport.height, 'Slug scene height');
     canvasSurface.resize(width, height);
@@ -283,7 +293,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
     const updateStartedAt = performance.now();
     const revision = ++updateRevision;
     try {
-      commitState(activeLine, {
+      commitState(activeLine, activeScene, {
         ...state,
         constraints: slugConstraints(nextContentWidth),
         layout: slugLayout(textAlign),
@@ -367,7 +377,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         // `Text` reconciles while it is parented, so attaching and forcing one world update is what commits the layout.
         scene.add(activeLine);
         activeLine.updateMatrixWorld(true);
-        if (activeLine.error !== undefined) throw activeLine.error;
+        endFrame(scene);
         committedState = state;
         const readyAt = performance.now();
         context.signal.throwIfAborted();
@@ -515,7 +525,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
         features: next.features,
       };
       activeFontFixture.commit(nextFixture, (fixture) => {
-        commitState(activeLine, {
+        commitState(activeLine, active.scene, {
           font: fixture.loadedFont,
           identity,
           constraints: slugConstraints(nextContentWidth),
@@ -552,7 +562,7 @@ export function createSlugTextPersistentScene(options: SlugTextPersistentSceneOp
   };
 }
 
-function applyState(line: Text<typeof slug>, next: SlugTextState): void {
+function applyState(line: Text<typeof slug>, scene: THREE.Scene, next: SlugTextState): void {
   line.set({
     font: next.font,
     text: next.identity.text,
@@ -564,7 +574,7 @@ function applyState(line: Text<typeof slug>, next: SlugTextState): void {
   line.visible = next.identity.text.length > 0;
   glyph.shape();
   line.updateMatrixWorld(true);
-  if (line.error !== undefined) throw line.error;
+  endFrame(scene);
 }
 
 function slugConstraints(width: number): Constraints {

@@ -2,6 +2,7 @@
 import { assert, bench, group } from '@pmndrs/labs';
 
 import {
+  endFrame,
   attachToScene,
   createParagraph,
   disposeParagraph,
@@ -69,7 +70,7 @@ group('typing into a long paragraph @edit', () => {
     const publish = () => {
       created.paragraph.text = next();
       scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      endFrame(scene);
       return created.paragraph.commitState().status;
     };
     publish();
@@ -100,7 +101,7 @@ group('one keystroke in one direction @edit @typing-direction', () => {
           const changed = [created.paragraph];
           const frame = () => {
             created.scene.updateMatrixWorld(true);
-            if (created.textGroup.error !== undefined) throw created.textGroup.error;
+            endFrame(created.scene);
           };
           yield selfTimed(
             () => {

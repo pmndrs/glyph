@@ -384,9 +384,6 @@ async function start(): Promise<Pixi3DParityProof> {
         }
         glyph.shape();
       }
-      for (const text of texts) {
-        if (text.error !== undefined) throw text.error;
-      }
       const meshes = texts.reduce((count, text) => count + text.children.length, 0);
       return { pixels: pixiFrame(), meshes };
     } finally {

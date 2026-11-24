@@ -516,7 +516,7 @@ async function createComparisonWorkloadRuntime(
           });
           try {
             for (const { node } of additions) batchRoot.add(node);
-            publishWorkloadTexts(batchRoot, additions);
+            publishWorkloadTexts(batchRoot);
           } catch (error) {
             discardEntries(additions);
             throw error;
@@ -565,7 +565,7 @@ async function createComparisonWorkloadRuntime(
         activeSelectedFont.commit(nextFixture, (nextFont) => {
           fontFixtureCommitting = true;
           try {
-            applyRetainedTextFontFixture(batchRoot, entries, targetTexts, nextFont.loaded);
+            applyRetainedTextFontFixture(batchRoot, targetTexts, nextFont.loaded);
           } finally {
             fontFixtureCommitting = false;
           }
@@ -632,7 +632,7 @@ async function createComparisonWorkloadRuntime(
         // TextGroup would duplicate every reserved engine arena while the outgoing command buffer is still live.
         if (reuseBatchRoot) for (const { node } of previous) previousRoot.remove(node);
         for (const { node } of nextEntries) nextRoot.add(node);
-        publishWorkloadTexts(nextRoot, nextEntries);
+        publishWorkloadTexts(nextRoot);
         const readyAt = performance.now();
         if (disposed || commitRevision !== revision) {
           entries = nextEntries;
@@ -691,7 +691,7 @@ async function createComparisonWorkloadRuntime(
           const restoredRoot = createBatchRoot(glyphRoot, configuration.workload);
           try {
             for (const { node } of previous) restoredRoot.add(node);
-            publishWorkloadTexts(restoredRoot, previous);
+            publishWorkloadTexts(restoredRoot);
             batchRoot = restoredRoot;
             scene.clear();
             scene.add(restoredRoot);
@@ -733,7 +733,7 @@ async function createComparisonWorkloadRuntime(
           viewportWidth: width,
         });
         applyRetainedConfiguration(entries, technique, configuration);
-        if (rasterPixelRatio !== undefined) publishWorkloadTexts(batchRoot, entries);
+        if (rasterPixelRatio !== undefined) publishWorkloadTexts(batchRoot);
         return;
       }
       if (
@@ -751,7 +751,7 @@ async function createComparisonWorkloadRuntime(
         committedContentWidth = undefined;
         revision += 1;
         applyRetainedConfiguration(entries, technique, configuration);
-        if (rasterPixelRatio !== undefined) publishWorkloadTexts(batchRoot, entries);
+        if (rasterPixelRatio !== undefined) publishWorkloadTexts(batchRoot);
         return;
       }
       const nextContentWidth = comparisonWorkloadContentWidth(next, width);
@@ -792,7 +792,7 @@ async function createComparisonWorkloadRuntime(
         timingEnd('text.update-and-measure', layoutStarted);
         const readyAt = performance.now();
         const publishStarted = timingBegin();
-        publishWorkloadTexts(batchRoot, entries);
+        publishWorkloadTexts(batchRoot);
         timingEnd('text.publish-clean', publishStarted);
         const finishedAt = performance.now();
         textReadyMs = finishedAt - readyStarted;
@@ -1337,12 +1337,11 @@ export function comparisonWorkloadRequiresIconWindowSuspension(
 /** Swaps the font fixture behind every retained Text, committing the whole set in one publication: the single `updateMatrixWorld` either commits all Texts or throws with none published. */
 export function applyRetainedTextFontFixture(
   root: THREE.Object3D,
-  entries: readonly WorkloadEntry[],
   texts: readonly WorkloadText[],
   next: WorkloadFont,
 ): void {
   for (const text of texts) text.font = next;
-  publishWorkloadTexts(root, entries);
+  publishWorkloadTexts(root);
 }
 
 export function applyRetainedTextWidths(texts: readonly WorkloadText[], widths: ArrayLike<number>): void {

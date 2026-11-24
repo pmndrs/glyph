@@ -1,6 +1,7 @@
 import { assert, bench, group } from '@pmndrs/labs';
 
 import {
+  endFrame,
   createLabels,
   createParagraph,
   disposeLabels,
@@ -27,7 +28,7 @@ group('common text operations @core', () => {
     const publishEdit = () => {
       created.paragraph.text = editedText(iteration++);
       created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      endFrame(created.scene);
       return created.textGroup.textCount;
     };
     // The first edit of a mounted Text is first-time work, measured in the cold suite; this workload times later edits.
@@ -45,7 +46,7 @@ group('common text operations @core', () => {
       iteration += 1;
       created.paragraph.constraints = { width: { mode: 'exact', size: 520 + iteration / 64 } };
       created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      endFrame(created.scene);
       return created.textGroup.textCount;
     };
     assert.equal(textCount, 1);
@@ -60,7 +61,7 @@ group('common text operations @core', () => {
       alternate = !alternate;
       created.paragraph.style = { color: alternate ? '#f97316' : '#38bdf8', fontSize: 24 };
       created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      endFrame(created.scene);
       return created.textGroup.textCount;
     };
     assert.equal(textCount, 1);
@@ -75,7 +76,7 @@ group('common text operations @core', () => {
       iteration += 1;
       created.paragraph.style = { fontSize: 20 + iteration / 1024 };
       created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      endFrame(created.scene);
       return created.textGroup.textCount;
     };
     assert.equal(textCount, 1);

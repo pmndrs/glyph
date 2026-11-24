@@ -22,6 +22,7 @@ import { paragraphCjkCoverageText } from '../../paragraph-contract-corpus';
 import { hashParagraphLayouts, paragraphLayoutBytes, paragraphLayoutContract } from '../../paragraph-layout-digest';
 import { createUikitLayoutFixture, YogaMeasureMode } from '../../uikit-layout-fixture';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
+import { endFrame } from '../../../three-frame';
 
 type BitmapFont = Font<typeof bitmap>;
 
@@ -209,7 +210,7 @@ async function runContracts(state: Extract<State, { readonly kind: 'ready' }>, s
   try {
     signal?.throwIfAborted();
     scene.updateMatrixWorld(true);
-    if (group.error !== undefined) throw group.error;
+    endFrame(scene);
     const layouts = texts.map((text, index) => {
       const layout = text.glyphs();
       const contract = expected[index];

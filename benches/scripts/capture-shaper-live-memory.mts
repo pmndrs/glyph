@@ -225,7 +225,7 @@ try {
           assert.equal(label.text, `${word} ${String(index).padStart(4, '0')}`);
         }
         batch!.scene.updateMatrixWorld(true);
-        if (batch!.textGroup.error !== undefined) throw batch!.textGroup.error;
+        f.endFrame(batch!.scene);
         assert(batch!.texts.every((label) => label.commitState().status === 'committed'));
       });
     }
@@ -252,7 +252,7 @@ try {
         assert.equal(paragraph!.paragraph.text, text);
         assert.equal(paragraph!.paragraph.measure().glyphCount, text.length);
         paragraph!.scene.updateMatrixWorld(true);
-        if (paragraph!.textGroup.error !== undefined) throw paragraph!.textGroup.error;
+        f.endFrame(paragraph!.scene);
         assert.equal(paragraph!.paragraph.commitState().status, 'committed');
       });
       current = text;
@@ -278,7 +278,7 @@ try {
           assert.equal(label.measure().glyphCount, text.length);
         }
         edits!.scene.updateMatrixWorld(true);
-        if (edits!.textGroup.error !== undefined) throw edits!.textGroup.error;
+        f.endFrame(edits!.scene);
         assert(edits!.labels.every((label) => label.commitState().status === 'committed'));
       });
     }

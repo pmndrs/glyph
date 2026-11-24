@@ -1,5 +1,5 @@
 import { type Font, type RasterFormatMetadata, bitmap } from '@pmndrs/glyph';
-import type { Text, TextGroup } from '@pmndrs/glyph/three';
+import type { Text } from '@pmndrs/glyph/three';
 import { glyphExample } from '@pmndrs/glyph-example-raster';
 import * as THREE from 'three/webgpu';
 
@@ -11,6 +11,7 @@ import {
 } from '../../workloads/font-assets/runtime';
 import { loadBenchmarkFont as loadFont } from '../../workloads/font-assets/library';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../three-root';
+import { endFrame } from '../../three-frame';
 
 registerExternalGlyphExampleThree();
 
@@ -106,7 +107,7 @@ function measureFormat(
   scene.updateMatrixWorld(true);
   const firstRealizationMs = performance.now() - firstStarted;
   try {
-    if (group.error !== undefined) throw group.error;
+    endFrame(scene);
     const draw = onlyDraw(scene, rootName);
     const geometry = draw.geometry;
     if (!(geometry instanceof THREE.InstancedBufferGeometry)) {
@@ -115,11 +116,11 @@ function measureFormat(
     if (!Number.isSafeInteger(geometry.instanceCount) || geometry.instanceCount < 1) {
       throw new Error('Three render-technique lab expected a non-empty draw');
     }
-    for (let index = 0; index < warmup; index += 1) update(index, text, scene, group, rootName, draw, geometry);
+    for (let index = 0; index < warmup; index += 1) update(index, text, scene, rootName, draw, geometry);
     const durations: number[] = [];
     for (let index = 0; index < samples; index += 1) {
       const started = performance.now();
-      update(index + warmup, text, scene, group, rootName, draw, geometry);
+      update(index + warmup, text, scene, rootName, draw, geometry);
       durations.push(performance.now() - started);
     }
     const ordered = durations.toSorted((left, right) => left - right);
@@ -142,14 +143,13 @@ function update(
   index: number,
   text: Text<RasterFormatMetadata>,
   scene: THREE.Scene,
-  group: TextGroup,
   rootName: string,
   draw: THREE.Mesh,
   geometry: THREE.BufferGeometry,
 ): void {
   text.text = index % 2 === 0 ? UPDATED_TEXT : INITIAL_TEXT;
   scene.updateMatrixWorld(true);
-  if (group.error !== undefined) throw group.error;
+  endFrame(scene);
   const current = onlyDraw(scene, rootName);
   if (current !== draw || current.geometry !== geometry) {
     throw new Error('Three render-technique lab lost its retained draw or geometry');

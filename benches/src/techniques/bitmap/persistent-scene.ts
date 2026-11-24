@@ -42,6 +42,7 @@ import { loadBitmapFontAsset, type BitmapFontAsset } from '../../workloads/font-
 import { retainedGlyphPresentation, type GlyphOriginPresentation } from '../shared/glyph-origin-presentation';
 import { bitmapAtlasConfiguration, type BitmapAtlasPageStats } from './metadata';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../three-root';
+import { endFrame } from '../../three-frame';
 
 export interface BitmapTextLiveStats {
   readonly technique: 'bitmap';
@@ -378,7 +379,7 @@ async function activateBitmapTextPersistentScene(
     // `Text` reconciles while it is parented, so attaching and forcing one world update is what commits the layout.
     scene.add(activeText);
     activeText.updateMatrixWorld(true);
-    if (activeText.error !== undefined) throw activeText.error;
+    endFrame(scene);
     const readyAt = performance.now();
     const committedLayout = (): ParagraphLayoutSummary => activeText.measure();
     const initialLayout = committedLayout();
@@ -438,7 +439,7 @@ async function activateBitmapTextPersistentScene(
       activeText.visible = next.text.length > 0;
       glyph.shape();
       activeText.updateMatrixWorld(true);
-      if (activeText.error !== undefined) throw activeText.error;
+      endFrame(scene);
     };
     const commitState = (next: BitmapTextState): void => {
       applyState(next);

@@ -81,7 +81,7 @@ try {
     const word = cycle % 2 === 0 ? 'bravo' : 'alpha';
     for (const [index, label] of created.texts.entries()) label.text = `${word} ${String(index).padStart(4, '0')}`;
     created.scene.updateMatrixWorld(true);
-    if (created.textGroup.error !== undefined) throw created.textGroup.error;
+    fixture.endFrame(created.scene);
     await checkpoint('after-update-and-publish', cycle);
   }
 
@@ -94,7 +94,7 @@ try {
     try {
       cold.texts[0]!.text = expectedText;
       cold.scene.updateMatrixWorld(true);
-      if (cold.textGroup.error !== undefined) throw cold.textGroup.error;
+      fixture.endFrame(cold.scene);
       // Demand optional glyph metadata in both independent copies before comparing the complete measurement.
       label.glyphs();
       cold.texts[0]!.glyphs();

@@ -173,7 +173,7 @@ describe('public external raster proof', () => {
     scene.updateMatrixWorld();
 
     try {
-      expect(group.error).toBeUndefined();
+      expect(() => endFrame(scene)).not.toThrow();
       const draw = rootDraws(scene)[0];
       expect(draw).toBeDefined();
       expect(draw?.renderOrder).toBe(200);
@@ -208,7 +208,7 @@ describe('public external raster proof', () => {
 
       text.text = 'PLUGIN UPDATE';
       scene.updateMatrixWorld();
-      expect(group.error).toBeUndefined();
+      expect(() => endFrame(scene)).not.toThrow();
       expect(rootDraws(scene)[0]).toBe(draw);
       expect(draw?.geometry).toBe(geometry);
     } finally {
@@ -237,7 +237,7 @@ describe('public external raster proof', () => {
 
     let materialDisposals = 0;
     try {
-      expect(group.error).toBeUndefined();
+      expect(() => endFrame(scene)).not.toThrow();
       const draw = rootDraws(scene)[0];
       expect(draw).toBeDefined();
       const geometry = draw?.geometry as THREE.InstancedBufferGeometry;
@@ -257,7 +257,7 @@ describe('public external raster proof', () => {
 
       text.text = 'QUAD STRIP';
       scene.updateMatrixWorld();
-      expect(group.error).toBeUndefined();
+      expect(() => endFrame(scene)).not.toThrow();
       expect(rootDraws(scene)[0]).toBe(draw);
       expect(draw?.geometry).toBe(geometry);
       expect(geometry.drawRange).toEqual({ start: 0, count: 6 });
@@ -285,6 +285,13 @@ async function createThreeHandle(format: RasterFormatMetadata) {
   const handle = glyph.handle(`three:glyph-example:${String(nextThreeHandle)}`, config);
   nextThreeHandle += 1;
   return handle;
+}
+
+/** Ends a headless frame as renderer.render() does, so Glyph throws what the frame found. */
+function endFrame(scene: THREE.Scene): void {
+  const hooks = scene as unknown as { onBeforeRender(): void; onAfterRender(): void };
+  hooks.onBeforeRender();
+  hooks.onAfterRender();
 }
 
 function rootDraws(scene: THREE.Scene): THREE.Mesh[] {

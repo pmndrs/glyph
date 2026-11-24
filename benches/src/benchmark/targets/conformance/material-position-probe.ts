@@ -10,6 +10,7 @@ import {
   type RendererBackend,
 } from '../../../renderer/webgpu-renderer';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
+import { endFrame } from '../../../three-frame';
 import { loadSlugFontAsset } from '../../../workloads/font-assets/slug';
 
 const width = 320;
@@ -105,7 +106,7 @@ export async function probeMaterialPosition(
     ancestor.add(label);
     scene.add(ancestor);
     scene.updateMatrixWorld(true);
-    if (label.error !== undefined) throw label.error;
+    endFrame(scene);
     const inverseTextWorld = label.matrixWorld.clone().invert();
 
     const camera = new THREE.OrthographicCamera(0, width, 0, -height, 0.1, 1_000);

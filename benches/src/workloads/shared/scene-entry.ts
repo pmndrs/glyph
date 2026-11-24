@@ -1,6 +1,8 @@
 import type { Font, ParagraphLayoutSummary, RasterFormatMetadata } from '@pmndrs/glyph';
-import { TextGroup, type Text, type ThreeRoot } from '@pmndrs/glyph/three';
+import type { Text, TextGroup, ThreeRoot } from '@pmndrs/glyph/three';
 import type * as THREE from 'three/webgpu';
+
+import { endFrame } from '../../three-frame';
 
 /** Technique-generic by construction: the host resolves one concrete technique per lane and hands every scene the same renderer-neutral view, so one `ComparisonWorkloadDefinition` serves Bitmap, MTSDF, and Slug. */
 export type WorkloadFont = Font<RasterFormatMetadata>;
@@ -57,14 +59,12 @@ export interface WorkloadTextFactoryContext {
   readonly root: ThreeRoot;
 }
 
-/** Commits every pending Text edit beneath `root` synchronously via `updateMatrixWorld` and reports the first failure — the exact point a retained-Rust measurement can observe the committed revision. */
-export function publishWorkloadTexts(root: THREE.Object3D, entries: readonly ComparisonWorkloadEntry[]): void {
+/** Commits every pending Text edit beneath `root` synchronously via `updateMatrixWorld` and ends the frame on its Scene, so Glyph throws the first failure — the exact point a retained-Rust measurement can observe the committed revision. */
+export function publishWorkloadTexts(root: THREE.Object3D): void {
   root.updateMatrixWorld(true);
-  if (root instanceof TextGroup && root.error !== undefined) throw root.error;
-  for (const entry of entries) {
-    const error = entry.text.error ?? entry.labelText?.error;
-    if (error !== undefined) throw error;
-  }
+  let top = root;
+  while (top.parent !== null) top = top.parent;
+  if ((top as Partial<THREE.Scene>).isScene === true) endFrame(top as THREE.Scene);
 }
 
 /** Explicitly queries the aggregate metrics committed by the Rust Text lifecycle before scene positioning. */
