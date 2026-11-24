@@ -1120,6 +1120,11 @@ Fredoka 0.981 to 1.018, so unchanged.
 
 Shaper wasm: 1,329,880 → 1,330,280 raw (+400), 526,740 → 526,846 gzip -9 (+106), 422,546 → 422,735 Brotli (+189).
 
+Gates on the tip, with the integration branch at `sil-green-69`: `cargo fmt --check`, clippy with `-D warnings`,
+`cargo test --features oracle`, the fork's parity tests, native and wasm oracle with the adversarial fonts (605 cases
+equal, 56,400 differential requests equal to cold, none rejected, none listed), `pnpm --filter @pmndrs/glyph test`,
+`pnpm check`. Kimun on `packages/glyph/rust` is C+ 76.4.
+
 ### Not now: estimates
 
 - **Data-driven syllabic interpreter (research step 7).** The Indic, Khmer, Myanmar and USE shapers plus vowel constraints
