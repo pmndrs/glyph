@@ -7,6 +7,7 @@ import { glyph, span, txt, bitmap } from '@pmndrs/glyph';
 import { Text as R3fText } from '@pmndrs/glyph/react';
 import { assertMatchesFreshBuild, createFontCache, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
 import { PlanTransport } from '../../dist/internal/handle-state.js';
+import { renderScene } from '../support/three-render.mjs';
 
 globalThis.self ??= globalThis;
 globalThis.requestAnimationFrame ??= () => 0;
@@ -796,18 +797,20 @@ test(
     const mounted = mount(font, [{ properties }]);
     const original = PlanTransport.prototype.consumeStagedUpdate;
     const injected = new Error('injected staged publication failure');
-    const errors = [];
     try {
       mounted.scene.updateMatrixWorld(true);
       const rendererBefore = rendererBytes(mounted);
-      mounted.nodes[0].onError = (error) => errors.push(error);
       mounted.nodes[0].set({ text: 'BBB' });
       PlanTransport.prototype.consumeStagedUpdate = function (...args) {
         original.apply(this, args);
         throw injected;
       };
-      mounted.scene.updateMatrixWorld(true);
-      assert.deepEqual(errors, [injected], 'publication errors are attributed through the Text error callback');
+      assert.throws(
+        () => renderScene(mounted.scene),
+        (error) => error === injected,
+        'the render throws it',
+      );
+      assert.equal(mounted.nodes[0].error, injected, 'and attributes it to the Text');
       assert.deepEqual(rendererBytes(mounted), rendererBefore, 'failed publication preserves the in-flight frame');
       assert.equal(mounted.nodes[0].text, 'BBB', 'publication failure does not reject accepted authored state');
       PlanTransport.prototype.consumeStagedUpdate = original;
@@ -1037,7 +1040,6 @@ test('nested React Text crossing a joining boundary mounts and publishes', { tim
   const { create } = await import('../support/r3f-test-renderer.mjs');
   const font = await fonts.load('inter');
   const nodes = [];
-  const errors = [];
   const renderer = await create(
     createElement(
       R3fText,
@@ -1046,7 +1048,6 @@ test('nested React Text crossing a joining boundary mounts and publishes', { tim
         style,
         constraints,
         layout,
-        onError: (error) => void errors.push(error),
         ref: (node) => void (node !== undefined && nodes.push(node)),
       },
       createElement(R3fText, { style: { color: '#ff2f00' } }, 'a'),
@@ -1058,7 +1059,6 @@ test('nested React Text crossing a joining boundary mounts and publishes', { tim
     assert.ok(node !== undefined);
     assert.equal(node.text, `a${ACUTE}bc`);
     assert.equal(node.error, undefined);
-    assert.deepEqual(errors, []);
   } finally {
     await renderer.unmount();
   }

@@ -30,6 +30,9 @@ void new Pixi3DTextMaterial({ extraBits: [bits.setup, bits.coverage] });
 
 // The minimal edit: UTF-16 offsets of the source text, refused with the error Three throws.
 text.replace(0, 5, 'Howdy') satisfies void;
+text.error satisfies unknown;
+// @ts-expect-error glyph.shape() throws a rejected publication; there is no error callback.
+void text.onError;
 // @ts-expect-error The inserted text is a string.
 text.replace(0, 1, 7);
 const caret: TextCaret = text.caret({ offset: 0, affinity: 'downstream' } satisfies TextPosition);

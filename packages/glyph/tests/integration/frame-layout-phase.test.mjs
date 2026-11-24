@@ -16,6 +16,7 @@ import * as THREE from 'three/webgpu';
 import { loadFont } from '../../dist/loader.js';
 import { adapterFont } from '../support/adapter-behavior.mjs';
 import { recordingHost } from '../support/typegpu-recording-host.mjs';
+import { renderScene } from '../support/three-render.mjs';
 
 const fontUrl = new URL('../../../../benches/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const msdfFontBytes = await readFile(
@@ -37,7 +38,7 @@ function threeScene(t) {
     scene.add(object);
     return object;
   };
-  return { handle, scene, add, frame: () => scene.updateMatrixWorld(true) };
+  return { handle, scene, add, frame: () => scene.updateMatrixWorld(true), render: () => renderScene(scene) };
 }
 
 /** A sibling whose matrix update runs `write` once: a setter issued in the middle of a traversal. */
@@ -225,7 +226,7 @@ test('Three: the preparation object stays first without disturbing a traversal i
 });
 
 test('Three: a root reports invalidation, and a callback installed late hears the current layout', async (t) => {
-  const { handle: root, add, frame } = threeScene(t);
+  const { handle: root, add, frame, render } = threeScene(t);
   let invalidations = 0;
   root.onInvalidate = () => {
     invalidations += 1;
@@ -244,16 +245,36 @@ test('Three: a root reports invalidation, and a callback installed late hears th
   frame();
   assert.equal(seen.length, 1);
 
-  const rootErrors = [];
-  root.onError = (error) => rootErrors.push(error);
   const failure = new Error('callback failed');
   label.onLayout = () => {
     throw failure;
   };
   label.text = 'changed again';
-  assert.doesNotThrow(frame);
-  assert.deepEqual(rootErrors, [failure], 'a callback exception reaches the root handler');
+  assert.doesNotThrow(frame, 'a callback exception never escapes the scene traversal');
   assert.equal(label.commitState().status, 'committed');
+  assert.throws(render, (error) => error === failure, 'the render after it throws the callback exception');
+  assert.doesNotThrow(render, 'once');
+});
+
+test('Three: a failure found by a nested render is thrown when the outermost render ends', async (t) => {
+  const { scene, add, frame } = threeScene(t);
+  const label = add('label');
+  frame();
+  const failure = new Error('callback failed');
+  label.onLayout = () => {
+    throw failure;
+  };
+  label.text = 'changed';
+  scene.updateMatrixWorld();
+  scene.onBeforeRender();
+  // A shadow or pass render of the same Scene ends inside the outer one.
+  scene.onBeforeRender();
+  assert.doesNotThrow(() => scene.onAfterRender(), 'a nested render does not throw');
+  assert.throws(
+    () => scene.onAfterRender(),
+    (error) => error === failure,
+    'the outermost render does',
+  );
 });
 
 test('Three: an invalid value names the property the caller wrote', async (t) => {
@@ -279,11 +300,10 @@ test('Three: an invalid value names the property the caller wrote', async (t) =>
   assert.equal(label.text, 'label');
 });
 
-test('Vue: layout is an event, observed only when listened to, and an invalid prop is an error event', async () => {
+test('Vue: layout is an event, observed only when listened to, and an invalid prop reaches Vue error handling', async () => {
   const adapter = await adapterFont();
   const components = [];
   const layouts = [];
-  const errors = [];
   const style = shallowRef({ fontSize: 16 });
   const host = await mountTres(() => [
     h(
@@ -296,7 +316,6 @@ test('Vue: layout is an event, observed only when listened to, and an invalid pr
           if (value !== null) components[0] = value;
         },
         onLayout: (text, layout) => layouts.push([text, layout.glyphCount]),
-        onError: (error) => errors.push(error),
       },
       () => 'observed',
     ),
@@ -322,10 +341,9 @@ test('Vue: layout is an event, observed only when listened to, and an invalid pr
     const accepted = observed.style;
     style.value = { fontSize: Number.NaN };
     await nextTick();
-    assert.equal(errors.length, 1, 'the component says why its prop was not applied');
-    assert.ok(errors[0] instanceof GlyphInputError);
-    assert.deepEqual(errors[0].path, ['style']);
-    assert.deepEqual(host.errors, [errors[0]], 'and the same error reaches Vue error handling');
+    assert.equal(host.errors.length, 1, 'the setter throws to Vue error handling');
+    assert.ok(host.errors[0] instanceof GlyphInputError);
+    assert.deepEqual(host.errors[0].path, ['style']);
     assert.equal(observed.style, accepted, 'the text keeps its previous value');
     assert.equal(observed.disposed, false);
   } finally {
@@ -334,7 +352,7 @@ test('Vue: layout is an event, observed only when listened to, and an invalid pr
   }
 });
 
-test('TypeGPU: a refused text exposes its error, reports it once, and recovers with new input', async (t) => {
+test('TypeGPU: a refused text exposes its error, draw throws it once, and it recovers with new input', async (t) => {
   const host = recordingHost();
   const handle = glyph.handle(`typegpu:frame-layout-phase:${String(nextHandle++)}`, host.config);
   const face = glyph.fontFace(new Blob([msdfFontBytes]), { format: msdf });
@@ -347,11 +365,19 @@ test('TypeGPU: a refused text exposes its error, reports it once, and recovers w
   const texts = Array.from({ length: 4 }, (_, index) =>
     handle.createText({ font: face, text: `label ${String(index)}`, position: [0, index * 40] }),
   );
+  const viewport = { width: 640, height: 240 };
   glyph.shape();
   const culprit = texts[1];
   culprit.measure();
-  const reports = [];
-  culprit.onError = (error) => reports.push(error);
+  const thrown = [];
+  const draw = () => {
+    const before = host.recorded.length;
+    try {
+      handle.draw({}, viewport);
+    } catch (error) {
+      thrown.push({ error, recorded: host.recorded.length - before });
+    }
+  };
   const laidOut = [];
   culprit.onLayout = () => laidOut.push('culprit');
   texts[2].onLayout = () => laidOut.push('sibling');
@@ -370,13 +396,18 @@ test('TypeGPU: a refused text exposes its error, reports it once, and recovers w
   for (let frame = 0; frame < 3; frame += 1) {
     try {
       glyph.shape();
-    } catch {
-      // A trapped frame reports through each root; the next frame restates every text.
+    } catch (error) {
+      // The trapped batch is the call's own failure; the next frame restates every text.
+      assert.match(String(error.message), /trapped/u);
     }
+    draw();
   }
   assert.ok(culprit.error !== undefined, 'the refused text says why it is not drawn');
-  assert.equal(reports.length, 1, 'and reports it once');
-  assert.equal(reports[0], culprit.error);
+  assert.deepEqual(
+    thrown,
+    [{ error: culprit.error, recorded: 3 }],
+    'the draw records the three siblings, then throws the refusal once',
+  );
   assert.equal(texts[0].error, undefined);
   assert.equal(texts[2].error, undefined);
   assert.deepEqual(laidOut, ['sibling'], 'a refused text has no layout to hand over; its sibling does');
@@ -385,6 +416,8 @@ test('TypeGPU: a refused text exposes its error, reports it once, and recovers w
   culpritDirty = false;
   culprit.update({ text: 'harmless' });
   glyph.shape();
+  draw();
   assert.equal(culprit.error, undefined);
+  assert.equal(thrown.length, 1);
   assert.deepEqual(laidOut, ['sibling', 'culprit']);
 });

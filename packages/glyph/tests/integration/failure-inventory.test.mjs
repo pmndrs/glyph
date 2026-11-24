@@ -1,5 +1,6 @@
 // Every way the text pipeline can fail, scripted once each, with the disposition the model gives it:
-// who is told, what state remains, and how it recovers. The table in
+// where it is thrown, what state remains, and how it recovers. A frame here is a render: a failure found
+// while rendering is thrown from that render, once. The table in
 // `.agents/docs/planning/failure-inventory.md` names each row by its `id` here.
 import { shaperInstanceCount, trapCallsWhen, trapNextCall, lastCallArguments } from '../support/wasm-crossings.mjs';
 
@@ -11,6 +12,7 @@ import { bitmap, glyph } from '@pmndrs/glyph';
 import { defineThreeConfig, ThreeConfig } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 import { loadFont } from '../../dist/loader.js';
+import { renderScene } from '../support/three-render.mjs';
 
 const bytes = await readFile(
   new URL('../../../../benches/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url),
@@ -32,9 +34,7 @@ function mount(t, config = ThreeConfig) {
     scene.add(object);
     return object;
   };
-  const reports = { root: [] };
-  handle.onError = (error) => reports.root.push(error);
-  return { handle, scene, add, reports, frame: () => scene.updateMatrixWorld(true) };
+  return { handle, scene, add, frame: () => renderScene(scene) };
 }
 
 const inputError = (path) => ({ name: 'GlyphInputError', code: 'invalid-input', path });
@@ -45,7 +45,7 @@ const inventory = [
   {
     id: 'input-invalid-value',
     run(t) {
-      const { add, frame, reports } = mount(t);
+      const { add, frame } = mount(t);
       const label = add('kept');
       frame();
       const style = label.style;
@@ -54,9 +54,8 @@ const inventory = [
       assert.throws(() => label.set({ text: 'both', layout: { maxLines: 0 } }), inputError(['layout']));
       assert.equal(label.style, style);
       assert.equal(label.text, 'kept', 'a refused update changes nothing, even its valid properties');
-      frame();
+      assert.doesNotThrow(frame, "an input error is the caller's: the render does not throw it again");
       assert.ok(committed(label));
-      assert.deepEqual(reports.root, [], "an input error is the caller's: nothing is reported elsewhere");
     },
   },
   {
@@ -92,7 +91,7 @@ const inventory = [
   {
     id: 'layout-phase-write',
     run(t) {
-      const { add, frame, reports } = mount(t);
+      const { add, frame } = mount(t);
       const [label, other] = [add('label'), add('other')];
       let refusal;
       label.onLayout = () => {
@@ -102,21 +101,18 @@ const inventory = [
           refusal = error;
         }
       };
-      frame();
+      assert.doesNotThrow(frame, 'the refusal was thrown to the callback, which caught it');
       assert.equal(refusal?.code, 'layout-phase');
       assert.equal(other.text, 'other');
       assert.ok(committed(label, other));
-      assert.deepEqual(reports.root, []);
     },
   },
   {
     id: 'layout-callback-throws',
     run(t) {
-      const { add, frame, reports } = mount(t);
+      const { add, frame } = mount(t);
       const [label, other] = [add('label'), add('other')];
       const failure = new Error('callback failed');
-      const text = [];
-      label.onError = (error) => text.push(error);
       label.onLayout = () => {
         throw failure;
       };
@@ -124,15 +120,16 @@ const inventory = [
       other.onLayout = () => {
         otherCalls += 1;
       };
-      assert.doesNotThrow(frame);
-      assert.deepEqual([text, reports.root, otherCalls], [[failure], [failure], 1]);
+      assert.throws(frame, (error) => error === failure, 'the render throws the exception after drawing');
+      assert.equal(otherCalls, 1, 'the other callback still ran');
       assert.ok(committed(label, other), 'the frame publishes; a callback exception is not a text error');
+      assert.doesNotThrow(frame, 'the same summary is not handed over again');
     },
   },
   {
     id: 'engine-trap-in-read',
     run(t) {
-      const { add, frame, reports } = mount(t);
+      const { add, frame } = mount(t);
       const [label, other] = [add('label'), add('other')];
       frame();
       const instances = shaperInstanceCount();
@@ -140,26 +137,22 @@ const inventory = [
       trapNextCall(/engine_measure_paragraph/);
       assert.equal(label.measure().glyphCount, 'readthroughatrap'.length + 3);
       assert.equal(shaperInstanceCount(), instances + 1, 'the engine was replaced and the read answered');
-      frame();
+      assert.doesNotThrow(frame, 'a read that answers leaves nothing for the render to throw');
       assert.ok(committed(label, other));
-      assert.deepEqual(reports.root, [], 'a read that answers reports nothing');
     },
   },
   {
     id: 'engine-trap-in-frame',
     run(t) {
-      const { add, frame, reports } = mount(t);
+      const { add, frame } = mount(t);
       const [label, other] = [add('label'), add('other')];
       frame();
       label.text = 'changed';
       trapNextCall(/engine_prepare_batch/);
-      assert.doesNotThrow(frame);
+      assert.throws(frame, /trapped and was restarted/u);
       assert.equal(label.commitState().status, 'failed');
-      assert.equal(reports.root.length, 1);
-      assert.match(String(reports.root[0].message), /trapped and was restarted/u);
-      frame();
+      assert.doesNotThrow(frame, 'the restart is thrown once');
       assert.ok(committed(label, other), 'the next frame restates every text; no setter was needed');
-      assert.equal(reports.root.length, 1);
     },
   },
   {
@@ -177,14 +170,16 @@ const inventory = [
         (name, args) =>
           dirty && (name === 'engine_prepare_batch' || (name === 'engine_measure_paragraph' && args[3] === paragraph)),
       );
-      frame();
-      frame();
+      // The first frame's batch traps and restarts the engine; the next one isolates and refuses the culprit.
+      assert.throws(frame, /trapped and was restarted/u);
+      assert.throws(frame, (error) => error === culprit.error);
       assert.ok(committed(texts[0], texts[2]), 'siblings publish');
       assert.equal(culprit.commitState().status, 'failed');
       assert.equal(culprit.text, 'b changed', 'the refused text keeps its value');
+      assert.doesNotThrow(frame, 'a standing refusal is thrown once');
       dirty = false;
       culprit.text = 'harmless';
-      frame();
+      assert.doesNotThrow(frame);
       assert.ok(committed(...texts), 'new input is a new chance');
     },
   },

@@ -73,6 +73,7 @@ import {
   validatingInput,
 } from '../glyph-error.js';
 import { changesLayoutStyle, LAYOUT_PHASE_WRITE_MESSAGE } from '../text-mutation.js';
+import { RenderFailures } from '../render-failures.js';
 
 /** Package-private construction capability used by the Three handle and R3F adapter. */
 export const threeTextConstructionToken: unique symbol = Symbol('pmndrs.glyph.three.construct');
@@ -180,8 +181,7 @@ interface TextReconciler {
   publishMeasurement(text: Text<RasterFormatMetadata>, measurement: ParagraphLayoutSummary): void;
   bind(text: Text<RasterFormatMetadata>, binding: ThreeRootPublication, group: TextGroup | undefined): void;
   unbindFrom(text: Text<RasterFormatMetadata>, binding: ThreeRootPublication): void;
-  setError(text: Text<RasterFormatMetadata>, error: unknown, publicationAccepted: boolean): boolean;
-  notifyError(text: Text<RasterFormatMetadata>, error: unknown): void;
+  setError(text: Text<RasterFormatMetadata>, error: unknown, publicationAccepted: boolean): void;
   clearError(text: Text<RasterFormatMetadata>): void;
   transformFlushed(text: THREE.Object3D): void;
   transformSynchronized(text: Text<RasterFormatMetadata>): void;
@@ -200,8 +200,7 @@ interface TrackedNode {
 
 interface TextGroupErrorReconciler {
   state(group: TextGroup): AttributedErrorState;
-  setError(group: TextGroup, error: unknown, publicationAccepted: boolean): boolean;
-  notifyError(group: TextGroup, error: unknown): void;
+  setError(group: TextGroup, error: unknown, publicationAccepted: boolean): void;
   clearError(group: TextGroup): void;
 }
 
@@ -274,11 +273,6 @@ export interface ThreeRoot extends GlyphRoot {
     properties: Omit<StandaloneTextProperties<FontFaceRasterOf<Selection>>, 'font'> & { readonly font: Selection },
   ): Text<FontFaceRasterOf<Selection>>;
   createTextGroup(options?: TextGroupOptions): TextGroup;
-  /**
-   * Receives each failure this root cannot attribute to one text's input: a publication the renderer rejected, a
-   * fixed capacity exceeded, an engine restart, and an exception thrown by a layout callback.
-   */
-  onError: ((error: unknown) => void) | undefined;
   /** Runs when a setter leaves this root needing a frame; an on-demand render loop requests one here. */
   onInvalidate: (() => void) | undefined;
   /**
@@ -325,14 +319,6 @@ class ThreePublicRoot implements ThreeRoot {
 
   dispose(): void {
     this.#host.dispose();
-  }
-
-  get onError(): ((error: unknown) => void) | undefined {
-    return this.#host.onError;
-  }
-
-  set onError(value: ((error: unknown) => void) | undefined) {
-    this.#host.onError = value;
   }
 
   get onInvalidate(): (() => void) | undefined {
@@ -402,7 +388,12 @@ export class ThreeRootHost {
   /** The Scene's matrices are being recomputed after layout callbacks moved objects mid-traversal. */
   #resynchronizing = false;
   #capacityReported = false;
-  onError: ((error: unknown) => void) | undefined;
+  /**
+   * Failures found since this root's Scene last finished rendering, thrown from the end of the next render: a
+   * refused paragraph, a fixed capacity exceeded, an exception from a layout callback, and whatever the engine
+   * calls made by a traversal threw (a rejected publication, an engine restart).
+   */
+  readonly #renderFailures = new RenderFailures();
   onInvalidate: (() => void) | undefined;
   readonly #materialRootContext: ThreeRootContext;
   #publicRoot: ThreeRoot | undefined;
@@ -411,7 +402,6 @@ export class ThreeRootHost {
   #needsInitialTransformSync = false;
   #publicationCycleActive = false;
   #deferredTraversalFailure: PublicationFailure | undefined;
-  #errorAttributionActive = false;
   /** Registered members currently attached to a Scene, in registration order; rebuilt only after a tree change. */
   #renderMemberCache: readonly Text<RasterFormatMetadata>[] = [];
   /** Every registered Text and each of its ancestors, with the nearest Scene resolved when membership was read. */
@@ -564,6 +554,7 @@ export class ThreeRootHost {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#finishPublicationCycle();
+    this.#renderFailures.clear();
     try {
       this.#binding?.dispose();
       this.#binding = undefined;
@@ -855,15 +846,11 @@ export class ThreeRootHost {
     else if (!this.#capacityReported) {
       // A fixed capacity is a policy the author chose, not a failure of any text: say so once, at the root.
       this.#capacityReported = true;
-      try {
-        this.onError?.(
-          new RangeError(
-            `Three root capacity is fixed at ${String(exceeded.size)} text units and ${String(exceeded.required)} are needed; nothing new is drawn until it fits`,
-          ),
-        );
-      } catch {
-        // A root handler cannot replace the condition it is told about.
-      }
+      this.#deferRenderFailure(
+        new RangeError(
+          `Three root capacity is fixed at ${String(exceeded.size)} text units and ${String(exceeded.required)} are needed; nothing new is drawn until it fits`,
+        ),
+      );
     }
     return prepared;
   }
@@ -877,8 +864,9 @@ export class ThreeRootHost {
   }
 
   /**
-   * Attributes each refused preparation to its own text, once: the text reports the error and `failed`, draws
-   * nothing, and its siblings publish as usual. A refusal ends when the text's input changes.
+   * Attributes each refused preparation to its own text, once: the text is `failed`, draws nothing, its siblings
+   * publish as usual, and the refusal is thrown from the end of the render. A refusal ends when the text's input
+   * changes; refused again after that, it is a new failure.
    */
   #reportRefusals(refusals: ReadonlyMap<Text<RasterFormatMetadata>, unknown>): void {
     for (const text of this.#refusedTexts.keys()) {
@@ -887,14 +875,15 @@ export class ThreeRootHost {
     for (const [text, refusal] of refusals) {
       if (Object.is(this.#refusedTexts.get(text), refusal)) continue;
       this.#refusedTexts.set(text, refusal);
-      this.#reportError(refusal, [text]);
+      this.#attributeError(refusal, [text]);
+      this.#deferRenderFailure(refusal);
     }
   }
 
   /**
    * @internal Runs each text's `onLayout` whose summary is new, after every root is prepared and before any is
-   * published. One callback's exception is reported and the rest still run, so it can neither stop the frame
-   * nor escape scene traversal.
+   * published. Every due callback runs and the frame publishes; an exception a callback threw is the
+   * application's own and is thrown from the end of the render, after the frame was drawn.
    */
   runLayoutPhase(): void {
     const binding = this.#binding;
@@ -905,23 +894,7 @@ export class ThreeRootHost {
       try {
         text.onLayout?.(text, layout);
       } catch (error) {
-        this.#reportCallbackError(text, error);
-      }
-    }
-  }
-
-  /** Tells the text's handler and the root's; an exception nobody listens for goes to the global error event. */
-  #reportCallbackError(text: Text<RasterFormatMetadata>, error: unknown): void {
-    const handlers = [text.onError, this.onError].filter((handler) => handler !== undefined);
-    if (handlers.length === 0) {
-      (globalThis as { reportError?: (error: unknown) => void }).reportError?.(error);
-      return;
-    }
-    for (const handler of handlers) {
-      try {
-        handler(error);
-      } catch {
-        // A handler cannot replace the failure it is told about.
+        this.#deferRenderFailure(error);
       }
     }
   }
@@ -950,8 +923,9 @@ export class ThreeRootHost {
       this.#binding?.acceptShape();
       const texts = this.#renderMembers();
       const publicationFailure = this.#renderer.takePublicationFailure() ?? this.#deferredTraversalFailure;
+      // The failure is thrown from this settlement, so the engine call that published reports it.
       if (publicationFailure === undefined) this.#clearErrors();
-      else this.#reportError(publicationFailure.error, texts, true);
+      else this.#attributeError(publicationFailure.error, texts, true);
       // An accepted publication clears what it resolved, never a refusal that still stands.
       for (const [text, refusal] of this.#refusedTexts) {
         reconciler.setError(text, refusal, false);
@@ -972,12 +946,12 @@ export class ThreeRootHost {
     }
   }
 
-  /** @internal Preserve the last accepted draw state and attribute this root's rejected shape. */
+  /** @internal Preserve the last accepted draw state and attribute this root's rejected shape; the engine throws it. */
   rejectShape(error: unknown): void {
     try {
       this.#renderer.takePublicationFailure();
       this.#binding?.rejectShape();
-      this.#reportError(error, this.#renderMembers());
+      this.#attributeError(error, this.#renderMembers());
     } finally {
       this.#finishPublicationCycle();
     }
@@ -1067,7 +1041,7 @@ export class ThreeRootHost {
           else this.#reconcileDirty = this.#membersDirty;
         }
       } catch (error) {
-        if (!this.#ownsTraversalFailure(error)) this.#reportError(error, texts);
+        this.#traversalFailed(error, texts);
         return;
       }
     }
@@ -1076,15 +1050,16 @@ export class ThreeRootHost {
       try {
         this.#flushTransforms(worldMatricesCurrent, texts);
       } catch (error) {
-        if (!this.#ownsTraversalFailure(error)) this.#reportError(error, texts);
+        this.#traversalFailed(error, texts);
       }
       return;
     }
     this.#traversalPublishing = sceneTraversal;
     try {
       publishGlyphFrame();
-    } catch {
-      // Every participating root received its attributed error before the global call threw.
+    } catch (error) {
+      // Every participating root has settled and attributed its failure; the render that published throws it.
+      this.#deferRenderFailure(error);
     } finally {
       this.#traversalPublishing = false;
     }
@@ -1092,14 +1067,22 @@ export class ThreeRootHost {
       this.#resynchronizeAfterLayout();
       this.#flushTransforms(worldMatricesCurrent, texts);
     } catch (error) {
-      if (!this.#ownsTraversalFailure(error)) this.#reportError(error, texts);
+      this.#traversalFailed(error, texts);
     }
   }
 
-  #ownsTraversalFailure(error: unknown): boolean {
-    if (!this.#publicationCycleActive) return false;
-    this.#deferredTraversalFailure ??= { error };
-    return true;
+  /** A traversal failure inside a publication cycle is that publication's; outside one, the render throws it. */
+  #traversalFailed(error: unknown, texts: readonly Text<RasterFormatMetadata>[]): void {
+    if (this.#publicationCycleActive) {
+      this.#deferredTraversalFailure ??= { error };
+      return;
+    }
+    this.#attributeError(error, texts);
+    this.#deferRenderFailure(error);
+  }
+
+  #deferRenderFailure(error: unknown): void {
+    this.#renderFailures.defer(error);
   }
 
   #finishPublicationCycle(): void {
@@ -1107,49 +1090,25 @@ export class ThreeRootHost {
     this.#deferredTraversalFailure = undefined;
   }
 
-  #reportError(error: unknown, texts: readonly Text<RasterFormatMetadata>[], publicationAccepted = false): void {
-    // The outer failure owns state and notifications until its attribution finishes.
-    if (this.#errorAttributionActive) return;
-    this.#errorAttributionActive = true;
-    try {
-      try {
-        this.onError?.(error);
-      } catch {
-        // A root handler cannot replace the failure it is told about.
+  /** Records the failure as the `error` each participating text and its groups read until a publication clears it. */
+  #attributeError(error: unknown, texts: readonly Text<RasterFormatMetadata>[], publicationAccepted = false): void {
+    const groups = new Set<TextGroup>();
+    for (const text of texts) {
+      for (let parent = text.parent; parent !== null; parent = parent.parent) {
+        if (parent instanceof TextGroup && !parent.disposed) groups.add(parent);
       }
-      const participants = [...texts];
-      const groups = new Set<TextGroup>();
-      for (const text of participants) {
-        for (let parent = text.parent; parent !== null; parent = parent.parent) {
-          if (parent instanceof TextGroup && !parent.disposed) groups.add(parent);
-        }
-      }
-      for (const group of this.#attributedErrorGroups) {
-        if (!groups.has(group)) textGroupErrors.clearError(group);
-      }
-      for (const text of participants) this.#attributedErrorTexts.add(text);
-      const textNotifications = participants.filter((text) => reconciler.setError(text, error, publicationAccepted));
-      const groupNotifications = [...groups].filter((group) =>
-        textGroupErrors.setError(group, error, publicationAccepted),
-      );
-      this.#attributedErrorGroups.clear();
-      for (const group of groups) this.#attributedErrorGroups.add(group);
-      for (const text of textNotifications) {
-        try {
-          reconciler.notifyError(text, error);
-        } catch {
-          // Error notification cannot replace the renderer failure it reports.
-        }
-      }
-      for (const group of groupNotifications) {
-        try {
-          textGroupErrors.notifyError(group, error);
-        } catch {
-          // Error notification cannot replace the renderer failure it reports.
-        }
-      }
-    } finally {
-      this.#errorAttributionActive = false;
+    }
+    for (const group of this.#attributedErrorGroups) {
+      if (!groups.has(group)) textGroupErrors.clearError(group);
+    }
+    for (const text of texts) {
+      this.#attributedErrorTexts.add(text);
+      reconciler.setError(text, error, publicationAccepted);
+    }
+    this.#attributedErrorGroups.clear();
+    for (const group of groups) {
+      textGroupErrors.setError(group, error, publicationAccepted);
+      this.#attributedErrorGroups.add(group);
     }
   }
 
@@ -1278,7 +1237,10 @@ export class ThreeRootHost {
   /**
    * Counts the renders in progress on a Scene. A renderer traverses the Scene before `onBeforeRender` and runs
    * shadow and pass renders between it and `onAfterRender`, so a traversal seen at depth above zero belongs to
-   * a nested render: it synchronizes transforms and neither prepares nor publishes.
+   * a nested render: it synchronizes transforms and neither prepares nor publishes. The outermost
+   * `onAfterRender` is where this root throws what the render found: Three calls it after restoring its render
+   * target and drawing the frame, where a throw from inside the traversal would leave the renderer drawing into
+   * its internal output target.
    *
    * `compileAsync` also calls `onBeforeRender`, after its traversal, but never `onAfterRender` and never a draw's
    * `onBeforeRender`. It is not counted, or the root would stop publishing; and the compiling renderer is
@@ -1302,6 +1264,8 @@ export class ThreeRootHost {
       onAfterRender(this: THREE.Scene, ...parameters: Parameters<THREE.Scene['onAfterRender']>): void {
         host.#renderDepth = Math.max(0, host.#renderDepth - 1);
         after.apply(this, parameters);
+        // Glyph's bookkeeping settled when each failure was found, so the next frame renders normally.
+        if (host.#renderDepth === 0) host.#renderFailures.throwFound();
       },
     };
     scene.onBeforeRender = counted.onBeforeRender;
@@ -1318,13 +1282,19 @@ export class ThreeRootHost {
     if (this.#disposed || !this.#placedInScene()) return;
     // Visited after the publication object, this traversal has already prepared and published its frame.
     if (this.#keepPrepareObjectFirst() || this.#renderDepth > 0) return;
-    try {
-      prepareGlyphFrame();
-    } catch {
-      // Every participating root received its attributed error before the global call threw.
-    }
+    this.prepareFrame();
     // No matrix of this traversal is computed yet, so whatever the callbacks moved is seen as it goes.
     this.#layoutCallbacksRan = false;
+  }
+
+  /** @internal Prepares for a frame this root will render; the render throws what preparation found. */
+  prepareFrame(): void {
+    try {
+      prepareGlyphFrame();
+    } catch (error) {
+      // Every participating root has attributed its failure; it stays dirty and is prepared again by the next frame.
+      this.#deferRenderFailure(error);
+    }
   }
 
   /**
@@ -1441,8 +1411,9 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       },
       bind: (text, binding, group) => text.#bind(binding, group),
       unbindFrom: (text, binding) => text.#unbindFrom(binding),
-      setError: (text, error, publicationAccepted) => text.#setError(error, publicationAccepted),
-      notifyError: (text, error) => text.#notifyError(error),
+      setError: (text, error, publicationAccepted) => {
+        text.#errorState = { present: true, error, publicationAccepted };
+      },
       clearError: (text) => text.#clearError(),
       transformFlushed: (text) => {
         if (#transformQueued in text) text.#transformQueued = false;
@@ -1474,7 +1445,6 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   #observedFrustumCulled = true;
   #transformQueued = false;
   #onLayout: TextLayoutCallback | undefined;
-  onError: ((error: unknown) => void) | undefined;
 
   /**
    * Called with this text and what `measure()` returns, after the text is first prepared and whenever that
@@ -1907,16 +1877,6 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     return this.#textGroup === undefined ? noAttributedError : textGroupErrors.state(this.#textGroup);
   }
 
-  #setError(error: unknown, publicationAccepted: boolean): boolean {
-    const notify = !this.#errorState.present || !Object.is(this.#errorState.error, error);
-    this.#errorState = { present: true, error, publicationAccepted };
-    return notify;
-  }
-
-  #notifyError(error: unknown): void {
-    this.onError?.(error);
-  }
-
   #clearError(): void {
     this.#errorState = noAttributedError;
   }
@@ -1948,8 +1908,9 @@ export class TextGroup extends THREE.Object3D {
   static {
     textGroupErrors = {
       state: (group) => group.#errorState,
-      setError: (group, error, publicationAccepted) => group.#setError(error, publicationAccepted),
-      notifyError: (group, error) => group.#notifyError(error),
+      setError: (group, error, publicationAccepted) => {
+        group.#errorState = { present: true, error, publicationAccepted };
+      },
       clearError: (group) => group.#clearError(),
     };
   }
@@ -1961,7 +1922,6 @@ export class TextGroup extends THREE.Object3D {
   #disposed = false;
   #errorState: AttributedErrorState = noAttributedError;
   #observedFrustumCulled = true;
-  onError: ((error: unknown) => void) | undefined;
 
   /** Ordinary applications construct TextGroup through `handle.createTextGroup()`. */
   constructor(token: typeof threeTextConstructionToken, options: TextGroupOptions, root: object) {
@@ -2067,16 +2027,6 @@ export class TextGroup extends THREE.Object3D {
     this.#disposed = true;
     textGroupObservations.delete(this);
     textGroupRoots.delete(this);
-  }
-
-  #setError(error: unknown, publicationAccepted: boolean): boolean {
-    const notify = !this.#errorState.present || !Object.is(this.#errorState.error, error);
-    this.#errorState = { present: true, error, publicationAccepted };
-    return notify;
-  }
-
-  #notifyError(error: unknown): void {
-    this.onError?.(error);
   }
 
   #clearError(): void {

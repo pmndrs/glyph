@@ -124,9 +124,10 @@ handle.
   Font leases and default-root reference with the component scope.
 - The Three classes are registered in the Tres catalogue under private names only so the custom renderer can
   construct and dispose them. Applications use the wrapper components; the tags are not public.
-- Frame errors and font load failures reach the component's `error` emit. A prop that is not valid input also
-  reaches it as a `GlyphInputError`; the component stays mounted with its previous value and the error is rethrown to
-  `onErrorCaptured` and `app.config.errorHandler`.
+- There is no `error` event. A prop that is not valid input throws a `GlyphInputError` to `onErrorCaptured` and
+  `app.config.errorHandler`, and the component stays mounted with its previous value. A FontFace that fails to load
+  reaches the same handlers once, and the component keeps rendering what it rendered. A failure found while rendering
+  (a refused paragraph, a rejected publication) is thrown from the render of the Tres Scene, once.
 - `@layout="(text, layout) => …"` is the layout callback: the text and what its `measure()` returns, after it is
   first prepared and whenever that summary changes, before the frame that draws it. Only a text with a listener is
   measured every frame. An exception thrown by the handler goes to Vue's error handling like any event handler's.

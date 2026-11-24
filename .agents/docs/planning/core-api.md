@@ -235,10 +235,11 @@ entering the engine, `controller.refusal` is the error of a preparation the engi
 counts it as published. Root shape hooks are `prepare()`, `prepared()`, `layout()`, `unchanged()`, `accepted()`,
 `rejected()` and `invalidated()`.
 
-TypeGPU text created through a configured handle exposes the same model directly: `text.onLayout(text, layout)`,
-`text.onError(error)` and a read-only `text.error`, each also accepted as a `createText()` option. `error` is the
-refusal that keeps the text from being drawn and clears when its input changes; `onError` receives it once, and any
-exception its layout callback throws. The top-level `glyph.shape()` publishes semantic changes; `services.syncTransforms()` is the
+TypeGPU text created through a configured handle exposes the same model directly: `text.onLayout(text, layout)`, also
+accepted as a `createText()` option, and a read-only `text.error`, the refusal that keeps the text from being drawn,
+which clears when its input changes. There is no error callback: the root's next `draw()` records the accepted text,
+then throws once what its texts failed with since the last draw (a refusal, an exception a layout callback threw),
+and a failure the next frame finds again is not thrown again. The top-level `glyph.shape()` publishes semantic changes; `services.syncTransforms()` is the
 cheap transform-only path. TextGroup remains adapter hierarchy and inheritance inside a root, not a publication boundary.
 
 ## Layout-query values

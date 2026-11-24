@@ -6,6 +6,7 @@ import { glyph } from '@pmndrs/glyph';
 import { Text } from '@pmndrs/glyph/vue';
 import { adapterFont } from '../support/adapter-behavior.mjs';
 import { preparationModel } from '../support/preparation-model.mjs';
+import { renderScene } from '../support/three-render.mjs';
 
 await glyph.init();
 
@@ -13,8 +14,6 @@ preparationModel('Vue', async (labels) => {
   const font = await adapterFont();
   const components = [];
   const layoutListeners = [];
-  const errorListeners = [];
-  const capturedListeners = [];
   const host = await mountTres(() =>
     labels.map((text, index) =>
       h(
@@ -26,7 +25,6 @@ preparationModel('Vue', async (labels) => {
             if (value !== null) components[index] = value;
           },
           onLayout: (_text, layout) => layoutListeners[index]?.(layout),
-          onError: (error) => errorListeners[index]?.(error),
         },
         () => text,
       ),
@@ -55,18 +53,14 @@ preparationModel('Vue', async (labels) => {
         onLayout: (listener) => {
           layoutListeners[index] = listener;
         },
-        // Vue routes an exception thrown by an event handler to `onErrorCaptured`, not to the `error` event,
-        // so this host's listener hears both.
-        onError: (listener) => {
-          errorListeners[index] = listener;
-          capturedListeners.push(listener);
-        },
       };
     }),
-    // The traversal the renderer performs once per frame.
+    // Vue routes an exception thrown by an event handler to `onErrorCaptured` during the frame, never through the
+    // emitting text; this host rethrows what its error handler captured as the frame's own.
     frame: () => {
-      host.scene.updateMatrixWorld(true);
-      for (const error of host.errors.splice(0)) for (const listener of capturedListeners) listener(error);
+      renderScene(host.scene);
+      const [error] = host.errors.splice(0);
+      if (error !== undefined) throw error;
     },
     prepare: () => glyph.prepare(),
     unmount: async () => {

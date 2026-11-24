@@ -31,7 +31,7 @@ import {
 import { inheritTextSpans, ownTextSpans, type FormattedText, type TextInput } from './formatted-text.js';
 import type { Font } from './font.js';
 import type { ParagraphLayoutSummary } from './layout.js';
-import { glyph, prepareGlyphFrame } from './glyph.js';
+import { glyph } from './glyph.js';
 import { GlyphFontError } from './loader.js';
 import { type FontSelection, type FontStack } from './loaded-font.js';
 import { assertPropertyList, mergePropertyList } from './property-list.js';
@@ -120,7 +120,6 @@ export type R3fTextProps<Technique extends RasterFormatMetadata> = Object3DProps
   readonly rasterPixelRatio?: number;
   readonly material?: ThreeTextMaterial;
   readonly pixelSnapping?: boolean;
-  readonly onError?: ((error: unknown) => void) | undefined;
   /**
    * Called with the Text and what its `measure()` returns, after it is first prepared and whenever that summary
    * changes, before the frame that draws it. Move other objects from it here, imperatively, and the first frame
@@ -133,7 +132,6 @@ export type R3fTextProps<Technique extends RasterFormatMetadata> = Object3DProps
 export type R3fTextGroupProps = Object3DProps &
   TextGroupOptions & {
     readonly children?: ReactNode;
-    readonly onError?: ((error: unknown) => void) | undefined;
     readonly ref?: Ref<ThreeTextGroup>;
   };
 
@@ -562,7 +560,6 @@ export const Text = forwardRef(function Text(
     flattened,
     fontFaces,
     object: objectProperties(properties),
-    onError: properties.onError,
     onLayout: properties.onLayout,
     publishObject,
   });
@@ -583,7 +580,6 @@ function ResolvedTextObject({
   readonly handle: ThreeHandle;
   readonly root: ThreeRoot;
   readonly object: TextElementProps;
-  readonly onError: ((error: unknown) => void) | undefined;
   readonly onLayout: ((text: ThreeText<RasterFormatMetadata>, layout: ParagraphLayoutSummary) => void) | undefined;
   readonly publishObject: (value: ThreeText<RasterFormatMetadata> | null) => void;
 }): ReactElement {
@@ -683,14 +679,12 @@ function TextObject({
   desired,
   root,
   object: objectProps,
-  onError,
   onLayout,
   publishObject: publishCommittedObject,
 }: {
   readonly desired: DesiredR3fTextProperties<RasterFormatMetadata>;
   readonly root: ThreeRoot;
   readonly object: TextElementProps;
-  readonly onError: ((error: unknown) => void) | undefined;
   readonly onLayout: ((text: ThreeText<RasterFormatMetadata>, layout: ParagraphLayoutSummary) => void) | undefined;
   readonly publishObject: (value: ThreeText<RasterFormatMetadata> | null) => void;
 }): ReactElement {
@@ -718,7 +712,6 @@ function TextObject({
   return createElement<ThreeElement<typeof ThreeText>>('pmndrsGlyphText', {
     ...objectProps,
     args: constructorArguments,
-    onError,
     onLayout,
     ref: publishObject,
   });
@@ -766,13 +759,8 @@ function retainGlyphFrame(store: R3fRootStore, root: ThreeRoot): () => void {
       canvasRootId === undefined
         ? undefined
         : getScheduler().register(
-            () => {
-              try {
-                prepareGlyphFrame();
-              } catch {
-                // Every participating root received its attributed error before the global call threw.
-              }
-            },
+            // The render that follows throws whatever preparation found.
+            () => threeRootHost(root).prepareFrame(),
             { id: `@pmndrs/glyph:prepare:${String(nextGlyphFrameJob++)}`, rootId: canvasRootId, before: 'render' },
           );
     const owned = frames;
@@ -860,7 +848,6 @@ function TextGroupObject({
     {
       ...objectProps,
       args: constructorArguments,
-      onError: options.onError,
       ref: publishObject,
     },
     options.children,
@@ -1318,7 +1305,6 @@ function objectProperties<Technique extends RasterFormatMetadata>(
     'rasterPixelRatio',
     'material',
     'pixelSnapping',
-    'onError',
     'onLayout',
     'ref',
   ])
@@ -1328,8 +1314,7 @@ function objectProperties<Technique extends RasterFormatMetadata>(
 
 function groupObjectProperties(properties: R3fTextGroupProps): TextGroupElementProps {
   const object = { ...properties } as Record<string, unknown>;
-  for (const key of ['batching', 'material', 'renderOrder', 'pixelSnapping', 'children', 'onError', 'ref'])
-    delete object[key];
+  for (const key of ['batching', 'material', 'renderOrder', 'pixelSnapping', 'children', 'ref']) delete object[key];
   return object as TextGroupElementProps;
 }
 

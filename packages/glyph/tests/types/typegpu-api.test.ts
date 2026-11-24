@@ -69,6 +69,11 @@ const borrowedCluster: number = text.readGlyphs((layout) => {
 });
 void borrowedCluster;
 handle.draw(pass, { width: 640, height: 320 });
+text.error satisfies unknown;
+// @ts-expect-error draw() throws what the frame found; there is no error callback.
+void text.onError;
+// @ts-expect-error Nor a construction option for one.
+handle.createText({ font, text: 'Hello', onError: () => undefined });
 handle('overlay').draw(pass, { width: 640, height: 320 });
 // @ts-expect-error Decoration lines are not part of the TypeGPU integration yet.
 text.update({ style: { decoration: { underline: true } } });

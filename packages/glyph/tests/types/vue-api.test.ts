@@ -72,7 +72,7 @@ function ComposableTypeAssertions(): void {
 void ComposableTypeAssertions;
 
 declare const props: VueTextProps<typeof bitmap>;
-props.onError satisfies ((error: unknown) => void) | undefined;
+props.font satisfies VueTextProps<typeof bitmap>['font'];
 declare const fontError: GlyphFontError;
 void fontError;
 

@@ -92,6 +92,14 @@ const extendedThreeConfig = defineGlyphConfig({
 glyph.handle('three:extended-type-fixture', extendedThreeConfig) satisfies ThreeHandle;
 const hud = three('hud');
 hud.createText({ font: bitmapFont, text: 'Named root' });
+// @ts-expect-error A failure found while rendering is thrown from renderer.render(); there is no error callback.
+void hud.onError;
+const hudText = hud.createText({ font: bitmapFont, text: 'Thrown, not reported' });
+// @ts-expect-error A Text has no error callback; `error` and `commitState()` read its failure.
+void hudText.onError;
+hudText.error satisfies unknown;
+// @ts-expect-error A TextGroup has no error callback either.
+void hud.createTextGroup().onError;
 // @ts-expect-error Material mutation has one property surface, not a duplicate setter method.
 hud.setMaterial(undefined);
 // @ts-expect-error Renderer publication objects stay behind the Three config schema.

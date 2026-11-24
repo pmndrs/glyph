@@ -217,6 +217,8 @@ export function readModule(instance: WebAssembly.Instance, module?: WebAssembly.
   /** `replaying` admits the owners restating themselves; `dead` admits nothing until an instance lands. */
   let state: 'live' | 'replaying' | 'dead' = 'live';
   let failure: unknown;
+  /** What every call throws while the engine is dead: one failure, however many frames try again. */
+  let dead: GlyphEngineRestartError | undefined;
   const listeners = new Set<() => void>();
   const replay = (replacement: WebAssembly.Instance): void => {
     current = readExports(replacement);
@@ -227,11 +229,13 @@ export function readModule(instance: WebAssembly.Instance, module?: WebAssembly.
     } catch (error) {
       state = 'dead';
       failure = error;
+      dead = undefined;
       throw error;
     }
   };
   const restart = (cause: unknown): never => {
     failure = cause;
+    dead = undefined;
     // A trap while owners restate themselves, or without a module to instantiate, leaves nothing to restart from.
     if (state !== 'live' || module === undefined) {
       state = 'dead';
@@ -261,7 +265,7 @@ export function readModule(instance: WebAssembly.Instance, module?: WebAssembly.
   for (const name of Object.keys(current) as (keyof ShaperExports)[]) {
     if (name === 'memory') continue;
     facade[name] = (...parameters: number[]): number => {
-      if (state === 'dead') throw new GlyphEngineRestartError('the text engine is restarting', failure);
+      if (state === 'dead') throw (dead ??= new GlyphEngineRestartError('the text engine is restarting', failure));
       try {
         return (current[name] as (...parameters: number[]) => number)(...parameters);
       } catch (error) {

@@ -7,6 +7,7 @@ import { ThreeConfig } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 import { loadFont } from '../../dist/loader.js';
 import { preparationModel } from '../support/preparation-model.mjs';
+import { renderScene } from '../support/three-render.mjs';
 
 const fontUrl = new URL('../../../../benches/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 await glyph.init();
@@ -42,12 +43,9 @@ preparationModel('Three', async (labels) => {
       onLayout: (listener) => {
         object.onLayout = (_text, layout) => listener(layout);
       },
-      onError: (listener) => {
-        object.onError = listener;
-      },
       dispose: () => object.dispose(),
     })),
-    frame: () => scene.updateMatrixWorld(true),
+    frame: () => renderScene(scene),
     prepare: () => glyph.prepare(),
     unmount: () => handle.dispose(),
   };

@@ -338,8 +338,8 @@ const resolved = alignSpansToClusters(text, spans);
 if (resolved !== spans) editor.reportOffsetsThatSplitACluster(resolved);
 ```
 
-Errors are retained on `text.error` and the owning `group.error`, then forwarded to `onError`. They do not escape Three.js
-scene traversal. A renderer-side failure leaves the last accepted draw state live and the error visible. Unchanged group
+Errors are retained on `text.error` and the owning `group.error`, and thrown from the end of the render that found them
+(see [Errors](#errors)). They do not escape Three.js scene traversal. A renderer-side failure leaves the last accepted draw state live and the error visible. Unchanged group
 traversals do not retry it. Assigning new material or other renderer-relevant state requests a checkpoint from the last
 accepted plan revision; malformed engine output remains a defect rather than a supported recovery state (D-285).
 
@@ -390,9 +390,8 @@ already drawn receives the current layout in the next frame.
 Inside the phase a callback may read any text and write transforms, visibility, colour, opacity and material; what it
 paints is drawn by the same frame. Writing a layout input of any text throws `GlyphLayoutPhaseError` (`code:
 'layout-phase'`) from that setter and the text keeps its value: a layout written there could not be laid out before
-the frame it was meant for. `dispose()` is allowed. An exception thrown by a callback is reported to that text's
-`onError` and the root's `onError` (or to the global error event when neither is set); the other callbacks still run
-and the frame publishes.
+the frame it was meant for. `dispose()` is allowed. An exception thrown by a callback propagates: the other callbacks
+still run and the frame publishes, then `renderer.render()` throws it.
 
 A text with a callback is drawn only at a layout its callback has seen. A layout input written after the frame's
 layout phase (from a later sibling's `updateMatrixWorld`, for example) keeps that text at its published revision for
@@ -401,23 +400,30 @@ it.
 
 ### Errors
 
-| Failure                                                       | Where it surfaces                                                  |
-| ------------------------------------------------------------- | ------------------------------------------------------------------ |
-| A value a setter, `set()` or `createText()` cannot accept     | `GlyphInputError` thrown by that call; the previous value stays    |
-| A layout input written inside a layout callback               | `GlyphLayoutPhaseError` thrown by that setter                      |
-| A paragraph the engine refuses (memory, an input that traps)  | That text's `error` and `onError`, once; siblings publish as usual |
-| A publication the renderer rejects, a fixed capacity exceeded | `text.error`/`group.error` and `onError` of the texts involved     |
-| An engine trap during a frame                                 | The affected texts' `error` and `onError`; the next frame retries  |
-| An exception thrown by a layout callback                      | That text's `onError`                                              |
+| Failure                                                       | Where it surfaces                                                                   |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| A value a setter, `set()` or `createText()` cannot accept     | `GlyphInputError` thrown by that call; the previous value stays                     |
+| A layout input written inside a layout callback               | `GlyphLayoutPhaseError` thrown by that setter                                       |
+| A paragraph the engine refuses (memory, an input that traps)  | Thrown from the render, once; that text's `error`; siblings draw as usual           |
+| A publication the renderer rejects, a fixed capacity exceeded | Thrown from the render, once; `text.error`/`group.error` of the texts involved      |
+| An engine trap during a frame                                 | Thrown from the render, once; the affected texts' `error`; the next frame retries   |
+| An exception thrown by a layout callback                      | Thrown from the render, once, after the other callbacks ran and the frame published |
+
+There is no error callback ([decision](decisions/render-time-errors-throw.md)). A failure found while rendering is
+thrown from the end of `renderer.render(scene, camera)`, from the Scene's outermost `onAfterRender`, after Three has
+restored its render target and drawn the frame; several are one `AggregateError`. It is thrown once: a failure the next
+frame finds again is standing and is not rethrown, and the failed text draws nothing until its input changes. Catch it
+around `renderer.render()` or let it reach the application's global error handler. A traversal outside a render (an
+application's own `scene.updateMatrixWorld()`) defers what it finds to the next render of that Scene. An explicit
+`glyph.shape()` keeps throwing a rejected publication itself.
 
 A publication that the result arena cannot hold (a memory cap) fails that one frame for the root. The largest
-paragraph is then withheld: it reports the error, is `failed`, draws nothing and cannot be read until its input
+paragraph is then withheld: it keeps the error, is `failed`, draws nothing and cannot be read until its input
 changes, and its siblings publish from the next frame on. The engine still discards the root on that failure, so
 the recovery frame lays the root's other paragraphs out again.
 
-`root.onError` also receives every failure in the last four rows, once per report, so one handler can observe a
-root. It is assigned on the root (`handle.onError = …` for the anonymous root, `handle('hud').onError = …` for
-a named one). GPU device loss is not detected by this package; the host observes `device.lost` and rebuilds.
+GPU errors are Three's: where Three only logs (a shader that does not compile, a lost device), this package adds no
+throw; the host observes `device.lost` and rebuilds.
 
 ## Measure desired layout and inspect positioned glyphs
 
@@ -841,8 +847,9 @@ maintained renderer target is `@react-three/fiber/webgpu`, which inherits Three'
 While a `<Text>` is mounted, its root is joined to the canvas: the root is attached to the canvas Scene, a scheduler
 job registered before `render` prepares dirty text and runs layout callbacks, and a setter that leaves the root
 needing a frame calls the canvas `invalidate()`, so `frameloop="demand"` draws an imperative
-`ref.current.text = …`. `<Text onLayout={(text, layout) => …}>` is the layout callback and `onError` the per-text
-error handler.
+`ref.current.text = …`. `<Text onLayout={(text, layout) => …}>` is the layout callback. There is no `onError` prop: a
+failure found while rendering is thrown from the canvas render, and the scheduler job defers what preparation finds to
+that render.
 
 A prop that is not valid input throws from the Text's setter while React commits. Without a boundary inside the
 canvas that error unmounts the whole canvas. `<GlyphErrorBoundary fallback={…} onError={…}>` is a boundary to place

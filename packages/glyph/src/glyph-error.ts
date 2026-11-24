@@ -10,7 +10,6 @@ export type GlyphErrorCode =
   | 'bake-failed'
   | 'worker-failed'
   | 'engine-failed'
-  | 'frame-rejected'
   | 'layout-phase'
   | 'invalid-input'
   | 'invalid-offset'

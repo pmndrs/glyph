@@ -31,6 +31,7 @@ import type { TypeGpuTransform } from './internal/renderer.js';
 import { reuseOrCreateTextPropertySnapshot, reuseOrCreateTextStyleSnapshot } from '../config/text-property.js';
 import { GlyphInputError, glyphInputError, PostCommitError, validatingInput } from '../glyph-error.js';
 import { sameConstraintSizes } from '../text-anchor.js';
+import type { RenderFailures } from '../render-failures.js';
 
 export type TypeGpuFontSelection = FontFaceSelection<
   | typeof bitmap
@@ -52,8 +53,6 @@ export interface TypeGpuTextOptions<Selection extends TypeGpuFontSelection = Typ
   readonly position?: readonly [number, number];
   /** See {@link TypeGpuText.onLayout}. */
   readonly onLayout?: TypeGpuLayoutCallback<Selection>;
-  /** See {@link TypeGpuText.onError}. */
-  readonly onError?: (error: unknown) => void;
 }
 
 /** A layout callback: the text and what its `measure()` returns. */
@@ -62,13 +61,13 @@ export type TypeGpuLayoutCallback<Selection extends TypeGpuFontSelection = TypeG
   layout: ParagraphLayoutSummary,
 ) => void;
 export type TypeGpuTextUpdate<Selection extends TypeGpuFontSelection = TypeGpuFontSelection> = Partial<
-  Omit<TypeGpuTextOptions<Selection>, 'onLayout' | 'onError'>
+  Omit<TypeGpuTextOptions<Selection>, 'onLayout'>
 >;
 type TypeGpuSemanticTextOptions<Selection extends TypeGpuFontSelection> = Omit<
   TypeGpuTextOptions<Selection>,
-  'position' | 'style' | 'onLayout' | 'onError'
+  'position' | 'style' | 'onLayout'
 > & { readonly style?: TextStyle };
-type TypeGpuSemanticTextKey = Exclude<keyof TypeGpuTextOptions, 'position' | 'onLayout' | 'onError'>;
+type TypeGpuSemanticTextKey = Exclude<keyof TypeGpuTextOptions, 'position' | 'onLayout'>;
 const semanticUpdateKeys = {
   font: 'font',
   text: 'text',
@@ -113,17 +112,16 @@ export interface TypeGpuText<Selection extends TypeGpuFontSelection = TypeGpuFon
   readonly disposed: boolean;
   /**
    * The error that keeps this text from being drawn, or `undefined`: the engine refused its last preparation.
-   * It clears when the text's input changes. Siblings are unaffected.
+   * The root's next `draw()` throws it once; it clears when the text's input changes. Siblings are unaffected.
    */
   readonly error: unknown;
   /**
    * Called with this text and what `measure()` returns, after the text is first prepared and whenever that
    * summary changes, inside `glyph.prepare()` or `glyph.shape()` and before anything is published. It may read
-   * anything and write positions; writing a layout input of any text throws `GlyphLayoutPhaseError`.
+   * anything and write positions; writing a layout input of any text throws `GlyphLayoutPhaseError`. Every due
+   * callback runs and the frame publishes; an exception one throws is thrown by the root's next `draw()`.
    */
   onLayout: TypeGpuLayoutCallback<Selection> | undefined;
-  /** Receives this text's refusal once, and any exception its layout callback throws. */
-  onError: ((error: unknown) => void) | undefined;
   update(update: TypeGpuTextUpdate<Selection>): void;
   measure(): ParagraphLayoutSummary;
   glyphs(): GlyphLayoutInspection;
@@ -148,7 +146,7 @@ export interface TypeGpuText<Selection extends TypeGpuFontSelection = TypeGpuFon
 export interface TypeGpuTextPublication<Selection extends TypeGpuFontSelection = TypeGpuFontSelection> {
   readonly text: TypeGpuText<Selection>;
   prepare(): void;
-  /** Runs the layout callback if the summary is new; its exception is reported, never thrown. */
+  /** Runs the layout callback if the summary is new; its exception is deferred to the root's draw, never thrown. */
   layout(): void;
   accepted(): void;
   rejected(): void;
@@ -160,17 +158,12 @@ export function createText<Selection extends TypeGpuFontSelection>(
   services: GlyphRootServices<Bindings, void, void>,
   transform: TypeGpuTransform,
   options: TypeGpuTextOptions<Selection>,
+  failures: RenderFailures,
   onDispose: () => void,
 ): TypeGpuTextPublication<Selection> {
   assertNoDecoration(options.style);
-  const {
-    position: _initialPosition,
-    onLayout: initialOnLayout,
-    onError: initialOnError,
-    ...initialSemanticState
-  } = options;
+  const { position: _initialPosition, onLayout: initialOnLayout, ...initialSemanticState } = options;
   let onLayout = initialOnLayout;
-  let onError = initialOnError;
   let notifiedLayout: ParagraphLayoutSummary | undefined;
   let reportedRefusal: unknown;
   validatePosition(options.position);
@@ -301,12 +294,6 @@ export function createText<Selection extends TypeGpuFontSelection>(
       if (value === undefined) notifiedLayout = undefined;
       if (!disposed) controller.keepMeasured = value !== undefined;
     },
-    get onError() {
-      return onError;
-    },
-    set onError(value) {
-      onError = value;
-    },
     update(update) {
       try {
         applyUpdate(update);
@@ -375,14 +362,14 @@ export function createText<Selection extends TypeGpuFontSelection>(
       try {
         onLayout(text, layout);
       } catch (error) {
-        reportTextError(onError, error);
+        failures.defer(error);
       }
     },
     prepare() {
       const refusal = disposed ? undefined : controller.refusal;
       if (refusal !== reportedRefusal) {
         reportedRefusal = refusal;
-        if (refusal !== undefined) reportTextError(onError, refusal);
+        if (refusal !== undefined) failures.defer(refusal);
       }
       // A text the engine refused has no layout to anchor; it draws nothing until its input changes.
       if (pendingAnchorNeedsMeasure && controller.refusal === undefined) {
@@ -507,16 +494,6 @@ function sameLayout(previous: ParagraphLayoutSummary | undefined, next: Paragrap
         previous.anchorOffset.x === next.anchorOffset.x &&
         previous.anchorOffset.y === next.anchorOffset.y))
   );
-}
-
-/** Tells a text's handler, or the host's global error reporting when it has none; never throws. */
-function reportTextError(handler: ((error: unknown) => void) | undefined, error: unknown): void {
-  try {
-    if (handler !== undefined) handler(error);
-    else (globalThis as { reportError?: (error: unknown) => void }).reportError?.(error);
-  } catch {
-    // A handler cannot replace the failure it is told about.
-  }
 }
 
 function validatePosition(position: readonly [number, number] = [0, 0]): void {

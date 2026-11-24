@@ -40,14 +40,8 @@ function createBitmapFontFace() {
 type BitmapFontFace = ReturnType<typeof createBitmapFontFace>;
 type BitmapFontSelection = BitmapFontFace['bitmap'];
 
-/** Target v1 reports failures via `onError`, not a rejected promise, so this records the first failure instead of hashing a partial frame. */
-interface ReactTextFailures {
-  error: unknown;
-}
-
 interface ReactTextResources {
   readonly canvas: HTMLCanvasElement;
-  readonly failures: ReactTextFailures;
   readonly fontFace: BitmapFontFace;
   readonly reference: React.RefObject<BitmapTextObject | null>;
   readonly renderer: THREE.WebGPURenderer;
@@ -99,7 +93,6 @@ async function createResources(dpr: number): Promise<ReactTextResources> {
   });
   const fontFace = createBitmapFontFace();
   const root = createRoot(canvas);
-  const failures: ReactTextFailures = { error: undefined };
   try {
     await root.configure({
       camera: {
@@ -118,8 +111,8 @@ async function createResources(dpr: number): Promise<ReactTextResources> {
       size: { height: FRAME_HEIGHT, left: 0, top: 0, width: FRAME_WIDTH },
     });
     const reference = createRef<BitmapTextObject>();
-    const initial = await renderCommittedText(root, reference, failures, fontFace.bitmap);
-    return { canvas, failures, fontFace, reference, renderer, root, store: initial.store };
+    const initial = await renderCommittedText(root, reference, fontFace.bitmap);
+    return { canvas, fontFace, reference, renderer, root, store: initial.store };
   } catch (error) {
     flushSync(() => root.unmount());
     fontFace.dispose();
@@ -136,7 +129,6 @@ async function runReconciliation(resources: ReactTextResources): Promise<TargetR
   const narrow = await renderCommittedText(
     resources.root,
     resources.reference,
-    resources.failures,
     resources.fontFace.bitmap,
     NARROW_WIDTH,
     '#31d7c5',
@@ -147,12 +139,7 @@ async function runReconciliation(resources: ReactTextResources): Promise<TargetR
     throw new Error('React Text did not retain its core object across width reflow');
   }
 
-  const restored = await renderCommittedText(
-    resources.root,
-    resources.reference,
-    resources.failures,
-    resources.fontFace.bitmap,
-  );
+  const restored = await renderCommittedText(resources.root, resources.reference, resources.fontFace.bitmap);
   const restoredLayout = requiredLayout(core);
   assertOracleLayout(restoredLayout, 'natural');
   if (restored.core !== core) throw new Error('React Text replaced its core object during restore');
@@ -197,7 +184,6 @@ async function runReconciliation(resources: ReactTextResources): Promise<TargetR
 async function renderCommittedText(
   root: ReturnType<typeof createRoot>,
   reference: React.RefObject<BitmapTextObject | null>,
-  failures: ReactTextFailures,
   font: BitmapFontSelection,
   width?: number,
   accent = '#ff8a00',
@@ -211,21 +197,20 @@ async function renderCommittedText(
   };
   let store: RootStore | undefined;
   flushSync(() => {
-    store = root.render(renderText(publish, failures, font, width, accent));
+    store = root.render(renderText(publish, font, width, accent));
   });
   // StrictMode may remount after the first host ref callback, so always read the retained object back from the ref.
   await committed.promise;
   const core = requiredCoreText(reference);
   if (store === undefined) throw new Error('R3F did not publish its root store');
   const state = store.getState();
+  // A failure the frame found is thrown from this render instead of hashing a partial frame.
   state.gl.render(state.scene, state.camera);
-  if (failures.error !== undefined) throw failures.error;
   return { core, store };
 }
 
 function renderText(
   textRef: React.RefCallback<BitmapTextObject>,
-  failures: ReactTextFailures,
   font: BitmapFontSelection,
   width?: number,
   accent = '#ff8a00',
@@ -233,23 +218,17 @@ function renderText(
   return React.createElement(
     StrictMode,
     null,
-    React.createElement(
-      CommittedText,
-      { accent, failures, font, textRef, ...(width === undefined ? {} : { width }) },
-      null,
-    ),
+    React.createElement(CommittedText, { accent, font, textRef, ...(width === undefined ? {} : { width }) }, null),
   );
 }
 
 function CommittedText({
   accent,
-  failures,
   font,
   textRef,
   width,
 }: {
   readonly accent: string;
-  readonly failures: ReactTextFailures;
   readonly font: BitmapFontSelection;
   readonly textRef: React.RefCallback<BitmapTextObject>;
   readonly width?: number;
@@ -258,9 +237,6 @@ function CommittedText({
     BitmapText,
     {
       font,
-      onError: (error: unknown) => {
-        failures.error ??= error;
-      },
       ref: textRef,
       style: {
         fontSize: canonicalParagraphLayout.style.fontSize,
