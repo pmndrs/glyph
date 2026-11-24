@@ -1,0 +1,414 @@
+---
+title: Measurement
+description: Reference for the values measure(), glyphs() and readGlyphs() return - paragraph and line metrics, per-glyph columns, borrowed glyph views, shaper flags and glyph outlines - with the coordinate space of every field.
+nav: 715
+sourcecode: packages/glyph/src/layout.ts
+---
+
+The measurement types describe a laid-out paragraph: its box, its lines, its glyphs and their outlines. They are
+plain data, exported from `@pmndrs/glyph`.
+
+```ts
+import type {
+  BaselineMetrics,
+  BorrowedGlyph,
+  BorrowedGlyphLayout,
+  GlyphLayout,
+  GlyphLayoutInspection,
+  GlyphOutlineContour,
+  GlyphOutlineCurve,
+  GlyphOutlineView,
+  LayoutBox,
+  LayoutPoint,
+  LineFontMetrics,
+  ParagraphIntrinsicWidths,
+  ParagraphLayoutSummary,
+  ParagraphLineMetrics,
+  ParagraphMeasurement,
+  TypographicReferences,
+} from '@pmndrs/glyph';
+import { glyphFlags } from '@pmndrs/glyph';
+```
+
+## Where the values come from
+
+| Call | Returns | Cost |
+| --- | --- | --- |
+| `text.measure()` | [`ParagraphLayoutSummary`](#paragraphlayoutsummary) | Layout only when the text changed; otherwise the retained object. |
+| `text.glyphs()` | [`GlyphLayoutInspection`](#glyphlayoutinspection) | A new copy of every column on each call. |
+| `text.readGlyphs(read)` | The result of `read`, which receives a [`BorrowedGlyphLayout`](#borrowedglyphlayout) | No copy of the layout. |
+| `onLayout` callback | [`ParagraphLayoutSummary`](#paragraphlayoutsummary) | See [React to layout](/guides/inspect/react-to-layout). |
+
+`measure()`, `glyphs()` and `readGlyphs()` exist on a three.js [`Text`](/reference/three-text), a
+[`TypeGpuText`](/reference/typegpu) and a [`Pixi3DText`](/reference/pixi3d). Each lays out the text first when a
+setter left it changed, and none of them publishes a frame. All returned objects are frozen.
+
+## Coordinate spaces
+
+| Space | Origin | Axes | Used by |
+| --- | --- | --- | --- |
+| Paragraph | Top-left corner of the paragraph box | +X right, +Y down, units of `style.fontSize` | Every field on this page except outlines |
+| Em | The glyph's pen position on its baseline | +X right, +Y down, `1` is the glyph's font size | [Glyph outlines](#glyphoutlinecurve) |
+
+Paragraph space does not include [`constraints.anchor`](/reference/constraints). `anchorOffset` is the translation
+from paragraph space to the text object's origin: add it to a paragraph-space point to get a Text-local point, the
+space the [editing methods](/reference/editing) use. On a three.js `Text`, also negate y to reach the object's local
+space, which is +Y up.
+
+## LayoutBox
+
+An axis-aligned rectangle.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `x` | `number` | Left edge. |
+| `y` | `number` | Top edge; +Y is down. |
+| `width` | `number` | Horizontal extent. |
+| `height` | `number` | Vertical extent. |
+
+In the measurement types a `LayoutBox` is in paragraph space. The editing methods return `LayoutBox` values in
+Text-local space, which includes the anchor.
+
+## LayoutPoint
+
+A point or a translation, +X right and +Y down.
+
+| Property | Type |
+| --- | --- |
+| `x` | `number` |
+| `y` | `number` |
+
+## BaselineMetrics
+
+Vertical metrics of a box around a baseline. Part of [`ParagraphMeasurement`](#paragraphmeasurement) and
+[`ParagraphLineMetrics`](#paragraphlinemetrics).
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `ascent` | `number` | Distance from the top edge of the box down to the baseline. |
+| `descent` | `number` | Signed distance from the baseline to the bottom edge of the box. A line height smaller than the font's own height can make it negative. |
+| `lineHeight` | `number` | Total vertical extent of the box. `ascent + descent === lineHeight`. |
+
+## TypographicReferences
+
+Vertical reference positions, each a distance down from the top edge of the paragraph box. They are computed from
+font metrics and line spacing, not read from an OpenType BASE table. Part of
+[`ParagraphMeasurement`](#paragraphmeasurement), where they describe the first line, and of
+[`ParagraphLineMetrics`](#paragraphlinemetrics).
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `alphabeticBaseline` | `number` | The line's baseline, including paragraph spacing and half of any extra line spacing. |
+| `ideographicBaseline` | `number` | The bottom of the line box. |
+| `capHeightTop` | `number` | Top of capital letters: the baseline minus the cap height, including baseline shifts. |
+| `xHeightTop` | `number` | Top of lowercase letters: the baseline minus the x-height, including baseline shifts. |
+
+These names, in kebab case, are the vertical values of [`constraints.anchor`](/reference/constraints):
+`'first-baseline'` anchors at `firstBaseline`, `'cap-height-top'` at `capHeightTop`.
+
+## LineFontMetrics
+
+The metrics of a line's primary font, scaled to the line's font size. When a line mixes styles, each value is the
+maximum over them. Glyphs supplied by a fallback font do not change these values.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `ascent` | `number` | The font's ascent, without line spacing or baseline shift. |
+| `descent` | `number` | The font's descent, positive downward, without line spacing or baseline shift. |
+| `leading` | `number` | The line height minus `ascent` and `descent`: the extra space the line height adds. Negative when the line height is tighter than the font. |
+| `capHeight` | `number` | Height of capital letters. |
+| `xHeight` | `number` | Height of lowercase letters. |
+| `capHeightSource` | `'font' \| 'fallback'` | `'font'` when every participating font states a cap height; `'fallback'` when 0.66 em was used for one that does not. |
+| `xHeightSource` | `'font' \| 'fallback'` | `'font'` when every participating font states an x-height; `'fallback'` when 0.5 em was used for one that does not. |
+
+On a line that starts with a [drop cap](/guides/layout/drop-caps), `capHeight` and `xHeight` include the drop cap's;
+`ascent`, `descent` and `leading` stay those of the body text.
+
+## ParagraphMeasurement
+
+The paragraph-level metrics. Extends [`BaselineMetrics`](#baselinemetrics) and
+[`TypographicReferences`](#typographicreferences). You receive it as part of
+[`ParagraphLayoutSummary`](#paragraphlayoutsummary).
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `width` | `number` | Width of the resolved paragraph box under the text's constraints. |
+| `height` | `number` | Height of the resolved paragraph box. |
+| `contentWidth` | `number` | Widest advance extent of the laid-out lines, before the box is applied. |
+| `contentHeight` | `number` | Vertical extent all laid-out lines need, before the box is applied. |
+| `firstBaseline` | `number` | Distance from the top of the paragraph box to the first line's baseline. |
+| `lastBaseline` | `number` | Distance from the top of the paragraph box to the last line's baseline. |
+| `ascent`, `descent`, `lineHeight` | `number` | [`BaselineMetrics`](#baselinemetrics) of the whole block of lines around `firstBaseline`. `ascent` equals `firstBaseline`. |
+| `alphabeticBaseline`, `ideographicBaseline`, `capHeightTop`, `xHeightTop` | `number` | [`TypographicReferences`](#typographicreferences) of the first line. |
+| `fontMetrics` | [`LineFontMetrics`](#linefontmetrics) | Font metrics of the first line. |
+| `inkBounds` | `LayoutBox \| undefined` | Union of every glyph's ink box, in paragraph space. A paragraph with no glyphs reports a zero-size box. `undefined` means the query did not position glyphs, never that the ink is empty. |
+| `anchorOffset` | [`LayoutPoint`](#layoutpoint) | Translation that places `constraints.anchor` on the text's origin. `{ x: 0, y: 0 }` without an anchor. The other fields are not shifted by it. |
+| `overflowed` | `boolean` | Whether the content exceeded the box under the layout's overflow setting. |
+
+`width`, `height`, `contentWidth` and `contentHeight` are rounded outward. A measured width passed back as an
+`'exact'` width therefore never makes the text wrap differently.
+
+`contentWidth` and `contentHeight` are advance extents, the measure CSS uses for a box. `inkBounds` is what is drawn.
+A script or italic face draws outside its advances, so the two differ.
+
+## ParagraphIntrinsicWidths
+
+The widths the paragraph would take with no width constraint. Part of
+[`ParagraphLayoutSummary`](#paragraphlayoutsummary). Both are rounded outward. Column splits and clipping do not
+affect them.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `minContentWidth` | `number` | Width of the widest piece when every allowed line break is taken. |
+| `maxContentWidth` | `number` | Width of the widest line when only forced line breaks are taken. |
+
+## ParagraphLineMetrics
+
+One laid-out line. Extends [`BaselineMetrics`](#baselinemetrics) and
+[`TypographicReferences`](#typographicreferences). All distances are in paragraph space.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `index` | `number` | Position of the line among the paragraph's lines, from `0`, top to bottom. |
+| `textStart` | `number` | UTF-16 offset of the first unit of the source text on this line. |
+| `textEnd` | `number` | UTF-16 offset after the last unit on this line, including a trailing space or line break. |
+| `glyphStart` | `number` | Index of the line's first glyph in the per-glyph columns of [`GlyphLayout`](#glyphlayout). |
+| `glyphCount` | `number` | Number of glyphs on the line. |
+| `baseline` | `number` | Distance from the top of the paragraph box to this line's baseline. |
+| `ascent`, `descent`, `lineHeight` | `number` | The line box around `baseline`: it spans from `baseline - ascent` to `baseline + descent`. |
+| `advance` | `number` | Advance extent of the line: how far the pen travelled, including justification. Not the ink width. |
+| `inkBounds` | `LayoutBox \| undefined` | Ink box of this line's glyphs, in paragraph space; `undefined` under the same rule as the paragraph's. |
+| `alphabeticBaseline`, `ideographicBaseline`, `capHeightTop`, `xHeightTop` | `number` | [`TypographicReferences`](#typographicreferences) of this line. `alphabeticBaseline` equals `baseline`. |
+| `fontMetrics` | [`LineFontMetrics`](#linefontmetrics) | Font metrics of this line. |
+
+## ParagraphLayoutSummary
+
+What `measure()` returns and what an `onLayout` callback receives. Extends
+[`ParagraphMeasurement`](#paragraphmeasurement) and [`ParagraphIntrinsicWidths`](#paragraphintrinsicwidths) and adds:
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `lineCount` | `number` | Number of laid-out lines. At least `1`: an empty text has one line with the font's line box. |
+| `glyphCount` | `number` | Number of positioned glyphs, including glyphs that draw nothing, such as spaces. |
+| `missingGlyphCount` | `number` | Number of positioned glyphs with glyph id `0`, the font's "missing glyph". |
+| `lines` | `readonly ParagraphLineMetrics[]` | Exactly `lineCount` entries, top to bottom. |
+
+```ts
+import type { ParagraphLayoutSummary } from '@pmndrs/glyph';
+
+const summary: ParagraphLayoutSummary = text.measure();
+const last = summary.lines[summary.lineCount - 1]!;
+const bottomOfLastLine = last.baseline + last.descent;
+```
+
+The summary has no per-glyph arrays. Lines and glyphs that a line limit or an ellipsis removed are not counted.
+While the text does not change, `measure()` returns the same object. The fields that depend on glyph positions
+(`glyphCount`, `missingGlyphCount`, `inkBounds`, and each line's `glyphStart`, `glyphCount` and `inkBounds`) are
+resolved the first time one of them is read; a summary keeps answering for the text as it was measured, even after
+later edits.
+
+## GlyphLayout
+
+The per-glyph and per-line columns of a positioned paragraph. Extends
+[`ParagraphMeasurement`](#paragraphmeasurement). You receive it as part of
+[`GlyphLayoutInspection`](#glyphlayoutinspection).
+
+Per-glyph columns have `glyphCount` entries, in visual order line by line. All positions are in paragraph space.
+
+| Property | Type | Per glyph |
+| --- | --- | --- |
+| `x` | `Float32Array` | Pen position x: the glyph's origin. |
+| `y` | `Float32Array` | Pen position y: on the glyph's baseline, +Y down. |
+| `glyphAdvances` | `Float32Array` | Shaped advance: how far the pen moves. Neither the ink width nor the font size. |
+| `glyphInkX`, `glyphInkY` | `Float32Array` | Top-left corner of the glyph's ink box. |
+| `glyphInkWidths`, `glyphInkHeights` | `Float32Array` | Size of the ink box. A glyph with no shape reports `0` for both, at its own origin. |
+| `glyphFontSizes` | `Float32Array` | Font size the glyph was set at. |
+| `clusters` | `Uint32Array` | UTF-16 offset in the source text of the cluster the glyph belongs to. |
+| `glyphIds` | `Uint16Array` | Glyph index in its font. `0` is the missing glyph. Not a Unicode code point. |
+| `glyphFontSlots` | `Uint16Array` | Index into `fontHandles` of the font that supplied the glyph. |
+| `glyphBidiLevels` | `Uint8Array` | Resolved bidirectional embedding level. Odd levels run right to left. |
+| `glyphFlags` | `Uint16Array` | Shaper flags; decode with [`glyphFlags`](#glyphflags). |
+
+One column is indexed by font slot:
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `fontHandles` | `Uint32Array` | Engine handle of each font the paragraph uses. Equal handles identify the same loaded font. The font of glyph `i` is `fontHandles[glyphFontSlots[i]]`. |
+
+Per-line columns have `lineCount` entries and hold the same values as [`ParagraphLineMetrics`](#paragraphlinemetrics):
+
+| Property | Type | Per line |
+| --- | --- | --- |
+| `lineTextStarts`, `lineTextEnds` | `Uint32Array` | `textStart`, `textEnd`. |
+| `lineGlyphStarts`, `lineGlyphCounts` | `Uint32Array` | `glyphStart`, `glyphCount`. |
+| `lineBaselines` | `Float32Array` | `baseline`. |
+| `lineAdvances` | `Float32Array` | `advance`. |
+
+## GlyphLayoutInspection
+
+What `glyphs()` returns: every column of [`GlyphLayout`](#glyphlayout) and every field of
+[`ParagraphLayoutSummary`](#paragraphlayoutsummary), plus:
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `glyphStableIds` | `Uint32Array` | Per glyph: an identifier that stays the same while the glyph is not reshaped, for example across an edit elsewhere in the text. |
+| `outlineAt(index)` | `(index: number) => GlyphOutlineContour[]` | The outline of glyph `index`. See below. |
+
+```ts
+import type { GlyphLayoutInspection } from '@pmndrs/glyph';
+
+const layout: GlyphLayoutInspection = text.glyphs();
+const firstInk = {
+  x: layout.glyphInkX[0],
+  y: layout.glyphInkY[0],
+  width: layout.glyphInkWidths[0],
+  height: layout.glyphInkHeights[0],
+};
+```
+
+The object is a frozen, caller-owned copy. It stays valid after the text changes or is disposed. `outlineAt` is not
+enumerable, so spreading or structured-cloning the object copies the columns only.
+
+### outlineAt()
+
+```ts
+import type { GlyphOutlineContour } from '@pmndrs/glyph';
+
+const contours: GlyphOutlineContour[] = text.glyphs().outlineAt(0);
+```
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `index` | `number` | A glyph index from `0` to `glyphCount - 1`. |
+
+**Returns** a new array of frozen [`GlyphOutlineContour`](#glyphoutlinecontour) values in em space. Place a point
+`(px, py)` of glyph `i` at `x[i] + px * glyphFontSizes[i]`, `y[i] + py * glyphFontSizes[i]` in paragraph space. A glyph
+with no shape returns `[]`. Glyphs with the same font and glyph id share the same contour objects.
+
+The call makes no engine call and keeps working after the text, its font or its handle is disposed.
+
+**Throws**
+
+- `RangeError` when `index` is not a whole number inside the layout.
+- `TypeError` when the glyph's font was baked without outlines. See
+  [Read glyph outlines](/guides/inspect/glyph-outlines#bake-the-font-with-outlines).
+
+## BorrowedGlyphLayout
+
+The view `readGlyphs(read)` passes to its callback. It is valid only until the callback returns; any use after that
+throws `Error`.
+
+```ts
+const advances = text.readGlyphs((glyphs) => {
+  const values: number[] = [];
+  for (let index = 0; index < glyphs.glyphCount; index += 1) values.push(glyphs.glyphAt(index).advance);
+  return values;
+});
+```
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `glyphCount` | `number` | Number of positioned glyphs. |
+| `glyphAt(index)` | `(index: number) => BorrowedGlyph` | One glyph as a caller-owned record. Throws `RangeError` for an index outside `0` to `glyphCount - 1`. |
+| `outlineAt(index, target?)` | `(index: number, target?: GlyphOutlineView) => GlyphOutlineView` | The glyph's outline as raw columns. Fills and returns `target` when given. Throws `RangeError` for an index outside the layout and `TypeError` when the glyph's font was baked without outlines. |
+
+The typed arrays of a `GlyphOutlineView` from `outlineAt` are views that are valid only inside the callback, even
+when you supplied `target`. Copy them to keep them.
+
+## BorrowedGlyph
+
+One glyph, as returned by `glyphAt(index)`. A plain object you may keep. Positions are in paragraph space.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `x`, `y` | `number` | Pen position. |
+| `advance` | `number` | Shaped advance. |
+| `inkX`, `inkY`, `inkWidth`, `inkHeight` | `number` | Ink box. |
+| `fontSize` | `number` | Font size the glyph was set at. |
+| `cluster` | `number` | UTF-16 offset of the glyph's cluster in the source text. |
+| `glyphId` | `number` | Glyph index in its font; not a Unicode code point and not a layout index. |
+| `fontHandle` | `number` | Engine handle of the font that supplied the glyph. |
+| `bidiLevel` | `number` | Bidirectional embedding level. |
+| `flags` | `number` | Shaper flags; decode with [`glyphFlags`](#glyphflags). |
+| `stableId` | `number` | The glyph's stable identifier; see [`glyphStableIds`](#glyphlayoutinspection). |
+
+## glyphFlags
+
+Named bits of the per-glyph `glyphFlags` column and of `BorrowedGlyph.flags`. They are the shaper's flags, passed
+through unchanged.
+
+```ts
+import { glyphFlags } from '@pmndrs/glyph';
+
+const flags = text.glyphs().glyphFlags[0] ?? 0;
+const unsafe = (flags & glyphFlags.unsafeToBreak) !== 0;
+```
+
+| Property | Type | Meaning when set |
+| --- | --- | --- |
+| `unsafeToBreak` | `number` | A line break before this glyph may change how the surrounding text shapes. |
+| `unsafeToConcat` | `number` | Joining another run at this boundary may change how the surrounding text shapes. |
+| `produced` | `number` | The union of every bit the engine can set. A bit outside it is never set. |
+
+## GlyphOutlineCurve
+
+One segment of an outline, in em space: a quadratic Bezier curve or a straight line.
+
+```ts
+import type { GlyphOutlineCurve } from '@pmndrs/glyph';
+
+declare const curve: GlyphOutlineCurve;
+const [x0, y0, cx, cy, x1, y1, isLine] = curve;
+```
+
+| Index | Name | Type | Description |
+| --- | --- | --- | --- |
+| 0, 1 | `x0`, `y0` | `number` | Start point. |
+| 2, 3 | `cx`, `cy` | `number` | Control point. For a line, the midpoint of the segment. |
+| 4, 5 | `x1`, `y1` | `number` | End point. |
+| 6 | `isLine` | `boolean` | `true` for a straight line. |
+
+A cubic curve of a CFF font is converted to four quadratic curves.
+
+## GlyphOutlineContour
+
+`readonly GlyphOutlineCurve[]`: one closed contour. Each curve starts where the previous one ended, and the last
+ends where the first started. Contours keep the font's winding direction, for filling with the nonzero rule.
+
+## GlyphOutlineView
+
+One glyph's outline as raw columns, in em space. Returned by `BorrowedGlyphLayout.outlineAt()`.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `fontHandle` | `number` | Engine handle of the font that shaped the glyph. |
+| `glyphId` | `number` | Glyph index in that font. Outlines with equal `fontHandle` and `glyphId` are identical. |
+| `points` | `Float32Array` | `x, y` pairs. Segment `s` of contour `c` starts at point `2s + c`, has its control at point `2s + c + 1` and ends at point `2s + c + 2`, which is also the start of the next segment. A contour's last point repeats its first. A line keeps its midpoint as its control. |
+| `contourEnds` | `Uint32Array` | For each contour, the index after its last segment. The last entry is the total segment count. |
+| `segmentLines` | `Uint8Array` | For each segment, `1` for a straight line and `0` for a quadratic curve. |
+
+```ts
+// Count curved segments of the first glyph without creating tuples.
+const curved = text.readGlyphs((glyphs) => {
+  if (glyphs.glyphCount === 0) return 0;
+  const { segmentLines } = glyphs.outlineAt(0);
+  let count = 0;
+  for (const isLine of segmentLines) if (isLine === 0) count += 1;
+  return count;
+});
+```
+
+## Renderer-specific measurements
+
+- three.js: `text.boundingBox` and `text.measureGlyphs()` return values in the object's local space (+Y up, anchor
+  included). See [Text](/reference/three-text) and [Glyphs and Decorations](/reference/three-glyphs).
+- PixiJS 3D: `text.measureInk()`, `text.computeBoundingBox()` and `text.measureGlyphs()`. See
+  [Pixi3D](/reference/pixi3d).
+
+## See also
+
+- [Measure text](/guides/inspect/measure-text)
+- [Read glyph positions](/guides/inspect/read-glyphs)
+- [Read glyph outlines](/guides/inspect/glyph-outlines)
+- [Editing](/reference/editing)
+- [Coordinate spaces](/explanation/coordinate-spaces)

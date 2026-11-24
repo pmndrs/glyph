@@ -3,19 +3,20 @@ import { Text, useMsdf } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame } from '@react-three/fiber/webgpu';
 import { useRef, useState } from 'react';
-import { type Mesh, Vector3 } from 'three/webgpu';
+import type { Mesh } from 'three/webgpu';
 
 import { INTER } from '../../fonts';
-import { pointerToWorld, useSceneInputs } from '../../lib/inputs';
+import { useSceneInputs } from '../../lib/inputs';
 import { ACCENT, PAPER, PAPER_DIM } from '../../theme';
+import { pointerToTextLocal } from '../editing-field/pointer';
 import { BLINK, CARET_WIDTH, FONT_SIZE, PASSAGE, SEED_WORD, TOP, WIDTH } from './config';
 
 /**
  * A caret and a selection from pointer input. The host hands the scene its
- * pointer events in frame pixels; each becomes a world point on the text's
- * plane, then a paragraph-local one — y flipped, paragraph space is y-down —
- * and `hitTest` answers with the nearest caret stop, `caret` with where to
- * draw it. `rangeRects` covers the range from the anchor to the head, one box
+ * pointer events in frame pixels; each becomes a point on the text's plane in
+ * Text-local coordinates — y flipped, Text-local space is y-down — and
+ * `hitTest` answers with the nearest caret stop, `caret` with where to draw
+ * it. `rangeRects` covers the range from the anchor to the head, one box
  * per run of the range on its line.
  */
 interface Placement {
@@ -34,7 +35,6 @@ export default function Caret() {
   const dragging = useRef(false);
   const seeded = useRef(false);
   const placedAt = useRef(0);
-  const world = useRef(new Vector3());
 
   useFrame(({ camera, elapsed, size }) => {
     const text = ref.current;
@@ -66,9 +66,7 @@ export default function Caret() {
       }
       if (input.x === undefined || input.y === undefined) continue;
       if (input.type === 'pointermove' && !dragging.current) continue;
-      const point = pointerToWorld(input.x, input.y, size, camera, world.current);
-      const local = text.worldToLocal(point);
-      const position = text.hitTest({ x: local.x, y: -local.y });
+      const position = text.hitTest(pointerToTextLocal(text, input.x, input.y, size, camera));
       if (input.type === 'pointerdown') {
         anchor.current = position.offset;
         dragging.current = true;

@@ -1,0 +1,198 @@
+---
+title: Measure text
+description: Read a paragraph's size, baselines, intrinsic widths, ink bounds and per-line metrics with text.measure(), and place other objects from them.
+nav: 420
+sourcecode: packages/glyph/src/layout.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="inspect" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+This guide reads the size and the metrics of a paragraph and uses them to place things: a panel behind a label, an
+icon on a baseline, a word centered on a point. `text.measure()` returns a `ParagraphLayoutSummary`; it exists on a
+three.js `Text`, a TypeGPU text and a `Pixi3DText`.
+
+## Measure a text
+
+```ts
+const summary = text.measure();
+
+summary.width; // the paragraph box, in the units of fontSize
+summary.height;
+summary.lineCount;
+```
+
+`measure()` lays the text out first if a setter changed it, so the answer is for the text as it is now. It needs no
+frame and no renderer: you can measure a text straight after `createText`, before it is in a scene. While nothing
+changes, repeated calls return the same frozen object, so calling it every frame is cheap.
+
+Units are the units of `style.fontSize`. If your font size is `0.5` world units, a width of `3` is three world units.
+
+## Know the coordinate space
+
+Everything `measure()` returns is in **paragraph space**: the origin is the top-left corner of the paragraph box, +X
+is right and **+Y is down**. Two adjustments turn a paragraph-space point into a three.js position in the text's
+local space:
+
+1. Add `summary.anchorOffset`. With the default anchor it is `{ x: 0, y: 0 }`. With an
+   [anchor](/guides/layout/anchor-text) it is the translation that puts the anchored point on the text's origin.
+2. Negate `y`, because three.js is +Y up.
+
+```ts
+import type { LayoutBox } from '@pmndrs/glyph';
+import { Vector3 } from 'three/webgpu';
+
+/** The center of a paragraph-space box, as a position in the text's local space. */
+function boxCenter(box: LayoutBox, target = new Vector3()): Vector3 {
+  const { anchorOffset } = text.measure();
+  return target.set(box.x + anchorOffset.x + box.width / 2, -(box.y + anchorOffset.y + box.height / 2), 0);
+}
+```
+
+The editing methods (`caret`, `rangeRects` and the others) already include the anchor; `measure()` and `glyphs()` do
+not. On a three.js `Text`, `text.boundingBox` gives the ink bounds directly as a `Box3` in local space, +Y up, anchor
+included.
+
+## Choose between the box, the content and the ink
+
+A paragraph has three extents, and using the wrong one is a visible error.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="measurement" aria-label="A script word with its advance box in grey and its ink bounds in gold" aspect="4 / 3" />
+
+The grey rectangle is the content extent and the gold one is the ink. The script face draws outside what layout
+reserved for it.
+
+| Fields | What they measure | Use them to |
+| --- | --- | --- |
+| `width`, `height` | The resolved paragraph box under the text's [constraints](/guides/layout/size-a-paragraph). With an `'exact'` width this is the width you asked for, however short the text. | Size a panel or a hit area; stack paragraphs. |
+| `contentWidth`, `contentHeight` | The extent of the laid-out lines by advance: the space the text claims, as CSS measures it. | Shrink a box to its text; lay out in a row or a column. |
+| `inkBounds` | The union of what the glyphs actually draw, as a box `{ x, y, width, height }`. Italics, accents and swashes overhang their advances. | Center a word optically; fit a frame tightly around the drawn shapes. |
+
+`inkBounds` is typed `LayoutBox | undefined`. Handle `undefined` as "not available"; text with no glyphs reports a
+zero-size box, not `undefined`.
+
+```ts
+const { inkBounds, anchorOffset } = text.measure();
+if (inkBounds !== undefined) {
+  // Move the text so the center of its ink sits on its parent's origin.
+  text.position.set(
+    -(inkBounds.x + anchorOffset.x + inkBounds.width / 2),
+    inkBounds.y + anchorOffset.y + inkBounds.height / 2,
+    0,
+  );
+}
+```
+
+`overflowed` is `true` when the content did not fit the box under the layout's
+[overflow](/guides/layout/truncate) setting.
+
+## Read the baselines
+
+Baselines are distances down from the top edge of the paragraph box.
+
+| Field | Meaning |
+| --- | --- |
+| `firstBaseline` | The baseline of the first line. |
+| `lastBaseline` | The baseline of the last line. |
+| `alphabeticBaseline` | The same as `firstBaseline`. |
+| `ideographicBaseline` | The bottom of the first line's box. |
+| `capHeightTop`, `xHeightTop` | The top of capital letters, and of lowercase letters, on the first line. |
+
+To sit an object on the first baseline of a text, place it at `-(firstBaseline + anchorOffset.y)` in the text's local
+space. To align two texts of different sizes on one baseline, give both the anchor `{ y: 'first-baseline' }` and the
+same `position.y`; see [Anchor text](/guides/layout/anchor-text).
+
+The paragraph's own `ascent`, `descent` and `lineHeight` describe the whole block of lines around the first
+baseline: `ascent` equals `firstBaseline`, `descent` is the extent below it, and `ascent + descent === lineHeight`.
+
+## Ask how wide the text wants to be
+
+`minContentWidth` and `maxContentWidth` are the paragraph's intrinsic widths, the same pair CSS calls min-content and
+max-content:
+
+- `maxContentWidth` is the width of the widest line when only forced line breaks are taken: the width the text needs
+  to avoid wrapping.
+- `minContentWidth` is the width of the widest piece when every allowed break is taken: the narrowest box that does
+  not overflow.
+
+They do not depend on the width the text currently has, and they come from the same layout pass as the rest of the
+summary. A layout system that negotiates a box reads them from the `measure()` it already made.
+
+```ts
+const { minContentWidth, maxContentWidth } = text.measure();
+
+const available = 4;
+const width = Math.min(maxContentWidth, Math.max(minContentWidth, available));
+text.constraints = { width: { mode: 'exact', size: width } };
+```
+
+## Read line metrics
+
+`lines` has one entry for each laid-out line, top to bottom.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="inspect-line-metrics" aria-label="A paragraph with each line's box, baseline, cap height and x-height drawn over it" aspect="16 / 9" />
+
+Each grey box is one line box, each gold rule a baseline, and the blue rules are that line's cap-height and x-height
+tops. The numbers on the right are read from `measure().lines`.
+
+```ts
+const summary = text.measure();
+
+for (const line of summary.lines) {
+  const top = line.baseline - line.ascent; // the top of the line box, from the top of the paragraph box
+  const bottom = top + line.lineHeight;
+  const source = text.text.slice(line.textStart, line.textEnd); // the characters on this line
+  console.log(line.index, top, bottom, line.advance, source);
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `index` | Position of the line, from 0. |
+| `textStart`, `textEnd` | The UTF-16 range of the string this line covers, including a trailing space or line break. |
+| `baseline` | Distance from the top of the paragraph box to this line's baseline. |
+| `ascent`, `descent`, `lineHeight` | The line box around the baseline: `ascent` above, `descent` below, and `ascent + descent === lineHeight`. Half of any extra line spacing is already in each. |
+| `advance` | How far the pen travelled along the line. Not the ink width. |
+| `inkBounds` | The ink box of this line's glyphs. |
+| `capHeightTop`, `xHeightTop`, `alphabeticBaseline`, `ideographicBaseline` | The same references as the paragraph's, for this line. |
+| `fontMetrics` | The font's own ascent, descent, cap height and x-height at this line's size, and the `leading` added by the line height. |
+| `glyphStart`, `glyphCount` | The line's glyphs as a range of the columns `glyphs()` returns. |
+
+A text with an empty string still has one line, with the font's line box and baseline and a width of 0, so a caret
+and a baseline anchor have somewhere to stand. `lineCount` is never 0. Lines that a line limit removed are not in
+`lines`.
+
+## Check font coverage
+
+`missingGlyphCount` counts the glyphs the font could not supply, drawn as the font's "missing glyph" box. It is 0
+when every character was covered.
+
+```ts
+const { missingGlyphCount, glyphCount } = text.measure();
+if (missingGlyphCount > 0) {
+  console.warn(`${missingGlyphCount} of ${glyphCount} glyphs are missing from the font`);
+}
+```
+
+`glyphCount` includes glyphs that draw nothing, such as spaces. Add a [fallback font](/guides/fonts/fallback-stacks)
+or widen the baked [subset](/guides/fonts/subset-coverage) when the count is not 0.
+
+## Cost
+
+`measure()` performs layout only when the text changed since the last read; otherwise it returns the retained
+summary. The fields that depend on positioned glyphs (`inkBounds`, `glyphCount`, `missingGlyphCount`, and each line's
+`inkBounds`, `glyphStart` and `glyphCount`) are worked out the first time you read one of them, so a caller that
+only wants `width` and `height` does not pay for them. For per-glyph data, use
+[`glyphs()` or `readGlyphs()`](/guides/inspect/read-glyphs).
+
+To run code every time the measurement changes, without polling, use
+[`onLayout`](/guides/inspect/react-to-layout).
+
+## See also
+
+- [Measurement reference](/reference/measurement)
+- [Read glyph positions](/guides/inspect/read-glyphs)
+- [React to layout](/guides/inspect/react-to-layout)
+- [Anchor text](/guides/layout/anchor-text)
+- [Coordinate spaces](/explanation/coordinate-spaces)

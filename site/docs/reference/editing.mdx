@@ -1,0 +1,397 @@
+---
+title: Editing
+description: Reference for the six editing methods (caret, hitTest, move, boundary, rangeRects, replace), the position, caret, movement and range types, and TextOffsetError.
+nav: 716
+sourcecode: packages/glyph/src/text-editing.ts
+---
+
+The editing methods give caret and selection geometry for a laid-out text and apply one exact edit. They hold no
+selection state and draw nothing.
+
+```ts
+import type {
+  LayoutBox,
+  LayoutPoint,
+  TextCaret,
+  TextDirection,
+  TextMovement,
+  TextPosition,
+  TextRange,
+  TextUnit,
+} from '@pmndrs/glyph';
+
+interface EditingMethods {
+  caret(position: TextPosition): TextCaret;
+  hitTest(point: LayoutPoint): TextPosition;
+  move(position: TextPosition, direction: TextDirection, unit: TextUnit, goalX?: number): TextMovement;
+  boundary(position: TextPosition, unit: TextUnit): TextRange;
+  rangeRects(start: number, end: number): readonly LayoutBox[];
+  replace(start: number, end: number, insert: string): void;
+}
+
+const methods: EditingMethods = text;
+```
+
+## Availability
+
+| Object | Entry point | Created with |
+| --- | --- | --- |
+| [`Text`](/reference/three-text) | `@pmndrs/glyph/three` | `handle.createText()`, React `<Text ref>`, Vue `<Text ref>` |
+| [`TypeGpuText`](/reference/typegpu) | `@pmndrs/glyph/typegpu` | `handle.createText()` |
+| [`Pixi3DText`](/reference/pixi3d) | `@pmndrs/glyph/pixi3d` | `handle.createText()` |
+
+The six methods have the same signatures and behavior on all three.
+
+The types on this page are exported from `@pmndrs/glyph`. `@pmndrs/glyph/three` and `@pmndrs/glyph/pixi3d` also
+export `TextOffsetError`, `TextCaret`, `TextDirection`, `TextMovement`, `TextPosition`, `TextRange` and `TextUnit`.
+
+## Conventions
+
+**Offsets** are UTF-16 code units of the source text, the units of `string.length`. An offset from `0` to the length
+of the text, inclusive, is valid when it lies on a grapheme boundary. A grapheme is one user-perceived character: a
+base letter with its combining marks, an emoji sequence, a flag, or `\r\n`. Grapheme, word and sentence boundaries
+are the engine's and follow the Unicode segmentation rules; `Intl.Segmenter` is not consulted. A ligature is several
+graphemes and has caret stops inside it.
+
+**Coordinates** are Text-local: the origin is the text object's origin, +X is right and +Y is **down**, in the units
+of `style.fontSize`. The offset of [`constraints.anchor`](/reference/constraints) is included. On a three.js `Text`,
+negate y to get the object's local space (+Y up). On a `Pixi3DText` the space is the same logical space, before the
+container's native transform.
+
+**Preparation.** Every method lays out the text first when a setter left it changed, and none of them publishes a
+frame. A result is never stale and never `undefined`.
+
+**Results** are frozen plain objects.
+
+**Errors common to all six.** An offset that is not a whole number, is out of range, ends a reversed range, or is
+inside a grapheme throws [`TextOffsetError`](#textoffseterror). Calling any method on a disposed text, or on a text
+whose root was disposed, throws `Error`.
+
+## caret()
+
+Returns where the caret of a position is drawn.
+
+```ts
+import type { TextCaret } from '@pmndrs/glyph';
+
+const caret: TextCaret = text.caret({ offset: 4, affinity: 'downstream' });
+```
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `position` | [`TextPosition`](#textposition) | The offset and the side of it. |
+
+**Returns** a [`TextCaret`](#textcaret).
+
+**Throws**
+
+- `TextOffsetError` when `position.offset` is not a valid offset (`argument` is `'offset'`).
+- `TypeError` when `position` is not an object or `position.affinity` is not `'upstream'` or `'downstream'`.
+
+## hitTest()
+
+Returns the caret stop nearest a point.
+
+```ts
+import type { TextPosition } from '@pmndrs/glyph';
+
+const position: TextPosition = text.hitTest({ x: 1.2, y: 0.4 });
+```
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `point` | [`LayoutPoint`](/reference/measurement#layoutpoint) | A Text-local point, +Y down. It may be between lines or outside the text. |
+
+**Returns** a [`TextPosition`](#textposition). Its affinity tells the end of a wrapped line (`'upstream'`) from the
+start of the next line (`'downstream'`), and the end of a non-empty text is `'upstream'`. In truncated text only
+positions in drawn text are returned.
+
+**Throws**
+
+- `TypeError` when `point` is not an object.
+- `RangeError` when `point.x` or `point.y` is not a finite number.
+
+`hitTest` never throws `TextOffsetError`.
+
+## move()
+
+Moves a position by one unit in a direction.
+
+```ts
+import type { TextMovement } from '@pmndrs/glyph';
+
+const next: TextMovement = text.move({ offset: 4, affinity: 'downstream' }, 'right', 'grapheme');
+const below: TextMovement = text.move(next.position, 'down', 'line');
+const further: TextMovement = text.move(below.position, 'down', 'line', below.goalX);
+```
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `position` | [`TextPosition`](#textposition) | | Where to move from. |
+| `direction` | [`TextDirection`](#textdirection) | | Logical, visual or vertical direction. |
+| `unit` | [`TextUnit`](#textunit) | | How far one step is. Must be `'line'` when `direction` is `'up'` or `'down'`. |
+| `goalX` | `number` | The caret's own x | Text-local x that an `'up'` or `'down'` move aims for. Pass the `goalX` the previous vertical move returned. |
+
+**Returns** a [`TextMovement`](#textmovement). At the end of the text in the direction of travel, the returned
+position has the same offset as the one given.
+
+Where a step stops:
+
+| `unit` | `'forward'` | `'backward'` |
+| --- | --- | --- |
+| `'grapheme'` | The next grapheme boundary. | The previous grapheme boundary. |
+| `'word'` | The end of the current word, or of the next word when between words. | The start of the current word, or of the previous word when already at a start. |
+| `'sentence'` | The start of the next sentence, or the end of the text. | The start of the current sentence, or of the previous one when already at a start. |
+| `'line'` | The end of the current line (`'upstream'`). | The start of the current line (`'downstream'`). |
+
+`'left'` and `'right'` take the same units and step in x order across runs of both directions. `'up'` and `'down'`
+return the stop nearest `goalX` on the previous or next line; `'up'` from the first line returns the start of the
+text and `'down'` from the last line returns its end.
+
+**Throws**
+
+- `TextOffsetError` when `position.offset` is not a valid offset (`argument` is `'offset'`).
+- `RangeError` when `direction` is `'up'` or `'down'` and `unit` is not `'line'`, or when `goalX` is given and is
+  not a finite number.
+- `TypeError` when `position`, `direction` or `unit` is not one of the values above.
+
+## boundary()
+
+Returns the grapheme, word, sentence or line that contains a position.
+
+```ts
+import type { TextRange } from '@pmndrs/glyph';
+
+const word: TextRange = text.boundary({ offset: 8, affinity: 'downstream' }, 'word');
+```
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `position` | [`TextPosition`](#textposition) | The position to look around. Its affinity selects the unit on that side: `'downstream'` the unit that starts at the offset, `'upstream'` the unit that ends there. |
+| `unit` | [`TextUnit`](#textunit) | The kind of range. |
+
+**Returns** a [`TextRange`](#textrange).
+
+| `unit` | The range covers |
+| --- | --- |
+| `'grapheme'` | One grapheme. |
+| `'word'` | One word without surrounding spaces. On a space or a punctuation mark, that character alone. |
+| `'sentence'` | One sentence, including the spaces after its final punctuation. |
+| `'line'` | One laid-out line, including the space or line break that ends it. |
+
+**Throws**
+
+- `TextOffsetError` when `position.offset` is not a valid offset (`argument` is `'offset'`).
+- `TypeError` when `position` or `unit` is not one of the values above.
+
+## rangeRects()
+
+Returns the rectangles that cover a range of the text.
+
+```ts
+import type { LayoutBox } from '@pmndrs/glyph';
+
+const rects: readonly LayoutBox[] = text.rangeRects(3, 9);
+```
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `start` | `number` | First offset of the range. |
+| `end` | `number` | Offset after the last unit of the range. Must not be less than `start`. |
+
+**Returns** a frozen array of [`LayoutBox`](/reference/measurement#layoutbox), Text-local, +Y down. There is one box
+for each run of the range that is contiguous on its line: one per line in single-direction text, more where the
+range crosses a direction boundary. Each box has the height of its line box. An empty range returns an empty array.
+Text that the layout did not draw contributes no box.
+
+**Throws** `TextOffsetError` when either offset is invalid (`argument` is `'start'` or `'end'`), including
+`reason: 'reversed'` when `end` is less than `start`.
+
+## replace()
+
+Replaces a range of the text with a string.
+
+```ts
+text.replace(3, 9, 'glyph'); // replace
+text.replace(3, 3, 'new '); // insert
+text.replace(3, 7, ''); // delete
+```
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `start` | `number` | First offset of the range to replace. |
+| `end` | `number` | Offset after the last unit to replace. Must not be less than `start`. |
+| `insert` | `string` | The replacement. May be empty. |
+
+**Returns** `undefined`. Afterwards the `text` property is the edited string. The edit is laid out by the next read
+or the next frame.
+
+The engine is told the exact range, so glyphs outside it keep their identity. Spans of formatted text follow the
+edit: inserted text takes the style of the grapheme before the range. In terms of span boundaries:
+
+| Span position relative to `[start, end)` | After the edit |
+| --- | --- |
+| Ends before `start` | Unchanged. |
+| Starts after `end` | Shifted by `insert.length - (end - start)`. |
+| Contains the whole range | Its start is unchanged and its end shifts by `insert.length - (end - start)`. |
+| Ends anywhere from `start` to `end` | Grows over the inserted text: its end becomes `start + insert.length`. |
+| Starts anywhere from `start` to `end` | Starts after the inserted text, at `start + insert.length`. |
+| Starts at `start` when `start` is `0` | Keeps starting at `0`: at the start of the text the inserted text takes the style of what follows. |
+| Left with no text | Removed. |
+
+**Throws**
+
+- `TextOffsetError` when either offset is invalid (`argument` is `'start'` or `'end'`). The text is unchanged.
+- [`GlyphInputError`](/reference/errors) when `insert` is not a string (`path` is `['insert']`), or when the edited
+  text is not acceptable input, for example longer than the root's `maxTextUnits`. The text is unchanged.
+- [`GlyphLayoutPhaseError`](/reference/errors) when called inside an `onLayout` callback.
+
+## TextPosition
+
+A caret position: an offset and a side.
+
+```ts
+import type { TextPosition } from '@pmndrs/glyph';
+
+const position: TextPosition = { offset: 12, affinity: 'upstream' };
+```
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `offset` | `number` | UTF-16 offset in the source text, on a grapheme boundary. |
+| `affinity` | [`TextAffinity`](#textaffinity) | Which grapheme the caret attaches to. |
+
+## TextAffinity
+
+```ts
+import type { TextAffinity } from '@pmndrs/glyph';
+
+const affinity: TextAffinity = 'downstream';
+```
+
+| Value | The caret attaches to |
+| --- | --- |
+| `'upstream'` | The grapheme that ends at the offset. |
+| `'downstream'` | The grapheme that starts at the offset. |
+
+The two sides of an offset are different places in two cases: at a soft wrap, where `'upstream'` is the end of the
+earlier line and `'downstream'` the start of the later one; and at a boundary between left-to-right and right-to-left
+text, where they are two x positions on one line. Everywhere else they are the same place.
+
+## TextCaret
+
+Where a caret is drawn. Returned by [`caret()`](#caret).
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `rect` | [`LayoutBox`](/reference/measurement#layoutbox) | Text-local rectangle of the caret. `width` is `0`; `height` is the height of the line box; `x`, `y` is its top. |
+| `line` | `number` | Index of the line the caret is on, from `0`. |
+| `level` | `number` | Bidirectional embedding level of the grapheme the caret attaches to, or of the paragraph on an empty line. Even is left to right, odd is right to left. |
+| `secondary` | `LayoutBox \| undefined` | At a direction boundary, the rectangle of the other affinity at the same offset: the second half of a split caret. `width` is `0`. `undefined` elsewhere, including at a soft wrap. |
+| `clipped` | `boolean` | `true` when the offset is in text the layout did not draw (after a line limit or an ellipsis). `rect` is then at the end of the last drawn line. |
+
+## TextMovement
+
+The result of [`move()`](#move).
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `position` | [`TextPosition`](#textposition) | The position after the step. |
+| `goalX` | `number` | Text-local x to pass to the next `'up'` or `'down'` move, so the caret keeps its column across a short line. |
+
+## TextRange
+
+A half-open range of UTF-16 offsets: `start` is included, `end` is not. Returned by [`boundary()`](#boundary).
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `start` | `number` | First offset of the range. |
+| `end` | `number` | Offset after the last unit of the range. |
+
+## TextDirection
+
+```ts
+import type { TextDirection } from '@pmndrs/glyph';
+
+const direction: TextDirection = 'forward';
+```
+
+| Value | Kind | Moves |
+| --- | --- | --- |
+| `'forward'` | Logical | Toward the end of the string. |
+| `'backward'` | Logical | Toward the start of the string. |
+| `'left'` | Visual | Toward smaller x, across runs of either direction. |
+| `'right'` | Visual | Toward larger x, across runs of either direction. |
+| `'up'` | Vertical | To the previous line. Requires the unit `'line'`. |
+| `'down'` | Vertical | To the next line. Requires the unit `'line'`. |
+
+## TextUnit
+
+```ts
+import type { TextUnit } from '@pmndrs/glyph';
+
+const unit: TextUnit = 'word';
+```
+
+| Value | Meaning |
+| --- | --- |
+| `'grapheme'` | One user-perceived character. |
+| `'word'` | One word, by the Unicode word-boundary rules. |
+| `'sentence'` | One sentence, by the Unicode sentence-boundary rules. |
+| `'line'` | One laid-out line: it depends on wrapping, so it changes when the width does. |
+
+## TextOffsetError
+
+Thrown when an offset cannot be used. It extends [`GlyphError`](/reference/errors) with the code `'invalid-offset'`.
+Nothing is snapped: the error carries the offset as given and the nearest valid boundaries.
+
+```ts
+import { TextOffsetError } from '@pmndrs/glyph';
+
+try {
+  text.caret({ offset: 3, affinity: 'downstream' });
+} catch (error) {
+  if (error instanceof TextOffsetError && error.reason === 'inside-grapheme') {
+    const snapped = error.before ?? error.after ?? 0;
+    text.caret({ offset: snapped, affinity: 'downstream' });
+  }
+}
+```
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `name` | `string` | `'TextOffsetError'`. |
+| `code` | `'invalid-offset'` | |
+| `method` | `TextOffsetMethod` | The method called: `'replace'`, `'caret'`, `'move'`, `'boundary'` or `'rangeRects'`. |
+| `argument` | `TextOffsetArgument` | The argument refused: `'offset'` for `caret`, `move` and `boundary`; `'start'` or `'end'` for `rangeRects` and `replace`. |
+| `offset` | `number` | The offset as given. |
+| `reason` | `TextOffsetReason` | Why it was refused; see below. |
+| `textLength` | `number` | Length of the source text in UTF-16 code units. |
+| `before` | `number \| undefined` | The nearest grapheme boundary at or before the offset. `undefined` when the offset is below `0`. |
+| `after` | `number \| undefined` | The nearest grapheme boundary at or after the offset. `undefined` when the offset is above the length of the text. |
+| `message` | `string` | For people, for example `replace(): end 3 is inside a grapheme; nearest boundaries are 1 and 5 (UTF-16 code units of the source text)`. Do not parse it. |
+
+| `reason` | Meaning |
+| --- | --- |
+| `'not-integer'` | The offset is not a whole number: a fraction, `NaN`, an infinity, or a value that is not a number. |
+| `'out-of-range'` | The offset is below `0` or above the length of the text. |
+| `'reversed'` | `end` is less than `start`. Reported for the `end` argument. |
+| `'inside-grapheme'` | The offset is inside a grapheme: between the units of a surrogate pair, inside an emoji or combining sequence, or between `\r` and `\n`. |
+
+The constructor takes one object with `method`, `argument`, `offset`, `reason`, `textLength`, `before` and `after`;
+applications do not normally construct it.
+
+## TextEditingQueries
+
+The interface a renderer integration receives from `GlyphTextController.editing`: `caret`, `hitTest`, `move`,
+`boundary` and `rangeRects` as above, and `beginReplace(start, end, insert)`, which validates a range and returns it
+as a `TextRange` so the integration can set the edited text. Applications use the six methods on a text instead. See
+[Core](/reference/core).
+
+## See also
+
+- [Place a caret and draw a selection](/guides/editing/caret-and-selection)
+- [Move the caret with the keyboard](/guides/editing/keyboard-movement)
+- [Edit text](/guides/editing/edit-text)
+- [Measurement](/reference/measurement)
+- [Errors](/reference/errors)

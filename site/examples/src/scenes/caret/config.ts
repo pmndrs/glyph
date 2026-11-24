@@ -1,6 +1,6 @@
 /** Basic Latin only: the checked-in Inter subset covers U+0020–007E. */
 export const PASSAGE =
-  'Click to place a caret. Drag to select: each rectangle is clipped to its line, and every offset is a cluster boundary, so a caret never lands inside a grapheme.';
+  'Click to place a caret. Drag to select: each rectangle stays on its line, and every offset is a grapheme boundary, so a caret never lands inside a grapheme.';
 export const WIDTH = 8.6;
 export const FONT_SIZE = 0.5;
 /** World y of the paragraph box's top edge; the box hangs down from it. */

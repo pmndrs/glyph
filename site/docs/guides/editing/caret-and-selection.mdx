@@ -1,0 +1,207 @@
+---
+title: Place a caret and draw a selection
+description: Turn a pointer into a caret position with hitTest, draw the caret from caret(), and cover a selected range with rangeRects, including wrapped, clipped and bidirectional text.
+nav: 400
+sourcecode: packages/glyph/src/text-editing.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="editing" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+This guide turns a pointer event into a caret position, draws the caret, and highlights a selected range. A text
+answers the geometry; the selection state and the meshes you draw are your application's. The methods are the same on
+a three.js `Text`, a TypeGPU text and a `Pixi3DText`; the examples use three.js.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="caret" role="application" tabindex="0" aria-label="A paragraph with a caret and a selection that follow the pointer" aspect="16 / 9" />
+
+Click in the scene to place the caret, and drag to select.
+
+## Know the coordinate space
+
+Every editing method takes and returns Text-local coordinates: the origin is the text object's origin, +X is right and
+**+Y is down**. The [anchor](/guides/layout/anchor-text) is already included, so a rectangle is where the text is
+drawn relative to the object, whatever `constraints.anchor` is.
+
+A three.js object's local space is +Y up. Negate `y` once when you pass a point in and once when you place a mesh from
+a rectangle.
+
+## Convert a pointer to a caret position
+
+Cast a ray from the pointer, find where it meets the plane the text lies on, convert that world point to the text's
+local space, and pass it to `hitTest`.
+
+```ts
+import type { TextPosition } from '@pmndrs/glyph';
+import { Raycaster, Vector2, Vector3 } from 'three/webgpu';
+
+const raycaster = new Raycaster();
+const ndc = new Vector2();
+const hit = new Vector3();
+
+function positionFromPointer(event: PointerEvent, canvas: HTMLCanvasElement): TextPosition {
+  const rect = canvas.getBoundingClientRect();
+  ndc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -(((event.clientY - rect.top) / rect.height) * 2 - 1));
+  raycaster.setFromCamera(ndc, camera);
+  const { origin, direction } = raycaster.ray;
+  hit.copy(origin).addScaledVector(direction, -origin.z / direction.z); // this text lies on the world plane z = 0
+  const local = text.worldToLocal(hit);
+  return text.hitTest({ x: local.x, y: -local.y });
+}
+```
+
+`hitTest` returns the caret stop nearest the point as a `TextPosition`: `{ offset, affinity }`. The point may be
+between two lines or outside the text; the answer is still the nearest stop. A point left of and above everything
+returns the start of the text, and a point right of and below everything returns the end.
+
+In React Three Fiber, a pointer handler on a mesh behind the text gives you the world point directly as `event.point`;
+see the [editable text field tutorial](/tutorials/editable-text-field).
+
+## Draw the caret
+
+Pass the position to `caret`. The rectangle has zero width and the height of the line box, so give the mesh a width
+of your own. Add the mesh as a child of the text and it follows the text's transform.
+
+```ts
+import type { TextPosition } from '@pmndrs/glyph';
+import { Mesh, MeshBasicNodeMaterial, PlaneGeometry } from 'three/webgpu';
+
+const caretMesh = new Mesh(new PlaneGeometry(1, 1), new MeshBasicNodeMaterial({ color: '#ffd166' }));
+text.add(caretMesh);
+
+function drawCaret(position: TextPosition): void {
+  const { rect } = text.caret(position);
+  caretMesh.scale.set(0.03, rect.height, 1);
+  caretMesh.position.set(rect.x, -(rect.y + rect.height / 2), 0.01);
+}
+```
+
+`caret` returns more than the rectangle:
+
+| Field | Meaning |
+| --- | --- |
+| `rect` | Where to draw: `x` and `y` of the top of the caret, `width` 0, `height` of the line box. |
+| `line` | Index of the line the caret is on, counted from 0. |
+| `level` | Bidirectional embedding level of the grapheme the caret attaches to. Odd levels run right to left. |
+| `secondary` | The other half of a split caret at a direction boundary, or `undefined`. See below. |
+| `clipped` | `true` when the offset is in text the layout did not draw. See below. |
+
+## Choose the affinity
+
+One offset can be two places. `affinity` says which one you mean:
+
+- `'downstream'`: the caret belongs to the grapheme that **starts** at the offset.
+- `'upstream'`: the caret belongs to the grapheme that **ends** at the offset.
+
+The two differ in exactly two situations.
+
+**At a soft wrap.** Where a line was wrapped, the offset is both the end of one line and the start of the next.
+`'upstream'` draws the caret at the end of the earlier line; `'downstream'` draws it at the start of the later one.
+
+```ts
+const wrap = text.measure().lines[0]!.textEnd; // the offset where the first line was wrapped
+
+text.caret({ offset: wrap, affinity: 'upstream' }).line; // 0: the end of the first line
+text.caret({ offset: wrap, affinity: 'downstream' }).line; // 1: the start of the second line
+```
+
+**At a direction boundary**, covered in the next section.
+
+Everywhere else the two affinities are one place, including on either side of a hard line break (`\n`). You rarely
+choose by hand: use the affinity that `hitTest` and `move` return. When you build a position yourself, use
+`'upstream'` after text you just inserted, so the caret stays with what was typed, and `'downstream'` otherwise.
+
+## Draw a split caret in bidirectional text
+
+Where left-to-right and right-to-left text meet, the two sides of one offset are two x positions on the same line.
+`caret().rect` is the side the affinity names, and `caret().secondary` is the other side.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="editing-bidi-caret" aria-label="Latin and Arabic text on one line with two carets for one offset" aspect="16 / 9" />
+
+In the top row, offset 4 is the start of the Arabic word. The gold caret is `rect` for `'downstream'`: the leading
+edge of the first Arabic letter, which is the right end of that word. The grey caret is `secondary`: where
+`'upstream'` would draw, after the space. The bottom row steps with `move(position, 'right', 'grapheme')`.
+
+```ts
+import type { LayoutBox, TextPosition } from '@pmndrs/glyph';
+
+function caretBars(position: TextPosition): readonly LayoutBox[] {
+  const caret = text.caret(position);
+  return caret.secondary === undefined ? [caret.rect] : [caret.rect, caret.secondary];
+}
+```
+
+`secondary` is `undefined` away from a direction boundary, and also at a soft wrap: the other side of a wrap is on
+another line and is not a split caret. Drawing both bars is optional; many editors draw only `rect`.
+
+## Handle text that was not drawn
+
+When a paragraph is truncated with `maxLines` or an ellipsis, some of the string has no place on screen. `caret`
+still answers for an offset in that text: it parks the rectangle at the end of the last drawn line and sets
+`clipped` to `true`.
+
+```ts
+import type { TextPosition } from '@pmndrs/glyph';
+
+/** Whether the caret of a position is in text that is on screen. */
+function caretIsDrawn(position: TextPosition): boolean {
+  return !text.caret(position).clipped;
+}
+```
+
+Hide the caret mesh, or scroll the hidden text into view, while this is `false`.
+
+`hitTest` only returns positions in drawn text.
+
+## Draw the selection
+
+Keep the selection as two positions: the anchor, where it started, and the focus, where the caret is.
+`rangeRects(start, end)` returns the rectangles that cover the half-open range `[start, end)`.
+
+```ts
+import type { TextPosition } from '@pmndrs/glyph';
+import { Group, Mesh, MeshBasicNodeMaterial, PlaneGeometry } from 'three/webgpu';
+
+const highlight = new Group();
+const highlightGeometry = new PlaneGeometry(1, 1);
+const highlightMaterial = new MeshBasicNodeMaterial({ color: '#264f78' });
+text.add(highlight);
+
+function drawSelection(anchor: TextPosition, focus: TextPosition): void {
+  highlight.clear();
+  const start = Math.min(anchor.offset, focus.offset);
+  const end = Math.max(anchor.offset, focus.offset);
+  for (const box of text.rangeRects(start, end)) {
+    const quad = new Mesh(highlightGeometry, highlightMaterial);
+    quad.scale.set(box.width, box.height, 1);
+    quad.position.set(box.x + box.width / 2, -(box.y + box.height / 2), -0.01);
+    highlight.add(quad);
+  }
+}
+```
+
+- The range must be ordered. A reversed range throws `TextOffsetError` with reason `'reversed'`; a user who drags
+  backwards has `focus.offset < anchor.offset`, so take the minimum and maximum.
+- An empty range returns an empty array.
+- There is one rectangle for each run of the range that is contiguous on its line. Left-to-right text gives one per
+  line; a range that crosses a direction boundary gives two or more on the same line.
+- Each rectangle is as tall as its line box, so rectangles on consecutive lines touch.
+
+## Check the result
+
+- Clicking places the caret between two letters, never inside one, and clicking past the end of a line places it at
+  the end of that line.
+- Dragging in either direction highlights the range between the press and the pointer.
+- Moving, rotating or scaling the text moves the caret and the highlight with it, because they are its children.
+
+Offsets must lie on grapheme boundaries. Positions that come from `hitTest`, `move` and `boundary` always do; an
+offset you compute yourself may not, and then every method throws `TextOffsetError`. See
+[Edit text](/guides/editing/edit-text#handle-an-invalid-offset).
+
+## See also
+
+- [Keyboard movement](/guides/editing/keyboard-movement)
+- [Edit text](/guides/editing/edit-text)
+- [Editing reference](/reference/editing)
+- [Bidirectional text](/guides/text/bidirectional-text)
+- [Coordinate spaces](/explanation/coordinate-spaces)

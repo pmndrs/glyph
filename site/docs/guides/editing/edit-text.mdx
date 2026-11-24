@@ -1,0 +1,214 @@
+---
+title: Edit text
+description: Insert, delete and replace ranges of a text with replace(), keep styled spans intact across an edit, stay on grapheme boundaries, and handle TextOffsetError.
+nav: 402
+sourcecode: packages/glyph/src/text-editing.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="editing" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+This guide applies edits to a text that is already on screen: typing, Backspace, Delete and replacing a selection.
+`replace(start, end, insert)` is the one editing call. It exists on a three.js `Text`, a TypeGPU text and a
+`Pixi3DText`.
+
+## Replace a range
+
+`replace` swaps the UTF-16 code units in the half-open range `[start, end)` for a string. The three kinds of edit are
+one call:
+
+```ts
+text.replace(5, 5, 'new '); // insert: an empty range
+text.replace(5, 9, ''); // delete: an empty string
+text.replace(5, 9, 'old '); // replace
+```
+
+Offsets count UTF-16 code units of `text.text`, the same units as `string.length` and `string.slice`.
+
+`replace` records the edit and returns. Layout runs when something next reads the text or when the next frame is
+drawn, so a query made straight after an edit answers for the edited text:
+
+```ts
+text.replace(0, 0, 'Hello ');
+const { rect } = text.caret({ offset: 6, affinity: 'upstream' }); // where the caret is after "Hello "
+```
+
+## Type at the caret
+
+Replace the selection, which is empty when there is only a caret, and put the caret after the inserted text.
+
+```ts
+import type { TextPosition } from '@pmndrs/glyph';
+
+interface Selection {
+  anchor: TextPosition;
+  focus: TextPosition;
+}
+
+function type(selection: Selection, insert: string): Selection {
+  const start = Math.min(selection.anchor.offset, selection.focus.offset);
+  const end = Math.max(selection.anchor.offset, selection.focus.offset);
+  text.replace(start, end, insert);
+  const caret: TextPosition = { offset: start + insert.length, affinity: 'upstream' };
+  return { anchor: caret, focus: caret };
+}
+```
+
+The range must be ordered, so take the minimum and maximum of the two offsets. `'upstream'` keeps the caret attached
+to the text that was just typed: if the insertion ends exactly where a line wraps, the caret stays at the end of that
+line.
+
+## Delete by grapheme
+
+A grapheme is one user-perceived character and can be several code units long: an emoji with a skin tone is four, a
+letter with a combining accent is two. Deleting `offset - 1` would cut one in half. Ask the text for the neighboring
+boundary instead:
+
+```ts
+import type { TextPosition } from '@pmndrs/glyph';
+
+function backspace(caret: TextPosition): TextPosition {
+  const previous = text.move(caret, 'backward', 'grapheme').position;
+  if (previous.offset === caret.offset) return caret; // already at the start
+  text.replace(previous.offset, caret.offset, '');
+  return { offset: previous.offset, affinity: 'upstream' };
+}
+
+function deleteForward(caret: TextPosition): TextPosition {
+  const next = text.move(caret, 'forward', 'grapheme').position;
+  if (next.offset !== caret.offset) text.replace(caret.offset, next.offset, '');
+  return caret;
+}
+```
+
+Use `'backward'` and `'forward'` here, not `'left'` and `'right'`: Backspace removes the character before the caret
+in the string, which in right-to-left text is to its right.
+
+For "delete word", pass `'word'` as the unit.
+
+## Keep spans styled across an edit
+
+When the text has styled spans (see [Rich text](/guides/text/rich-text)), `replace` moves them with the edit. The
+rule: inserted text takes the style of the grapheme before it.
+
+```ts
+import { span, txt } from '@pmndrs/glyph';
+
+const big = span({ fontSize: 0.8 });
+text.text = txt`ab${big`cd`}ef`; // "abcdef", with "cd" large
+
+text.replace(4, 4, 'X'); // "abcdXef": X follows "d", so it is large and the span grows
+text.replace(2, 2, 'Y'); // "abYcdXef": Y follows "b", so it is not; the span now starts after Y
+text.replace(3, 6, ''); // "abYef": a span left with no text is dropped
+```
+
+In detail:
+
+| Edit | What happens to a span |
+| --- | --- |
+| Insert at the end of a span | The span grows over the inserted text. |
+| Insert at the start of a span | The inserted text is outside it; the span starts after the insertion. |
+| Insert at offset 0 | There is no grapheme before, so the text takes the style of what follows: a span that starts at 0 grows. |
+| Replace a range that ends inside a span | The inserted text takes the style of the grapheme before the range. |
+| Delete all of a span's text | The span is removed. |
+| Edit entirely before a span | The span shifts by the change in length. |
+
+Typing at the end of a bold word therefore continues in bold, and typing just before it does not, which is what a
+word processor does.
+
+## Prefer `replace` over setting the whole string
+
+You can also assign a new string to `text.text`. The engine then has to compare the old and the new string to find
+what changed, and for some edits there is more than one answer: inserting an `a` into `aaa` could be anywhere. That
+matters when spans or per-glyph state depend on which characters are new.
+
+`replace` states the range. The engine is told exactly which units were replaced, the unchanged glyphs keep their
+identity, and spans follow the rule above. Use `replace` for every edit a user makes at a caret, and the `text`
+setter when the content is replaced wholesale.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="editing" aria-label="A line of text typed one character at a time" aspect="16 / 9" />
+
+This scene takes the wholesale route on purpose: each keystroke assigns the complete line again, colored runs
+included, and the text finds the difference itself.
+
+## Handle an invalid offset
+
+Every editing method requires offsets that are whole numbers, inside the text, in order, and on grapheme boundaries.
+Anything else throws `TextOffsetError`, and nothing is changed. The engine never moves an offset to the nearest valid
+place for you.
+
+```ts
+import { TextOffsetError } from '@pmndrs/glyph';
+
+try {
+  text.replace(1, 3, '');
+} catch (error) {
+  if (!(error instanceof TextOffsetError)) throw error;
+  console.log(error.method); // 'replace'
+  console.log(error.argument); // 'end': which argument was refused
+  console.log(error.offset); // 3: the value as given
+  console.log(error.reason); // 'inside-grapheme'
+  console.log(error.before, error.after); // 1 5: the nearest boundaries on each side
+  console.log(error.textLength); // the length of the text in UTF-16 code units
+}
+```
+
+| `reason` | Cause |
+| --- | --- |
+| `'not-integer'` | The offset is not a whole number (a fraction, `NaN`, or not a number at all). |
+| `'out-of-range'` | The offset is below 0 or above the length of the text. |
+| `'reversed'` | `end` is before `start`. |
+| `'inside-grapheme'` | The offset is inside a grapheme, such as between the two halves of a surrogate pair or between the two units of `\r\n`. |
+
+`before` and `after` are the nearest grapheme boundaries at or before, and at or after, the offset. One of them is
+`undefined` when the offset is outside the text on that side.
+
+### Snap an offset yourself
+
+Offsets from `hitTest`, `move` and `boundary` are always valid. An offset from somewhere else, such as a saved cursor
+or a search result computed on the string, may not be. Decide the direction and snap explicitly:
+
+```ts
+import { TextOffsetError } from '@pmndrs/glyph';
+
+function snapOffset(offset: number, toward: 'before' | 'after'): number {
+  try {
+    text.caret({ offset, affinity: 'downstream' });
+    return offset; // already a boundary
+  } catch (error) {
+    if (!(error instanceof TextOffsetError)) throw error;
+    const snapped = toward === 'before' ? (error.before ?? error.after) : (error.after ?? error.before);
+    return snapped ?? 0;
+  }
+}
+
+const start = snapOffset(3, 'before');
+const end = snapOffset(7, 'after');
+text.replace(start, end, '');
+```
+
+To delete a whole range, snap the start backward and the end forward, so the range grows to cover complete
+graphemes.
+
+## Other errors
+
+- `replace` throws `GlyphInputError` when `insert` is not a string, or when the resulting text is longer than the
+  root's `maxTextUnits`. The text keeps its previous value.
+- `replace` is a layout input. Called inside an `onLayout` callback it throws `GlyphLayoutPhaseError`; see
+  [React to layout](/guides/inspect/react-to-layout).
+
+## Check the result
+
+- After each edit, `text.text` is the string you expect and the caret rectangle read in the same handler is already
+  in the right place.
+- Backspace over an emoji removes all of it in one press.
+- Typing at the end of a styled run continues the style.
+
+## See also
+
+- [Place a caret and draw a selection](/guides/editing/caret-and-selection)
+- [Support input methods](/guides/editing/input-methods)
+- [Editing reference](/reference/editing)
+- [Rich text](/guides/text/rich-text)
+- [Handle errors](/guides/project/handle-errors)

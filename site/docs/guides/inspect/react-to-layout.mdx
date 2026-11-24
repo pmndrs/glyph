@@ -1,0 +1,209 @@
+---
+title: React to layout
+description: Run code whenever a text's measurement changes with onLayout, size and place other objects before the frame that draws the text, and know what a layout callback may write.
+nav: 423
+sourcecode: packages/glyph/src/three/text.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="inspect" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+This guide keeps other objects in step with a text's size: a panel that fits a label, a badge at the end of a line, a
+row of items spaced by their measured widths. `onLayout` is a callback that receives the text's measurement each time
+it changes, before the frame that draws the text. It exists on a three.js `Text`, as a prop in React, as an event in
+Vue, and on a TypeGPU text.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="inspect-on-layout" aria-label="The same changing text on a fixed panel and on a panel resized from onLayout" aspect="16 / 9" />
+
+Both sides show the same changing text. The panel on the left has a fixed size. The panel on the right is scaled
+inside `onLayout`, so it fits every message in the same frame the message appears.
+
+## Size a panel from the layout
+
+Assign a function to `text.onLayout`. It is called with the text and the same summary
+[`measure()`](/guides/inspect/measure-text) returns.
+
+```ts
+import { Mesh, MeshBasicNodeMaterial, PlaneGeometry } from 'three/webgpu';
+
+const padding = 0.25;
+const panel = new Mesh(new PlaneGeometry(1, 1), new MeshBasicNodeMaterial({ color: '#1c2536' }));
+text.add(panel); // a child of the text, so it shares the text's transform
+
+text.onLayout = (_text, layout) => {
+  panel.scale.set(layout.width + padding * 2, layout.height + padding * 2, 1);
+  // The paragraph box hangs down and to the right of the text's origin; layout is +Y down.
+  panel.position.set(
+    layout.anchorOffset.x + layout.width / 2,
+    -(layout.anchorOffset.y + layout.height / 2),
+    -0.01,
+  );
+};
+```
+
+From then on, any change to the text resizes the panel:
+
+```ts
+text.text = 'A longer label that wraps onto a second line';
+// No call to measure() and no waiting: the next frame runs onLayout, then draws both.
+```
+
+Set `text.onLayout = undefined` to stop.
+
+## In React
+
+Pass `onLayout` to `<Text>`. Write to other objects through refs, so they are right in the same frame. Setting React
+state from the callback also works, but the re-render it causes lands after that frame.
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+import { useRef } from 'react';
+import type { Mesh } from 'three/webgpu';
+
+export function Label({ children }: { children: string }) {
+  const panel = useRef<Mesh>(null);
+  return (
+    <group>
+      <mesh ref={panel} scale={[0, 0, 1]}>
+        <planeGeometry args={[1, 1]} />
+        <meshBasicNodeMaterial color="#1c2536" />
+      </mesh>
+      <Text
+        font={inter}
+        style={{ fontSize: 0.36, color: '#e7ecf6' }}
+        constraints={{ width: { mode: 'at-most', size: 4 } }}
+        onLayout={(_text, layout) => {
+          const mesh = panel.current;
+          if (mesh === null) return;
+          mesh.scale.set(layout.width + 0.5, layout.height + 0.5, 1);
+          mesh.position.set(layout.width / 2, -layout.height / 2, -0.01);
+        }}
+      >
+        {children}
+      </Text>
+    </group>
+  );
+}
+```
+
+## In Vue
+
+Listen for the `layout` event. The handler receives the three.js `Text` and the summary.
+
+```html
+<script setup lang="ts">
+import type { ParagraphLayoutSummary } from '@pmndrs/glyph';
+import { Text } from '@pmndrs/glyph/vue';
+import { shallowRef } from 'vue';
+import type { Mesh } from 'three/webgpu';
+
+const panel = shallowRef<Mesh>();
+
+function onLayout(_text: unknown, layout: ParagraphLayoutSummary): void {
+  panel.value?.scale.set(layout.width + 0.5, layout.height + 0.5, 1);
+  panel.value?.position.set(layout.width / 2, -layout.height / 2, -0.01);
+}
+</script>
+
+<template>
+  <TresMesh ref="panel">
+    <TresPlaneGeometry :args="[1, 1]" />
+    <TresMeshBasicMaterial color="#1c2536" />
+  </TresMesh>
+  <Text :font="font" :constraints="{ width: { mode: 'at-most', size: 4 } }" @layout="onLayout">
+    {{ label }}
+  </Text>
+</template>
+```
+
+A text only tracks its layout for a callback while something listens, so a `Text` without `@layout` pays nothing.
+
+## When it runs
+
+`onLayout` runs:
+
+- after the text is first laid out, and
+- each time its summary changes afterwards: a new string, font, style, layout or constraint that changes any
+  measured value.
+
+It does not run for a change of color, opacity, material, visibility or transform, because those do not change the
+layout.
+
+It runs **inside the frame**, after every text has been laid out and before anything is drawn: in three.js, during
+the `renderer.render(scene, camera)` call that draws the change. Objects you move in the callback are drawn in their
+new place in that same frame, including objects that come before the text in the scene graph. It also runs inside
+`glyph.prepare()` if you call that yourself.
+
+It never runs from a setter or from a read. Setting `text.text` only marks the text as changed, and calling
+`text.measure()` lays it out for you without notifying the callback; the callback still runs in the next frame.
+
+A callback assigned to a text that is already on screen is called once in the next frame with the current layout.
+
+## What a callback may write
+
+Inside `onLayout` you may read anything, including `measure()`, `glyphs()` and the editing methods of any text.
+
+You may write:
+
+- transforms of any object: `position`, `rotation`, `scale`, `matrix`;
+- `visible`;
+- a text's color and opacity and its `material`. `style` is replaced as a whole, so assign a style that differs from
+  the current one only in `color` or `opacity`.
+
+You may not write a **layout input** of any text, the one being reported or any other: `text`, `font`, `style`
+properties other than color and opacity, `layout`, `constraints`, `flow` or `rasterPixelRatio`, or call `replace`.
+Those would need another layout pass before the frame they were meant for. The setter throws
+`GlyphLayoutPhaseError` and the text keeps its value:
+
+```ts
+import { GlyphLayoutPhaseError } from '@pmndrs/glyph';
+
+text.onLayout = (label, layout) => {
+  try {
+    if (layout.lineCount > 2) label.style = { fontSize: 0.3 }; // a layout input
+  } catch (error) {
+    if (error instanceof GlyphLayoutPhaseError) {
+      console.log(error.code); // 'layout-phase'
+    }
+  }
+};
+```
+
+To change a layout input in response to a layout, such as shrinking the font until the text fits, do it outside the
+callback: record what you learned, and apply it before the next frame.
+
+```ts
+let shrink = false;
+
+text.onLayout = (_text, layout) => {
+  shrink = layout.overflowed;
+};
+
+function beforeRender(): void {
+  if (!shrink) return;
+  shrink = false;
+  text.style = { fontSize: 0.3 }; // outside the callback: allowed
+}
+```
+
+## If the callback throws
+
+An exception thrown by your callback does not stop the frame: the other callbacks still run and the frame is drawn.
+The exception is then thrown from the end of that `renderer.render()` call, once, as an error whose message names
+the text and whose `cause` is what you threw. In TypeGPU it is thrown by the root's next `draw()`. See
+[Handle errors](/guides/project/handle-errors).
+
+## Check the result
+
+- The panel fits the text on the very first frame; there is no frame where it has the wrong size.
+- Changing the string resizes the panel; changing only the color does not call the callback.
+- Writing `text.text` inside the callback throws `GlyphLayoutPhaseError`.
+
+## See also
+
+- [Measure text](/guides/inspect/measure-text)
+- [When layout runs](/explanation/when-layout-runs)
+- [Three Text reference](/reference/three-text)
+- [Errors reference](/reference/errors)
+- [Labels](/guides/scene/labels)

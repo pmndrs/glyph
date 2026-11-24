@@ -1,0 +1,141 @@
+---
+title: Support input methods
+description: Show an input method's composition inside a Glyph text with replace() and rangeRects(), position the candidate window, and commit or cancel the composition.
+nav: 403
+sourcecode: packages/glyph/src/text-editing.ts
+---
+
+An input method editor (IME) lets a user compose text that a keyboard cannot type directly, such as Chinese, Japanese
+or Korean. While composing, the provisional text is shown in place and underlined, and it changes with every
+keystroke until the user commits it. This guide shows the composition inside a Glyph text. It needs two methods:
+`replace` to show each update and `rangeRects` to underline it.
+
+Glyph draws on a canvas, and a canvas does not receive composition events. The usual arrangement is a hidden or
+transparent `textarea` (or a `contenteditable` element) that holds keyboard focus and receives the events; your code
+mirrors them into the text.
+
+## Track the composition as a range
+
+Keep one range: where the composition starts and where it currently ends. On every update, replace that range with
+the new provisional string and move its end.
+
+```ts
+import type { LayoutBox, TextRange } from '@pmndrs/glyph';
+
+let composition: TextRange | undefined;
+let caretOffset = 0;
+
+function compose(insert: string): readonly LayoutBox[] {
+  const range = composition ?? { start: caretOffset, end: caretOffset };
+  text.replace(range.start, range.end, insert);
+  composition = { start: range.start, end: range.start + insert.length };
+  caretOffset = composition.end;
+  return text.rangeRects(composition.start, composition.end); // what to underline
+}
+```
+
+The first update replaces an empty range at the caret, which inserts. Every later update replaces the previous
+provisional text. Because `replace` names the exact range, text around the composition keeps its glyphs and its
+styles, and the provisional text takes the style of the grapheme before it.
+
+The offsets `start` and `start + insert.length` are always valid: the start was a grapheme boundary before the
+composition began, and the end of an inserted string is one too.
+
+## Wire the DOM events
+
+```ts
+declare function drawUnderline(boxes: readonly { x: number; y: number; width: number; height: number }[]): void;
+
+const input = document.createElement('textarea');
+input.style.cssText = 'position: fixed; opacity: 0; pointer-events: none; width: 1px; height: 1px;';
+document.body.append(input);
+
+let composing: { start: number; end: number } | undefined;
+let caret = text.text.length;
+
+function update(insert: string): void {
+  const range = composing ?? { start: caret, end: caret };
+  text.replace(range.start, range.end, insert);
+  composing = { start: range.start, end: range.start + insert.length };
+  caret = composing.end;
+  drawUnderline(composing.start === composing.end ? [] : text.rangeRects(composing.start, composing.end));
+}
+
+input.addEventListener('compositionstart', () => {
+  composing = { start: caret, end: caret };
+});
+input.addEventListener('compositionupdate', (event) => {
+  update(event.data);
+});
+input.addEventListener('compositionend', (event) => {
+  update(event.data); // the committed text replaces the provisional text
+  composing = undefined;
+  drawUnderline([]);
+  input.value = '';
+});
+```
+
+- `compositionupdate` carries the whole provisional string each time, not a difference, which is why each update
+  replaces the whole range.
+- `compositionend` carries the committed string. When the user cancels, browsers end the composition with an empty
+  string, and replacing the range with `''` removes the provisional text.
+- While `composing` is set, ignore `keydown` for navigation and editing; the IME owns those keys. Check
+  `event.isComposing` in your key handler.
+
+`drawUnderline` is yours: draw each rectangle's bottom edge as a thin quad at
+`(box.x + box.width / 2, -(box.y + box.height))` in the text's local space. A composition that wraps or crosses a
+direction boundary returns several rectangles, and each needs its own underline.
+
+## Place the candidate window
+
+The IME shows its candidate list next to the focused DOM element. Move the hidden input to the caret so the list
+appears beside the composition. Take the caret rectangle, convert its Text-local corner to world space and project it
+to the screen:
+
+```ts
+import { Vector3 } from 'three/webgpu';
+
+const corner = new Vector3();
+
+function placeInput(input: HTMLElement, canvas: HTMLCanvasElement, offset: number): void {
+  const { rect } = text.caret({ offset, affinity: 'upstream' });
+  corner.set(rect.x, -(rect.y + rect.height), 0); // bottom of the caret; Text-local +Y is down
+  text.localToWorld(corner).project(camera);
+  const bounds = canvas.getBoundingClientRect();
+  input.style.left = `${bounds.left + ((corner.x + 1) / 2) * bounds.width}px`;
+  input.style.top = `${bounds.top + ((1 - corner.y) / 2) * bounds.height}px`;
+}
+```
+
+Call it after each update with the end of the composition.
+
+## Carets inside the composition
+
+Some IMEs let the user move within the provisional text. Every grapheme boundary inside the range is a valid caret
+position, including positions inside a ligature that the provisional text forms: a font that draws `ffi` as one
+glyph still has a caret stop after each letter.
+
+```ts
+function caretInComposition(start: number, index: number) {
+  return text.caret({ offset: start + index, affinity: 'upstream' }).rect;
+}
+```
+
+`index` must land on a grapheme boundary of the provisional string. Strings from an IME can contain surrogate pairs
+and combining sequences, so step with `text.move(position, 'forward', 'grapheme')` instead of adding 1.
+
+## Check the result
+
+- While composing, the provisional text appears at the caret with an underline, and the rest of the paragraph
+  re-wraps around it.
+- Each new keystroke replaces the provisional text; it does not append to it.
+- After committing, `text.text` equals the string you would get by inserting the committed text at the original
+  caret, and the paragraph lays out exactly as if that string had been set whole.
+- Cancelling the composition restores the text to what it was.
+
+## See also
+
+- [Edit text](/guides/editing/edit-text)
+- [Place a caret and draw a selection](/guides/editing/caret-and-selection)
+- [Editing reference](/reference/editing)
+- [Languages and scripts](/guides/text/languages-and-scripts)

@@ -1,0 +1,184 @@
+---
+title: Move the caret with the keyboard
+description: Map arrow keys, Home, End and word shortcuts to move(), keep the column across lines with goalX, and select words, sentences and lines with boundary().
+nav: 401
+sourcecode: packages/glyph/src/text-editing.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="editing" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+This guide maps keys to caret movement. `move` takes a position, a direction and a unit, and returns the position one
+step away; `boundary` returns the range of the unit that contains a position. Both work on a three.js `Text`, a
+TypeGPU text and a `Pixi3DText`.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="editing-movement" aria-label="Four paragraphs with a caret stepping by grapheme, by word, by sentence and by line" aspect="16 / 9" />
+
+Each paragraph repeats one kind of `move`. The dim marks are every position the walk visits, and the gold line of text
+is the call that produced the current one.
+
+## Move left and right
+
+Use the visual directions `'left'` and `'right'` for the arrow keys, with the unit `'grapheme'`. A grapheme is one
+user-perceived character: a letter with its combining accents, an emoji sequence or a flag is one step.
+
+```ts
+import type { TextPosition } from '@pmndrs/glyph';
+
+let position: TextPosition = { offset: 0, affinity: 'downstream' };
+
+function onArrow(key: 'ArrowLeft' | 'ArrowRight'): void {
+  position = text.move(position, key === 'ArrowLeft' ? 'left' : 'right', 'grapheme').position;
+}
+```
+
+At either end of the text `move` returns a position with the same offset. Compare offsets if you need to know that
+nothing moved.
+
+## Choose a direction
+
+| Direction | Moves | Typical key |
+| --- | --- | --- |
+| `'left'`, `'right'` | Visually along the line. In right-to-left text, `'right'` moves toward the start of the string. | Arrow left, arrow right |
+| `'forward'`, `'backward'` | Logically, toward the end or the start of the string, whatever the direction of the text. | Delete and Backspace ranges, word and line shortcuts |
+| `'up'`, `'down'` | To the previous or next line. The unit must be `'line'`. | Arrow up, arrow down |
+
+In left-to-right text `'right'` and `'forward'` agree. They differ in bidirectional text: `'right'` always increases
+x, so the offsets it returns run backward through a right-to-left word. Use the visual directions for arrow keys and
+the logical ones when you need a range of the string, such as "delete the previous character".
+
+## Choose a unit
+
+| Unit | `'forward'` stops at | `'backward'` stops at |
+| --- | --- | --- |
+| `'grapheme'` | The next grapheme boundary. | The previous grapheme boundary. |
+| `'word'` | The end of the current word, or of the next one when the position is between words. | The start of the current word, or of the previous one when the position is already at a start. |
+| `'sentence'` | The start of the next sentence, or the end of the text. | The start of the current sentence, or of the previous one when the position is already at a start. |
+| `'line'` | The end of the current line. | The start of the current line. |
+
+Spaces and punctuation between words are skipped. A move by `'line'` stays where it is once the position is already at
+that end of the line, which makes it the Home and End keys:
+
+```ts
+import type { TextPosition } from '@pmndrs/glyph';
+
+function onKey(position: TextPosition, key: string, wordModifier: boolean): TextPosition {
+  switch (key) {
+    case 'Home':
+      return text.move(position, 'backward', 'line').position;
+    case 'End':
+      return text.move(position, 'forward', 'line').position;
+    case 'ArrowLeft':
+      return text.move(position, wordModifier ? 'backward' : 'left', wordModifier ? 'word' : 'grapheme').position;
+    case 'ArrowRight':
+      return text.move(position, wordModifier ? 'forward' : 'right', wordModifier ? 'word' : 'grapheme').position;
+    default:
+      return position;
+  }
+}
+```
+
+Graphemes, words and sentences are the engine's own, following the Unicode segmentation rules. `Intl.Segmenter` is
+not consulted and may disagree; always take boundaries from the text.
+
+## Move up and down and keep the column
+
+Vertical movement goes to the line above or below, at the stop nearest an x. That x is the goal column: `move`
+returns it as `goalX`, and you pass it to the next vertical move.
+
+```ts
+import type { TextPosition } from '@pmndrs/glyph';
+
+let position: TextPosition = { offset: 0, affinity: 'downstream' };
+let goalX: number | undefined;
+
+function onVertical(key: 'ArrowUp' | 'ArrowDown'): void {
+  const moved = text.move(position, key === 'ArrowUp' ? 'up' : 'down', 'line', goalX);
+  position = moved.position;
+  goalX = moved.goalX; // keep it for the next vertical move
+}
+
+function onAnyOtherChange(next: TextPosition): void {
+  position = next;
+  goalX = undefined; // a click, a horizontal move or an edit starts a new column
+}
+```
+
+Without `goalX`, `move` uses the caret's own x. That is correct for the first vertical move, but after the caret
+crosses a short line its x is the end of that line, and the next move would continue from there. With `goalX`, the
+caret returns to its original column on the next long line.
+
+`goalX` is in Text-local units with the anchor included, like a caret rectangle's `x`. Moving `'up'` from the first
+line returns the start of the text, and `'down'` from the last line returns the end.
+
+`'up'` and `'down'` with any unit other than `'line'` throw `RangeError`.
+
+## Select a word, a sentence or a line
+
+`boundary(position, unit)` returns the half-open range `{ start, end }` of the unit that contains the position. Use
+it for double click, triple click and "select line".
+
+<glyph-proxy fit="cover" root="scenes" data-scene="editing-boundary" role="application" tabindex="0" aria-label="A paragraph that highlights the word, sentence and line under the pointer" aspect="16 / 9" />
+
+Move the pointer over the paragraph. The bright box is the word, the tint is the sentence and the faint band is the
+line that contain the position under the pointer.
+
+```ts
+import type { TextPosition, TextRange } from '@pmndrs/glyph';
+
+function onMultiClick(position: TextPosition, clicks: number): TextRange {
+  if (clicks === 2) return text.boundary(position, 'word');
+  if (clicks === 3) return text.boundary(position, 'sentence');
+  return { start: position.offset, end: position.offset };
+}
+
+const word = onMultiClick(text.hitTest({ x: 1.2, y: 0.3 }), 2);
+const rects = text.rangeRects(word.start, word.end);
+```
+
+What each unit returns:
+
+- `'grapheme'`: the single grapheme at the position.
+- `'word'`: the word, without the space after it. On a space or a punctuation mark, the range is that character.
+- `'sentence'`: the sentence, including the spaces that follow its final punctuation.
+- `'line'`: the laid-out line, including the line break character that ends it, if any.
+
+The affinity decides which neighbor "contains" a position that sits between two units. With `'downstream'` it is the
+unit that starts there; with `'upstream'` it is the unit that ends there. At the start of a word,
+`boundary({ offset, affinity: 'upstream' }, 'word')` is therefore the space before it. The position `hitTest`
+returns already has the affinity that matches where the pointer was.
+
+## Extend a selection with Shift
+
+`move` knows nothing about selections. To extend one, move the focus and leave the anchor:
+
+```ts
+import type { TextPosition } from '@pmndrs/glyph';
+
+interface Selection {
+  anchor: TextPosition;
+  focus: TextPosition;
+}
+
+function onShiftArrow(selection: Selection, key: 'ArrowLeft' | 'ArrowRight'): Selection {
+  const focus = text.move(selection.focus, key === 'ArrowLeft' ? 'left' : 'right', 'grapheme').position;
+  return { anchor: selection.anchor, focus };
+}
+```
+
+Without Shift, a horizontal arrow on a non-empty selection conventionally collapses it to that end instead of moving.
+
+## Check the result
+
+- Left and right step once per visible character, including over emoji and accented letters.
+- Down then up from a long line, across a short one, returns to the starting column.
+- Home and End go to the ends of the current visual line, not of the paragraph.
+- Double click selects one word without its trailing space.
+
+## See also
+
+- [Place a caret and draw a selection](/guides/editing/caret-and-selection)
+- [Edit text](/guides/editing/edit-text)
+- [Editing reference](/reference/editing)
+- [Build an editable text field](/tutorials/editable-text-field)

@@ -1,9 +1,10 @@
 import { Text, useSlug } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
-import type { slug } from '@pmndrs/glyph';
+import type { Font, slug } from '@pmndrs/glyph';
 import { useFrame } from '@react-three/fiber/webgpu';
 import { useRef, useState } from 'react';
 
+import { Caption } from '../../components/text';
 import { PLAYWRITE } from '../../fonts';
 import { ACCENT, PAPER } from '../../theme';
 
@@ -20,6 +21,20 @@ interface Boxes {
 
 export default function Measurement() {
   const script = useSlug(PLAYWRITE);
+  return (
+    <>
+      <Caption x={-4} y={-2.05} width={8}>
+        grey: contentWidth x contentHeight, the space layout reserved
+      </Caption>
+      <Caption x={-4} y={-2.45} width={8}>
+        gold: inkBounds, what the glyphs draw; the rule is firstBaseline
+      </Caption>
+      <Measured script={script} />
+    </>
+  );
+}
+
+function Measured({ script }: { readonly script: Font<typeof slug> }) {
   const ref = useRef<ThreeText<typeof slug>>(null);
   const [boxes, setBoxes] = useState<Boxes | undefined>(undefined);
 
@@ -39,8 +54,8 @@ export default function Measurement() {
 
   return (
     // Centred on the advance box once it is known; the box hangs down from the group's origin.
-    <group position={boxes === undefined ? [-1.6, 1, 0] : [-boxes.advance[2] / 2, boxes.advance[3] / 2 + 0.3, 0]}>
-      <Text ref={ref} font={script} style={{ fontSize: 1.5, color: PAPER }} layout={{ wrap: 'none' }}>
+    <group position={boxes === undefined ? [-2.6, 2, 0] : [-boxes.advance[2] / 2, boxes.advance[3] / 2 + 0.55, 0]}>
+      <Text ref={ref} font={script} style={{ fontSize: 2.4, color: PAPER }} layout={{ wrap: 'none' }}>
         glyph
       </Text>
       {boxes !== undefined && (

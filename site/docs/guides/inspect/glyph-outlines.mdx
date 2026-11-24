@@ -1,0 +1,196 @@
+---
+title: Read glyph outlines
+description: Bake a font with outlines, read each glyph's contours with outlineAt(), place them over the text, and turn them into paths or three.js shapes.
+nav: 422
+sourcecode: packages/glyph/src/glyph-outline.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="inspect" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+This guide reads the vector outline of each glyph in a laid-out text: the curves the font designer drew. Use
+outlines to extrude text into geometry, trace a stroke along a letter, build a physics shape or export SVG paths. The
+outlines come from the font, so the font has to be baked with them.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="inspect-outlines" aria-label="The word glyph with each letter's outline, curve ends and control points drawn over it" aspect="16 / 9" />
+
+The gold lines are the contours `outlineAt` returned for the five glyphs, drawn at the position and size layout gave
+each one. White squares are where curves meet and blue squares are control points.
+
+## Bake the font with outlines
+
+A baked font carries outlines only when the bake asked for them. With the CLI, add `--outlines`:
+
+```sh
+npx glyph bake --input Inter-Regular.ttf --output public/fonts/inter.font.glb --msdf --outlines
+```
+
+From Node, set `outlines: true` on the `font` option of `bakeFont`:
+
+```ts
+import { bakeFont } from '@pmndrs/glyph/bake';
+import { msdfBaker } from '@pmndrs/glyph/bakers/msdf';
+
+await bakeFont({
+  input: 'Inter-Regular.ttf',
+  output: 'public/fonts/inter.font.glb',
+  font: { fontFaceIndex: 0, outlines: true },
+  rasters: [{ baker: msdfBaker, packaging: { artifact: 'embedded' }, options: undefined }],
+});
+```
+
+Outlines are independent of the raster format: the same outlines are read from a Bitmap, MSDF or Slug font. They add
+to the file size, so bake them only into fonts you read outlines from, and consider a
+[subset](/guides/fonts/subset-coverage). A font baked in the browser at
+[runtime](/guides/fonts/runtime-baking) has no outlines.
+
+Load the font as usual; nothing changes at the call site.
+
+## Read the contours of a glyph
+
+Take one `glyphs()` copy and call `outlineAt(index)` with a glyph index.
+
+```ts
+const layout = text.glyphs();
+
+for (let index = 0; index < layout.glyphCount; index += 1) {
+  const contours = layout.outlineAt(index);
+  console.log(index, contours.length);
+}
+```
+
+The result is an array of contours (`GlyphOutlineContour[]`). A contour is a closed loop made of curves; the letter
+`o` has two, an outer and an inner one. Each curve is a tuple:
+
+```ts
+import type { GlyphOutlineCurve } from '@pmndrs/glyph';
+
+declare const curve: GlyphOutlineCurve;
+const [x0, y0, cx, cy, x1, y1, isLine] = curve;
+```
+
+- `(x0, y0)` is the start, `(x1, y1)` the end and `(cx, cy)` the control point of a quadratic Bezier curve.
+- When `isLine` is `true` the segment is straight, and its control point is the midpoint, so code that treats every
+  segment as a curve still draws it correctly.
+- Each curve starts where the previous one ended, and the last curve of a contour ends where the first started.
+
+A glyph with no shape, such as a space, returns an empty array. Contours keep the font's winding direction: fill them
+with the nonzero rule to get the letter with its holes. Fonts with cubic outlines (CFF, most `.otf` files) are
+converted, four quadratic curves for each cubic.
+
+## Place an outline over the text
+
+Outline coordinates are in **em units**, relative to the glyph's pen position on the baseline, with **y down**. An em
+unit is the font size: multiply by the glyph's font size and add the pen position to get paragraph space.
+
+```ts
+import type { GlyphLayoutInspection } from '@pmndrs/glyph';
+
+/** A point of glyph `index`'s outline, as a position in the text's local space (+Y up). */
+function placeOutlinePoint(layout: GlyphLayoutInspection, index: number, x: number, y: number) {
+  const size = layout.glyphFontSizes[index]!;
+  const paragraphX = layout.x[index]! + x * size;
+  const paragraphY = layout.y[index]! + y * size;
+  return { x: paragraphX + layout.anchorOffset.x, y: -(paragraphY + layout.anchorOffset.y) };
+}
+```
+
+`layout.x` and `layout.y` are in paragraph space, +Y down and without the anchor, so the function adds
+`anchorOffset` and negates `y` for three.js.
+
+## Build a three.js shape
+
+`ShapePath` accepts quadratic curves directly. Flip `y` while adding them, then let three.js sort the outer contours
+from the holes.
+
+```ts
+import { Mesh, MeshBasicNodeMaterial, ShapeGeometry, ShapePath } from 'three/webgpu';
+
+const layout = text.glyphs();
+const path = new ShapePath();
+
+for (let index = 0; index < layout.glyphCount; index += 1) {
+  const size = layout.glyphFontSizes[index]!;
+  const left = layout.x[index]! + layout.anchorOffset.x;
+  const top = layout.y[index]! + layout.anchorOffset.y;
+  const px = (x: number) => left + x * size;
+  const py = (y: number) => -(top + y * size);
+
+  for (const contour of layout.outlineAt(index)) {
+    const first = contour[0];
+    if (first === undefined) continue;
+    path.moveTo(px(first[0]), py(first[1]));
+    for (const [, , cx, cy, x1, y1, isLine] of contour) {
+      if (isLine) path.lineTo(px(x1), py(y1));
+      else path.quadraticCurveTo(px(cx), py(cy), px(x1), py(y1));
+    }
+  }
+}
+
+const filled = new Mesh(new ShapeGeometry(path.toShapes()), new MeshBasicNodeMaterial({ color: '#ffd166' }));
+text.add(filled); // a child of the text, so it shares the text's transform
+```
+
+`toShapes()` works out which contours are holes, so the counters of letters such as `g` and `p` stay open. Swap
+`ShapeGeometry` for `ExtrudeGeometry` to give the letters depth.
+
+## Cache shapes by glyph
+
+Two glyphs with the same font and the same glyph id have the same outline. Key a cache on that pair and build each
+shape once, however often the letter appears:
+
+```ts
+import type { GlyphOutlineContour } from '@pmndrs/glyph';
+
+const layout = text.glyphs();
+const shapes = new Map<string, readonly GlyphOutlineContour[]>();
+
+for (let index = 0; index < layout.glyphCount; index += 1) {
+  const key = `${layout.fontHandles[layout.glyphFontSlots[index]!]!}:${layout.glyphIds[index]!}`;
+  if (!shapes.has(key)) shapes.set(key, layout.outlineAt(index));
+}
+```
+
+The contours are frozen plain data. They stay readable after the text, its font or its handle is disposed.
+
+## Read outlines without copying the layout
+
+Inside [`readGlyphs`](/guides/inspect/read-glyphs), `outlineAt(index)` returns the outline as raw typed arrays, a
+`GlyphOutlineView`, instead of tuples:
+
+```ts
+const pointCount = text.readGlyphs((glyphs) => {
+  let points = 0;
+  for (let index = 0; index < glyphs.glyphCount; index += 1) {
+    points += glyphs.outlineAt(index).points.length / 2;
+  }
+  return points;
+});
+```
+
+The arrays are views that are valid only inside the callback. Copy them (`points.slice()`) to keep them. See the
+[measurement reference](/reference/measurement#glyphoutlineview) for the layout of `points`, `contourEnds` and
+`segmentLines`.
+
+## Errors
+
+| Thrown | When |
+| --- | --- |
+| `TypeError` | The glyph's font was baked without outlines. Bake it again with `--outlines`. |
+| `RangeError` | The index is not a whole number from `0` to `glyphCount - 1`. |
+
+In a text that uses a [fallback stack](/guides/fonts/fallback-stacks), each glyph's outline comes from the font that
+shaped it, so every font in the stack needs outlines.
+
+## Check the result
+
+- `outlineAt` returns at least one contour for a visible letter, and two for `o`, `p` or `g`.
+- Lines drawn through the placed points trace the edge of the rendered glyph.
+
+## See also
+
+- [Read glyph positions](/guides/inspect/read-glyphs)
+- [Bake fonts](/guides/fonts/bake-fonts)
+- [Measurement reference](/reference/measurement)
+- [Bake reference](/reference/bake)

@@ -1,0 +1,454 @@
+---
+title: Build an editable text field
+description: A step-by-step tutorial that builds a single-paragraph text field in React Three Fiber with a caret, drag selection, arrow keys, typing and word selection.
+nav: 22
+sourcecode: packages/glyph/src/text-editing.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="editing" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+In this tutorial you build a text field inside a React Three Fiber canvas: one paragraph you can click, select, move
+through with the arrow keys and type into. Glyph answers where things are and applies each edit; the selection, the
+caret and the key handling are yours, and you write them here.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="editing-field" role="textbox" tabindex="0" aria-label="An editable paragraph: click to place the caret, drag to select, type to edit" aspect="16 / 9" />
+
+This is the finished field. Click in it and type; drag to select; double click a word; use the arrow keys.
+
+## Before you start
+
+You need the project from [Your first text in React](/tutorials/first-text-react): a Vite app with
+`@pmndrs/glyph`, `three`, `@react-three/fiber` and a baked font at `public/fonts/inter.font.glb`.
+
+Three facts hold for every step:
+
+- A caret position is a `TextPosition`: an `offset` into the string, counted in UTF-16 code units (the units of
+  JavaScript's `string.length`), and an `affinity` that says which side of the offset the caret belongs to.
+- The editing methods use Text-local coordinates with +X right and **+Y down**, measured from the text object's
+  origin. A three.js object is +Y up, so every `y` is negated once on the way in and once on the way out.
+- Every method lays the text out first if it has changed. An answer is never stale and you never wait for a frame.
+
+Each step explains one part of the component and shows its code. The complete file is at the end of the page; if a
+step leaves you unsure where a piece goes, look there.
+
+## 1. Draw the paragraph on a panel
+
+Replace `src/App.tsx` with a field that holds its string in React state and draws it on a dark panel. The panel is an
+ordinary mesh just behind the text. It is the field's background, and from the next step it is also the surface that
+receives the pointer.
+
+```tsx
+import type { msdf } from '@pmndrs/glyph';
+import { Text, useMsdf } from '@pmndrs/glyph/react';
+import type { Text as GlyphText } from '@pmndrs/glyph/three';
+import { Canvas } from '@react-three/fiber/webgpu';
+import { Suspense, useRef, useState } from 'react';
+
+const WIDTH = 6;
+
+function Field() {
+  const font = useMsdf('/fonts/inter.font.glb');
+  const field = useRef<GlyphText<typeof msdf>>(null);
+  const [value] = useState('Click here and type. Drag to select, double click for a word.');
+
+  return (
+    <group position={[-WIDTH / 2, 1, 0]}>
+      <mesh position={[WIDTH / 2, -1, -0.01]}>
+        <planeGeometry args={[WIDTH + 0.6, 2.6]} />
+        <meshBasicNodeMaterial color="#12151c" />
+      </mesh>
+      <Text
+        ref={field}
+        font={font}
+        style={{ fontSize: 0.4, color: '#e7ecf6', lineHeight: 1.4 }}
+        layout={{ wrap: 'word' }}
+        constraints={{ width: { mode: 'exact', size: WIDTH } }}
+      >
+        {value}
+      </Text>
+    </group>
+  );
+}
+
+export function App() {
+  return (
+    <Canvas camera={{ position: [0, 0, 8], fov: 50 }}>
+      <color attach="background" args={['#07080b']} />
+      <Suspense fallback={null}>
+        <Field />
+      </Suspense>
+    </Canvas>
+  );
+}
+```
+
+The `ref` gives you the three.js `Text` object, which has the editing methods. The group's origin is the paragraph's
+top-left corner: the paragraph hangs down and to the right from it.
+
+**You should see** two lines of text, wrapped at 6 world units, on a dark rectangle.
+
+## 2. Turn a pointer into a caret position
+
+React Three Fiber reports a pointer hit on a mesh as a world-space point, `event.point`. Convert it to the text's
+local space with `worldToLocal`, negate `y`, and ask the text for the nearest caret stop with `hitTest`.
+
+```tsx
+import type { TextPosition } from '@pmndrs/glyph';
+import type { ThreeEvent } from '@react-three/fiber/webgpu';
+
+function positionAt(event: ThreeEvent<PointerEvent>): TextPosition {
+  const local = text.worldToLocal(event.point.clone());
+  return text.hitTest({ x: local.x, y: -local.y }); // Text-local +Y is down
+}
+```
+
+Here `text` stands for `field.current`. `hitTest` accepts any point: one between two lines, or outside the text
+altogether, still returns the nearest stop.
+
+Add `positionAt` inside `Field`, add an `onPointerDown` handler to the panel mesh that calls it, and log the result
+for now.
+
+**You should see**, in the console, an object such as `{ offset: 11, affinity: 'downstream' }` for each click, with
+offsets that grow as you click further along the text.
+
+## 3. Draw the caret
+
+`caret(position)` returns where to draw the caret. Its `rect` has zero width and the height of the line it is on, in
+the same Text-local space.
+
+```ts
+import type { TextPosition } from '@pmndrs/glyph';
+
+function caretCenter(position: TextPosition) {
+  const { rect } = text.caret(position);
+  return { x: rect.x, y: -(rect.y + rect.height / 2), height: rect.height }; // three.js +Y is up
+}
+```
+
+Keep the selection in a ref and what you draw in state:
+
+- `selection` holds two positions, `anchor` and `focus`. They are equal while nothing is selected; the caret is always
+  at `focus`.
+- `view` holds the caret rectangle (and, from the next step, the selection rectangles).
+- `show(next)` stores a selection, reads its geometry from the text and sets `view`.
+
+Then draw a thin mesh at the caret rectangle as a sibling of the text, inside the same group, so it shares the
+text's transform. Call `show({ anchor: position, focus: position })` from `onPointerDown`. A `useFrame` callback that
+toggles the mesh's `visible` makes it blink. To show a caret before the first click, set `view` once in an effect
+after mount, from `text.caret({ offset: 0, affinity: 'downstream' }).rect`.
+
+**You should see** a blinking gold caret at the start of the text, and it jumps to wherever you click. Click past the
+end of a line and it lands at the end of that line.
+
+## 4. Select by dragging
+
+While the button is held, the anchor stays where the press happened and the focus follows the pointer.
+`rangeRects(start, end)` returns the rectangles that cover a range of the text: one for each line the range touches.
+
+```ts
+import type { LayoutBox, TextPosition } from '@pmndrs/glyph';
+
+function selectionRects(anchor: TextPosition, focus: TextPosition): readonly LayoutBox[] {
+  const start = Math.min(anchor.offset, focus.offset);
+  const end = Math.max(anchor.offset, focus.offset);
+  return start === end ? [] : text.rangeRects(start, end);
+}
+```
+
+`rangeRects` refuses a reversed range, so order the two offsets yourself; dragging backwards is then the same code.
+
+Add an `onPointerMove` handler to the panel. When `event.buttons & 1` is set, call
+`show({ anchor: selection.current.anchor, focus: positionAt(event) })`. Store the rectangles in `view` and draw one
+mesh for each, centered at `(rect.x + rect.width / 2, -(rect.y + rect.height / 2))`, between the panel and the text.
+
+**You should see** a blue highlight that follows the pointer while you drag, in either direction and across both
+lines, with the caret at the end you are dragging.
+
+## 5. Move with the arrow keys
+
+`move(position, direction, unit)` returns the position one step away. For the left and right arrows the direction is
+`'left'` or `'right'` and the unit is `'grapheme'`: one user-perceived character, so an emoji or an accented letter is
+one step.
+
+Up and down move by `'line'`. They also take and return a `goalX`: the x the caret is trying to keep. Pass the
+`goalX` of the previous vertical move to the next one and the caret returns to its column after crossing a short
+line. Any other change to the selection forgets it.
+
+```ts
+import type { TextPosition } from '@pmndrs/glyph';
+
+function moveCaret(focus: TextPosition, key: string, goalX: number | undefined) {
+  if (key === 'ArrowLeft' || key === 'ArrowRight') {
+    const position = text.move(focus, key === 'ArrowLeft' ? 'left' : 'right', 'grapheme').position;
+    return { position, goalX: undefined };
+  }
+  const moved = text.move(focus, key === 'ArrowUp' ? 'up' : 'down', 'line', goalX);
+  return { position: moved.position, goalX: moved.goalX };
+}
+```
+
+Listen for `keydown` on `window` in an effect, and call `show` with the new position as both anchor and focus. When
+there is a selection, the left and right arrows should collapse it to that end instead of moving.
+
+**You should see** the caret step one character at a time with the left and right arrows and stop at both ends of the
+text. Put it at the end of the first line and press down, then up: it returns to the same place.
+
+## 6. Type and delete
+
+`replace(start, end, insert)` replaces a range of the text with a string. Typing replaces the selection with the
+typed character; with no selection the range is empty, which is an insertion. The caret goes after the inserted text.
+
+```ts
+import type { TextPosition } from '@pmndrs/glyph';
+
+function replaceRange(from: TextPosition, to: TextPosition, insert: string): TextPosition {
+  const start = Math.min(from.offset, to.offset);
+  const end = Math.max(from.offset, to.offset);
+  text.replace(start, end, insert);
+  return { offset: start + insert.length, affinity: 'upstream' };
+}
+```
+
+Backspace replaces the selection with the empty string. With no selection it deletes back to the previous grapheme
+boundary, which `move(focus, 'backward', 'grapheme')` finds; deleting one UTF-16 unit instead would cut an emoji in
+half, and `replace` throws for an offset inside a grapheme.
+
+`replace` changes the three.js object, so React's copy of the string is now out of date. Call `setValue(text.text)`
+in `show`; the next render then passes the same string the object already holds, which changes nothing.
+
+**You should see** each key you type appear at the caret, the lines re-wrap as the text grows, a selection replaced
+by what you type, and Backspace remove one character or the whole selection. The caret is in the right place
+immediately after each key, because `caret` laid out the edited text before it answered.
+
+## 7. Select a word on double click
+
+`boundary(position, unit)` returns the range of the grapheme, word, sentence or line that contains a position.
+
+```ts
+import type { TextPosition } from '@pmndrs/glyph';
+
+function wordAt(position: TextPosition) {
+  const word = text.boundary(position, 'word');
+  return {
+    anchor: { offset: word.start, affinity: 'downstream' },
+    focus: { offset: word.end, affinity: 'upstream' },
+  } as const;
+}
+```
+
+In `onPointerDown`, remember the time and offset of the last press. A second press within 400 ms on the same offset
+is a double click: show `wordAt(position)` instead of a collapsed caret.
+
+**You should see** a double click highlight exactly one word, without the space after it. Typing then replaces the
+word.
+
+## The complete component
+
+```tsx
+import type { LayoutBox, TextPosition, msdf } from '@pmndrs/glyph';
+import { Text, useMsdf } from '@pmndrs/glyph/react';
+import type { Text as GlyphText } from '@pmndrs/glyph/three';
+import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber/webgpu';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import type { Mesh } from 'three/webgpu';
+
+const WIDTH = 6;
+const START: TextPosition = { offset: 0, affinity: 'downstream' };
+
+/** The application owns the selection: where it started, where the caret is, and the column to keep. */
+interface Selection {
+  readonly anchor: TextPosition;
+  readonly focus: TextPosition;
+  readonly goalX?: number;
+}
+
+/** What is drawn for a selection, in Text-local coordinates (+X right, +Y down). */
+interface View {
+  readonly caret: LayoutBox;
+  readonly rects: readonly LayoutBox[];
+}
+
+function Field() {
+  const font = useMsdf('/fonts/inter.font.glb');
+  const field = useRef<GlyphText<typeof msdf>>(null);
+  const caret = useRef<Mesh>(null);
+  const selection = useRef<Selection>({ anchor: START, focus: START });
+  const lastPress = useRef({ time: 0, offset: -1 });
+  const [value, setValue] = useState('Click here and type. Drag to select, double click for a word.');
+  const [view, setView] = useState<View>();
+
+  // Stores a selection and reads back what to draw for it.
+  const show = (next: Selection) => {
+    const text = field.current;
+    if (text === null) return;
+    selection.current = next;
+    const start = Math.min(next.anchor.offset, next.focus.offset);
+    const end = Math.max(next.anchor.offset, next.focus.offset);
+    setValue(text.text);
+    setView({
+      caret: text.caret(next.focus).rect,
+      rects: start === end ? [] : text.rangeRects(start, end),
+    });
+  };
+
+  // Replaces the range between two positions with `insert` and puts the caret after it.
+  const replace = (from: TextPosition, to: TextPosition, insert: string) => {
+    const text = field.current;
+    if (text === null) return;
+    const start = Math.min(from.offset, to.offset);
+    const end = Math.max(from.offset, to.offset);
+    text.replace(start, end, insert);
+    const position: TextPosition = { offset: start + insert.length, affinity: 'upstream' };
+    show({ anchor: position, focus: position });
+  };
+
+  // A pointer hit on the panel, as the nearest caret stop.
+  const positionAt = (event: ThreeEvent<PointerEvent>): TextPosition | undefined => {
+    const text = field.current;
+    if (text === null) return undefined;
+    const local = text.worldToLocal(event.point.clone());
+    return text.hitTest({ x: local.x, y: -local.y }); // Text-local +Y is down
+  };
+
+  const onPointerDown = (event: ThreeEvent<PointerEvent>) => {
+    const text = field.current;
+    const position = positionAt(event);
+    if (text === null || position === undefined) return;
+    const now = performance.now();
+    const again = now - lastPress.current.time < 400 && lastPress.current.offset === position.offset;
+    lastPress.current = { time: now, offset: position.offset };
+    if (!again) {
+      show({ anchor: position, focus: position });
+      return;
+    }
+    // A second press on the same stop: select the word that contains it.
+    const word = text.boundary(position, 'word');
+    show({
+      anchor: { offset: word.start, affinity: 'downstream' },
+      focus: { offset: word.end, affinity: 'upstream' },
+    });
+  };
+
+  const onPointerMove = (event: ThreeEvent<PointerEvent>) => {
+    if ((event.buttons & 1) === 0) return; // only while the button is held
+    const position = positionAt(event);
+    if (position !== undefined) show({ anchor: selection.current.anchor, focus: position });
+  };
+
+  const onKeyDown = (event: KeyboardEvent) => {
+    const text = field.current;
+    if (text === null || event.metaKey || event.ctrlKey || event.altKey) return;
+    const { anchor, focus, goalX } = selection.current;
+    const selected = anchor.offset !== focus.offset;
+    const { key } = event;
+    if (key === 'ArrowLeft' || key === 'ArrowRight') {
+      // With a selection, the arrow collapses it to that end (this field holds left-to-right text).
+      const position: TextPosition = selected
+        ? {
+            offset: key === 'ArrowLeft' ? Math.min(anchor.offset, focus.offset) : Math.max(anchor.offset, focus.offset),
+            affinity: 'downstream',
+          }
+        : text.move(focus, key === 'ArrowLeft' ? 'left' : 'right', 'grapheme').position;
+      show({ anchor: position, focus: position });
+    } else if (key === 'ArrowUp' || key === 'ArrowDown') {
+      const moved = text.move(focus, key === 'ArrowUp' ? 'up' : 'down', 'line', goalX);
+      show({ anchor: moved.position, focus: moved.position, goalX: moved.goalX });
+    } else if (key === 'Backspace') {
+      // Without a selection, delete back to the previous grapheme boundary; at the start there is none.
+      const from = selected ? anchor : text.move(focus, 'backward', 'grapheme').position;
+      if (from.offset !== focus.offset) replace(from, focus, '');
+    } else if (key.length === 1) {
+      replace(anchor, focus, key);
+    } else {
+      return;
+    }
+    event.preventDefault();
+  };
+
+  // One listener for the life of the component; it always calls the latest handler.
+  const latestKeyDown = useRef(onKeyDown);
+  useEffect(() => {
+    latestKeyDown.current = onKeyDown;
+  });
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => latestKeyDown.current(event);
+    window.addEventListener('keydown', listener);
+    return () => window.removeEventListener('keydown', listener);
+  }, []);
+
+  // The first caret, before any input: a query prepares the text, so no frame has to pass first.
+  useEffect(() => {
+    const text = field.current;
+    if (text === null) return;
+    setView({ caret: text.caret(START).rect, rects: [] });
+  }, []);
+
+  useFrame(() => {
+    if (caret.current !== null) caret.current.visible = Math.floor(performance.now() / 500) % 2 === 0;
+  });
+
+  // The first mesh is the panel: the field's background and the surface that receives the pointer.
+  return (
+    <group position={[-WIDTH / 2, 1, 0]}>
+      <mesh position={[WIDTH / 2, -1, -0.01]} onPointerDown={onPointerDown} onPointerMove={onPointerMove}>
+        <planeGeometry args={[WIDTH + 0.6, 2.6]} />
+        <meshBasicNodeMaterial color="#12151c" />
+      </mesh>
+      {view?.rects.map((rect) => (
+        <mesh key={`${rect.x},${rect.y}`} position={[rect.x + rect.width / 2, -(rect.y + rect.height / 2), -0.005]}>
+          <planeGeometry args={[rect.width, rect.height]} />
+          <meshBasicNodeMaterial color="#264f78" />
+        </mesh>
+      ))}
+      <Text
+        ref={field}
+        font={font}
+        style={{ fontSize: 0.4, color: '#e7ecf6', lineHeight: 1.4 }}
+        layout={{ wrap: 'word' }}
+        constraints={{ width: { mode: 'exact', size: WIDTH } }}
+      >
+        {value}
+      </Text>
+      {view !== undefined && (
+        <mesh ref={caret} position={[view.caret.x, -(view.caret.y + view.caret.height / 2), 0.005]}>
+          <planeGeometry args={[0.03, view.caret.height]} />
+          <meshBasicNodeMaterial color="#ffd166" />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
+export function App() {
+  return (
+    <Canvas camera={{ position: [0, 0, 8], fov: 50 }}>
+      <color attach="background" args={['#07080b']} />
+      <Suspense fallback={null}>
+        <Field />
+      </Suspense>
+    </Canvas>
+  );
+}
+```
+
+The live field at the top of this page is this component with four more keys (Home, End, Delete and Enter), fed by
+the documentation page's input instead of `window` events.
+
+## What you built
+
+- `hitTest` turned a pointer into a position, and `caret` turned a position into a rectangle.
+- `rangeRects` drew the selection; `move` and `boundary` moved through the text by grapheme, line and word.
+- `replace` applied each edit exactly where you said, and every query after it answered for the edited text.
+
+A production field also needs clipboard, undo, input-method composition and focus handling. Those are application
+code over the same six methods.
+
+## See also
+
+- [Caret and selection](/guides/editing/caret-and-selection)
+- [Keyboard movement](/guides/editing/keyboard-movement)
+- [Edit text](/guides/editing/edit-text)
+- [Support input methods](/guides/editing/input-methods)
+- [Editing reference](/reference/editing)

@@ -1,0 +1,175 @@
+---
+title: Read glyph positions
+description: Read every glyph's position, advance, ink box, cluster and font from a text with glyphs(), readGlyphs() and measureGlyphs(), and choose between them.
+nav: 421
+sourcecode: packages/glyph/src/layout.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="inspect" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+This guide reads the per-glyph result of layout: where each glyph is, how far it advances, what it draws and which
+characters it came from. Use it for custom decoration, per-glyph hit areas, debugging or exporting a layout. For
+carets and selections use the [editing methods](/guides/editing/caret-and-selection) instead; they handle ligatures
+and bidirectional text for you.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="inspect-glyphs" aria-label="A word with an advance box and an ink box drawn around each glyph" aspect="16 / 9" />
+
+Each grey box is the space layout reserved for one glyph, each gold box is what the glyph draws, and each dot is a
+pen position. All of it is read from `glyphs()`.
+
+## Choose a method
+
+| Method | Returns | Use it when |
+| --- | --- | --- |
+| `text.glyphs()` | A copy of every column as typed arrays, plus everything `measure()` returns. Yours to keep. | You need most glyphs, or want to keep the data. |
+| `text.readGlyphs(read)` | Whatever your callback returns. The callback gets a view that is valid only while it runs. | You need a few glyphs, or one number computed from them, without copying the layout. |
+| `text.measureGlyphs()` | One object per glyph with three.js vectors and boxes, +Y up, anchor included. three.js only. | You are placing three.js objects on glyphs. |
+
+All three lay the text out first if it changed, and none of them draws anything. `glyphs()` and `readGlyphs()` are
+on a three.js `Text`, a TypeGPU text and a `Pixi3DText`.
+
+## Copy the columns with `glyphs()`
+
+`glyphs()` returns a `GlyphLayoutInspection`. Each per-glyph value is a typed array with one entry per glyph;
+`glyphCount` is the length of all of them.
+
+```ts
+const layout = text.glyphs();
+const line = layout.lines[0]!;
+
+for (let index = 0; index < layout.glyphCount; index += 1) {
+  const advanceBox = {
+    x: layout.x[index]!,
+    y: line.baseline - line.ascent,
+    width: layout.glyphAdvances[index]!,
+    height: line.lineHeight,
+  };
+  const inkBox = {
+    x: layout.glyphInkX[index]!,
+    y: layout.glyphInkY[index]!,
+    width: layout.glyphInkWidths[index]!,
+    height: layout.glyphInkHeights[index]!,
+  };
+  console.log(index, layout.clusters[index], advanceBox, inkBox);
+}
+```
+
+The columns:
+
+| Column | Per glyph |
+| --- | --- |
+| `x`, `y` | The pen position: the glyph's origin on its baseline. |
+| `glyphAdvances` | How far the pen moves after this glyph. |
+| `glyphInkX`, `glyphInkY`, `glyphInkWidths`, `glyphInkHeights` | The box the glyph draws in. A glyph with no shape, such as a space, has zero width and height. |
+| `glyphFontSizes` | The font size the glyph was set at. |
+| `clusters` | The UTF-16 offset in `text.text` of the cluster this glyph belongs to. |
+| `glyphIds` | The glyph's index in its font. 0 is the font's "missing glyph". Not a Unicode code point. |
+| `glyphFontSlots`, `fontHandles` | The font that supplied the glyph: `fontHandles[glyphFontSlots[i]]`. They differ between glyphs when a fallback font was used. |
+| `glyphBidiLevels` | The bidirectional embedding level. Odd levels run right to left. |
+| `glyphFlags` | Shaper flags; see below. |
+| `glyphStableIds` | An identifier for the glyph that an edit elsewhere in the text does not change. |
+
+There are also per-line columns with one entry per line (`lineTextStarts`, `lineTextEnds`, `lineGlyphStarts`,
+`lineGlyphCounts`, `lineBaselines`, `lineAdvances`); the same values are on `layout.lines` as objects.
+
+Three things to know when reading them:
+
+- **Coordinates are paragraph space**: origin at the top-left corner of the paragraph box, +Y down, without the
+  anchor. Convert as [Measure text](/guides/inspect/measure-text#know-the-coordinate-space) describes.
+- **Glyphs are in visual order**, line by line, not in string order. In right-to-left text the first glyph of a line
+  belongs to the last characters of that line.
+- **Glyphs are not characters.** A ligature is one glyph for several characters; an accented letter can be two
+  glyphs with one cluster. Use `clusters` to go from a glyph to the string, never the glyph index.
+
+Every call copies the columns, and the result is frozen. Call it once and keep the result; do not call it in a
+per-frame loop.
+
+## Read without copying with `readGlyphs()`
+
+`readGlyphs` runs your callback with a borrowed view and returns what the callback returns. `glyphAt(index)` gives
+one glyph as a plain object you may keep.
+
+```ts
+const widest = text.readGlyphs((glyphs) => {
+  let advance = 0;
+  for (let index = 0; index < glyphs.glyphCount; index += 1) {
+    advance = Math.max(advance, glyphs.glyphAt(index).advance);
+  }
+  return advance;
+});
+```
+
+A glyph from `glyphAt` has the same data as the columns under singular names: `x`, `y`, `advance`, `inkX`, `inkY`,
+`inkWidth`, `inkHeight`, `fontSize`, `cluster`, `glyphId`, `fontHandle`, `bidiLevel`, `flags` and `stableId`.
+
+The view expires when the callback returns. Using it afterwards throws, so return the values you need instead of the
+view. The callback must be synchronous.
+
+```ts
+const first = text.readGlyphs((glyphs) => (glyphs.glyphCount > 0 ? glyphs.glyphAt(0) : undefined));
+console.log(first?.x, first?.advance); // the record is yours; the view is not
+```
+
+`glyphAt` throws `RangeError` for an index outside `0` to `glyphCount - 1`.
+
+## Decode shaper flags
+
+`glyphFlags` tells you where it is safe to cut a shaped run. Test the bits with the exported `glyphFlags` constants.
+
+```ts
+import { glyphFlags } from '@pmndrs/glyph';
+
+const layout = text.glyphs();
+for (let index = 0; index < layout.glyphCount; index += 1) {
+  const flags = layout.glyphFlags[index]!;
+  if ((flags & glyphFlags.unsafeToBreak) !== 0) {
+    // Breaking the line before this glyph may change how its neighbors are shaped.
+  }
+}
+```
+
+| Constant | Meaning |
+| --- | --- |
+| `glyphFlags.unsafeToBreak` | A line break before this glyph may change how the surrounding text shapes. |
+| `glyphFlags.unsafeToConcat` | Joining another run at this boundary may change how the surrounding text shapes. |
+| `glyphFlags.produced` | Every bit the engine can set. Mask with it before comparing. |
+
+## Get three.js boxes with `measureGlyphs()`
+
+On a three.js `Text`, `measureGlyphs()` returns one measurement per glyph already converted to the text's local
+space: +Y up, anchor included. Nothing needs negating.
+
+```ts
+import { Box3Helper } from 'three/webgpu';
+
+const measurements = text.measureGlyphs() ?? [];
+for (const glyph of measurements) {
+  text.add(new Box3Helper(glyph.localInkBounds, '#ffd166'));
+  const center = glyph.anchorPoint({ x: 'center', y: 'center' }, 'advance');
+  console.log(glyph.index, center.x, center.y);
+}
+```
+
+Each measurement has `shapedOrigin` (the pen position), `localInkBounds` and `localAdvanceBounds` (`Box3`),
+`localQuad` (the four corners) and `anchorPoint(anchor, bounds)`, which resolves a point such as the center or a
+corner of the ink or advance box. The return type includes `undefined`, which is returned once the text's root has
+been disposed. See [Glyphs reference](/reference/three-glyphs) for every field.
+
+To move, rotate or recolor individual glyphs, split the text into a `Glyphs` object instead; see
+[Animate glyphs](/guides/scene/animate-glyphs).
+
+## Check the result
+
+- `layout.glyphCount` equals `text.measure().glyphCount`.
+- On a line that is not justified, the sum of `glyphAdvances` over the line's glyph range matches that line's
+  `advance` to within rounding.
+- A box drawn at each ink rectangle, with `y` negated, hugs the drawn glyph.
+
+## See also
+
+- [Measurement reference](/reference/measurement)
+- [Measure text](/guides/inspect/measure-text)
+- [Read glyph outlines](/guides/inspect/glyph-outlines)
+- [Animate glyphs](/guides/scene/animate-glyphs)
