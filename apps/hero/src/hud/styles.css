@@ -1,0 +1,63 @@
+/* A black cover until every shader is compiled, so the first thing seen is the caret. */
+.hero-cover {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  background: #000000;
+  color: #8d877b;
+  font:
+    12px ui-monospace,
+    monospace;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 0.6s ease,
+    visibility 0s 0.6s;
+}
+
+.hero-cover[data-ready='true'] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.hero-readout,
+.hero-hint {
+  position: fixed;
+  bottom: 14px;
+  z-index: 5;
+  margin: 0;
+  color: #8d877b;
+  font:
+    11px/1 ui-monospace,
+    'SF Mono',
+    Menlo,
+    monospace;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.72;
+}
+
+.hero-readout {
+  left: 16px;
+}
+
+.hero-hint {
+  right: 16px;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+.hero-hint[data-shown='true'] {
+  opacity: 0.72;
+}
+
+@media (max-width: 720px) {
+  .hero-hint {
+    display: none;
+  }
+}

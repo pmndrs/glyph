@@ -1,0 +1,15 @@
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000000;
+}
+
+canvas {
+  display: block;
+  cursor: default;
+  touch-action: none;
+}
