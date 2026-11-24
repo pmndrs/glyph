@@ -161,6 +161,19 @@ pub enum Regions {
 }
 
 impl Layout {
+    /// The narrowest width a host can send with these regions. A host derives equal columns
+    /// from an exact width and refuses one that leaves no positive column measure, so columns
+    /// need one unit each beside their gaps; anything else needs one unit.
+    pub fn narrowest_width(&self) -> f32 {
+        match self.regions {
+            Regions::Columns { count, gap } => {
+                let count = count.max(1);
+                gap * f32::from(count - 1) + f32::from(count)
+            }
+            Regions::Single | Regions::Boxes { .. } => 1.0,
+        }
+    }
+
     /// The region boxes this layout flows through.
     pub fn region_boxes(&self) -> Vec<RegionBox> {
         let inline_end = bounded(self.width);

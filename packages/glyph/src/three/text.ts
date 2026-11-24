@@ -1282,7 +1282,8 @@ export class ThreeRootHost {
    *
    * `compileAsync` also calls `onBeforeRender`, after its traversal, but never `onAfterRender` and never a draw's
    * `onBeforeRender`. It is not counted, or the root would stop publishing; and the compiling renderer is
-   * registered as a holder of every draw's storage, since compiling may allocate it.
+   * registered as a holder of the storage of every draw in the compiled object, since compiling may allocate it.
+   * That includes draws outside this root, such as a `split()` copy, which no root's draws would otherwise name.
    */
   #countRenders(scene: THREE.Scene): () => void {
     const before = scene.onBeforeRender;
@@ -1290,9 +1291,9 @@ export class ThreeRootHost {
     const host = this;
     const counted = {
       onBeforeRender(this: THREE.Scene, ...parameters: Parameters<THREE.Scene['onBeforeRender']>): void {
-        const [renderer] = parameters;
+        const [renderer, compiled] = parameters;
         if (compiling(renderer)) {
-          for (const draw of host.#renderObject.children) trackDrawRenderer(draw, renderer);
+          compiled.traverse((object) => trackDrawRenderer(object, renderer));
         } else {
           host.#renderDepth += 1;
         }

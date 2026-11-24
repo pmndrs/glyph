@@ -397,6 +397,8 @@ impl Planner<'_> {
         if layout.width == 0.0 {
             layout.width = 600.0;
         }
+        // Columns a host could not derive from the width it holds are never planned.
+        layout.width = layout.width.max(layout.narrowest_width());
         let regions = layout.regions;
         let height = layout.height;
         self.label(format!("regions {regions:?} height {height}"));
@@ -570,15 +572,22 @@ impl Planner<'_> {
         }
     }
 
+    /// Changes the width to one a host can send: columns need an exact width that leaves each a
+    /// positive measure, so a columned paragraph narrows to its narrowest instead of to none.
     fn width(&mut self) {
         let current = self.next.layout.width;
+        let narrowest = self.next.layout.narrowest_width();
+        let columns = matches!(self.next.layout.regions, Regions::Columns { .. });
         let width = match self.rng.below(8) {
             0 => current + 1.0 / 64.0,
-            1 => (current - 1.0).max(1.0),
+            1 => (current - 1.0).max(narrowest),
             2 => current + 7.0,
-            3 => (current - 33.0).max(1.0),
+            3 => (current - 33.0).max(narrowest),
+            4 if columns => narrowest,
             4 => 0.0,
-            _ => 60.0 + self.rng.below(840) as f32 + self.rng.below(4) as f32 * 0.25,
+            _ => {
+                (60.0 + self.rng.below(840) as f32 + self.rng.below(4) as f32 * 0.25).max(narrowest)
+            }
         };
         self.label(format!("width {width}"));
         self.next.layout.width = width;
@@ -1254,6 +1263,40 @@ mod tests {
         assert_eq!(spans, [span(2, 0, 2), span(4, 4, 6)]);
         assert!(!nests(&spans, span(9, 1, 5)), "a crossing span is refused");
         assert!(nests(&spans, span(9, 0, 6)), "an enclosing span is allowed");
+    }
+
+    /// A host derives equal columns from an exact width and a bounded height, and refuses a
+    /// width that leaves no positive column measure (`normalizedColumns` and
+    /// `compileEngineGeometry` in `engine-encoding.ts`). The driver plans nothing else.
+    #[test]
+    fn the_driver_plans_only_columns_a_host_can_send() {
+        let cases = super::super::matrix::cases();
+        let columned = cases.iter().filter(|case| case.fuzz && case.extras.regions);
+        let mut checked = 0_usize;
+        for case in columned {
+            for seed in 1..=32 {
+                for (step, planned) in scripted(case, &case.start(), seed, 60).iter().enumerate() {
+                    for paragraph in &planned.next.paragraphs {
+                        let layout = paragraph.model.layout;
+                        let Regions::Columns { count, gap } = layout.regions else {
+                            continue;
+                        };
+                        checked += 1;
+                        let measure =
+                            (layout.width - gap * f32::from(count - 1)) / f32::from(count);
+                        assert!(
+                            layout.width != 0.0 && layout.height != 0.0 && measure > 0.0,
+                            "{} seed {seed} step {step} ({}): {count} columns, gap {gap}, width {}, height {}",
+                            case.name,
+                            planned.label,
+                            layout.width,
+                            layout.height,
+                        );
+                    }
+                }
+            }
+        }
+        assert!(checked != 0, "the driver planned no columns");
     }
 
     #[test]

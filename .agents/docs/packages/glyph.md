@@ -867,7 +867,10 @@ preparation of the paragraph settle it with the eager inputs, so retention, plac
 equal an eager positioning
 ([decision](../planning/decisions/summary-only-reads-defer-positioning.md)). Its measurement carries no glyph facts
 (`GLYPHS_DEFERRED`); the TypeScript summary computes them on first read, from a later read, the prior facts the next
-preparation of that paragraph returns first, or the publication that positions it. Two exceptions keep that off hot
+preparation of that paragraph returns first, or the publication that positions it. An engine restart discards the
+measured preparation, so the planner keeps a lease on the measured desired state and re-derives the facts by preparing
+it (incremental equals cold) on first read, before that paragraph is prepared again, or before it is disposed; a text
+edited since is restated at its desired value by its next preparation. Two exceptions keep that off hot
 paths: TypeScript reads also set `availableGlyphFacts`, so a paragraph positioned once preparation ends (an inline leaf,
 or a width whose lines positioning already describes) carries its facts at no cost; and a text whose caller read the
 facts of its last summary asks for them up front (`glyphFacts`) on its next read, observing again whether they are read.
@@ -929,7 +932,10 @@ geometry stay unculled because their record layout is not Glyph's. A batched dra
 members is outside. Three's `frustumCulled = false` on a `Text`, an enclosing `TextGroup` or a `Glyphs` makes every
 draw placing its records report an unbounded sphere, so in indexed mode its whole batch stays drawn; each of those
 objects compares the flag in its per-frame matrix visit, and a draw re-reads its members only after such a change, a
-reparenting, a new transform table, or a change of its records. `benchmark:frustum-culling` proves culled and unculled
+reparenting, a new transform table, or a change of its records. A `Text` learns of a reparenting from its root's
+listeners on its ancestors; a `Glyphs`, which no root tracks, compares whether some scope enclosing it opts out in its
+matrix visit (an ancestor walk, only once any scope has opted out), so a deeper ancestor moving into or out of an
+opted-out `TextGroup` is seen. `benchmark:frustum-culling` proves culled and unculled
 pixels identical on both backends, including a displacing material at its declared maximum, with half that padding
 as a pixel-detected negative control.
 When a rank-only permutation keeps the committed Codec, capability, one-batch single-aggregate-draw storage topology,

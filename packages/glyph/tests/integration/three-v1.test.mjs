@@ -5081,6 +5081,40 @@ test('a draw compiled and never rendered releases its storage through the compil
   }
 });
 
+test('a split copy compiled and never rendered releases its storage through the compiling renderer', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
+  t.after(() => font.dispose());
+  const scene = new THREE.Scene();
+  const group = three.createTextGroup();
+  const label = three.createText({ font, text: 'Compiled copy' });
+  group.add(label);
+  scene.add(group);
+  scene.updateMatrixWorld();
+  // The copy sits outside the root, below an ordinary Group, and is compiled before its first render.
+  const [detached] = label.split();
+  const holder = new THREE.Group();
+  holder.add(detached);
+  scene.add(holder);
+  const { renderer, deleted } = storageReleaseRenderer();
+  compileWith(renderer, scene);
+  const detachedDraws = detached.children.filter((child) => child.isMesh);
+  const storage = new Set(detachedDraws.flatMap((draw) => sharedStorageOf(draw)));
+  const transforms = detachedDraws.map((draw) => draw.geometry.getAttribute('_pmndrsGlyphInstanceTransforms'));
+  assert.ok(transforms.length > 0 && transforms.every((attribute) => storage.has(attribute)));
+
+  detached.dispose();
+  for (const attribute of transforms) {
+    assert.ok(deleted.includes(attribute), "the copy's transform storage is released through the compiling renderer");
+  }
+  group.dispose();
+  label.dispose();
+  three.dispose();
+  for (const attribute of storage) {
+    assert.ok(deleted.includes(attribute), 'every storage attribute the compile could allocate is released');
+  }
+});
+
 // Three r185/r186 free storage only through the renderer's attribute manager; BufferAttribute.dispose alone leaks (#317).
 test('Three releases every storage kind a drawn text binds through each renderer, once its last owner retires', async (t) => {
   assert.ok(['185', '186'].includes(THREE.REVISION), 'the installed Three needs the attribute-manager bridge');

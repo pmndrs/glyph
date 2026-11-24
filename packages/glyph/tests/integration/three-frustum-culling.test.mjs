@@ -342,6 +342,49 @@ for (const transformMode of ['indexed', 'direct']) {
 }
 
 for (const transformMode of ['indexed', 'direct']) {
+  test(`${transformMode} a Glyphs follows a deeper ancestor into and out of an opted-out TextGroup`, async (t) => {
+    const three = await cullingHandle(t, transformMode);
+    const font = await loadFont({ baked: { bytes: await readFile(bitmapFontUrl) } }, bitmap({ strikes: [16] }));
+    t.after(() => font.dispose());
+    const scene = new THREE.Scene();
+    const camera = viewCamera();
+    const group = three.createTextGroup({ batching: 'group' });
+    group.frustumCulled = false;
+    scene.add(group);
+    const label = three.createText({ font, text: 'Detached', style: { fontSize: 16 } });
+    scene.add(label);
+    scene.updateMatrixWorld(true);
+    const [glyphs] = label.split();
+    label.visible = false;
+    // The Glyphs keeps its own parent throughout; only an ancestor two levels up moves.
+    const outer = new THREE.Group();
+    const inner = new THREE.Group();
+    outer.add(inner);
+    inner.add(glyphs);
+    scene.add(outer);
+    glyphs.position.x = 1_000;
+    const drawsOfGlyphs = () => glyphDraws(glyphs);
+    assert.ok(drawsOfGlyphs().length > 0, 'the detached copy publishes draws');
+    assert.equal(submittedDraws(scene, camera).length, 0, 'the detached copy is culled off-screen');
+
+    group.add(outer);
+    let submitted = submittedDraws(scene, camera);
+    assert.ok(
+      drawsOfGlyphs().every((draw) => submitted.includes(draw)),
+      'a Glyphs whose ancestor moved into an opted-out group is drawn',
+    );
+    scene.add(outer);
+    assert.equal(submittedDraws(scene, camera).length, 0, 'and is culled again once that ancestor leaves it');
+    group.add(outer);
+    submitted = submittedDraws(scene, camera);
+    assert.ok(drawsOfGlyphs().every((draw) => submitted.includes(draw)));
+    glyphs.dispose();
+    label.dispose();
+    group.dispose();
+  });
+}
+
+for (const transformMode of ['indexed', 'direct']) {
   test(`${transformMode} detached glyph bounds follow their instance matrices`, async (t) => {
     const three = await cullingHandle(t, transformMode);
     const font = await loadFont({ baked: { bytes: await readFile(bitmapFontUrl) } }, bitmap({ strikes: [16] }));

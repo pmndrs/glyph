@@ -2,7 +2,7 @@
 // line glyph spans, ink) on first read. These tests hold it to the deferred, never-stale contract: exact before the
 // first publication, exact for the text as it was measured after later edits, exact in `onLayout` on the first
 // frame, and no growth across many measure and edit cycles.
-import { crossingsOf, shaperMemoryPages } from '../support/wasm-crossings.mjs';
+import { crossingsOf, shaperInstanceCount, shaperMemoryPages, trapNextCall } from '../support/wasm-crossings.mjs';
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -213,3 +213,33 @@ test('a paragraph that is positioned anyway answers its glyph facts with the rea
   );
   assert.deepEqual(summaryOf(measurement), expected);
 });
+
+// A trap replaces the engine, which then holds nothing a summary measured. The summary still answers for the text as
+// it was measured, whatever the text did after the restart.
+for (const after of ['unchanged', 'edited', 'edited and published', 'disposed']) {
+  test(`a summary measured before an engine restart answers when the text is ${after}`, { timeout }, async (t) => {
+    const edited = { text: `${paragraph}and then some`, constraints: { width: { mode: 'exact', size: 260 } } };
+    const expected = await coldSummary(t, wide);
+    const expectedEdited = await coldSummary(t, edited);
+    const { add, frame } = await createScene(t);
+    const text = add({ text: 'mounted', constraints: wide.constraints });
+    const sibling = add({ text: 'sibling' });
+    frame();
+    text.text = wide.text;
+    const measurement = text.measure();
+    // The sibling's read traps: the engine restarts and every text restates itself.
+    sibling.text = 'sibling after';
+    const instances = shaperInstanceCount();
+    trapNextCall(/engine_measure_paragraph/);
+    sibling.measure();
+    assert.equal(shaperInstanceCount(), instances + 1, 'the engine instance was replaced');
+    if (after !== 'unchanged') text.set(edited);
+    if (after === 'edited and published') frame();
+    if (after === 'disposed') text.dispose();
+    assert.deepEqual(summaryOf(measurement), expected);
+    if (after === 'disposed') return;
+    frame();
+    assert.deepEqual(summaryOf(text.measure()), after === 'unchanged' ? expected : expectedEdited);
+    assert.equal(text.commitState().status, 'committed');
+  });
+}
