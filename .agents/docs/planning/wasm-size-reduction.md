@@ -251,6 +251,23 @@ permanent parallel codebase.
 ±100 bytes, and `--converge` makes gzip marginally _worse_. This confirms D-244 and closes the
 pass-ordering lever. D-242 already closed `opt-level`.
 
+#### 2026-11-24: the shaper's level and the last min-sized-rust flags
+
+The remaining build settings were measured on one raw module at `9b9fc6d49`
+([decision](decisions/shaper-build-flags-2026-11.md)):
+
+- **Rust flags.** `-Zfmt-debug=none` and `-Zlocation-detail=none`, alone or together, give a raw module byte-identical
+  to the baseline. `-Cpanic=immediate-abort` had already removed everything they target.
+- **Optimizer level.** The level inside the D-244 sandwich mostly moves raw bytes, not gzip bytes. Against `-Oz`
+  (1,410,403 / 567,156 / 451,720 raw / gzip / Brotli):
+  - `-O3` is +7,473 / −753 / −1,036, and matches `-Oz` speed in the browser headline and the engine Labs, so the
+    shaper now ships `-O3`.
+  - `-O4` is about 2–4% slower on the engine lanes and +923 gzip.
+  - Removing `--one-caller-inline-max-function-size=0` adds about 5 kB gzip and costs 8–15% on a cold first frame.
+  - The bakers keep `-Oz`.
+
+The optimizer has no size left to give this module; the remaining levers are code and tables.
+
 ### 4. Static Unicode tables in this repository
 
 Our own generated tables, measured from their declarations:
