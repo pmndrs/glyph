@@ -1,0 +1,156 @@
+---
+title: Size a paragraph
+description: Give a paragraph a width and a height with Constraints, and read back the box it resolved to.
+nav: 300
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="layout" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+A paragraph has no size of its own. Its `constraints` state how much room the parent gives it on each axis, and the
+layout engine resolves a box from that room and the text. This guide sets a width and a height, explains what each of
+the three modes does to wrapping and to the measured box, and reads the result back.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="layout-constraints" aria-label="One sentence under unconstrained, at-most and exact width while the stated size changes" aspect="16 / 9" />
+
+The grey line is the size the constraint states. The gold box is the width and height `measure()` reports. Watch the
+`at-most` row: it wraps like `exact`, but its box stops at the end of the widest line.
+
+## Set a width
+
+Pass `constraints.width` with a `mode` and, for every mode except `unconstrained`, a `size`. Sizes are in
+paragraph-local units, the same units as `fontSize`: the local units of the text object, so world units when the
+object is not scaled.
+
+```ts
+const paragraph = three.createText({
+  font: Inter,
+  text: 'The measured box follows the width mode.',
+  style: { fontSize: 0.3 },
+  constraints: { width: { mode: 'exact', size: 4 } },
+});
+```
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text font={Inter} style={{ fontSize: 0.3 }} constraints={{ width: { mode: 'exact', size: 4 } }}>
+  The measured box follows the width mode.
+</Text>;
+```
+
+Pick the mode by what the box should do when the text is shorter than the room:
+
+| `width.mode` | Where lines wrap | `measure().width` |
+| --- | --- | --- |
+| `'unconstrained'` (the default) | Only at line breaks in the text (`\n`). | The widest line. |
+| `'at-most'` | At `size`. | The widest line, never more than `size`. |
+| `'exact'` | At `size`. | `size`, whatever the text. |
+
+Wrapping at `size` assumes the default `wrap: 'word'`. See [Wrap and align text](/guides/layout/wrap-and-align) for
+the other wrap modes.
+
+> [!IMPORTANT]
+> Alignment happens inside the resolved width. Under `unconstrained` and `at-most` the box shrinks to the widest line,
+> so `align: 'center'` or `'end'` only moves the shorter lines, and a one-line paragraph does not move at all. Use
+> `exact` when lines must align to an edge you chose, and use [the anchor](/guides/layout/anchor-text) to place the
+> box itself.
+
+## Set a height
+
+`constraints.height` takes the same three modes. A height never changes where lines wrap. It decides how many lines
+fit.
+
+```ts
+const card = three.createText({
+  font: Inter,
+  text: 'A long description that will not fit in three lines of this card, however it is wrapped.',
+  style: { fontSize: 0.2, lineHeight: 1.3 },
+  constraints: {
+    width: { mode: 'exact', size: 3 },
+    height: { mode: 'at-most', size: 0.8 },
+  },
+});
+
+const { height, contentHeight, overflowed } = card.measure();
+```
+
+| `height.mode` | Lines kept | `measure().height` |
+| --- | --- | --- |
+| `'unconstrained'` (the default) | All of them. | The height of all lines, plus `spaceBefore` and `spaceAfter`. |
+| `'at-most'` | The lines that fit in `size`. | The height of the lines kept, never more than `size`. |
+| `'exact'` | The lines that fit in `size`. | `size`, whatever the text. |
+
+When lines do not fit, `measure().overflowed` is `true` and `contentHeight` still reports the height the whole text
+needs at this width. What happens to the lines that do not fit is the paragraph's `overflow` policy; see
+[Truncate text](/guides/layout/truncate).
+
+## Read the resolved box
+
+`measure()` prepares the text if a setter left it dirty, so its numbers always describe the current properties.
+
+```ts
+const measured = text.measure();
+
+measured.width; // resolved box width
+measured.height; // resolved box height
+measured.contentWidth; // widest line's advance, before the box clamps it
+measured.contentHeight; // height all lines need, before the box clamps it
+measured.overflowed; // true when content did not fit the constraints
+measured.minContentWidth; // widest unbreakable run: the narrowest width that breaks no word
+measured.maxContentWidth; // widest run between line breaks: the width at which nothing wraps
+```
+
+The box starts at the paragraph origin and extends right and down in paragraph-local coordinates (+X right, +Y down).
+In the scene, with the default anchor, that is right and down from the object's position.
+
+## Change the box later
+
+Assign a new object to `text.constraints`, or pass `constraints` to `text.set()`. The setter validates and records the
+value. The paragraph is laid out again on the next `glyph.shape()` or the next read, such as `measure()`.
+
+```ts
+text.constraints = { width: { mode: 'exact', size: 6 } };
+
+// Several properties in one call.
+text.set({ constraints: { width: { mode: 'at-most', size: 6 } }, layout: { align: 'center' } });
+```
+
+The assignment replaces the whole constraints object. An axis you leave out goes back to `unconstrained`, and an
+anchor you leave out goes back to left and top.
+
+## Name the boxes you reuse
+
+`Constraints.create` validates a set of named constraint objects once and returns them frozen. `constraints` also
+accepts an array, merged left to right, so a named box can be combined with a per-text override.
+
+```ts
+import { Constraints } from '@pmndrs/glyph';
+
+const boxes = Constraints.create({
+  card: { width: { mode: 'exact', size: 3 }, height: { mode: 'at-most', size: 2 } },
+  label: { width: { mode: 'at-most', size: 4 }, anchor: { x: 'center', y: 'middle' } },
+});
+
+three.createText({ font: Inter, text: 'Summit', constraints: boxes.label });
+three.createText({
+  font: Inter,
+  text: 'A card body.',
+  constraints: [boxes.card, { anchor: { y: 'bottom' } }],
+});
+```
+
+## Check the result
+
+- `text.measure().width` equals `size` under `exact`, and is at most `size` under `at-most`.
+- `text.measure().lineCount` grows when you reduce the width of a wrapping paragraph.
+- An invalid constraint throws `GlyphInputError` from the call that set it, with `path` equal to `['constraints']`.
+
+## See also
+
+- [Constraints reference](/reference/constraints)
+- [Anchor text to a point](/guides/layout/anchor-text)
+- [Wrap and align text](/guides/layout/wrap-and-align)
+- [Measure text](/guides/inspect/measure-text)

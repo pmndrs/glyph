@@ -1,0 +1,249 @@
+---
+title: Constraints
+description: Reference for the Constraints object - the width and height an axis may take, the anchor that places the paragraph box, and Constraints.create.
+nav: 712
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+`Constraints` states the box a parent gives a paragraph: how wide and how tall it may be, and which point of the
+resolved box sits at the text's origin. The rules for flowing text inside the box are
+[`ParagraphLayout`](/reference/paragraph-layout). `Constraints` is exported from `@pmndrs/glyph` as a type and, under
+the same name, as an object with one method, [`create`](#constraintscreate).
+
+```ts
+import { Constraints } from '@pmndrs/glyph';
+
+const boxes = Constraints.create({
+  card: { width: { mode: 'exact', size: 3 }, height: { mode: 'at-most', size: 2 } },
+});
+
+const constraints: Constraints = {
+  width: { mode: 'at-most', size: 4 },
+  anchor: { x: 'center', y: 'first-baseline' },
+};
+```
+
+## Type
+
+```ts
+interface Constraints {
+  readonly width?: AxisConstraint;
+  readonly height?: AxisConstraint;
+  readonly anchor?: TextAnchor;
+}
+
+type AxisConstraint =
+  | { readonly mode: 'unconstrained' }
+  | { readonly mode: 'at-most'; readonly size: number }
+  | { readonly mode: 'exact'; readonly size: number };
+
+interface TextAnchor {
+  readonly x?: TextAnchorX;
+  readonly y?: TextAnchorY;
+}
+
+type TextAnchorX = 'left' | 'center' | 'right';
+
+type TextAnchorY =
+  | 'top'
+  | 'middle'
+  | 'bottom'
+  | 'first-baseline'
+  | 'last-baseline'
+  | 'alphabetic-baseline'
+  | 'ideographic-baseline'
+  | 'cap-height-top'
+  | 'x-height-top';
+```
+
+`AxisConstraint`, `TextAnchor`, `TextAnchorX` and `TextAnchorY` are exported from `@pmndrs/glyph` as types.
+
+## Where it is accepted
+
+| Place | Form |
+| --- | --- |
+| `root.createText({ constraints })`, `text.constraints = …`, `text.set({ constraints })` in `@pmndrs/glyph/three` | `PropertyList<Constraints>` |
+| `constraints` prop of `<Text>` in `@pmndrs/glyph/react` and `@pmndrs/glyph/vue` | `PropertyList<Constraints>` |
+| `constraints` option in `@pmndrs/glyph/typegpu` and `@pmndrs/glyph/pixi3d` | One `Constraints` object |
+
+A `PropertyList<Constraints>` is a constraints object, or an array of them that may be nested and may contain
+`false`, `null` and `undefined`. The entries are merged left to right with the semantics of `Object.assign`: a later
+`width`, `height` or `anchor` replaces an earlier one whole. To change one axis of an anchor, spread the earlier
+anchor into the new one.
+
+`text.constraints` returns the merged, frozen object. Assigning `constraints` replaces the previous value entirely.
+
+## Properties
+
+| Property | Type | Default |
+| --- | --- | --- |
+| [`width`](#width-and-height) | `AxisConstraint` | `{ mode: 'unconstrained' }` |
+| [`height`](#width-and-height) | `AxisConstraint` | `{ mode: 'unconstrained' }` |
+| [`anchor`](#anchor) | `TextAnchor` | `{ x: 'left', y: 'top' }` |
+
+### width and height
+
+Each axis takes one of three modes. `size` is in paragraph-local units, the units of `fontSize`. It is required for
+`'at-most'` and `'exact'`, must be finite and zero or more, and must be absent for `'unconstrained'`.
+
+| `width.mode` | Line limit | Resolved width (`measure().width`) |
+| --- | --- | --- |
+| `'unconstrained'` | None. Lines break only at line breaks in the text. | The widest line (`contentWidth`). |
+| `'at-most'` | `size` | The widest line, at most `size`. |
+| `'exact'` | `size` | `size` |
+
+| `height.mode` | Lines kept | Resolved height (`measure().height`) |
+| --- | --- | --- |
+| `'unconstrained'` | All. | The height of all lines plus `spaceBefore` and `spaceAfter` (`contentHeight`). |
+| `'at-most'` | The lines that fit in `size`. | The height of the lines kept, at most `size`. |
+| `'exact'` | The lines that fit in `size`. | `size` |
+
+When content does not fit, `measure().overflowed` is `true`. `contentWidth` and `contentHeight` report the extents
+of the content before the box clamps them. What becomes of the lines that do not fit is
+[`ParagraphLayout.overflow`](/reference/paragraph-layout#overflow).
+
+Alignment (`ParagraphLayout.align`) takes place inside the resolved width.
+
+With `ParagraphLayout.columns`, the width must be `'exact'` and a height must be stated; see
+[columns](/reference/paragraph-layout#columns). With a [`flow`](/reference/text-flow), `width` and `height` do not
+limit lines; they define the resolved box and therefore the anchor.
+
+> [!CAUTION]
+> A height `size` of `0` passes validation, but a box with no height cannot be laid out: the first read that prepares
+> the text, such as `measure()`, throws `GlyphEngineStatusError`. A positive height smaller than one line is
+> accepted and keeps no lines.
+
+### anchor
+
+The point of the resolved paragraph box that is placed at the text's origin: the position of the `Text` object in
+three.js, React and Vue. Omitted axes use `'left'` and `'top'`.
+
+| `anchor.x` | Reference | Inline position |
+| --- | --- | --- |
+| `'left'` | Left edge of the box. | `0` |
+| `'center'` | Center of the box. | `width / 2` |
+| `'right'` | Right edge of the box. | `width` |
+
+| `anchor.y` | Reference | Block position, as a `measure()` field |
+| --- | --- | --- |
+| `'top'` | Top edge of the box. | `0` |
+| `'middle'` | Middle of the box. | `height / 2` |
+| `'bottom'` | Bottom edge of the box. | `height` |
+| `'first-baseline'` | Baseline of the first line. | `firstBaseline` |
+| `'last-baseline'` | Baseline of the last line. | `lastBaseline` |
+| `'alphabetic-baseline'` | Layout baseline of the first line. | `alphabeticBaseline` |
+| `'ideographic-baseline'` | Bottom of the first line's line box. | `ideographicBaseline` |
+| `'cap-height-top'` | Top of the cap height of the first line's primary font. | `capHeightTop` |
+| `'x-height-top'` | Top of the x-height of the first line's primary font. | `xHeightTop` |
+
+`width` and `height` here are the resolved values, so under `'at-most'` and `'unconstrained'` the box references
+follow the content.
+
+The anchor is applied as a translation. `measure().anchorOffset` reports it as `{ x, y }` in paragraph-local
+coordinates (+X right, +Y down): the negated inline and block positions from the tables. `measure()` and `glyphs()`
+report layout values without it. A paragraph-local point `(x, y)` is at
+`(x + anchorOffset.x, -(y + anchorOffset.y))` in the local frame of a three.js `Text`, whose +Y is up. Flow regions
+and exclusions are paragraph-local and are translated with the paragraph.
+
+Changing only `anchor` does not shape or lay out the text again.
+
+## Constraints.create()
+
+Validates named constraint objects and returns them frozen.
+
+```ts
+import { Constraints } from '@pmndrs/glyph';
+
+const boxes = Constraints.create({
+  column: { width: { mode: 'exact', size: 9 } },
+  label: [{ width: { mode: 'at-most', size: 4 } }, { anchor: { x: 'center', y: 'middle' } }],
+});
+
+boxes.label.anchor; // { x: 'center', y: 'middle' }
+```
+
+### Syntax
+
+```ts
+import type { Constraints, PropertyList } from '@pmndrs/glyph';
+
+declare function create<const Rules extends Readonly<Record<string, PropertyList<Constraints>>>>(
+  rules: Rules,
+): Readonly<{ [Name in keyof Rules]: Readonly<Constraints> }>;
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `rules` | `Record<string, PropertyList<Constraints>>` | An object whose keys are rule names. Each value is a constraints object or a property list, merged left to right before validation. |
+
+### Return value
+
+A frozen object with the same keys. Each value is the merged, frozen `Constraints` for that rule. Pass the values
+wherever constraints are accepted, alone or as entries of a property list.
+
+### Exceptions
+
+`TypeError` with the message `Constraints.create rules must be an object` when `rules` is `null`, not an object, or
+an array. Otherwise the errors of [Validation](#validation), with the label `Constraints.create rule "<name>"`.
+
+## Validation
+
+Constraints are validated when they are set on a text and when they are passed to `Constraints.create`. The messages
+below start with a label that says where:
+
+| Where | Label | Thrown as |
+| --- | --- | --- |
+| `createText`, `text.constraints`, `text.set`, the `constraints` prop | `Text constraints` | [`GlyphInputError`](/reference/errors) with `path` equal to `['constraints']`; the `TypeError` or `RangeError` in the table is its `cause` |
+| `Constraints.create` | `Constraints.create rule "<name>"` | The `TypeError` or `RangeError` itself |
+
+When a setter throws, the text keeps its previous constraints.
+
+The table uses `width`; the same checks and messages apply to `height`.
+
+| Condition | Error | Message after the label |
+| --- | --- | --- |
+| The value, or an entry of a property list, is not an object | `TypeError` | `must be an object or property array` |
+| `width` is not an object | `TypeError` | `width must be an object` |
+| `width.mode` is not one of the three modes | `TypeError` | `width mode is invalid` |
+| `mode` is `'unconstrained'` and the object has a `size` property | `TypeError` | `width must not state a size when unconstrained` |
+| `mode` is `'at-most'` or `'exact'` and `size` is missing | `TypeError` | `width size is required` |
+| `size` is `NaN` or infinite | `RangeError` | `width size must be finite` |
+| `size` is negative | `RangeError` | `width size must be nonnegative` |
+| `anchor` is not an object | `TypeError` | `anchor must be an object` |
+| `anchor.x` is not one of its values | `TypeError` | `anchor x is invalid` |
+| `anchor.y` is not one of its values | `TypeError` | `anchor y is invalid` |
+
+A text whose layout has more than one column also requires an exact width and a stated height. That check is made
+when either `layout` or `constraints` is set; see
+[ParagraphLayout validation](/reference/paragraph-layout#validation).
+
+## Example
+
+```ts
+import { Constraints } from '@pmndrs/glyph';
+
+const boxes = Constraints.create({
+  card: { width: { mode: 'exact', size: 3 }, height: { mode: 'at-most', size: 2 } },
+});
+
+const body = three.createText({
+  font: Inter,
+  text: 'A card body that wraps inside three units and keeps the lines that fit in two.',
+  style: { fontSize: 0.2 },
+  layout: { wrap: 'word', overflow: 'ellipsis' },
+  constraints: [boxes.card, { anchor: { x: 'center', y: 'middle' } }],
+});
+
+const { width, height, overflowed, anchorOffset } = body.measure();
+// width === 3; height <= 2; anchorOffset is { x: -1.5, y: -height / 2 }
+```
+
+## See also
+
+- [ParagraphLayout](/reference/paragraph-layout)
+- [TextFlow](/reference/text-flow)
+- [Measurement](/reference/measurement)
+- [Size a paragraph](/guides/layout/size-a-paragraph)
+- [Anchor text to a point](/guides/layout/anchor-text)

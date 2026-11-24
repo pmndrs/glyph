@@ -1,0 +1,169 @@
+---
+title: Flow text through regions
+description: Flow one paragraph through an ordered list of rectangles and polygons with the flow property.
+nav: 307
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="layout" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+A region is a 2D shape that holds lines of text. The `flow` property gives a paragraph an ordered list of regions:
+the text fills the first, continues in the second, and so on. Use it for columns of different sizes, for text that
+continues in another box, and for text set inside a shape. This guide defines rectangle and polygon regions and
+explains how the paragraph's other properties apply to them.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="layout-flow-regions" aria-label="One paragraph flowing through a rectangle, a polygon and a second rectangle" aspect="16 / 9" />
+
+One paragraph in three regions. The first region's height changes. When it shrinks, its last lines move to the top
+of the second region, and that region's last lines move on to the third.
+
+## Define the regions
+
+`flow` is a property of the text beside `layout` and `constraints`. It takes an object with a `regions` array. Each
+region has a `key` and a `shape`.
+
+```ts
+import type { TextFlow } from '@pmndrs/glyph';
+
+const flow: TextFlow = {
+  regions: [
+    { key: 'lede', shape: { kind: 'rectangle', bounds: [0, 0, 2.9, 2.4] } },
+    {
+      key: 'wedge',
+      shape: {
+        kind: 'polygon',
+        vertices: [
+          [3.4, 0.2],
+          [6.5, 0.2],
+          [5.9, 3.9],
+          [4.0, 3.9],
+        ],
+      },
+    },
+    { key: 'tail', shape: { kind: 'rectangle', bounds: [7.0, 0.7, 9.9, 4.5] } },
+  ],
+};
+
+const story = three.createText({
+  font: Inter,
+  text: 'One long text. '.repeat(60),
+  style: { fontSize: 0.2, lineHeight: 1.35 },
+  flow,
+});
+```
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+import type { TextFlow } from '@pmndrs/glyph';
+
+declare const flow: TextFlow;
+
+<Text font={Inter} style={{ fontSize: 0.2, lineHeight: 1.35 }} flow={flow}>
+  {'One long text. '.repeat(60)}
+</Text>;
+```
+
+Coordinates are paragraph-local: the origin is the paragraph origin, the first number of a pair is the inline
+position (+X, to the right), and the second is the block position (+Y, down). The units are those of `fontSize`. With
+the default anchor the origin is the object's position, so the point `[3.4, 0.2]` is 3.4 to the right of it and 0.2
+below it.
+
+- A **rectangle** is `bounds: [inlineStart, blockStart, inlineEnd, blockEnd]`: left, top, right, bottom. The end
+  values must be greater than the start values.
+- A **polygon** is `vertices`: three or more `[inline, block]` points. The ring closes itself, so do not repeat the
+  first point. It may wind either way. It must not cross itself, repeat a vertex, or have zero area.
+
+> [!CAUTION]
+> Keep rectangle regions at block positions of zero or more. A rectangle region that starts above the paragraph
+> origin (a negative `blockStart`) passes validation, but the engine refuses the paragraph when it is prepared.
+> Regions may start left of the origin.
+
+## Order and keys
+
+The array order is the flow order. It does not have to match the position of the regions: a paragraph can start in a
+box on the right and continue in one on the left.
+
+The `key` identifies a region across updates. Keys must be unique within the flow and must not be empty. When you
+assign a new `flow`, a region with the same key and the same geometry is recognized as unchanged, wherever it now
+sits in the array. Use stable names, not array indexes, if you reorder or insert regions.
+
+```ts
+// Each frame: the same keys, one region resized.
+text.flow = {
+  regions: [
+    { key: 'lede', shape: { kind: 'rectangle', bounds: [0, 0, 2.9, 1.8] } },
+    { key: 'tail', shape: { kind: 'rectangle', bounds: [7.0, 0.7, 9.9, 4.5] } },
+  ],
+};
+```
+
+Assigning `undefined` removes the flow and returns the paragraph to its constraint box.
+
+## How lines fill a region
+
+Lines are placed from the top of a region downward. Each line takes the width the region has over the line's whole
+height, so inside a polygon with slanted sides the text stays within both edges, as in the demo. When the next line
+does not fit above the bottom of the region, it starts at the top of the next region.
+
+Regions are not balanced. A region is filled before the next one receives anything.
+
+Text left over after the last region is not drawn, and `measure().overflowed` is `true`. `overflow: 'ellipsis'`
+ends the last line of the last region with an ellipsis; see [Truncate text](/guides/layout/truncate).
+
+## How layout and constraints apply
+
+Regions decide where lines break. The paragraph's other properties still apply:
+
+| Property | With `flow` |
+| --- | --- |
+| `layout.wrap` | `'word'` and `'character'` wrap at the region's width. `'none'` does not wrap and ignores the width. |
+| `layout.align` | Aligns each line inside its region when `constraints.width` is `exact`. Without an exact width, lines align inside the width of the widest line, measured from the region's start edge. |
+| `layout.maxLines` | Counts lines across all regions. |
+| `layout.columns` | Not used: the regions replace generated columns. Its requirements for an exact width and a height are still checked, so leave it out. |
+| `constraints.width`, `constraints.height` | Do not move or resize regions. They set the box that `measure().width` and `height` report and that `constraints.anchor` refers to. |
+
+For any alignment other than `'start'`, and whenever you use an anchor, state the box that encloses your regions:
+
+```ts
+import type { TextFlow } from '@pmndrs/glyph';
+
+declare const flow: TextFlow;
+
+text.set({
+  flow,
+  layout: { wrap: 'word', align: 'justify' },
+  constraints: {
+    width: { mode: 'exact', size: 9.9 },
+    height: { mode: 'exact', size: 4.5 },
+  },
+});
+```
+
+The anchor translates the whole paragraph, regions included. With `anchor: { x: 'center', y: 'middle' }` and the box
+above, the regions are drawn 4.95 to the left of and 2.25 above where their coordinates say.
+
+## Clip bounds
+
+A region may carry `clip: [inlineStart, blockStart, inlineEnd, blockEnd]`, the rectangle its lines are clipped to
+when `layout.overflow` is `'clip'`. It defaults to the bounds of the shape.
+
+> [!NOTE]
+> The three.js renderer in this release does not cut glyphs at clip bounds. See the note in
+> [Truncate text](/guides/layout/truncate).
+
+## Check the result
+
+- Under `align: 'start'`, the first glyph of each line in `text.glyphs()` has `x` at the left edge of its region.
+- Shrinking the first region moves text into the second: the `textStart` of the second region's first line, in
+  `measure().lines`, gets smaller.
+- A flow with no regions, a duplicate key, or a self-crossing polygon throws `GlyphInputError` with `path` equal to
+  `['flow']`.
+
+## See also
+
+- [TextFlow reference](/reference/text-flow)
+- [Wrap text around shapes](/guides/layout/wrap-around-shapes)
+- [Lay out text in columns](/guides/layout/columns)
+- [Anchor text to a point](/guides/layout/anchor-text)

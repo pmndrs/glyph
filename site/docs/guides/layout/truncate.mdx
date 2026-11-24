@@ -1,0 +1,147 @@
+---
+title: Truncate text
+description: Limit a paragraph to a number of lines or a height, end it with an ellipsis, and detect that text was cut.
+nav: 304
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="layout" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+Text often has more to say than its box has room for. This guide limits a paragraph by line count or by height, ends
+the last line with an ellipsis, and reads back whether anything was cut and where.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="layout-truncate" aria-label="A paragraph in a box of changing height under each overflow policy, above three line-capped texts" aspect="16 / 9" />
+
+Top row: one paragraph in a box whose height changes, under each `overflow` value. Bottom row: a two-line cap, and a
+single unwrapped line in a left-to-right and a right-to-left paragraph.
+
+## Limit the lines
+
+There are two limits, and the first one reached applies.
+
+- `layout.maxLines` caps the number of lines. It is a positive integer.
+- `constraints.height` with mode `'at-most'` or `'exact'` caps the height. Only whole lines that fit are kept.
+
+```ts
+const teaser = three.createText({
+  font: Inter,
+  text: 'A long description that keeps going well past the space a card has for it.',
+  style: { fontSize: 0.2, lineHeight: 1.35 },
+  layout: { wrap: 'word', maxLines: 2 },
+  constraints: { width: { mode: 'exact', size: 3.2 } },
+});
+```
+
+With the default `overflow: 'visible'`, the lines past the limit are left out. The last line kept ends wherever it
+happened to wrap, with nothing to show that more text follows.
+
+## End with an ellipsis
+
+Set `overflow: 'ellipsis'`. The last line that fits is shortened until it and an ellipsis fit in the width, and the
+ellipsis is drawn after it.
+
+```ts
+text.layout = { wrap: 'word', maxLines: 2, overflow: 'ellipsis' };
+```
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text
+  font={Inter}
+  style={{ fontSize: 0.2, lineHeight: 1.35 }}
+  layout={{ wrap: 'word', maxLines: 2, overflow: 'ellipsis' }}
+  constraints={{ width: { mode: 'exact', size: 3.2 } }}
+>
+  A long description that keeps going well past the space a card has for it.
+</Text>;
+```
+
+For a single line, such as a title or a table cell, turn wrapping off and give the line a width limit:
+
+```ts
+text.set({
+  layout: { wrap: 'none', overflow: 'ellipsis' },
+  constraints: { width: { mode: 'at-most', size: 3.2 } },
+});
+```
+
+Text that fits is not changed, and no ellipsis is added.
+
+### The font must have the ellipsis character
+
+The ellipsis is the character U+2026 (`…`), shaped with the paragraph's own font at the size of the text it follows.
+If the font does not cover U+2026, the font's missing-glyph box is drawn in its place. When the font is a stack, the
+first member that has the character supplies it.
+
+Include U+2026 when you bake a subset (see [Subset a font](/guides/fonts/subset-coverage)), or add a
+fallback font that has it:
+
+```ts
+import { createFontStack, type Font, type msdf } from '@pmndrs/glyph';
+
+declare const symbols: Font<typeof msdf>; // a font whose coverage includes U+2026
+
+const stack = createFontStack(inter, symbols);
+three.createText({
+  font: stack,
+  text: 'A title that is too long for its column',
+  layout: { wrap: 'none', overflow: 'ellipsis' },
+  constraints: { width: { mode: 'exact', size: 2 } },
+});
+```
+
+### The ellipsis follows the paragraph direction
+
+The ellipsis goes at the end of the line in reading order. In a left-to-right paragraph that is the right edge. In a
+right-to-left paragraph it is the left edge, including when the line contains left-to-right words. The base
+direction comes from `style.direction`; see [Bidirectional text](/guides/text/bidirectional-text).
+
+## Know what each overflow value does
+
+| `overflow` | Lines past the limit | A line wider than the box |
+| --- | --- | --- |
+| `'visible'` (the default) | Not drawn. | Runs past the edge of the box. |
+| `'ellipsis'` | Not drawn; the last line kept ends with an ellipsis. | Shortened to fit, with an ellipsis. |
+| `'clip'` | Not drawn. | Runs past the edge of the box. |
+
+> [!NOTE]
+> `'clip'` marks the paragraph's lines for clipping to their region. The three.js renderer in this release does not
+> cut glyphs at the box edge, so `'clip'` draws the same lines as `'visible'`, as the demo shows. The measurements
+> differ in one case: under a height limit, `measure()` and `glyphs()` keep reporting every line under `'clip'`, and
+> only the lines kept under `'visible'`.
+
+## Detect truncation
+
+`measure().overflowed` is `true` whenever the content did not fit, under every `overflow` value. The line records
+say where the kept text ends.
+
+```ts
+const measured = text.measure();
+
+if (measured.overflowed) {
+  const lastLine = measured.lines[measured.lines.length - 1];
+  // UTF-16 offset just past the last character that is still drawn.
+  const cutAt = lastLine?.textEnd;
+  // Height the whole text would need at this width.
+  const needed = measured.contentHeight;
+}
+```
+
+Use this to show a "more" control, to put the full text in a tooltip, or to grow the box to `contentHeight`.
+
+## Check the result
+
+- `text.measure().lineCount` is at most `maxLines`.
+- `text.measure().overflowed` is `true` for text that was cut and `false` for text that fits.
+- The last line of a truncated text ends with `…`. An empty box in its place means the font has no U+2026.
+
+## See also
+
+- [ParagraphLayout reference](/reference/paragraph-layout)
+- [Size a paragraph](/guides/layout/size-a-paragraph)
+- [Use fallback fonts](/guides/fonts/fallback-stacks)
+- [Subset a font](/guides/fonts/subset-coverage)
+- [Measure text](/guides/inspect/measure-text)

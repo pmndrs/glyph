@@ -1,0 +1,144 @@
+---
+title: Indent and space paragraphs
+description: Indent a paragraph's first line and reserve space above and below it with firstLineIndent, spaceBefore and spaceAfter.
+nav: 305
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="layout" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+One `Text` is one paragraph. Running text is several of them stacked, and the conventions that separate one from the
+next, an indented first line or a gap between blocks, belong to each paragraph's `layout`. This guide sets the three
+properties involved and stacks paragraphs by their measured height.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="layout-indent-spacing" aria-label="Two stacked paragraphs without and with first-line indent and paragraph spacing" aspect="16 / 9" />
+
+The same two paragraphs, stacked. On the right each has a first-line indent (the gold bar), `spaceBefore` and
+`spaceAfter` (the shaded bands). The grey outline is each paragraph's measured box: the spacing is inside it.
+
+## Indent the first line
+
+`firstLineIndent` moves the start of the first line inward by a length in paragraph-local units, the same units as
+`fontSize`. The line has that much less room, so it wraps sooner.
+
+```ts
+const paragraph = three.createText({
+  font: Inter,
+  text: 'The first line of a paragraph may start further in than the rest.',
+  style: { fontSize: 0.22, lineHeight: 1.35 },
+  layout: { wrap: 'word', firstLineIndent: 0.45 },
+  constraints: { width: { mode: 'exact', size: 4.5 } },
+});
+```
+
+Only the first line of the paragraph is indented. A line that follows a line break in the text (`\n`) is not. The
+indent is measured from the start edge, so it is on the right in a right-to-left paragraph. The value must be zero or
+more; there is no hanging indent.
+
+## Add space before and after
+
+`spaceBefore` reserves room above the first line and `spaceAfter` reserves room below the last. Both are lengths in
+paragraph-local units and both are part of the paragraph box.
+
+```ts
+text.layout = { wrap: 'word', firstLineIndent: 0.45, spaceBefore: 0.3, spaceAfter: 0.42 };
+
+const measured = text.measure();
+measured.height; // lines + spaceBefore + spaceAfter
+measured.firstBaseline; // includes spaceBefore
+```
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text
+  font={Inter}
+  style={{ fontSize: 0.22, lineHeight: 1.35 }}
+  layout={{ wrap: 'word', firstLineIndent: 0.45, spaceBefore: 0.3, spaceAfter: 0.42 }}
+  constraints={{ width: { mode: 'exact', size: 4.5 } }}
+>
+  Space before and space after belong to the paragraph box.
+</Text>;
+```
+
+Because the space is inside the box:
+
+- `measure().height` and `measure().contentHeight` include both.
+- `measure().firstBaseline`, and every line's `baseline`, are measured from the top of the box and so include
+  `spaceBefore`.
+- The anchors `'top'`, `'middle'` and `'bottom'` refer to the box with its spacing. Use `'first-baseline'` or
+  `'last-baseline'` to anchor to the text itself; see [Anchor text to a point](/guides/layout/anchor-text).
+- Under a height limit, `spaceBefore` uses up room that lines would otherwise have.
+
+## Stack paragraphs
+
+Since each box carries its own spacing, stacking is a running sum of heights. The scene's +Y is up and the paragraph
+grows down, so each paragraph goes below the previous one.
+
+```ts
+const paragraphs = ['First paragraph of the article.', 'Second paragraph of the article.'];
+
+let top = 2;
+for (const content of paragraphs) {
+  const paragraph = three.createText({
+    font: Inter,
+    text: content,
+    style: { fontSize: 0.22, lineHeight: 1.35 },
+    layout: { wrap: 'word', firstLineIndent: 0.45, spaceAfter: 0.3 },
+    constraints: { width: { mode: 'exact', size: 4.5 } },
+  });
+  paragraph.position.set(-2.25, top, 0);
+  scene.add(paragraph);
+  top -= paragraph.measure().height;
+}
+```
+
+In React, `onLayout` reports each paragraph's measurement before the frame that draws it. Move the next block from
+there.
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+import { useRef } from 'react';
+import type { Group } from 'three/webgpu';
+
+function Article() {
+  const rest = useRef<Group>(null);
+  const layout = { wrap: 'word', firstLineIndent: 0.45, spaceAfter: 0.3 } as const;
+  const constraints = { width: { mode: 'exact', size: 4.5 } } as const;
+  return (
+    <group position={[-2.25, 2, 0]}>
+      <Text
+        font={Inter}
+        layout={layout}
+        constraints={constraints}
+        onLayout={(_text, measured) => {
+          if (rest.current !== null) rest.current.position.y = -measured.height;
+        }}
+      >
+        First paragraph of the article.
+      </Text>
+      <group ref={rest}>
+        <Text font={Inter} layout={layout} constraints={constraints}>
+          Second paragraph of the article.
+        </Text>
+      </group>
+    </group>
+  );
+}
+```
+
+## Check the result
+
+- `text.measure().height` grows by exactly `spaceBefore + spaceAfter` when you add them to a paragraph with no
+  height limit.
+- In `text.measure().lines`, the first line's `advance` includes the indent.
+- A negative value throws `GlyphInputError`, for example `Text layout firstLineIndent must be nonnegative`.
+
+## See also
+
+- [ParagraphLayout reference](/reference/paragraph-layout)
+- [Size a paragraph](/guides/layout/size-a-paragraph)
+- [React to layout changes](/guides/inspect/react-to-layout)
+- [Style text](/guides/text/style-text)

@@ -1,0 +1,155 @@
+---
+title: Anchor text to a point
+description: Choose which point of the paragraph box sits on the object's position with Constraints.anchor, and read the offset it applied.
+nav: 301
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="layout" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+By default a text hangs from its position: the top-left corner of the paragraph box is at the object's origin, and
+the lines run right and down from there. `constraints.anchor` names a different point of the box to put on the
+origin, such as its center or its first baseline. This guide centers a label on a point, sits text on a baseline, and
+reads the offset the anchor applied.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="layout-anchor" aria-label="The same two lines under three anchors, each rocking about its position" aspect="16 / 9" />
+
+The gold dot is each object's `position`. The anchor decides which point of the grey box lies on the dot, and
+because the dot is the object's origin, the text also rotates and scales about it.
+
+## Center a label on a point
+
+Set `anchor.x` and `anchor.y`, then position the object where the anchor should be.
+
+```ts
+const label = three.createText({
+  font: Inter,
+  text: 'Summit',
+  style: { fontSize: 0.4 },
+  constraints: { anchor: { x: 'center', y: 'middle' } },
+});
+label.position.set(2, 1.5, 0); // the center of the box is now at (2, 1.5, 0)
+scene.add(label);
+```
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text
+  font={Inter}
+  style={{ fontSize: 0.4 }}
+  constraints={{ anchor: { x: 'center', y: 'middle' } }}
+  position={[2, 1.5, 0]}
+>
+  Summit
+</Text>;
+```
+
+`anchor.x` is `'left'`, `'center'` or `'right'`. `anchor.y` is one of nine references, listed below. An axis you
+leave out uses `'left'` or `'top'`.
+
+The anchor refers to the resolved box, the one `measure().width` and `measure().height` describe. With no width
+constraint, or with `at-most`, that box is as wide as the widest line, so `x: 'center'` centers the text itself. With
+`exact`, it centers the box you stated, and `layout.align` places the lines inside it. See
+[Size a paragraph](/guides/layout/size-a-paragraph).
+
+## Sit text on a baseline
+
+The box references `'top'`, `'middle'` and `'bottom'` depend on line height and paragraph spacing. To line text up
+with something drawn, such as a rule, an icon, or another text at a different size, anchor a typographic reference
+instead.
+
+```ts
+const price = three.createText({
+  font: Inter,
+  text: '42',
+  style: { fontSize: 1.2 },
+  constraints: { anchor: { x: 'right', y: 'first-baseline' } },
+});
+const unit = three.createText({
+  font: Inter,
+  text: 'km',
+  style: { fontSize: 0.4 },
+  constraints: { anchor: { x: 'left', y: 'first-baseline' } },
+});
+// Both baselines are on y = 0; the two texts meet at x = 0 and x = 0.1.
+price.position.set(0, 0, 0);
+unit.position.set(0.1, 0, 0);
+```
+
+<glyph-proxy fit="cover" root="scenes" data-scene="layout-anchor-references" aria-label="Every vertical anchor reference drawn on a two-line paragraph" aspect="16 / 9" />
+
+Every `anchor.y` token, drawn at the position `measure()` reports for it. The paragraph has an exact height taller
+than its two lines, which separates `'middle'` and `'bottom'` from the text.
+
+| `anchor.y` | Point on the origin | Same value in `measure()` |
+| --- | --- | --- |
+| `'top'` (default) | Top edge of the box. | `0` |
+| `'middle'` | Half the box height. | `height / 2` |
+| `'bottom'` | Bottom edge of the box. | `height` |
+| `'first-baseline'` | Baseline of the first line. | `firstBaseline` |
+| `'last-baseline'` | Baseline of the last line. | `lastBaseline` |
+| `'alphabetic-baseline'` | Baseline of the first line. | `alphabeticBaseline` |
+| `'ideographic-baseline'` | Bottom of the first line's line box. | `ideographicBaseline` |
+| `'cap-height-top'` | Top of capital letters on the first line. | `capHeightTop` |
+| `'x-height-top'` | Top of lowercase letters such as x on the first line. | `xHeightTop` |
+
+Each metric token is the kebab-case form of the `measure()` field it uses. The typographic references come from the
+primary font of the first line, not from the glyphs that happen to be in the text, so a label reading `xxx` and one
+reading `Åg` anchor at the same height.
+
+## Read the offset
+
+The anchor is a translation applied when the text is placed. It does not change the layout: `measure()` and
+`glyphs()` keep reporting paragraph-local coordinates with the origin at the top-left of the box and +Y down.
+`measure().anchorOffset` is the translation, in the same space.
+
+```ts
+const { anchorOffset, width, height } = text.measure();
+
+// A paragraph-local point (x right, y down) in the text object's local frame (x right, y up):
+const toLocal = (x: number, y: number) => [x + anchorOffset.x, -(y + anchorOffset.y)] as const;
+
+const topLeft = toLocal(0, 0);
+const bottomRight = toLocal(width, height);
+```
+
+For `{ x: 'center', y: 'middle' }` on a box 4 wide and 2 high, `anchorOffset` is `{ x: -2, y: -1 }`. With the default
+anchor it is `{ x: 0, y: 0 }`.
+
+Members that answer in the text object's own frame already include the anchor: `boundingBox` and `measureGlyphs()`
+(+Y up), and the editing queries such as `caret()` and `hitTest()` (+Y down). Only `measure()` and `glyphs()` report
+unanchored values. [Coordinate spaces](/explanation/coordinate-spaces) lists which method uses which space.
+
+## Change one axis
+
+A `constraints` array is merged shallowly, so a later `anchor` replaces an earlier one whole. To override one axis
+of a named anchor, spread it.
+
+```ts
+import { Constraints } from '@pmndrs/glyph';
+
+const boxes = Constraints.create({
+  label: { width: { mode: 'at-most', size: 4 }, anchor: { x: 'center', y: 'middle' } },
+});
+
+text.constraints = [boxes.label, { anchor: { ...boxes.label.anchor, y: 'bottom' } }];
+```
+
+Changing only the anchor moves the text without shaping or laying it out again.
+
+## Check the result
+
+- `text.measure().anchorOffset` is `{ x: -width / 2, y: -height / 2 }` for `{ x: 'center', y: 'middle' }`.
+- Rotating the object turns the text about the anchored point.
+- Changing the text or its width keeps the anchored point on the object's position.
+
+## See also
+
+- [Constraints reference](/reference/constraints)
+- [Size a paragraph](/guides/layout/size-a-paragraph)
+- [Coordinate spaces](/explanation/coordinate-spaces)
+- [Labels over objects](/guides/scene/labels)
+- [Measure text](/guides/inspect/measure-text)

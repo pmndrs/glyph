@@ -1,0 +1,118 @@
+---
+title: Justify text
+description: Fill every line to both edges with align justify, bound how far word spaces stretch and shrink, and decide what the last line does.
+nav: 303
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="layout" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+A justified paragraph has two straight edges. The layout engine gets there by changing the spaces between words on
+each line. This guide turns justification on, limits how much a space may change so that narrow columns do not open
+wide gaps, and sets the policy for the last line.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="justify" aria-label="A justified paragraph above two justified columns while the width changes" aspect="16 / 9" />
+
+A justified paragraph above a justified two-column body, with the width changing. Both use the bounds described
+below, so a line that cannot reach the edge within them stays slightly short instead of opening a gap.
+
+## Turn justification on
+
+Set `align: 'justify'` and give the paragraph a width to fill.
+
+```ts
+const body = three.createText({
+  font: Inter,
+  text: 'A page holds its measure, both edges true, while every line negotiates its own interior.',
+  style: { fontSize: 0.24, lineHeight: 1.3 },
+  layout: { wrap: 'word', align: 'justify' },
+  constraints: { width: { mode: 'exact', size: 4 } },
+});
+```
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text
+  font={Inter}
+  style={{ fontSize: 0.24, lineHeight: 1.3 }}
+  layout={{ wrap: 'word', align: 'justify' }}
+  constraints={{ width: { mode: 'exact', size: 4 } }}
+>
+  A page holds its measure, both edges true, while every line negotiates its own interior.
+</Text>;
+```
+
+With no further settings, each wrapped line's word spaces grow by whatever it takes to reach the far edge, and they
+never shrink. Spaces at the end of a line are not counted. The lines fill the resolved paragraph width, so use
+`width: { mode: 'exact' }`: under `at-most` the paragraph is only as wide as its widest line, and the other lines
+justify to that.
+
+## Bound the word spaces
+
+On a narrow width, unbounded justification opens wide gaps. `layout.justify` limits what a word space may do.
+
+```ts
+text.layout = {
+  wrap: 'word',
+  align: 'justify',
+  justify: {
+    maxWordSpaceRatio: 1.5, // a word space may grow to 1.5 times its natural width
+    minWordSpaceRatio: 0.8, // and may shrink to 0.8 times, to fit one more word on a line
+    letterSpaceExpansion: 0.01, // then each gap between letters may grow by up to 0.01 units
+  },
+};
+```
+
+| Field | Range | Effect |
+| --- | --- | --- |
+| `maxWordSpaceRatio` | 1 or more | The most a word space may grow, as a multiple of its natural advance. Unset: no limit. |
+| `minWordSpaceRatio` | More than 0, up to 1 | Lets word spaces shrink to this multiple of their natural advance, so the line breaker can fit a word that would otherwise wrap. Unset or `1`: spaces never shrink. |
+| `letterSpaceExpansion` | 0 or more | After word spaces reach `maxWordSpaceRatio`, the most each gap between letters may grow, in paragraph-local units. Unset: letter gaps do not change. |
+
+The engine fills a line in that order: word spaces first, up to the maximum, then letter gaps, up to their limit.
+Whatever is still missing is left as it is, and the line ends short of the edge. A short line is the visible sign
+that the bounds are tight for this width.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="layout-justify-bounds" aria-label="One narrow paragraph justified four ways" aspect="16 / 9" />
+
+The gold line is the edge every line is trying to reach. Unbounded justification reaches it with large gaps. With
+`maxWordSpaceRatio: 1.5` some lines stop short. Adding `letterSpaceExpansion` lets those lines spread part of the
+remainder between letters, up to its own limit.
+
+Reasonable starting values for body text are a maximum between 1.3 and 1.6, a minimum between 0.75 and 0.9, and a
+letter-space expansion of a few percent of the font size. `letterSpaceExpansion` is a length, not a ratio, so scale
+it with `fontSize`.
+
+The `justify` bounds only apply when `align` is `'justify'`.
+
+## Decide the last line
+
+By default the last line of the paragraph is not justified, and neither is a line that ends at a line break in the
+text (`\n`). They sit at the start edge. To fill them as well, set `lastLine`.
+
+```ts
+text.layout = { wrap: 'word', align: 'justify', lastLine: 'justify' };
+```
+
+| `lastLine` | The final line and lines ending in `\n` |
+| --- | --- |
+| `'auto'` (the default) | Are not justified. |
+| `'justify'` | Are justified like every other line, within the same bounds. |
+
+## Check the result
+
+- With an exact width and no `justify` bounds, every wrapped line except the last has `advance` equal to
+  `measure().width` in `measure().lines`.
+- With bounds set, `measure().contentWidth` drops below `measure().width` when no line could be filled.
+- A value out of range throws `GlyphInputError`, for example
+  `Text layout justify maxWordSpaceRatio must be at least 1`.
+
+## See also
+
+- [ParagraphLayout reference](/reference/paragraph-layout)
+- [Wrap and align text](/guides/layout/wrap-and-align)
+- [Lay out text in columns](/guides/layout/columns)
+- [Style text](/guides/text/style-text)

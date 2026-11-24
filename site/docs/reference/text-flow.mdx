@@ -1,0 +1,352 @@
+---
+title: TextFlow
+description: Reference for flow regions and exclusions - TextFlow, TextFlowRegion, TextFlowExclusion, TextFlowShape - and the three.js projection helpers projectTextFlowBounds and projectTextFlowSilhouette.
+nav: 713
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+A `TextFlow` is an ordered list of 2D regions that one paragraph's text flows through, each with the shapes its
+lines must avoid. It is the value of a text's `flow` property. The types are exported from `@pmndrs/glyph`. Two
+helpers in `@pmndrs/glyph/three` build an exclusion from a 3D object as the camera sees it.
+
+```ts
+import type { TextFlow } from '@pmndrs/glyph';
+
+const flow: TextFlow = {
+  regions: [
+    {
+      key: 'left',
+      shape: { kind: 'rectangle', bounds: [0, 0, 4, 5] },
+      exclusions: [{ key: 'figure', shape: { kind: 'rectangle', bounds: [2.5, 1, 4, 2.5] }, marginInline: 0.1 }],
+    },
+    { key: 'right', shape: { kind: 'rectangle', bounds: [4.5, 0, 8.5, 5] } },
+  ],
+};
+
+text.flow = flow;
+```
+
+## Types
+
+```ts
+interface TextFlow {
+  readonly regions: readonly TextFlowRegion[];
+}
+
+interface TextFlowRegion {
+  readonly key: string;
+  readonly shape: TextFlowShape;
+  readonly clip?: TextFlowBounds;
+  readonly exclusions?: readonly TextFlowExclusion[];
+}
+
+interface TextFlowExclusion {
+  readonly key: string;
+  readonly shape: TextFlowShape;
+  readonly wrapSide?: 'both' | 'inline-start' | 'inline-end' | 'largest';
+  readonly marginInline?: number;
+  readonly marginBlock?: number;
+}
+
+type TextFlowShape =
+  | Readonly<{ kind: 'rectangle'; bounds: TextFlowBounds }>
+  | Readonly<{ kind: 'polygon'; vertices: readonly TextFlowPoint[] }>;
+
+/** [inlineStart, blockStart, inlineEnd, blockEnd] */
+type TextFlowBounds = readonly [number, number, number, number];
+
+/** [inline, block] */
+type TextFlowPoint = readonly [number, number];
+```
+
+## Coordinates
+
+Every coordinate is paragraph-local: the origin is the paragraph origin, inline positions increase to the right
+(+X), block positions increase downward (+Y), and the units are those of `fontSize`. This is the space `measure()`
+and `glyphs()` report in. With the default anchor the paragraph origin is the text's origin. With another
+[`anchor`](/reference/constraints#anchor), regions and exclusions are translated with the paragraph by
+`measure().anchorOffset`.
+
+Coordinates are stored as 32-bit floats. A value that is finite as a number but not as a 32-bit float is rejected.
+
+## Where it is accepted
+
+| Place | Notes |
+| --- | --- |
+| `root.createText({ flow })`, `text.flow = …`, `text.set({ flow })` in `@pmndrs/glyph/three` | Assign `undefined` to remove the flow. |
+| `flow` prop of `<Text>` in `@pmndrs/glyph/react` and `@pmndrs/glyph/vue` | Root `<Text>` only, not nested spans. |
+| `flow` option in `@pmndrs/glyph/pixi3d` | |
+
+`flow` is one object, not a property list. Setting it validates the value and stores a normalized, frozen copy:
+`text.flow` returns that copy, with coordinates rounded to 32-bit floats and polygon vertices in a consistent winding
+order. A new value that is equal to the current one after normalization does not change the text.
+
+## TextFlow
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `regions` | `readonly TextFlowRegion[]` | The regions, in flow order. At least one. |
+
+Text fills `regions[0]` from its top, continues at the top of `regions[1]` when the next line does not fit, and so
+on. Regions are not balanced. Content left after the last region is not laid out, and `measure().overflowed` is
+`true`; [`ParagraphLayout.overflow`](/reference/paragraph-layout#overflow) applies to the last line of the last
+region.
+
+When a text has a flow:
+
+- The regions replace the columns `ParagraphLayout.columns` would generate.
+- `Constraints.width` and `height` do not limit lines. They define the resolved box (`measure().width`, `height`) and
+  the anchor. Lines align inside their region when the width constraint is `'exact'`.
+- `ParagraphLayout.wrap: 'none'` does not wrap at region edges.
+
+## TextFlowRegion
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `key` | `string` | Required | Identity of the region across updates. Nonempty, unique among the flow's regions. Array order is flow order, not identity. |
+| `shape` | [`TextFlowShape`](#textflowshape) | Required | The area lines are placed in. |
+| `clip` | `TextFlowBounds` | The bounds of `shape` | Clip rectangle for the region's lines when `ParagraphLayout.overflow` is `'clip'`. |
+| `exclusions` | `readonly TextFlowExclusion[]` | None | Shapes this region's lines avoid. |
+
+A line occupies the inline span that the shape provides over the line's whole block extent. In a polygon with
+slanted edges, lines therefore stay inside both edges.
+
+> [!CAUTION]
+> A rectangle region with a negative `blockStart` passes validation, but the engine refuses the paragraph: the first
+> read that prepares the text throws `GlyphEngineStatusError`. Negative inline coordinates are accepted.
+
+> [!NOTE]
+> The three.js renderer does not cut glyphs at `clip`; see
+> [`overflow`](/reference/paragraph-layout#overflow).
+
+## TextFlowExclusion
+
+| Property | Type | Default | Constraint | Description |
+| --- | --- | --- | --- | --- |
+| `key` | `string` | Required | Nonempty, unique among the region's exclusions | Identity of the exclusion across updates. |
+| `shape` | [`TextFlowShape`](#textflowshape) | Required | | The area to avoid, in the same coordinates as the region. It may extend outside the region. |
+| `wrapSide` | `'both' \| 'inline-start' \| 'inline-end' \| 'largest'` | `'both'` | | Which side of the shape may hold text. |
+| `marginInline` | `number` | `0` | Finite, 0 or more | Extra clearance on the inline sides of the shape. |
+| `marginBlock` | `number` | `0` | Finite, 0 or more | Extra reach above and below the shape when deciding which lines it affects. |
+
+For each line, an exclusion removes one inline span from the space the region provides: for a rectangle, its inline
+extent; for a polygon, the extent from the smallest to the largest inline coordinate it reaches within the line's
+block extent grown by `marginBlock`. The span is then grown by `marginInline` on both sides. A line the shape,
+grown by `marginBlock`, does not reach is unaffected.
+
+`wrapSide` chooses what remains of a line that the span divides:
+
+| `wrapSide` | Remaining space used |
+| --- | --- |
+| `'both'` | The part before the span and the part after it. |
+| `'inline-start'` | Only the part before the span (smaller inline coordinates). |
+| `'inline-end'` | Only the part after the span (larger inline coordinates). |
+| `'largest'` | The wider part; the part before the span when they are equal. |
+
+"Before" and "after" are positions on the inline axis and do not depend on the paragraph's direction.
+
+An exclusion affects only the region that lists it.
+
+## TextFlowShape
+
+| `kind` | Field | Description |
+| --- | --- | --- |
+| `'rectangle'` | `bounds: TextFlowBounds` | `[inlineStart, blockStart, inlineEnd, blockEnd]`. Each end must be greater than its start. |
+| `'polygon'` | `vertices: readonly TextFlowPoint[]` | Three or more `[inline, block]` vertices of a simple polygon. The ring is closed implicitly. Either winding order is accepted. |
+
+A polygon must not repeat a vertex, must not intersect itself, and must have nonzero area. It may be concave.
+
+## Validation
+
+A flow is validated when it is set. On a three.js, React or Vue text, a violation throws
+[`GlyphInputError`](/reference/errors) with `path` equal to `['flow']`; the `TypeError` or `RangeError` below is its
+`cause`, and the text keeps its previous flow. Messages start with `Text flow`. In the table, `<region>` stands for
+`Text flow region <index>`, `<exclusion>` for `<region> exclusion <index>`, and `<shape>` for `<region> shape` or
+`<exclusion> shape`.
+
+| Condition | Error | Message |
+| --- | --- | --- |
+| `flow` is not an object | `TypeError` | `Text flow must be an object` |
+| `regions` is not an array, or is empty | `TypeError` | `Text flow regions must be a nonempty array` |
+| A region or exclusion is not an object | `TypeError` | `<region> must be an object`, `<exclusion> must be an object` |
+| A key is not a nonempty string | `TypeError` | `<region> key must be a nonempty string`, `<exclusion> key must be a nonempty string` |
+| Two regions share a key | `TypeError` | `Text flow region key "<key>" is duplicated` |
+| Two exclusions of a region share a key | `TypeError` | `<region> exclusion key "<key>" is duplicated` |
+| `wrapSide` is not one of its values | `TypeError` | `<exclusion> wrapSide is invalid` |
+| A margin is not a finite 32-bit float | `TypeError` | `<exclusion> marginInline must contain finite f32 coordinates` |
+| A margin is negative | `RangeError` | `<exclusion> marginInline must be nonnegative` |
+| A shape is not an object | `TypeError` | `<shape> must be an object` |
+| `kind` is neither value, or a polygon has fewer than three vertices | `TypeError` | `<shape> must be a rectangle or a polygon with at least three vertices` |
+| `bounds` or `clip` is not an array of four numbers | `TypeError` | `<shape> bounds must contain four finite coordinates`, `<region> clip must contain four finite coordinates` |
+| A bounds coordinate is not a finite 32-bit float | `TypeError` | `<shape> bounds must contain finite f32 coordinates` |
+| An end is not greater than its start | `RangeError` | `<shape> bounds must have positive inline and block extents` |
+| A vertex is not an array of two numbers | `TypeError` | `<shape> vertex <index> must contain two finite coordinates` |
+| A vertex coordinate is not a finite 32-bit float | `TypeError` | `<shape> vertex <index> must contain finite f32 coordinates` |
+| Two neighboring vertices are equal | `TypeError` | `<shape> has consecutive duplicate vertices` |
+| Two other vertices are equal | `TypeError` | `<shape> repeats a vertex` |
+| The polygon's area is zero or not finite | `RangeError` | `<shape> must have nonzero finite area` |
+| Two edges of the polygon cross or touch | `TypeError` | `<shape> must not self-intersect` |
+
+`clip` is checked like `bounds`, with `<region> clip` in the message. The contour of a
+[drop cap](/reference/paragraph-layout#dropcap) is validated as a polygon with the same messages.
+
+## projectTextFlowBounds()
+
+Projects a 3D bounding box through a camera onto a text's plane and returns the area it covers as an exclusion.
+Exported from `@pmndrs/glyph/three`.
+
+```ts
+import { projectTextFlowBounds } from '@pmndrs/glyph/three';
+import { Box3, Vector3, type Object3D } from 'three/webgpu';
+
+declare const object: Object3D;
+
+const exclusion = projectTextFlowBounds({
+  key: 'object',
+  camera,
+  text,
+  object,
+  bounds: new Box3(new Vector3(-0.5, -0.5, -0.5), new Vector3(0.5, 0.5, 0.5)),
+  flowBounds: [0, 0, 8, 4],
+});
+```
+
+### Syntax
+
+```ts
+import type { TextFlowExclusion } from '@pmndrs/glyph';
+import type { ProjectTextFlowBoundsOptions } from '@pmndrs/glyph/three';
+
+declare function projectTextFlowBounds(options: ProjectTextFlowBoundsOptions): TextFlowExclusion | undefined;
+```
+
+### Parameters
+
+`options` is a `ProjectTextFlowBoundsOptions` object:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `key` | `string` | Required | Key of the returned exclusion. |
+| `camera` | `THREE.Camera` | Required | A `PerspectiveCamera` or `OrthographicCamera`. Its current world matrix and projection matrix define the projection. |
+| `text` | `THREE.Object3D` | Required | The object whose local `z = 0` plane is the text plane; its local +X is the inline axis and its local -Y the block axis. Normally the `Text`. |
+| `object` | `THREE.Object3D` | Required | The object the bound belongs to. Its world matrix places the bound. |
+| `bounds` | `THREE.Box3` | Required | The bound, in `object`'s local space. Finite, with a positive extent on every axis. |
+| `flowBounds` | `TextFlowBounds` | Required | Rectangle in flow coordinates that the result is clipped to. |
+| `projectionError` | `number` | `0` | Distance, in flow units, by which the projected shape is grown on every side. Finite, 0 or more. |
+| `wrapSide` | `TextFlowExclusion['wrapSide']` | Not set | Copied to the exclusion. |
+| `marginInline` | `number` | Not set | Copied to the exclusion. |
+| `marginBlock` | `number` | Not set | Copied to the exclusion. |
+
+### Return value
+
+A frozen, normalized [`TextFlowExclusion`](#textflowexclusion) whose shape is a convex polygon, or `undefined` when
+nothing of the bound can cover the flow.
+
+The polygon is the convex hull of the projection of the part of the box that lies on the camera's side of the text
+plane and inside the camera's frustum. Each point is projected along its camera ray onto the text plane, converted
+to the text's local frame, and clipped to `flowBounds`. A box entirely behind the text plane, outside the frustum, or
+projecting outside `flowBounds` gives `undefined`.
+
+The function calls `updateWorldMatrix(true, false)` on `camera`, `text` and `object`. It does not update the
+camera's projection matrix. It does not read depth or pixels and does not account for other objects.
+
+The result is in the text object's local frame. That equals flow coordinates when the text has the default anchor.
+
+### Exceptions
+
+Plain `TypeError` and `RangeError`; see [Projection errors](#projection-errors).
+
+## projectTextFlowSilhouette()
+
+Projects an outline you supply, instead of a box, and keeps its concave corners. Exported from
+`@pmndrs/glyph/three`.
+
+```ts
+import { projectTextFlowSilhouette } from '@pmndrs/glyph/three';
+import { Vector3, type Object3D } from 'three/webgpu';
+
+declare const object: Object3D;
+
+const exclusion = projectTextFlowSilhouette({
+  key: 'object',
+  camera,
+  text,
+  object,
+  silhouette: [new Vector3(-1, -1, 0), new Vector3(1, -1, 0), new Vector3(0, 1, 0)],
+  flowBounds: [0, 0, 8, 4],
+});
+```
+
+### Syntax
+
+```ts
+import type { TextFlowExclusion } from '@pmndrs/glyph';
+import type { ProjectTextFlowSilhouetteOptions } from '@pmndrs/glyph/three';
+
+declare function projectTextFlowSilhouette(
+  options: ProjectTextFlowSilhouetteOptions,
+): TextFlowExclusion | undefined;
+```
+
+### Parameters
+
+`options` is a `ProjectTextFlowSilhouetteOptions` object. It has every option of
+[`projectTextFlowBounds`](#projecttextflowbounds) except `bounds`, and adds:
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `silhouette` | `readonly THREE.Vector3[]` | Vertices of a closed ring in `object`'s local space, in order around the outline. At least three; no two neighbors equal, the last and first included. |
+
+### Return value
+
+A frozen, normalized [`TextFlowExclusion`](#textflowexclusion) whose shape is a polygon, or `undefined` when no part
+of the ring can cover the flow.
+
+The ring is clipped to the camera's side of the text plane and to the camera's frustum, projected like a bound, and
+clipped to `flowBounds`. With `projectionError` unset or `0` the projected outline is kept as given, concave corners
+included. With a nonzero `projectionError` the result is the convex hull of the grown outline.
+
+### Exceptions
+
+Plain `TypeError` and `RangeError`; see [Projection errors](#projection-errors).
+
+## Projection errors
+
+Both helpers throw the errors below directly; they are not wrapped in `GlyphInputError`.
+
+| Condition | Error | Message |
+| --- | --- | --- |
+| `camera` is neither perspective nor orthographic | `TypeError` | `camera must be a PerspectiveCamera or OrthographicCamera` |
+| A matrix has a `NaN` or infinite element | `RangeError` | `camera matrixWorld must contain only finite values` (likewise `camera projectionMatrix`, `text matrixWorld`, `object matrixWorld`) |
+| `object`'s world matrix cannot be inverted | `RangeError` | `object matrixWorld must be finite and invertible` |
+| `text`'s world matrix cannot be inverted | `RangeError` | `text matrixWorld must be finite and invertible` |
+| `text`'s world matrix collapses its plane | `RangeError` | `text matrixWorld must describe a nondegenerate plane` |
+| The camera is in the text plane | `RangeError` | `camera must not lie on the text plane` |
+| A corner of `flowBounds` is not in front of the camera | `RangeError` | `text flow plane must project finitely in front of the camera` |
+| The text plane is seen edge-on | `RangeError` | `text flow plane projection must not be edge-on or degenerate` |
+| The camera's frustum is degenerate | `RangeError` | `camera projection must describe a finite nondegenerate frustum` |
+| `projectionError` is negative or not finite | `RangeError` | `projectionError must be a nonnegative finite f32 value` |
+| `flowBounds` is not a valid rectangle | `TypeError` or `RangeError` | The bounds messages of [Validation](#validation), starting with `text flow region 0 shape bounds` |
+| `bounds` is empty, not finite, or flat on an axis | `RangeError` | `bounds must be a finite nonempty Box3` |
+| `silhouette` has fewer than three vertices | `RangeError` | `silhouette must contain at least three ordered vertices` |
+| A silhouette vertex is not a `Vector3` | `TypeError` | `silhouette vertex <index> must be a Vector3` |
+| A silhouette vertex is not finite | `RangeError` | `silhouette vertex <index> must contain only finite values` |
+| Two neighboring silhouette vertices are equal | `RangeError` | `silhouette must not contain duplicate consecutive vertices` |
+| `key`, `wrapSide`, a margin, or the projected outline is not a valid exclusion | `TypeError` or `RangeError` | The exclusion messages of [Validation](#validation), starting with `text flow region 0 exclusion 0` |
+
+## Renderer support
+
+| Entry point | `flow` | Projection helpers |
+| --- | --- | --- |
+| `@pmndrs/glyph/three` | Yes | Yes |
+| `@pmndrs/glyph/react`, `@pmndrs/glyph/vue` | Yes, as a prop | Use the helpers from `@pmndrs/glyph/three` |
+| `@pmndrs/glyph/pixi3d` | Yes | No |
+| `@pmndrs/glyph/typegpu` | No | No |
+
+## See also
+
+- [ParagraphLayout](/reference/paragraph-layout)
+- [Constraints](/reference/constraints)
+- [Flow text through regions](/guides/layout/flow-through-regions)
+- [Wrap text around shapes](/guides/layout/wrap-around-shapes)
+- [Wrap text around 3D objects](/guides/layout/wrap-around-3d-objects)

@@ -1,0 +1,135 @@
+---
+title: Lay out text in columns
+description: Flow one paragraph through side-by-side columns with ParagraphLayout.columns.
+nav: 306
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="layout" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+`layout.columns` splits the paragraph box into equal columns and flows one text through them in order. It is the
+short form for the common case. For columns of different sizes, or boxes that are not side by side, see
+[Flow text through regions](/guides/layout/flow-through-regions).
+
+<glyph-proxy fit="cover" root="scenes" data-scene="layout-columns" aria-label="One paragraph in three columns while the box height changes" aspect="16 / 9" />
+
+One paragraph in three columns while the height of the box changes. Each column fills to the bottom before the next
+one starts.
+
+## Set the columns
+
+Give `columns` a `count` and a `gap`, and give the paragraph an exact width and a height.
+
+```ts
+const article = three.createText({
+  font: Inter,
+  text: 'One long text. '.repeat(40),
+  style: { fontSize: 0.21, lineHeight: 1.35 },
+  layout: { wrap: 'word', columns: { count: 3, gap: 0.45 } },
+  constraints: {
+    width: { mode: 'exact', size: 9.9 },
+    height: { mode: 'exact', size: 2.4 },
+  },
+});
+```
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text
+  font={Inter}
+  style={{ fontSize: 0.21, lineHeight: 1.35 }}
+  layout={{ wrap: 'word', columns: { count: 3, gap: 0.45 } }}
+  constraints={{ width: { mode: 'exact', size: 9.9 }, height: { mode: 'exact', size: 2.4 } }}
+>
+  {'One long text. '.repeat(40)}
+</Text>;
+```
+
+- `count` is an integer from 1 to 16.
+- `gap` is the space between neighboring columns, in paragraph-local units. It defaults to `0`.
+- Each column is `(width - gap * (count - 1)) / count` wide. The first starts at the left edge of the box and the last
+  ends at its right edge.
+
+## Give the box a width and a height
+
+Both constraints are required as soon as `count` is more than 1, and each has a job.
+
+- The width must be `exact`. The column width is derived from it, and an `at-most` width has no fixed value to
+  divide.
+- The height must be stated. A column ends where the height ends, and that is the only thing that moves text to the
+  next column.
+
+Without them the call that sets `layout` or `constraints` throws `GlyphInputError`:
+
+| Missing | Message |
+| --- | --- |
+| An exact width | `layout columns require an exact width constraint to derive the column measure` |
+| A height | `layout columns require a bounded height constraint to fill columns in order` |
+
+If the gaps leave no room for the columns, a `RangeError` with the message
+`layout columns and gap leave no positive column measure` is thrown when the text is first prepared, for example by
+`measure()`.
+
+## Expect unbalanced columns
+
+Columns fill in order and are not balanced. The first column takes as many lines as the height allows, then the
+second, and so on. The consequences:
+
+- If the text is short, the last columns are short or empty.
+- If the height is `at-most` and larger than the text needs, or `unconstrained`, everything stays in the first column.
+- If the text does not fit in all the columns, the rest is not drawn and `measure().overflowed` is `true`. The
+  `overflow` policy applies to the last line of the last column, so `overflow: 'ellipsis'` ends that line with an
+  ellipsis; see [Truncate text](/guides/layout/truncate).
+
+To get columns of roughly equal length, choose the height yourself. Measure the text in a single column of the
+column width, then divide.
+
+```ts
+const count = 3;
+const gap = 0.45;
+const width = 9.9;
+const columnWidth = (width - gap * (count - 1)) / count;
+
+// 1. How tall is the text in one column of that width?
+text.set({ layout: { wrap: 'word' }, constraints: { width: { mode: 'exact', size: columnWidth } } });
+const single = text.measure();
+const lineHeight = single.lines[0]?.lineHeight ?? 0;
+
+// 2. Share the lines between the columns, rounding up to whole lines. Half a line of slack keeps
+//    floating-point rounding from pushing the last line of a column into the next one.
+const linesPerColumn = Math.ceil(single.lineCount / count);
+text.set({
+  layout: { wrap: 'word', columns: { count, gap } },
+  constraints: {
+    width: { mode: 'exact', size: width },
+    height: { mode: 'exact', size: (linesPerColumn + 0.5) * lineHeight },
+  },
+});
+```
+
+This assumes every line has the same height, which holds for text in one font size.
+
+## Combine with other layout properties
+
+`align`, `justify`, `maxLines` and `overflow` work per line as they do in a single column, against the column width.
+`firstLineIndent` and `spaceBefore` apply once, to the first line of the first column. `maxLines` counts lines across
+all columns.
+
+`measure().width` and `measure().height` describe the whole box, not one column. `measure().contentWidth` is the
+widest line.
+
+## Check the result
+
+- In `text.glyphs()`, the first glyph of a line in the second column has `x` equal to `columnWidth + gap`.
+- `text.measure().overflowed` turns `true` when you reduce the height below what the text needs.
+- `text.measure().lineCount` counts the lines of all columns.
+
+## See also
+
+- [ParagraphLayout reference](/reference/paragraph-layout)
+- [Flow text through regions](/guides/layout/flow-through-regions)
+- [Justify text](/guides/layout/justify)
+- [Size a paragraph](/guides/layout/size-a-paragraph)

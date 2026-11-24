@@ -1,0 +1,131 @@
+---
+title: Wrap and align text
+description: Choose where lines may break with ParagraphLayout.wrap and where each line sits in the paragraph width with align.
+nav: 302
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="layout" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+`layout` holds the rules a paragraph follows whatever box it is given: where a line may break and how a line is
+placed in the width. This guide sets `wrap` and `align`. Both need a width to work against, which comes from
+`constraints`; see [Size a paragraph](/guides/layout/size-a-paragraph).
+
+<glyph-proxy fit="cover" root="scenes" data-scene="paragraph-layout" aria-label="One paragraph under three layout rules in a box whose width changes" aspect="16 / 9" />
+
+One text under three layout rules while the box changes width. The rule stays the same; only `constraints` is
+reassigned, and each paragraph is composed again.
+
+## Choose where lines break
+
+```ts
+const paragraph = three.createText({
+  font: Inter,
+  text: 'Lines break nowhere, between words, or between any two characters.',
+  style: { fontSize: 0.24 },
+  layout: { wrap: 'word' },
+  constraints: { width: { mode: 'exact', size: 4 } },
+});
+```
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text
+  font={Inter}
+  style={{ fontSize: 0.24 }}
+  layout={{ wrap: 'word' }}
+  constraints={{ width: { mode: 'exact', size: 4 } }}
+>
+  Lines break nowhere, between words, or between any two characters.
+</Text>;
+```
+
+| `wrap` | A line may break |
+| --- | --- |
+| `'word'` (the default) | At the line-break opportunities Unicode defines, which in Latin text means after spaces and hyphens. A single word wider than the line is split between characters so that it still fits. |
+| `'character'` | Between any two characters. Every line is filled as far as it goes. |
+| `'none'` | Only at a line break in the text (`\n`). A line wider than the box runs past its edge. |
+
+"Character" here means a shaped cluster, so a letter is never separated from its combining marks.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="layout-wrap" aria-label="One sentence under wrap none, word and character in a box whose width changes" aspect="16 / 9" />
+
+The same sentence under each mode. `'none'` ignores the box, `'word'` keeps words whole, and `'character'` breaks
+inside them.
+
+Wrapping needs a width limit. With no width constraint, or `{ mode: 'unconstrained' }`, there is nothing to wrap at
+and `'word'` and `'character'` behave like `'none'`.
+
+> [!NOTE]
+> Words are not hyphenated. A line breaks only where the text already allows it.
+
+A line that does not fit when `wrap` is `'none'` sets `measure().overflowed`. To shorten it instead, see
+[Truncate text](/guides/layout/truncate).
+
+## Align the lines
+
+```ts
+text.layout = { wrap: 'word', align: 'center' };
+text.constraints = { width: { mode: 'exact', size: 4 } };
+```
+
+| `align` | Each line sits |
+| --- | --- |
+| `'start'` (the default) | At the edge where the paragraph begins: the left in a left-to-right paragraph, the right in a right-to-left one. |
+| `'center'` | In the middle of the paragraph width. |
+| `'end'` | At the edge opposite `'start'`. |
+| `'justify'` | From edge to edge, by stretching the spaces between words. The last line stays at `'start'`. |
+
+<glyph-proxy fit="cover" root="scenes" data-scene="layout-align" aria-label="One paragraph under the four alignments in the same box" aspect="16 / 9" />
+
+The four alignments in the same exact width.
+
+`'start'` and `'end'` are logical: they follow the paragraph's base direction, which comes from `style.direction`.
+See [Bidirectional text](/guides/text/bidirectional-text). Justification has controls of its own; see
+[Justify text](/guides/layout/justify).
+
+> [!IMPORTANT]
+> Lines align inside the resolved paragraph width, which is `measure().width`. Under `width: { mode: 'at-most' }` or
+> no width constraint, that width is the widest line, so a one-line paragraph looks the same under every `align`.
+> Use `width: { mode: 'exact' }` to align to the edges of a box you chose, or keep the box tight and move it with
+> `constraints.anchor`; see [Anchor text to a point](/guides/layout/anchor-text).
+
+## Name the rules you reuse
+
+`ParagraphLayout.create` validates named layout objects once and returns them frozen. `layout` accepts an array,
+merged left to right, so a shared rule can take a per-text override.
+
+```ts
+import { ParagraphLayout } from '@pmndrs/glyph';
+
+const layouts = ParagraphLayout.create({
+  body: { wrap: 'word', align: 'start' },
+  caption: { wrap: 'word', align: 'center', maxLines: 2 },
+});
+
+three.createText({
+  font: Inter,
+  text: 'A caption under a figure.',
+  layout: [layouts.caption, { align: 'end' }],
+  constraints: { width: { mode: 'exact', size: 4 } },
+});
+```
+
+## Check the result
+
+- `text.measure().lineCount` is `1` under `wrap: 'none'` for text without `\n`.
+- Under `align: 'end'` in a left-to-right paragraph with an exact width, every line ends at the right edge of the
+  box.
+- An unknown value throws `GlyphInputError` with the message `Text layout wrap is invalid` or
+  `Text layout align is invalid`.
+
+## See also
+
+- [ParagraphLayout reference](/reference/paragraph-layout)
+- [Size a paragraph](/guides/layout/size-a-paragraph)
+- [Justify text](/guides/layout/justify)
+- [Truncate text](/guides/layout/truncate)
+- [Bidirectional text](/guides/text/bidirectional-text)

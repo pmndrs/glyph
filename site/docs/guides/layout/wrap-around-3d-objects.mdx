@@ -1,0 +1,257 @@
+---
+title: Wrap text around 3D objects
+description: Project a scene object through the camera onto a paragraph and use the result as a flow exclusion.
+nav: 309
+sourcecode: packages/glyph/src/three/projected-flow.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="layout" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+An object floating in front of a paragraph covers some of its words. Which words depends on the camera: under
+perspective, the area an object hides is larger than the object and shifts as either one moves.
+`projectTextFlowBounds` and `projectTextFlowSilhouette`, from `@pmndrs/glyph/three`, compute that area on the text
+plane and return it as an ordinary exclusion, so the text wraps around what the camera sees.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="layout-projected-exclusion" aria-label="A paragraph wrapping around the camera's view of a cube that floats in front of it" aspect="16 / 9" />
+
+A cube 1.6 units in front of a paragraph. Each frame its bounding box is projected onto the text plane and the lines
+are composed around the result, so the cube never covers a word.
+
+## Before you start
+
+You need a text with a `flow` that has at least one region; see
+[Wrap text around shapes](/guides/layout/wrap-around-shapes). Leave the text's `constraints.anchor` at its default.
+The helpers answer in the text object's local frame, which matches flow coordinates only when the paragraph origin
+is at the object's origin.
+
+## Project a bounding box
+
+Call `projectTextFlowBounds` with the camera, the text, the object, and the object's bounding box in its own local
+space. Put the returned exclusion in the region.
+
+```ts
+import { projectTextFlowBounds } from '@pmndrs/glyph/three';
+import { Box3, BoxGeometry, Mesh, MeshBasicNodeMaterial, Vector3 } from 'three/webgpu';
+import type { TextFlowBounds } from '@pmndrs/glyph';
+
+const region: TextFlowBounds = [0, 0, 8.4, 3.9];
+const page = three.createText({
+  font: Inter,
+  text: 'One long text. '.repeat(60),
+  style: { fontSize: 0.2, lineHeight: 1.35 },
+  flow: { regions: [{ key: 'page', shape: { kind: 'rectangle', bounds: region } }] },
+});
+page.position.set(-4.2, 1.95, 0);
+
+const cube = new Mesh(new BoxGeometry(0.9, 0.9, 0.9), new MeshBasicNodeMaterial());
+cube.position.set(1, 0.5, 1.6); // 1.6 in front of the text plane
+scene.add(page, cube);
+
+// The bound is in the cube's local space; the helper applies the cube's world transform.
+const bounds = new Box3(new Vector3(-0.45, -0.45, -0.45), new Vector3(0.45, 0.45, 0.45));
+
+function update() {
+  const exclusion = projectTextFlowBounds({
+    key: 'cube',
+    camera,
+    text: page,
+    object: cube,
+    bounds,
+    flowBounds: region,
+    marginInline: 0.12,
+    wrapSide: 'largest',
+  });
+  page.flow = {
+    regions: [
+      {
+        key: 'page',
+        shape: { kind: 'rectangle', bounds: region },
+        exclusions: exclusion === undefined ? [] : [exclusion],
+      },
+    ],
+  };
+}
+```
+
+Call `update()` whenever the camera, the text or the object has moved, before `glyph.shape()` and the render. The
+helper updates the world matrices of all three itself. It does not call `camera.updateProjectionMatrix()`, so do
+that after changing the field of view, the aspect ratio or the zoom.
+
+What the options mean:
+
+- `key` becomes the exclusion's key. Keep it the same from frame to frame.
+- `text` is the object whose local plane `z = 0` is the text plane. Pass the `Text`.
+- `object` and `bounds` describe the thing to avoid: a `Box3` in the object's local space. For a mesh,
+  `geometry.boundingBox` after `geometry.computeBoundingBox()` is that box.
+- `flowBounds` is a rectangle in flow coordinates that the result is clipped to. Pass the bounds of the region the
+  exclusion goes into.
+- `wrapSide`, `marginInline` and `marginBlock` are copied onto the exclusion.
+
+The result is a polygon exclusion: the convex outline of the part of the box that is on the camera's side of the
+text plane and inside the camera's view, as seen from the camera.
+
+## Handle "nothing to exclude"
+
+Both helpers return `undefined` when the object cannot cover any of the flow: it is entirely behind the text plane,
+outside the camera's view, or its projection misses `flowBounds`. Leave the exclusion out in that case, as the code
+above does. An object that crosses the text plane is cut at the plane, and only the part in front is projected.
+
+## Follow a silhouette instead of a box
+
+A bounding box is conservative: the area it hides is larger than a round or thin object needs. If you know the
+object's outline, pass it to `projectTextFlowSilhouette` as an ordered ring of points in the object's local space.
+
+```ts
+import { projectTextFlowSilhouette } from '@pmndrs/glyph/three';
+import { Object3D, Vector3 } from 'three/webgpu';
+import type { TextFlowBounds } from '@pmndrs/glyph';
+
+declare const arrow: Object3D;
+declare const region: TextFlowBounds;
+
+// An arrow shape in the object's local XY plane, listed in order around the outline.
+const silhouette = [
+  new Vector3(-0.6, 0.2, 0),
+  new Vector3(0.1, 0.2, 0),
+  new Vector3(0.1, 0.5, 0),
+  new Vector3(0.7, 0, 0),
+  new Vector3(0.1, -0.5, 0),
+  new Vector3(0.1, -0.2, 0),
+  new Vector3(-0.6, -0.2, 0),
+];
+
+const exclusion = projectTextFlowSilhouette({
+  key: 'arrow',
+  camera,
+  text,
+  object: arrow,
+  silhouette,
+  flowBounds: region,
+});
+```
+
+The ring needs at least three points and no two neighbors may be equal. Its projection keeps concave corners. The
+points do not have to lie in one plane, but the helper does not compute an outline for you: it projects the ring you
+give it.
+
+## Allow for approximation
+
+If the bound or silhouette is only approximate, for example a low-detail outline of a detailed model, set
+`projectionError` to the largest error you expect, in paragraph-local units. The projected shape is grown by that
+amount on every side.
+
+```ts
+import { projectTextFlowBounds } from '@pmndrs/glyph/three';
+import type { Box3, Object3D } from 'three/webgpu';
+import type { TextFlowBounds } from '@pmndrs/glyph';
+
+declare const model: Object3D;
+declare const bounds: Box3;
+declare const region: TextFlowBounds;
+
+const exclusion = projectTextFlowBounds({
+  key: 'model',
+  camera,
+  text,
+  object: model,
+  bounds,
+  flowBounds: region,
+  projectionError: 0.05,
+});
+```
+
+A nonzero `projectionError` makes the result convex, also for a silhouette.
+
+## Use it from React
+
+Compute the exclusion in `useFrame` and keep it in state, so the `flow` prop changes when the projection does.
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+import { projectTextFlowBounds, type Text as ThreeText } from '@pmndrs/glyph/three';
+import type { msdf, TextFlowExclusion } from '@pmndrs/glyph';
+import { useFrame } from '@react-three/fiber/webgpu';
+import { useRef, useState } from 'react';
+import { Box3, Vector3, type Mesh } from 'three/webgpu';
+
+const REGION = [0, 0, 8.4, 3.9] as const;
+const BOUNDS = new Box3(new Vector3(-0.45, -0.45, -0.45), new Vector3(0.45, 0.45, 0.45));
+
+function Page({ children }: { children: string }) {
+  const page = useRef<ThreeText<typeof msdf>>(null);
+  const cube = useRef<Mesh>(null);
+  const [exclusion, setExclusion] = useState<TextFlowExclusion>();
+
+  useFrame(({ camera, elapsed }) => {
+    if (page.current === null || cube.current === null) return;
+    cube.current.position.set(Math.sin(elapsed * 0.4) * 2.6, 0.35, 1.6);
+    setExclusion(
+      projectTextFlowBounds({
+        key: 'cube',
+        camera,
+        text: page.current,
+        object: cube.current,
+        bounds: BOUNDS,
+        flowBounds: REGION,
+      }),
+    );
+  });
+
+  return (
+    <>
+      <mesh ref={cube}>
+        <boxGeometry args={[0.9, 0.9, 0.9]} />
+        <meshBasicNodeMaterial />
+      </mesh>
+      <Text
+        ref={page}
+        font={inter}
+        position={[-4.2, 1.95, 0]}
+        flow={{
+          regions: [
+            {
+              key: 'page',
+              shape: { kind: 'rectangle', bounds: REGION },
+              exclusions: exclusion === undefined ? [] : [exclusion],
+            },
+          ],
+        }}
+      >
+        {children}
+      </Text>
+    </>
+  );
+}
+```
+
+A projection that moved by less than the precision of a 32-bit float returns an equal exclusion, and assigning a flow
+equal to the current one does not lay the text out again. A still scene costs one projection per frame and no
+layout.
+
+## Know the limits
+
+- The helpers do geometry only. They do not read the depth buffer or rendered pixels, so they do not know whether
+  another object hides the one you projected, or which parts of a mesh are transparent.
+- The camera must be a `PerspectiveCamera` or an `OrthographicCamera`, and it must not lie in the text plane.
+- Every corner of `flowBounds` must be in front of the camera, and the text plane must not be seen edge-on.
+- The exclusion belongs to the regions you add it to. Other regions of the same text are not affected.
+
+A helper throws `TypeError` or `RangeError` when one of these conditions does not hold; the messages are listed in
+the [TextFlow reference](/reference/text-flow).
+
+## Check the result
+
+- The returned exclusion has `shape.kind === 'polygon'`, and every vertex lies inside `flowBounds`.
+- With the camera facing the text squarely and the object centered on the camera axis, the polygon is centered on
+  the object.
+- Moving the object behind the text plane makes the helper return `undefined`, and the text fills the region again.
+
+## See also
+
+- [TextFlow reference](/reference/text-flow)
+- [Wrap text around shapes](/guides/layout/wrap-around-shapes)
+- [Flow text through regions](/guides/layout/flow-through-regions)
+- [Place text in 3D](/guides/scene/place-text-in-3d)
+- [Coordinate spaces](/explanation/coordinate-spaces)

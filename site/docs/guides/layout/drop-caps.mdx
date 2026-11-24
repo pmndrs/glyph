@@ -1,0 +1,161 @@
+---
+title: Add a drop cap
+description: Enlarge a paragraph's first letter and run the body text beside it with ParagraphLayout.dropCap.
+nav: 310
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="layout" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+A drop cap is a large first letter with the opening lines of the paragraph set beside it. In Glyph the letter stays
+part of the paragraph's text: you give it a larger size with a span, and `layout.dropCap` tells the layout engine to
+take it out of the first line and make room for it. This guide sizes the cap, sets how it aligns, and shapes the
+text around it.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="layout-drop-cap" aria-label="Four drop caps on the same paragraph: dropped, raised, on the end side, and with a contour" aspect="16 / 9" />
+
+One paragraph, four settings: a cap dropped three lines, a raised cap on the first baseline, a cap on the end side,
+and a cap whose contour lets the lines follow the slope of the letter.
+
+## Make the first letter a cap
+
+Two things are needed: a span that makes the first letter large, and `dropCap` with the number of body lines to
+reserve beside it.
+
+```ts
+import { span, txt } from '@pmndrs/glyph';
+
+const opening = three.createText({
+  font: Inter,
+  text: txt`${span({ fontSize: 0.94 })`A`}fter the initial, the body runs beside it for three lines.`,
+  style: { fontSize: 0.2, lineHeight: 1.35 },
+  layout: { wrap: 'word', dropCap: { lines: 3, marginInline: 0.06 } },
+  constraints: { width: { mode: 'exact', size: 2.45 } },
+});
+```
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text
+  font={Inter}
+  style={{ fontSize: 0.2, lineHeight: 1.35 }}
+  layout={{ wrap: 'word', dropCap: { lines: 3, marginInline: 0.06 } }}
+  constraints={{ width: { mode: 'exact', size: 2.45 } }}
+>
+  <Text style={{ fontSize: 0.94 }}>A</Text>
+  fter the initial, the body runs beside it for three lines.
+</Text>;
+```
+
+`dropCap` does not choose the size of the letter. The cap is drawn at whatever size, font, color and material its
+own span gives it. Without a larger span, the first letter stays at body size and the following lines are merely
+indented by its width.
+
+The cap is the first character of the text. If separating it from the next character would change how the text is
+shaped, for example inside a ligature, the cap extends to the nearest point where the text can be split safely.
+
+## Size the cap to the lines
+
+For a cap that drops `lines` lines, its capital height must reach from the top of the capitals on the first line to
+the baseline of the last reserved line. Compute the font size from the body's own metrics:
+
+```ts
+const bodySize = 0.2;
+const lines = 3;
+
+// Any text in the body style reports the metrics.
+const probe = three.createText({ font: Inter, text: 'H', style: { fontSize: bodySize, lineHeight: 1.35 } });
+const measured = probe.measure();
+const capHeight = measured.fontMetrics.capHeight; // of the body, in paragraph-local units
+const lineHeight = measured.lines[0]?.lineHeight ?? 0;
+probe.dispose();
+
+// Height the cap must cover, divided by the font's cap height per unit of font size.
+const capSize = ((lines - 1) * lineHeight + capHeight) / (capHeight / bodySize);
+```
+
+For Inter at a body size of 0.2 and a line height of 1.35 this gives about 0.94, the value used above. A cap in a
+different font needs that font's cap-height ratio in the divisor.
+
+`lines` is a minimum, an integer from 1 to 16. If the cap is taller than that many lines, the body stays clear of
+it for as many lines as it actually covers.
+
+## Align the cap
+
+| `align` | The cap sits |
+| --- | --- |
+| `'text-top'` (the default) | With the top of its capital height level with the top of the capitals on the first body line. It hangs down beside the following lines. |
+| `'baseline'` | On the baseline of the first body line. It rises above the paragraph. |
+
+`'baseline'` with `lines: 1` is a raised initial. The cap extends above the top of the paragraph box, so leave room
+above the text; `measure().inkBounds` reports how far it reaches.
+
+```ts
+text.layout = { wrap: 'word', dropCap: { lines: 1, align: 'baseline' } };
+```
+
+## Choose the side
+
+`side` is `'inline-start'` by default: the edge where the paragraph begins, which is the left in a left-to-right
+paragraph and the right in a right-to-left one. `'inline-end'` places the cap at the opposite edge.
+
+## Set the clearance
+
+`marginInline` is the gap between the cap and the body text beside it. `marginBlock` is extra clearance above and
+below the cap, which can make it claim one more line. Both are lengths in paragraph-local units, zero or more, and
+default to `0`. The clearance is measured from the cap's drawn shape, not from its line box.
+
+## Follow the letter's shape
+
+By default the body keeps clear of a rectangle that runs from the paragraph edge to the far side of the cap, margins
+included. Letters such as A, V, L or W leave part of that rectangle empty. `contour` replaces the rectangle with a
+polygon, given in the unit square of that rectangle: `[0, 0]` is its top-left corner and `[1, 1]` its bottom-right.
+For a cap on the left, each body line then starts where the contour ends at that line's height. For a cap on the
+right, each line ends where the contour begins.
+
+```ts
+text.layout = {
+  wrap: 'word',
+  dropCap: {
+    lines: 3,
+    marginInline: 0.06,
+    // The right-hand slope of an A: narrow at the top, full width at the bottom.
+    contour: [
+      [0, 0],
+      [0.62, 0],
+      [1, 1],
+      [0, 1],
+    ],
+  },
+};
+```
+
+The contour needs at least three vertices, all within 0 to 1, and must not cross itself. It only moves the body
+text; the cap is drawn where it was.
+
+## When no cap is made
+
+The paragraph is laid out without a cap, and without an error, when:
+
+- the text has fewer than two characters;
+- the text starts with a space or a line break;
+- the cap could not be separated from the text that follows without changing its shaping;
+- the cap and its `marginInline` are as wide as the line.
+
+## Check the result
+
+- In `text.glyphs()`, the body glyphs of the first `lines` lines start to the right of the cap, and later lines
+  start at the paragraph edge.
+- `text.measure().firstBaseline` is that of an ordinary body line: the large letter does not make the first line
+  taller.
+- `lines: 0` throws `GlyphInputError` with the message `Text layout dropCap lines must be an integer between 1 and 16`.
+
+## See also
+
+- [ParagraphLayout reference](/reference/paragraph-layout)
+- [Rich text](/guides/text/rich-text)
+- [Wrap text around shapes](/guides/layout/wrap-around-shapes)
+- [Anchor text to a point](/guides/layout/anchor-text)

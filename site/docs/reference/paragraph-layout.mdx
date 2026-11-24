@@ -1,0 +1,331 @@
+---
+title: ParagraphLayout
+description: Reference for the ParagraphLayout object - wrap, align, overflow, maxLines, indent, spacing, justification, columns and dropCap - and ParagraphLayout.create.
+nav: 711
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+`ParagraphLayout` describes how a paragraph's text flows: where lines break, how they align, how many are kept, and
+how the paragraph is indented, spaced, split into columns or opened with a drop cap. It holds no sizes of the box
+itself; those are [`Constraints`](/reference/constraints). It is exported from `@pmndrs/glyph` as a type and, under
+the same name, as an object with one method, [`create`](#paragraphlayoutcreate).
+
+```ts
+import { ParagraphLayout } from '@pmndrs/glyph';
+
+const layouts = ParagraphLayout.create({
+  body: { wrap: 'word', align: 'justify', firstLineIndent: 0.4 },
+});
+
+const layout: ParagraphLayout = { wrap: 'word', maxLines: 3, overflow: 'ellipsis' };
+```
+
+## Type
+
+```ts
+interface ParagraphLayout {
+  readonly maxLines?: number;
+  readonly wrap?: 'none' | 'word' | 'character';
+  readonly align?: 'start' | 'center' | 'end' | 'justify';
+  readonly overflow?: 'visible' | 'clip' | 'ellipsis';
+  readonly firstLineIndent?: number;
+  readonly spaceBefore?: number;
+  readonly spaceAfter?: number;
+  readonly justify?: {
+    readonly minWordSpaceRatio?: number;
+    readonly maxWordSpaceRatio?: number;
+    readonly letterSpaceExpansion?: number;
+  };
+  readonly lastLine?: 'auto' | 'justify';
+  readonly columns?: { readonly count: number; readonly gap?: number };
+  readonly dropCap?: {
+    readonly lines: number;
+    readonly align?: 'text-top' | 'baseline';
+    readonly side?: 'inline-start' | 'inline-end';
+    readonly marginInline?: number;
+    readonly marginBlock?: number;
+    readonly contour?: readonly (readonly [number, number])[];
+  };
+}
+```
+
+Every property is optional. Lengths are in paragraph-local units, the units of `fontSize`.
+
+## Where it is accepted
+
+| Place | Form |
+| --- | --- |
+| `root.createText({ layout })`, `text.layout = …`, `text.set({ layout })` in `@pmndrs/glyph/three` | `PropertyList<ParagraphLayout>` |
+| `layout` prop of `<Text>` in `@pmndrs/glyph/react` and `@pmndrs/glyph/vue` | `PropertyList<ParagraphLayout>` |
+| `layout` option in `@pmndrs/glyph/typegpu` and `@pmndrs/glyph/pixi3d` | One `ParagraphLayout` object |
+
+A `PropertyList<ParagraphLayout>` is a layout object, or an array of them that may be nested and may contain `false`,
+`null` and `undefined`. The entries are merged left to right with the semantics of `Object.assign`: a later entry
+replaces a property of an earlier one whole, including the nested objects `justify`, `columns` and `dropCap`. The
+merged result is validated, not the individual entries.
+
+`text.layout` returns the merged, frozen object. Assigning `layout` replaces the previous value entirely; properties
+the new value does not state return to their defaults.
+
+## Properties
+
+| Property | Type | Default | Constraint |
+| --- | --- | --- | --- |
+| [`wrap`](#wrap) | `'none' \| 'word' \| 'character'` | `'word'` | |
+| [`align`](#align) | `'start' \| 'center' \| 'end' \| 'justify'` | `'start'` | |
+| [`overflow`](#overflow) | `'visible' \| 'clip' \| 'ellipsis'` | `'visible'` | |
+| [`maxLines`](#maxlines) | `number` | No limit | Integer, 1 or more |
+| [`firstLineIndent`](#firstlineindent) | `number` | `0` | Finite, 0 or more |
+| [`spaceBefore`](#spacebefore-and-spaceafter) | `number` | `0` | Finite, 0 or more |
+| [`spaceAfter`](#spacebefore-and-spaceafter) | `number` | `0` | Finite, 0 or more |
+| [`justify`](#justify) | `object` | No bounds | See below |
+| [`lastLine`](#lastline) | `'auto' \| 'justify'` | `'auto'` | |
+| [`columns`](#columns) | `{ count, gap? }` | One column | See below |
+| [`dropCap`](#dropcap) | `object` | No drop cap | See below |
+
+### wrap
+
+Where a line may break.
+
+| Value | Meaning |
+| --- | --- |
+| `'word'` | At Unicode line-break opportunities (UAX #14). A word wider than the line is broken between clusters. |
+| `'character'` | Between any two clusters. |
+| `'none'` | Only at a line break in the text. |
+
+Wrapping takes effect when the line has a width limit: a `width` constraint of mode `'at-most'` or `'exact'`,
+generated columns, or a flow region. Words are not hyphenated.
+
+### align
+
+Where each line sits in the paragraph width.
+
+| Value | Meaning |
+| --- | --- |
+| `'start'` | At the start edge: left for a left-to-right paragraph, right for a right-to-left one. |
+| `'center'` | Centered. |
+| `'end'` | At the edge opposite the start edge. |
+| `'justify'` | Filled from edge to edge by adjusting word spaces, within the [`justify`](#justify) bounds. Lines covered by [`lastLine`](#lastline) are excepted. |
+
+The paragraph width is the resolved width, `measure().width`: the constraint's `size` under `'exact'`, and the widest
+line under `'at-most'` and `'unconstrained'`. Inside columns and flow regions, lines align within the column or
+region when the width constraint is `'exact'`. The base direction comes from `TextStyle.direction`.
+
+### overflow
+
+What happens to content that does not fit the line limit (`maxLines`), the height constraint, or the last column or
+region.
+
+| Value | Meaning |
+| --- | --- |
+| `'visible'` | Lines past the limit are not laid out or drawn. A line wider than its box extends past it. |
+| `'ellipsis'` | As `'visible'`, and the last line kept is shortened so that it and an ellipsis fit the line's width. The ellipsis is at the line's end in the paragraph's base direction. |
+| `'clip'` | Lines are assigned to their region's clip bounds. |
+
+The ellipsis is U+2026, shaped through the font selection of the text it follows at that text's size: the first font
+in the stack that has the character, otherwise the last font's missing glyph.
+
+`measure().overflowed` is `true` under every value when content did not fit.
+
+> [!NOTE]
+> The three.js renderer does not cut glyphs at clip bounds. Under `'clip'` it draws the lines `'visible'` draws. Under
+> a height constraint, `measure()` and `glyphs()` report all lines for `'clip'` and only the kept lines for
+> `'visible'`.
+
+### maxLines
+
+The largest number of lines laid out, counted across all columns or regions. Lines past it are handled according to
+[`overflow`](#overflow).
+
+### firstLineIndent
+
+Extra inline offset of the paragraph's first line, from the start edge. The first line's available width shrinks by
+the same amount. Lines that follow a line break in the text are not indented.
+
+### spaceBefore and spaceAfter
+
+Block-axis space before the first line and after the last line. Both are inside the paragraph box:
+`measure().height` and `contentHeight` include them, and `firstBaseline` and line baselines include `spaceBefore`.
+In columns and regions, `spaceBefore` applies once, before the first line of the first one.
+
+### justify
+
+Bounds for `align: 'justify'`. Ignored for other alignments.
+
+| Field | Type | Default | Constraint | Meaning |
+| --- | --- | --- | --- | --- |
+| `minWordSpaceRatio` | `number` | No shrinking | Finite, more than 0 and at most 1 | Smallest word space, as a multiple of its natural advance. Lets the line breaker fit more on a line by shrinking spaces. |
+| `maxWordSpaceRatio` | `number` | No limit | Finite, 1 or more | Largest word space, as a multiple of its natural advance. |
+| `letterSpaceExpansion` | `number` | `0` | Finite, 0 or more | Largest extra advance per gap between clusters, in paragraph-local units, used after word spaces reach `maxWordSpaceRatio`. |
+
+A line that cannot be filled within the bounds is left short. Spaces at the end of a line take no part.
+
+### lastLine
+
+Whether `align: 'justify'` also applies to the paragraph's final line and to lines that end at a line break in the
+text.
+
+| Value | Meaning |
+| --- | --- |
+| `'auto'` | Those lines are not justified. |
+| `'justify'` | Those lines are justified. |
+
+### columns
+
+Flows the text through equal side-by-side columns inside the paragraph width.
+
+| Field | Type | Default | Constraint | Meaning |
+| --- | --- | --- | --- | --- |
+| `count` | `number` | Required | Integer from 1 to 16 | Number of columns. |
+| `gap` | `number` | `0` | Finite, 0 or more | Inline space between neighboring columns. |
+
+Each column is `(width - gap * (count - 1)) / count` wide and as tall as the height constraint. Columns fill in
+order and are not balanced; the last may be short or empty.
+
+When `count` is more than 1, the text's constraints must have a `width` of mode `'exact'` and must state a `height`.
+A `height` of mode `'unconstrained'` is accepted and keeps every line in the first column.
+
+Ignored when the text has a [`flow`](/reference/text-flow), except that these requirements are still checked.
+
+### dropCap
+
+Takes the first character of the paragraph out of the first line and reserves body lines beside it. The character
+keeps the style of its own span; `dropCap` does not enlarge it.
+
+| Field | Type | Default | Constraint | Meaning |
+| --- | --- | --- | --- | --- |
+| `lines` | `number` | Required | Integer from 1 to 16 | Smallest number of body lines kept clear beside the cap. A taller cap clears more. |
+| `align` | `'text-top' \| 'baseline'` | `'text-top'` | | `'text-top'`: the cap's capital height is level with the capital height of the first body line. `'baseline'`: the cap's baseline is the first body line's baseline. |
+| `side` | `'inline-start' \| 'inline-end'` | `'inline-start'` | | Logical side of the paragraph that holds the cap. `'inline-start'` is the left in a left-to-right paragraph and the right in a right-to-left one. |
+| `marginInline` | `number` | `0` | Finite, 0 or more | Inline clearance between the cap's ink and the body text. |
+| `marginBlock` | `number` | `0` | Finite, 0 or more | Block clearance above and below the cap's ink. |
+| `contour` | `readonly [number, number][]` | The whole reserved rectangle | A [polygon](/reference/text-flow#textflowshape) with every coordinate in 0 to 1 | Outline the body avoids, as `[inline, block]` points in the unit square of the reserved rectangle: `[0, 0]` top-left, `[1, 1]` bottom-right. Each line is cut to the contour's inline extent over that line. |
+
+The cap is the first extended grapheme cluster of the text, extended to the nearest following position where the
+text can be split without changing its shaping. The first line keeps the body's ascent, descent and line height; the
+cap contributes to the first line's `capHeightTop` and `xHeightTop`.
+
+No cap is made, and no error is raised, when the text has fewer than two clusters, when it begins with a space or a
+line break, when no safe split position follows the first cluster, or when the cap and its margin are as wide as the
+line.
+
+## ParagraphLayout.create()
+
+Validates named layout rules and returns them frozen.
+
+```ts
+import { ParagraphLayout } from '@pmndrs/glyph';
+
+const layouts = ParagraphLayout.create({
+  body: { wrap: 'word', align: 'justify', justify: { maxWordSpaceRatio: 1.5 } },
+  caption: [{ wrap: 'word', align: 'center' }, { maxLines: 2, overflow: 'ellipsis' }],
+});
+
+layouts.body.align; // 'justify'
+layouts.caption.maxLines; // 2
+```
+
+### Syntax
+
+```ts
+import type { ParagraphLayout, PropertyList } from '@pmndrs/glyph';
+
+declare function create<const Rules extends Readonly<Record<string, PropertyList<ParagraphLayout>>>>(
+  rules: Rules,
+): Readonly<{ [Name in keyof Rules]: Readonly<ParagraphLayout> }>;
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `rules` | `Record<string, PropertyList<ParagraphLayout>>` | An object whose keys are rule names. Each value is a layout object or a property list, merged left to right before validation. |
+
+### Return value
+
+A frozen object with the same keys. Each value is the merged, frozen `ParagraphLayout` for that rule. Pass the
+values wherever a layout is accepted, alone or as entries of a property list.
+
+### Exceptions
+
+`TypeError` with the message `ParagraphLayout.create rules must be an object` when `rules` is `null`, not an object,
+or an array. Otherwise the errors of [Validation](#validation), with the label
+`ParagraphLayout.create rule "<name>"`.
+
+## Validation
+
+A layout is validated when it is set on a text and when it is passed to `ParagraphLayout.create`. The messages
+below start with a label that says where:
+
+| Where | Label | Thrown as |
+| --- | --- | --- |
+| `createText`, `text.layout`, `text.set`, the `layout` prop | `Text layout` | [`GlyphInputError`](/reference/errors) with `path` equal to `['layout']`; the `TypeError` or `RangeError` in the table is its `cause` |
+| `ParagraphLayout.create` | `ParagraphLayout.create rule "<name>"` | The `TypeError` or `RangeError` itself |
+
+When a setter throws, the text keeps its previous layout.
+
+| Condition | Error | Message after the label |
+| --- | --- | --- |
+| The value, or an entry of a property list, is not an object | `TypeError` | `must be an object or property array` |
+| `maxLines` is not an integer of 1 or more | `RangeError` | `maxLines must be a positive integer` |
+| `wrap`, `align`, `overflow` or `lastLine` is not one of its values | `TypeError` | `wrap is invalid` (and likewise for the others) |
+| `firstLineIndent`, `spaceBefore` or `spaceAfter` is `NaN` or infinite | `RangeError` | `firstLineIndent must be finite` |
+| `firstLineIndent`, `spaceBefore` or `spaceAfter` is negative | `RangeError` | `firstLineIndent must be nonnegative` |
+| `justify`, `columns` or `dropCap` is not an object | `TypeError` | `justify must be an object` |
+| `justify.minWordSpaceRatio` is not in the range above | `RangeError` | `justify minWordSpaceRatio must be in (0, 1]` |
+| `justify.maxWordSpaceRatio` is less than 1 or not finite | `RangeError` | `justify maxWordSpaceRatio must be at least 1` |
+| `justify.letterSpaceExpansion` is not finite, or negative | `RangeError` | `justify letterSpaceExpansion must be finite`, `… must be nonnegative` |
+| `columns.count` is not an integer from 1 to 16 | `RangeError` | `columns count must be an integer between 1 and 16` |
+| `columns.gap` is not finite, or negative | `RangeError` | `columns gap must be finite`, `… must be nonnegative` |
+| `dropCap.lines` is not an integer from 1 to 16 | `RangeError` | `dropCap lines must be an integer between 1 and 16` |
+| `dropCap.align` or `dropCap.side` is not one of its values | `TypeError` | `dropCap align is invalid`, `dropCap side is invalid` |
+| `dropCap.marginInline` or `marginBlock` is not finite, or negative | `RangeError` | `dropCap marginInline must be finite`, `… must be nonnegative` |
+| `dropCap.contour` has fewer than three vertices | `TypeError` | `dropCap contour must be a rectangle or a polygon with at least three vertices` |
+| `dropCap.contour` is not a valid polygon | `TypeError` or `RangeError` | The [polygon messages](/reference/text-flow#validation), with `dropCap contour` in place of the shape |
+| A `dropCap.contour` coordinate is outside 0 to 1 | `RangeError` | `dropCap contour vertices must stay within [0, 1]` |
+
+Three checks involve the constraints as well and are made on a text, not by `create`. Their messages have no label.
+
+| Condition | When | Error | Message |
+| --- | --- | --- | --- |
+| `columns.count` is more than 1 and `constraints.width` is not `'exact'` | Setting `layout` or `constraints` | `GlyphInputError` (cause `TypeError`) | `layout columns require an exact width constraint to derive the column measure` |
+| `columns.count` is more than 1 and `constraints.height` is not stated | Setting `layout` or `constraints` | `GlyphInputError` (cause `TypeError`) | `layout columns require a bounded height constraint to fill columns in order` |
+| The gaps are as wide as the paragraph | When the text is prepared | `RangeError` | `layout columns and gap leave no positive column measure` |
+
+## Example
+
+```ts
+import { ParagraphLayout } from '@pmndrs/glyph';
+
+const layouts = ParagraphLayout.create({
+  article: {
+    wrap: 'word',
+    align: 'justify',
+    justify: { minWordSpaceRatio: 0.8, maxWordSpaceRatio: 1.5, letterSpaceExpansion: 0.01 },
+    lastLine: 'auto',
+    firstLineIndent: 0.4,
+    spaceAfter: 0.3,
+    columns: { count: 2, gap: 0.5 },
+    overflow: 'ellipsis',
+  },
+});
+
+const article = three.createText({
+  font: Inter,
+  text: 'One long text. '.repeat(80),
+  style: { fontSize: 0.22, lineHeight: 1.35 },
+  layout: layouts.article,
+  constraints: { width: { mode: 'exact', size: 9 }, height: { mode: 'exact', size: 4 } },
+});
+
+// A per-text override: the array is merged left to right.
+article.layout = [layouts.article, { columns: { count: 3, gap: 0.4 } }];
+```
+
+## See also
+
+- [Constraints](/reference/constraints)
+- [TextFlow](/reference/text-flow)
+- [Text](/reference/three-text)
+- [Measurement](/reference/measurement)
+- [Wrap and align text](/guides/layout/wrap-and-align)

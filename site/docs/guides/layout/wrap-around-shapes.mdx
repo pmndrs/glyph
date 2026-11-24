@@ -1,0 +1,198 @@
+---
+title: Wrap text around shapes
+description: Carve rectangles and polygons out of a paragraph with flow exclusions, and control which side the text keeps.
+nav: 308
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="layout" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+An exclusion is a shape that lines of text must avoid: a picture set into a column, a pull quote, a character
+standing in front of a page. Exclusions belong to a flow region. This guide wraps a paragraph around a rectangle and
+a polygon, sets the clearance, chooses which side keeps the text, and moves the shape.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="layout-exclusion" aria-label="A paragraph wrapping around a disc that drifts through it" aspect="16 / 9" />
+
+A sixteen-sided polygon moving through one region. Each line it crosses is cut where the shape is, and the words
+continue on the other side.
+
+## Add an exclusion
+
+Exclusions are listed on a region, so the paragraph needs a `flow` even when it is a single box. Make one rectangle
+region the size of the paragraph, and add the shape to its `exclusions`.
+
+```ts
+import type { TextFlow } from '@pmndrs/glyph';
+
+const flow: TextFlow = {
+  regions: [
+    {
+      key: 'page',
+      shape: { kind: 'rectangle', bounds: [0, 0, 8.2, 3.7] },
+      exclusions: [
+        {
+          key: 'picture',
+          shape: { kind: 'rectangle', bounds: [5.2, 0.4, 7.4, 2.0] },
+        },
+      ],
+    },
+  ],
+};
+
+const page = three.createText({
+  font: Inter,
+  text: 'One long text. '.repeat(60),
+  style: { fontSize: 0.2, lineHeight: 1.35 },
+  flow,
+});
+```
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+import type { TextFlow } from '@pmndrs/glyph';
+
+declare const flow: TextFlow;
+
+<Text font={Inter} style={{ fontSize: 0.2, lineHeight: 1.35 }} flow={flow}>
+  {'One long text. '.repeat(60)}
+</Text>;
+```
+
+An exclusion uses the same coordinates as its region: paragraph-local, `[inline, block]`, +X right and +Y down from
+the paragraph origin. Its `shape` is a rectangle or a polygon, with the same rules as a region shape; see
+[Flow text through regions](/guides/layout/flow-through-regions). It may extend outside the region.
+
+An exclusion only reserves space. It draws nothing, so add your own mesh for the picture.
+
+## Follow an outline with a polygon
+
+For each line, a polygon exclusion removes one span: from the leftmost to the rightmost point the polygon reaches
+within that line's height. A round or slanted shape therefore produces a stepped edge that follows its outline line
+by line.
+
+```ts
+import type { TextFlowPoint } from '@pmndrs/glyph';
+
+function disc(cx: number, cy: number, radius: number, sides = 16): TextFlowPoint[] {
+  return Array.from({ length: sides }, (_, index): TextFlowPoint => {
+    const angle = (index / sides) * Math.PI * 2;
+    return [cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius];
+  });
+}
+
+text.flow = {
+  regions: [
+    {
+      key: 'page',
+      shape: { kind: 'rectangle', bounds: [0, 0, 8.2, 3.7] },
+      exclusions: [{ key: 'disc', shape: { kind: 'polygon', vertices: disc(4.1, 1.6, 0.85) } }],
+    },
+  ],
+};
+```
+
+A polygon must not cross itself, repeat a vertex, or have zero area. It may be concave, but because each line loses
+a single span, text does not enter a gap between two arms of the shape.
+
+## Set the clearance
+
+`marginInline` and `marginBlock` grow the excluded area without changing the shape. Both are lengths in
+paragraph-local units, zero or more, and default to `0`.
+
+```ts
+const exclusion = {
+  key: 'picture',
+  shape: { kind: 'rectangle', bounds: [5.2, 0.4, 7.4, 2.0] },
+  marginInline: 0.15, // clear space to the left and right of the shape
+  marginBlock: 0.05, // lines within this distance above or below the shape are also cut
+} as const;
+```
+
+`marginInline` moves the text away from the sides. `marginBlock` extends the shape's reach up and down, which
+decides whether a line that passes just above or below it is affected.
+
+## Choose the side that keeps text
+
+When a shape sits inside a line, it leaves a piece of the line on each side. `wrapSide` says which pieces may hold
+text.
+
+| `wrapSide` | Text is placed |
+| --- | --- |
+| `'both'` (the default) | On both sides. A line continues across the shape. |
+| `'inline-start'` | Only before the shape, on the side with the smaller inline coordinate (the left). |
+| `'inline-end'` | Only after the shape, on the side with the larger inline coordinate (the right). |
+| `'largest'` | Only on the wider of the two sides. If they are equal, the start side. |
+
+<glyph-proxy fit="cover" root="scenes" data-scene="layout-wrap-side" aria-label="The same sliding rectangle under each wrapSide value" aspect="16 / 9" />
+
+The same rectangle sliding left and right under each value. Under `'largest'` the text changes sides when the
+rectangle crosses the middle.
+
+The sides are positions in flow coordinates, not reading directions: `'inline-start'` is the left side in a
+right-to-left paragraph too.
+
+> [!TIP]
+> A piece of line too narrow for a word still receives text: the word is split between characters to fit, as it
+> would be in any line that is too narrow. If a shape can come close to an edge, use `'largest'`, or
+> `'inline-start'` or `'inline-end'`, so that the narrow side stays empty.
+
+A shape that spans the whole width of the region leaves no room on either side, and the lines continue below it.
+
+## Move the shape
+
+Assign a new `flow` with the shape at its new position. Keep the region and exclusion keys the same, so that the
+engine sees the same shape in a new place and not a removed shape and a new one.
+
+```ts
+import type { TextFlow } from '@pmndrs/glyph';
+
+const pageWith = (left: number): TextFlow => ({
+  regions: [
+    {
+      key: 'page',
+      shape: { kind: 'rectangle', bounds: [0, 0, 8.2, 3.7] },
+      exclusions: [
+        {
+          key: 'picture',
+          shape: { kind: 'rectangle', bounds: [left, 0.4, left + 2.2, 2.0] },
+          marginInline: 0.15,
+        },
+      ],
+    },
+  ],
+});
+
+let elapsed = 0;
+function frame(delta: number) {
+  elapsed += delta;
+  text.flow = pageWith(3 + Math.sin(elapsed) * 2.5);
+  // glyph.shape() runs before the next render and composes the affected lines again.
+}
+```
+
+To place an exclusion where a scene object is, convert the object's position in the text's local frame (+Y up) to
+flow coordinates (+Y down): with the default anchor, the point `(x, y)` is `[x, -y]`. With another anchor, subtract
+`measure().anchorOffset` from that. For objects in front of the text plane, seen through a perspective camera, see
+[Wrap text around 3D objects](/guides/layout/wrap-around-3d-objects).
+
+## Use several shapes and regions
+
+A region may list any number of exclusions; their keys must be unique within that region. An exclusion affects only
+the region that lists it. To keep a shape clear in two regions, add it to both. Leaving it out of one region lets
+that region's text run behind the shape.
+
+## Check the result
+
+- No glyph in `text.glyphs()` has its origin inside the shape grown by `marginInline`.
+- `text.measure().lineCount` rises when the shape is added, because the same text needs more lines.
+- A duplicate exclusion key throws `GlyphInputError`, for example
+  `Text flow region 0 exclusion key "picture" is duplicated`.
+
+## See also
+
+- [TextFlow reference](/reference/text-flow)
+- [Flow text through regions](/guides/layout/flow-through-regions)
+- [Wrap text around 3D objects](/guides/layout/wrap-around-3d-objects)
+- [Add a drop cap](/guides/layout/drop-caps)
