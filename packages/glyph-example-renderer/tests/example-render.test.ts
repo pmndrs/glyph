@@ -119,7 +119,9 @@ test('the public handle publishes the shared bound hierarchy into a renderer-own
     expect(device.primary.submissions).toHaveLength(acceptedSubmissions);
     expect(device.primary.realizedDraws).toEqual(acceptedDraws);
 
-    text.update({ text: 'Portable TypeGPU reflow', fontSize: 64, width: 360, height: 192 });
+    // Short enough that the narrow layout leaves a line wholly below the box: the default overflow
+    // draws the straddling line, never one past it.
+    text.update({ text: 'Portable TypeGPU reflow', fontSize: 64, width: 360, height: 120 });
     glyph.shape();
     const narrowDrawCount = handle.drawList.draws.length;
     const narrowVisibleRecordEnd = device.primary.realizedDraws.reduce(

@@ -9,6 +9,8 @@
 //! suffix do not pair: nothing for an edit at one place, the span between the first and last
 //! edit otherwise.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 use core::ops::Range;
 
@@ -81,7 +83,7 @@ impl ClusterChanges {
             return Ok(());
         }
         self.ranges
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.ranges.push(ChangedClusters { new, old });
         Ok(())
@@ -181,7 +183,7 @@ fn push_segment(
         return Ok(());
     }
     segments
-        .try_reserve(1)
+        .try_reserve_cold(1)
         .map_err(|_| EngineError::ResultTooLarge)?;
     segments.push(Segment {
         new_start: new_start as u32,

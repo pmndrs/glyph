@@ -78,6 +78,10 @@ mod text_parser;
 mod unicode_emoji_table;
 #[rustfmt::skip]
 mod ucd_table;
+// Upstream's generated table, verbatim: the source of `ucd_table` and its test reference.
+#[cfg(test)]
+#[rustfmt::skip]
+mod ucd_table_upstream;
 mod unicode;
 
 use read_fonts::types::Tag as hb_tag_t;

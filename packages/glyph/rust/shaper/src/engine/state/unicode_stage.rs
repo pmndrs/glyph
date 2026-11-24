@@ -16,7 +16,6 @@ impl ParagraphState {
         };
         if preflight_candidate.unicode_state == CandidateUnicode::ReuseCommitted {
             self.unicode_reused_for_text_edit = true;
-            self.pending_reused_ascii_facts = preflight_candidate.reused_ascii_facts;
             self.carry_boundary_lanes(false);
             return Ok(());
         }
@@ -78,16 +77,11 @@ impl ParagraphState {
     pub(super) fn discard_unicode_candidate(&mut self) {
         self.unicode.discard_candidate();
         self.unicode_reused_for_text_edit = false;
-        self.pending_reused_ascii_facts = None;
     }
 
     pub(super) fn commit_unicode(&mut self) {
         if self.unicode.is_prepared() {
             self.unicode.commit();
-        } else if let Some(facts) = self.pending_reused_ascii_facts.take() {
-            // Only the accepted transaction reaches this point. The arrays
-            // were reused; their derived small fact is committed in place.
-            self.unicode.active_mut().accept_reused_ascii_facts(facts);
         }
         self.discard_unicode_candidate();
     }

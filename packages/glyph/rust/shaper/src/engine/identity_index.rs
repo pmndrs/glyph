@@ -1,5 +1,7 @@
 //! Reusable exact-identity lookup scratch with epoch-based clearing.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 
 use super::EngineError;
@@ -116,7 +118,7 @@ fn hash(identity: u32) -> usize {
 
 fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), IdentityIndexError> {
     values
-        .try_reserve(additional)
+        .try_reserve_cold(additional)
         .map_err(|_| IdentityIndexError::AllocationFailed)
 }
 

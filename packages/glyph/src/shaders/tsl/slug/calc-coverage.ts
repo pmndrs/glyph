@@ -10,16 +10,17 @@ export function calcCoverage(
   yWeight: Node<'float'>,
   evenOdd: Node<'bool'>,
   weightBoost: Node<'bool'>,
-  stemDarken?: Node<'float'>,
-  pixelsPerEm?: Node<'float'>,
+  stemDarken: Node<'float'> | undefined,
+  pixelsPerEm: Node<'float'> | undefined,
+  suffix: string,
 ): Node<'float'> {
   const weightedNumerator = abs(add(mul(xCoverage, xWeight), mul(yCoverage, yWeight)));
   const weighted = div(weightedNumerator, max(add(xWeight, yWeight), 1 / 65_536));
   const fallback = min(abs(xCoverage), abs(yCoverage));
-  const rawCoverage = max(weighted, fallback).toVar('slugRawCoverage');
+  const rawCoverage = max(weighted, fallback).toVar(`slugRawCoverage${suffix}`);
   const nonzeroCoverage = saturate(rawCoverage);
   const evenOddCoverage = sub(1, abs(sub(1, mul(fract(mul(rawCoverage, 0.5)), 2))));
-  const filledCoverage = select(evenOdd, evenOddCoverage, nonzeroCoverage).toVar('slugCoverage');
+  const filledCoverage = select(evenOdd, evenOddCoverage, nonzeroCoverage).toVar(`slugCoverage${suffix}`);
   filledCoverage.assign(select(weightBoost, sqrt(filledCoverage), filledCoverage));
 
   if (stemDarken !== undefined && pixelsPerEm !== undefined) {

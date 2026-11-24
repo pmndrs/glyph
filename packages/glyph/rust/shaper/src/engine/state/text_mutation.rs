@@ -1,5 +1,7 @@
 //! Applying and validating the text mutations of a request against a paragraph's committed text.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 pub(super) fn apply_text_mutation(
@@ -14,7 +16,7 @@ pub(super) fn apply_text_mutation(
         new_len,
     } = check_text_mutation(old_len, mutation)?;
     if new_len > old_len {
-        text.try_reserve(new_len - old_len)
+        text.try_reserve_cold(new_len - old_len)
             .map_err(|_| TextMutationError::Allocation)?;
         text.resize(new_len, 0);
     }
@@ -55,7 +57,7 @@ pub(super) fn populate_preflight_text(
             let insert_count = mutation.insert_utf16_le.len() / 2;
             destination.clear();
             destination
-                .try_reserve(insert_count.max(preserved_capacity))
+                .try_reserve_cold(insert_count.max(preserved_capacity))
                 .map_err(|_| EngineError::ResultTooLarge)?;
             destination.extend(decoded_inserted_units(mutation.insert_utf16_le));
             return Ok(());
@@ -64,7 +66,7 @@ pub(super) fn populate_preflight_text(
     if seed_committed {
         destination.clear();
         destination
-            .try_reserve(committed.len().max(preserved_capacity))
+            .try_reserve_cold(committed.len().max(preserved_capacity))
             .map_err(|_| EngineError::ResultTooLarge)?;
         destination.extend_from_slice(committed);
         #[cfg(test)]
@@ -98,7 +100,7 @@ pub(super) fn copy_preflight_text_edits(
     let edits = source.get(start..end).ok_or(EngineError::InvalidRequest)?;
     destination.clear();
     destination
-        .try_reserve(edits.len())
+        .try_reserve_cold(edits.len())
         .map_err(|_| EngineError::ResultTooLarge)?;
     destination.extend_from_slice(edits);
     Ok(())

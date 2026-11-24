@@ -1,5 +1,7 @@
 //! Placement slots for a root's paragraphs and the commit that adopts every prepared paragraph.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 impl PlannerState {
@@ -176,9 +178,9 @@ impl PlannerState {
                 .ok_or(EngineError::ResultTooLarge)
         })?;
         desired
-            .try_reserve(required)
+            .try_reserve_cold(required)
             .map_err(|_| EngineError::ResultTooLarge)?;
-        rows.try_reserve(required)
+        rows.try_reserve_cold(required)
             .map_err(|_| EngineError::ResultTooLarge)?;
         for index in 0..work_count {
             let paragraph = self
@@ -241,7 +243,7 @@ impl PlannerState {
             crate::engine::work_attribution::record(|work| work.publication_commit_visits += 1);
             let paragraph = &mut self.paragraphs[index];
             if !paragraph.state.has_pending_preparation()
-                && !paragraph.state.clipped_inspection.is_prepared()
+                && !paragraph.state.intrinsic_inspection.is_prepared()
                 && !paragraph.positioned_changed
             {
                 #[cfg(test)]
@@ -466,7 +468,7 @@ fn complete_placement_rows(
             .binary_search_by_key(&entry.id, |paragraph| paragraph.id)
             .map_err(|_| EngineError::InvalidRequest)?;
         let state = &paragraphs[paragraph_index].state;
-        rows.try_reserve(state.active_placement_segments().len())
+        rows.try_reserve_cold(state.active_placement_segments().len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         for (relative, translation) in state.active_placement_translations().iter().enumerate() {
             let handle = state

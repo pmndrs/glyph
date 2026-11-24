@@ -1,5 +1,7 @@
 //! Compiler-mapped cold decoder for normalized per-font renderer data.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 
 use crate::{
@@ -262,7 +264,7 @@ fn decode_f32(bytes: &[u8]) -> Result<Vec<f32>, u32> {
 fn reserved_vec<T>(capacity: usize) -> Result<Vec<T>, u32> {
     let mut values = Vec::new();
     values
-        .try_reserve_exact(capacity)
+        .try_reserve_exact_cold(capacity)
         .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
     Ok(values)
 }

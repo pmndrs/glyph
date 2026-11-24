@@ -10,7 +10,7 @@ import test from 'node:test';
 
 import { h, shallowRef } from 'vue';
 import { bitmap, glyph, GlyphInputError, msdf } from '@pmndrs/glyph';
-import { ThreeConfig } from '@pmndrs/glyph/three';
+import { defineTextMaterial, ThreeConfig } from '@pmndrs/glyph/three';
 import { Text as VueText } from '@pmndrs/glyph/vue';
 import * as THREE from 'three/webgpu';
 import { loadFont } from '../../dist/loader.js';
@@ -259,6 +259,30 @@ test('Three: a root reports invalidation, and a callback installed late hears th
     'the render after it throws the callback exception, naming the text',
   );
   assert.doesNotThrow(render, 'once');
+});
+
+test('Three: root and group material, batching and disposal ask the host for a frame', async (t) => {
+  const { handle: root, scene, frame } = threeScene(t);
+  const group = root.createTextGroup();
+  group.add(root.createText({ font, text: 'grouped' }));
+  scene.add(group);
+  frame();
+  let invalidations = 0;
+  root.onInvalidate = () => {
+    invalidations += 1;
+  };
+  const material = defineTextMaterial((context) => context.createDefaultMaterial());
+  const writes = [
+    ['root.material', () => (root.material = material)],
+    ['group.material', () => (group.material = material)],
+    ['group.batching', () => (group.batching = 'group')],
+    ['group.dispose()', () => group.dispose()],
+  ];
+  for (const [name, write] of writes) {
+    const before = invalidations;
+    write();
+    assert.ok(invalidations > before, `${name} asks an on-demand loop for a frame`);
+  }
 });
 
 test('Three: a failure found by a nested render is thrown when the outermost render ends', async (t) => {

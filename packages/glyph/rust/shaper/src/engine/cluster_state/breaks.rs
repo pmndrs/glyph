@@ -141,21 +141,4 @@ impl ClusterArena {
         let target = self.ends.get(index)?;
         (*target == position || required).then_some(index)
     }
-
-    pub(super) fn cluster_at(&self, offset: u32) -> Result<usize, EngineError> {
-        let index = *self
-            .index_at
-            .get(usize::try_from(offset).map_err(|_| EngineError::InvalidRequest)?)
-            .ok_or(EngineError::InvalidRequest)?;
-        let index = usize::try_from(index).map_err(|_| EngineError::InvalidRequest)?;
-        if !self
-            .starts
-            .get(index)
-            .zip(self.ends.get(index))
-            .is_some_and(|(start, end)| *start <= offset && offset < *end)
-        {
-            return Err(EngineError::InvalidRequest);
-        }
-        Ok(index)
-    }
 }

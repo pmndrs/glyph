@@ -116,6 +116,20 @@ export interface ParagraphLayout {
   readonly maxLines?: number;
   readonly wrap?: 'none' | 'word' | 'character';
   readonly align?: 'start' | 'center' | 'end' | 'justify';
+  /**
+   * What happens to text that does not fit a fixed `height` (in the last column with `columns`, or the last region of a
+   * `flow`). Lines are measured by their line box (line height, not ink). A line that ends at or above the box's
+   * block end fits; a line that starts inside the box and ends past it straddles the edge; a line that starts at or
+   * below the block end is outside. Outside lines are never laid out or drawn, whatever the mode; give the paragraph an
+   * unconstrained `height` to lay out all of the text. In an earlier column or region a line that does not fit moves to
+   * the next one. `measure().overflowed` is `true` whenever text did not fit, and `measure().contentHeight` reports the
+   * height all of the text needs.
+   * - `'visible'` (default): the lines that fit and the one straddling line are laid out and drawn; the straddling line
+   *   spills over the edge.
+   * - `'clip'`: only the lines that fit are laid out and drawn. Nothing is drawn past the box, so no pixel clipping
+   *   is involved.
+   * - `'ellipsis'`: like `'clip'`, and the last line that fits ends in an ellipsis.
+   */
   readonly overflow?: 'visible' | 'clip' | 'ellipsis';
   /** Extra inline offset for the paragraph's first line, in paragraph-local units. */
   readonly firstLineIndent?: number;
@@ -183,6 +197,7 @@ export interface ParagraphBaseProperties<Format extends RasterFormatMetadata> {
   /** Explicit sequential 2D regions and exclusions; replaces generated columns when present. */
   readonly flow?: TextFlow;
   readonly rasterPixelRatio?: number;
+  /** Paint order among an integration's paragraphs, where that integration exposes it; Three derives it from the scene. */
   readonly order?: number;
 }
 

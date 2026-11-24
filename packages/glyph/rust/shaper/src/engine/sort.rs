@@ -6,6 +6,8 @@
 //! key type. Keyed sorts carry the source index, which both applies the permutation and
 //! makes equal-key order total and deterministic.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::EngineError;
 use alloc::vec::Vec;
 
@@ -92,7 +94,7 @@ pub(crate) fn prepare_pairs(pairs: &mut Vec<(u64, u32)>, len: usize) -> Result<(
     }
     pairs.clear();
     pairs
-        .try_reserve(len)
+        .try_reserve_cold(len)
         .map_err(|_| EngineError::ResultTooLarge)
 }
 

@@ -62,6 +62,7 @@ use retained_proof::*;
 
 #[cfg(test)]
 pub(crate) const SEMANTIC_F32_BASE_FIELD_COUNT: usize = 6;
+#[cfg(test)]
 pub(crate) const SEMANTIC_F32_FIELD_COUNT: usize = 9;
 #[cfg(test)]
 pub(crate) const SEMANTIC_U32_FIELD_COUNT: usize = 8;
@@ -933,6 +934,7 @@ mod tests {
                 x_offsets: vec![0; count],
                 y_offsets: vec![0; count],
                 glyph_flags: vec![0; count],
+                beyond_pairs: Vec::new(),
             },
             stable_ids: vec![11; count],
         }
@@ -1289,6 +1291,7 @@ mod tests {
             x_offsets: vec![-17, 33, -9, 11, -13, 5, -7, 0, 19, -23, 7],
             y_offsets: vec![5, -7, 3, 9, -11, 1, -3, 0, 4, -6, 2],
             glyph_flags: vec![0; 11],
+            beyond_pairs: Vec::new(),
         };
         let metrics = |_| {
             Some(FontMetrics {
@@ -3035,6 +3038,7 @@ mod tests {
                 x_offsets: vec![0; count + 1],
                 y_offsets: vec![0; count + 1],
                 glyph_flags: vec![0; count + 1],
+                beyond_pairs: Vec::new(),
             },
             stable_ids: (2_001..=2_001 + ISLAND).collect(),
         };
@@ -3242,6 +3246,7 @@ mod tests {
             x_offsets: vec![0; count],
             y_offsets: vec![0; count],
             glyph_flags: vec![0; count],
+            beyond_pairs: Vec::new(),
         };
         let metrics = |_| {
             Some(FontMetrics {
@@ -3332,6 +3337,7 @@ mod tests {
                 x_offsets: vec![0; glyphs],
                 y_offsets: vec![0; glyphs],
                 glyph_flags: vec![0; glyphs],
+                beyond_pairs: Vec::new(),
             },
             stable_ids: (2_001..=2_000 + u32::try_from(glyphs).unwrap()).collect(),
         };
@@ -3589,6 +3595,7 @@ mod tests {
                 x_offsets: vec![0],
                 y_offsets: vec![0],
                 glyph_flags: vec![0],
+                beyond_pairs: Vec::new(),
             },
             stable_ids: vec![777],
         };

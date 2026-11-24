@@ -1,5 +1,7 @@
 //! Candidate text assembled before preparation: its buffers and the Unicode facts it can reuse.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 /// The retained buffers a preflight text candidate may write into instead of its own.
@@ -21,7 +23,7 @@ impl PreflightTextSources<'_> {
         edit_scratch: &mut Vec<TextEdit>,
     ) -> Result<usize, EngineError> {
         candidates
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
         let index = candidates.len();
         candidates.push(PreflightTextCandidate::default());
@@ -30,7 +32,6 @@ impl PreflightTextSources<'_> {
         candidate.buffers = self.candidate_buffers(paragraph_id);
         self.populate_candidate_text(candidate, text_mutations)?;
         candidate.unicode_state = CandidateUnicode::ReuseCommitted;
-        candidate.reused_ascii_facts = None;
         let edit_start = edit_scratch.len();
         let committed_len = self.committed_text().len();
         let reconciliation = text_reconciliation(text_mutations, committed_len);
@@ -177,8 +178,8 @@ impl PreflightTextSources<'_> {
         })
     }
 
-    /// A changed candidate reuses the committed printable-ASCII facts when every edit is a
-    /// letter edit they survive; otherwise its Unicode is analysed in its own buffers.
+    /// A changed candidate reuses the committed analysis when every edit replaces ASCII
+    /// letters with as many ASCII letters; otherwise its Unicode is analysed in its own buffers.
     pub(super) fn prepare_candidate_unicode(
         &mut self,
         candidate: &mut PreflightTextCandidate,
@@ -188,9 +189,8 @@ impl PreflightTextSources<'_> {
     ) -> Result<(), EngineError> {
         #[cfg(feature = "stage-bench")]
         let _clock = oracle::stage_bench::clock::UNICODE.guard();
-        if let Some(facts) = self.reused_ascii_facts(candidate, candidate_edits)? {
+        if self.reuses_committed_unicode(candidate, candidate_edits)? {
             candidate.unicode_state = CandidateUnicode::ReuseCommitted;
-            candidate.reused_ascii_facts = Some(facts);
             return Ok(());
         }
         match candidate.buffers {
@@ -238,30 +238,26 @@ impl PreflightTextSources<'_> {
         Ok(())
     }
 
-    pub(super) fn reused_ascii_facts(
+    /// Whether every edit of a retained paragraph is a letter edit its analysis survives.
+    pub(super) fn reuses_committed_unicode(
         &self,
         candidate: &PreflightTextCandidate,
         candidate_edits: &[TextEdit],
-    ) -> Result<Option<PrintableAsciiFacts>, EngineError> {
+    ) -> Result<bool, EngineError> {
         let committed_text = self.committed_text();
         let candidate_text = self.candidate_text(candidate)?;
-        Ok(self.paragraph.as_deref().and_then(|paragraph| {
-            if paragraph.created || candidate_edits.is_empty() {
-                return None;
-            }
-            let unicode = paragraph.state.unicode.committed();
-            let mut facts = unicode.printable_ascii_facts();
-            for edit in candidate_edits.iter().copied() {
-                facts = unicode.reusable_ascii_facts_for_letter_edit(
-                    committed_text,
-                    candidate_text,
-                    edit.old_start,
-                    edit.old_end,
-                    edit.new_end,
-                    facts,
-                )?;
-            }
-            Some(facts)
+        Ok(self.paragraph.as_deref().is_some_and(|paragraph| {
+            !paragraph.created
+                && !candidate_edits.is_empty()
+                && candidate_edits.iter().all(|edit| {
+                    crate::unicode::reusable_for_ascii_letter_edit(
+                        committed_text,
+                        candidate_text,
+                        edit.old_start,
+                        edit.old_end,
+                        edit.new_end,
+                    )
+                })
         }))
     }
 }

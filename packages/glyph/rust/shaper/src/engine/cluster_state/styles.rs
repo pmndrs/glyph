@@ -3,33 +3,6 @@
 use super::*;
 
 impl ClusterArena {
-    /// Points every cluster at the resolved segment that now covers it. `false` when a segment
-    /// boundary falls inside a cluster, which the full build reports as the caller's error.
-    pub(super) fn remap_style_indexes(
-        &mut self,
-        styles: &[StyleSegment],
-    ) -> Result<bool, EngineError> {
-        let mut style_index = 0usize;
-        for cluster in 0..self.starts.len() {
-            let (start, end) = (self.starts[cluster], self.ends[cluster]);
-            while styles
-                .get(style_index)
-                .is_some_and(|segment| segment.text_end <= start)
-            {
-                style_index += 1;
-            }
-            let Some(segment) = styles.get(style_index) else {
-                return Ok(false);
-            };
-            if segment.text_start > start || segment.text_end < end {
-                return Ok(false);
-            }
-            self.style_indexes[cluster] =
-                u32::try_from(style_index).map_err(|_| EngineError::ResultTooLarge)?;
-        }
-        Ok(true)
-    }
-
     /// Remaps retained clusters to current styles. Metric dirt also re-derives
     /// advances in shaping order; mapping-only dirt preserves line corrections.
     /// Uncovered clusters fall back to the existing full build.

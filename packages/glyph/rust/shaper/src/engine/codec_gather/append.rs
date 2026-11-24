@@ -1,8 +1,11 @@
 //! Appending fresh rows: from layout sources, as columns or flat rows, and decorations.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 impl CodecGatherWorkspace {
+    #[cfg(test)]
     pub fn append_from<'binding>(
         &mut self,
         codec: &ValidatedCodec,
@@ -55,6 +58,7 @@ impl CodecGatherWorkspace {
             return Err(GatherError::AllocationFailed);
         }
         match (input, RowSource::new(input)) {
+            #[cfg(test)]
             (GatherInput::Flat(input), _) => {
                 self.append_flat_rows(
                     codec,
@@ -206,6 +210,7 @@ impl CodecGatherWorkspace {
         Ok(())
     }
 
+    #[cfg(test)]
     pub(super) fn append_flat_rows<'binding>(
         &mut self,
         codec: &ValidatedCodec,
@@ -318,7 +323,7 @@ impl CodecGatherWorkspace {
             return Ok(true);
         }
         self.dirty_mask_ranges
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| GatherError::AllocationFailed)?;
         let base = self.glyphs.len();
         reserve(&mut self.glyphs, decoration_count)?;

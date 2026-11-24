@@ -1,5 +1,7 @@
 //! Proving a retained line's occurrences still hold and copying them into the new arena.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 use crate::engine::placement_state::PlacementSegment;
 
@@ -66,7 +68,7 @@ impl RetainedOccurrenceProof<'_> {
             .occurrence_spans
             .partition_point(|span| span.semantic_start < end);
         self.spans
-            .try_reserve(last - first)
+            .try_reserve_cold(last - first)
             .map_err(|_| EngineError::ResultTooLarge)?;
         let mut covered = 0_u32;
         let mut outlined_total = 0_u32;

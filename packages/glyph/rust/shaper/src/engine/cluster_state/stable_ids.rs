@@ -139,58 +139,6 @@ pub(crate) fn canonical_revision_for_run(
     Ok(revision)
 }
 impl ClusterArena {
-    pub(crate) fn assign_stable_glyph_ids_in_range(
-        &mut self,
-        previous: &Self,
-        cluster_start: usize,
-        cluster_end: usize,
-        index: &mut IdentityIndex,
-        next_id: &mut u32,
-    ) -> Result<(), EngineError> {
-        let _clock = StageClock::start();
-        index
-            .prepare(cluster_end.saturating_sub(cluster_start))
-            .map_err(identity_index_error)?;
-        for cluster in cluster_start..cluster_end {
-            index
-                .insert(
-                    previous.stable_ids[cluster],
-                    u32::try_from(cluster).map_err(|_| EngineError::ResultTooLarge)?,
-                )
-                .map_err(identity_index_error)?;
-        }
-        *next_id = (*next_id).max(1);
-        for cluster in cluster_start..cluster_end {
-            let new_start = usize::try_from(self.glyph_starts[cluster])
-                .map_err(|_| EngineError::InvalidRequest)?;
-            let new_count = usize::try_from(self.glyph_counts[cluster])
-                .map_err(|_| EngineError::InvalidRequest)?;
-            let previous_cluster = index
-                .get(self.stable_ids[cluster])
-                .and_then(|value| usize::try_from(value).ok());
-            let previous_start = previous_cluster
-                .and_then(|cluster| previous.glyph_starts.get(cluster))
-                .copied()
-                .and_then(|value| usize::try_from(value).ok())
-                .unwrap_or(0);
-            let previous_count = previous_cluster
-                .and_then(|cluster| previous.glyph_counts.get(cluster))
-                .copied()
-                .and_then(|value| usize::try_from(value).ok())
-                .unwrap_or(0);
-            for ordinal in 0..new_count {
-                self.glyph_stable_ids[new_start + ordinal] = if ordinal < previous_count {
-                    previous.glyph_stable_ids[previous_start + ordinal]
-                } else {
-                    let allocated = *next_id;
-                    *next_id = next_id.checked_add(1).ok_or(EngineError::ResultTooLarge)?;
-                    allocated
-                };
-            }
-        }
-        Ok(())
-    }
-
     pub(crate) fn assign_stable_glyph_ids(
         &mut self,
         previous: &dyn CanonicalClusterView,

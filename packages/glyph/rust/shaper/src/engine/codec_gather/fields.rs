@@ -1,7 +1,10 @@
 //! Gathered fields: aligned storage, change masks and the per-field source reads.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
+#[cfg(test)]
 pub(super) fn known_semantic_f32(field: u8) -> bool {
     usize::from(field) < crate::engine::positioning::SEMANTIC_F32_FIELD_COUNT
         || matches!(
@@ -19,6 +22,7 @@ pub(super) fn known_semantic_f32(field: u8) -> bool {
         )
 }
 impl CodecGatherWorkspace {
+    #[cfg(test)]
     #[allow(clippy::too_many_arguments)]
     pub(super) fn gather_fields(
         &mut self,
@@ -68,6 +72,7 @@ impl CodecGatherWorkspace {
         Ok(())
     }
 
+    #[cfg(test)]
     #[allow(clippy::too_many_arguments)]
     pub(super) fn update_fields(
         &mut self,
@@ -144,7 +149,7 @@ impl CodecGatherWorkspace {
             }
         }
         self.dirty_mask_ranges
-            .try_reserve(runs)
+            .try_reserve_cold(runs)
             .map_err(|_| GatherError::AllocationFailed)
     }
 
@@ -165,7 +170,7 @@ impl<T: Copy + Default> AlignedField<T> {
         let block_capacity = record_capacity.div_ceil(4);
         if self.blocks.capacity() < block_capacity {
             self.blocks
-                .try_reserve_exact(block_capacity.saturating_sub(self.blocks.len()))
+                .try_reserve_exact_cold(block_capacity.saturating_sub(self.blocks.len()))
                 .map_err(|_| GatherError::AllocationFailed)?;
         }
         Ok(())
@@ -190,6 +195,7 @@ impl<T: Copy + Default> AlignedField<T> {
         Ok(())
     }
 
+    #[cfg(test)]
     pub(super) fn set(&mut self, index: usize, value: T) -> Result<(), GatherError> {
         if index >= self.len {
             return Err(GatherError::InvalidSemanticShape);
@@ -290,6 +296,7 @@ impl<T: Copy + Default> AlignedField<T> {
     }
 }
 
+#[cfg(test)]
 pub(super) fn plan_glyph(
     row: GatherRow<'_>,
     binding: &FontRenderBinding,
@@ -322,6 +329,7 @@ pub(super) fn plan_glyph(
     })
 }
 
+#[cfg(test)]
 pub(super) fn plan_glyph_placement(row: GatherRow<'_>) -> Result<(u32, [f32; 2]), GatherError> {
     let glyph = row.glyph;
     let semantic = row
@@ -366,6 +374,7 @@ pub(super) fn same_storage_topology(previous: PlanGlyph, next: PlanGlyph) -> boo
         && previous.depth_key == next.depth_key
 }
 
+#[cfg(test)]
 pub(super) fn source_f32(
     scope: InputScope,
     field: u8,
@@ -386,6 +395,7 @@ pub(super) fn source_f32(
         .ok_or(GatherError::SourceFieldMissing)
 }
 
+#[cfg(test)]
 pub(super) fn derived_semantic_f32(
     field: u8,
     row: GatherRow<'_>,
@@ -425,6 +435,7 @@ pub(super) fn derived_semantic_f32(
     }))
 }
 
+#[cfg(test)]
 pub(super) fn optional_semantic_f32(row: GatherRow<'_>, field: usize) -> Result<f32, GatherError> {
     if row
         .input
@@ -437,6 +448,7 @@ pub(super) fn optional_semantic_f32(row: GatherRow<'_>, field: usize) -> Result<
     row.semantic_f32(field)
 }
 
+#[cfg(test)]
 pub(super) fn source_u32(
     scope: InputScope,
     field: u8,

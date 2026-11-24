@@ -1,5 +1,7 @@
 //! One paragraph's stage pipeline: reuse, staged preparation and the commit of every stage.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 /// Stage ownership once, reserving publication-frontier growth before semantic mutation.
@@ -17,10 +19,10 @@ pub(super) fn admit_preparation_owner(
         .checked_add(1)
         .ok_or(EngineError::ResultTooLarge)?;
     unpublished
-        .try_reserve(additional)
+        .try_reserve_cold(additional)
         .map_err(|_| EngineError::ResultTooLarge)?;
     staged
-        .try_reserve(1)
+        .try_reserve_cold(1)
         .map_err(|_| EngineError::ResultTooLarge)?;
     staged.insert(index, id);
     Ok(())
@@ -127,7 +129,6 @@ impl ParagraphState {
         }
         self.unicode.discard_candidate();
         self.unicode_reused_for_text_edit = false;
-        self.pending_reused_ascii_facts = None;
         {
             let (committed, pending) = self.bidi.pair_mut();
             committed.clear();
@@ -153,8 +154,6 @@ impl ParagraphState {
             pending.clear();
         }
         self.shape.discard_candidate();
-        self.accepted_shape_font_instance = None;
-        self.pending_shape_font_instance = None;
         self.shape_window_scratch.clear();
         self.incremental_shape_source_run = None;
         self.incremental_shape_source_runs.clear();
@@ -184,13 +183,11 @@ impl ParagraphState {
         self.intrinsic_geometry_scratch.clear();
         self.intrinsic_flow_layout_scratch.clear();
         {
-            let (committed, pending) = self.clipped_inspection.pair_mut();
-            committed.mode = IntrinsicInspection::None;
-            committed.positioned.clear();
-            pending.mode = IntrinsicInspection::None;
-            pending.positioned.clear();
+            let (committed, pending) = self.intrinsic_inspection.pair_mut();
+            *committed = IntrinsicInspection::None;
+            *pending = IntrinsicInspection::None;
         }
-        self.clipped_inspection.discard_candidate();
+        self.intrinsic_inspection.discard_candidate();
         self.intrinsic_boundary_shape.clear();
         self.boundary_shape.clear();
         self.pending_boundary_shape.clear();
@@ -392,8 +389,8 @@ impl ParagraphState {
                     // unclipped layout a measurement derives, which is retired here because
                     // positioning, which otherwise retires it, does not run.
                     self.discard_positioned_candidate();
-                    self.clipped_inspection.pending_mut().mode = IntrinsicInspection::None;
-                    self.clipped_inspection.mark_prepared();
+                    *self.intrinsic_inspection.pending_mut() = IntrinsicInspection::None;
+                    self.intrinsic_inspection.mark_prepared();
                     return Ok(false);
                 }
             }
@@ -429,13 +426,12 @@ impl ParagraphState {
         self.prepared_layout.commit();
         if let PreparedLayout::Inline(_) = self.prepared_layout.committed() {
             self.shape.pair_mut().0.clear();
-            self.accepted_shape_font_instance = None;
             self.clusters.pair_mut().0.clear();
             self.flow_layout.pair_mut().0.clear();
             self.positioned.pair_mut().0.clear();
             self.fallback_spans.clear();
         }
-        self.clipped_inspection.commit();
+        self.intrinsic_inspection.commit();
     }
 
     pub(super) fn initialize(&mut self) -> Result<(), EngineError> {

@@ -49,6 +49,20 @@ A Three root now keeps a second private object in the Scene, `@pmndrs/glyph-prep
 that walks `scene.children` by index or assumes the first child is its own must skip it. `root.attach(scene)` (new)
 names the Scene before the first traversal; React and Vue call it for you.
 
+### Fixed-height text and `layout.overflow`
+
+With a fixed `height`, a line is judged by its line box: it fits when it ends at or above the block end, it straddles
+when it starts inside the box and ends past it, and it is outside when it starts at or below the block end. Only the
+last column or flow region is affected; earlier ones still pass a line that does not fit on to the next.
+
+| 0.1.0                                                                                                | Now                                                                 |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `'visible'` (the default) drew the lines that fit and dropped the straddling line.                   | `'visible'` also draws the straddling line, spilling over the edge. |
+| `'clip'` drew the same lines, but `measure().lines` and `glyphs()` reported every line past the box. | `'clip'` lays out, draws and reports only the lines that fit.       |
+
+Use `overflow: 'clip'` to keep 0.1.0's drawing. To read all of the text's lines, measure it with an unconstrained
+`height`; no mode lays out a line wholly outside the box. `measure().overflowed` and `contentHeight` are unchanged.
+
 ## 2. Errors
 
 | 0.1.0                                                                                         | Now                                                                                                                                      | What to change                                                                                        |
@@ -86,15 +100,17 @@ text, so a console or error report alone finds it; a refused text's `commitState
 
 ## 3. Renamed and removed application names
 
-| Entry                                      | 0.1.0                                                            | Now                                                                                                     |
-| ------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| three, typegpu, core `GlyphTextController` | `withGlyphs(read)`                                               | `readGlyphs(read)`, same signature                                                                      |
-| three                                      | `Text.breakApart()`                                              | `Text.split()`, same return type                                                                        |
-| three                                      | `DetachedGlyph.sourceIndex`, `ThreeGlyphMeasurement.sourceIndex` | Removed. Detached indices are dense over drawable glyphs.                                               |
-| three                                      | `Text.caretAt(x, y)`                                             | `text.hitTest({ x, y })`, then `text.caret(position)` for the rectangle                                 |
-| three                                      | `Text.selectionRects(start, end)`                                | `text.rangeRects(start, end)`                                                                           |
-| three, root                                | `GlyphCaret` (`offset`, `line`, `leading`, `rect`)               | `TextPosition` (`offset`, `affinity`) and `TextCaret` (`rect`, `line`, `level`, `secondary`, `clipped`) |
-| core                                       | `GlyphPlacements.caretAt`, `caretForOffset`, `selectionRects`    | Removed. Use `GlyphTextController.editing`.                                                             |
+| Entry                                      | 0.1.0                                                                    | Now                                                                                                     |
+| ------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| three, typegpu, core `GlyphTextController` | `withGlyphs(read)`                                                       | `readGlyphs(read)`, same signature                                                                      |
+| three                                      | `Text.breakApart()`                                                      | `Text.split()`, same return type                                                                        |
+| three                                      | `DetachedGlyph.sourceIndex`, `ThreeGlyphMeasurement.sourceIndex`         | Removed. Detached indices are dense over drawable glyphs.                                               |
+| three                                      | `Text.caretAt(x, y)`                                                     | `text.hitTest({ x, y })`, then `text.caret(position)` for the rectangle                                 |
+| three                                      | `Text.selectionRects(start, end)`                                        | `text.rangeRects(start, end)`                                                                           |
+| three, root                                | `GlyphCaret` (`offset`, `line`, `leading`, `rect`)                       | `TextPosition` (`offset`, `affinity`) and `TextCaret` (`rect`, `line`, `level`, `secondary`, `clipped`) |
+| core                                       | `GlyphPlacements.caretAt`, `caretForOffset`, `selectionRects`            | Removed. Use `GlyphTextController.editing`.                                                             |
+| three, react, vue                          | `order` on Three `TextProperties`/`TextUpdate`, R3F and Vue `Text` props | Removed. It was never read; Three paints in scene order with `renderOrder`. Delete the property.        |
+| CLI                                        | `glyph bake --yes`                                                       | Removed. It never did anything (the CLI does not prompt). Delete the flag.                              |
 
 `Text.caretAt` and `Text.selectionRects` existed in 0.1.0; `Text.caretForOffset` was added after it and is replaced
 by `text.caret({ offset, affinity })` before any release. What changes in behaviour, not only in name:
@@ -121,7 +137,8 @@ None of these require a change; they replace patterns that no longer work or wer
   `onLayout` on TypeGPU text. It receives what `measure()` returns, after the first preparation and whenever that
   summary changes, before the frame that draws it. Use it where 0.1.0 code read `measure()` after a frame to size
   something else. Inside it, writing a layout input of any text throws `GlyphLayoutPhaseError`.
-- `root.onInvalidate`, `root.attach(scene)` on a Three root; `text.error` on TypeGPU text.
+- `root.onInvalidate` (also run by `root.material`, `TextGroup.material`, `TextGroup.batching` and `TextGroup.dispose()`)
+  and `root.attach(scene)` on a Three root.
 - `@pmndrs/glyph/pixi3d`: PixiJS 3D text on WebGPU and WebGL2, a subpath of this package with optional peers `@pixi/3d`
   (`>=0.1.0 <0.2`) and `pixi.js` (`>=8.23.0 <9`). It is not a separate package. `Pixi3DText` has `measure`, `glyphs`,
   `split` and the editing methods below, including `replace`, and the entry exports `TextOffsetError` and the editing
@@ -245,6 +262,8 @@ draws, before the frame that draws them. MSDF quads are trimmed to the ink.
 
 ### Behaviour a renderer can rely on, or must now handle
 
+- No overflow mode draws outside its box, so none publishes a clip boundary: an instance span's and a draw's `clip`
+  is always `undefined`, and a clipped multi-column paragraph is no longer split into one draw per column.
 - Three materials survive buffer growth: when instance storage outgrows its capacity, the material (node graph,
   shader modules, pipeline) is kept and pointed at the new buffers. The material factory is not called again, so a
   factory with side effects per call sees fewer calls.

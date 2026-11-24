@@ -1,10 +1,10 @@
 //! The cluster build of edited source runs, spliced between the previous arena's clusters.
 //!
-//! An edit that changes how many clusters or glyphs a source run has cannot keep the previous
-//! arena's topology, but the incremental shape stage still reshaped the edited source runs
-//! alone: every other source run's glyphs are the previous ones, moved by the edits before
-//! them. So the clusters between the edited runs are the previous arena's rows, renumbered,
-//! and only the edited runs' own clusters are built, by the same passes the full build runs.
+//! The incremental shape stage reshapes the edited source runs alone, whether or not an edit
+//! changes how many clusters or glyphs a run has: every other source run's glyphs are the
+//! previous ones, moved by the edits before them. So the clusters between the edited runs are
+//! the previous arena's rows, renumbered, and only the edited runs' own clusters are built, by
+//! the same passes the full build runs.
 //! What a row reads from outside its run is checked rather than assumed:
 //!
 //! - grapheme boundaries after an edited run, which a run can share context with (a regional
@@ -17,6 +17,8 @@
 //! The result equals the full build of the same inputs, lane for lane; anything the splice
 //! cannot prove declines it, and the caller builds in full.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 use core::ops::Range;
 
@@ -27,8 +29,8 @@ use super::super::sort;
 
 use super::{
     CLUSTER_ALLOWED_BREAK, CLUSTER_BREAK_CORRECTION, CLUSTER_REQUIRED_BREAK, ClusterArena,
-    ClusterBuildInput, EngineError, LAYOUT_CHUNK, ShapingRun, StyleSegment, all_ltr,
-    build::ShapeScope, reserve, summarize_unit_chunks,
+    ClusterBuildInput, EngineError, LAYOUT_CHUNK, SHAPING_CONTEXT, ShapingRun, StyleSegment,
+    all_ltr, build::ShapeScope, reserve, summarize_unit_chunks,
 };
 
 /// The shaping runs the incremental shape stage reshaped, and what the previous arena was
@@ -73,7 +75,7 @@ fn window_texts(
 ) -> Option<Vec<(Range<u32>, Range<u32>)>> {
     let (new_runs, old_runs) = (input.runs, splice.previous_runs);
     let mut texts: Vec<(Range<u32>, Range<u32>)> = Vec::new();
-    texts.try_reserve(splice.windows.len()).ok()?;
+    texts.try_reserve_cold(splice.windows.len()).ok()?;
     let (mut old_at, mut new_at, mut delta) = (0u32, 0u32, 0i64);
     for window in splice.windows {
         let (new, old) = (&window.new, &window.old);
@@ -180,7 +182,7 @@ fn plan_windows(
             .map_or(previous.glyph_ids.len(), |start| *start as usize)
     };
     let mut windows: Vec<Window> = Vec::new();
-    windows.try_reserve(splice.windows.len()).ok()?;
+    windows.try_reserve_cold(splice.windows.len()).ok()?;
     for (window, (old_text, new_text)) in splice.windows.iter().zip(texts) {
         let start = boundaries.binary_search(&new_text.start).ok()?;
         let end = boundaries.binary_search(&new_text.end).ok()?;
@@ -437,6 +439,28 @@ impl ClusterArena {
             .any(|flags| flags & CLUSTER_BREAK_CORRECTION != 0)
         {
             self.break_corrections.resize_with(count, Default::default);
+            // One run rebuilt with every cluster where it was and as many glyphs: the corrections
+            // cached away from it still hold. A correction reshapes an island plus SHAPING_CONTEXT
+            // clusters either side of its boundary.
+            if let [window] = plan.windows.as_slice()
+                && window.added_runs == 0
+                && window.source_runs.len() == 1
+                && window.clusters == window.old_clusters
+                && window.text == window.old_text
+                && window.glyphs == window.old_glyphs.len()
+                && self.starts[window.clusters.clone()] == previous.starts[window.clusters.clone()]
+                && self.ends[window.clusters.clone()] == previous.ends[window.clusters.clone()]
+                && previous.break_corrections.len() == count
+            {
+                self.break_corrections
+                    .clone_from_slice(&previous.break_corrections);
+                let first = self.island(window.clusters.start.max(1) - 1).0;
+                let last = self.island(window.clusters.end.min(count - 1)).1;
+                self.reset_break_corrections(
+                    first.saturating_sub(SHAPING_CONTEXT),
+                    last + SHAPING_CONTEXT,
+                );
+            }
         }
 
         // Layout units are per cluster; the chunk summaries from the first changed cluster's
@@ -479,7 +503,7 @@ impl ClusterArena {
         // clusters, which map back through the clusters the windows before them added.
         let mut changed = Vec::new();
         changed
-            .try_reserve(flagged.len())
+            .try_reserve_cold(flagged.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         for range in &flagged {
             let old = |cluster: usize| moved(cluster as u32, -plan.cluster_shift_at(cluster));
@@ -491,7 +515,7 @@ impl ClusterArena {
         self.spliced = Some(super::diff::Spliced { changed });
         let mut windows = Vec::new();
         windows
-            .try_reserve(plan.windows.len())
+            .try_reserve_cold(plan.windows.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         for (index, window) in plan.windows.iter().enumerate() {
             let (_, cluster_delta, glyph_delta) = plan.shift(index + 1);

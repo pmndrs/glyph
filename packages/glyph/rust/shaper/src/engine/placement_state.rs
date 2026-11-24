@@ -1,3 +1,4 @@
+use crate::cold_growth::ColdGrowth as _;
 use alloc::vec::Vec;
 
 use super::{
@@ -352,13 +353,13 @@ impl PlacementState {
         }
         let index = u32::try_from(self.segments.len()).map_err(|_| EngineError::ResultTooLarge)?;
         self.segments
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.translations
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.segment_instance_counts
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.segments.push(segment);
         self.translations.push(placement);
@@ -414,13 +415,13 @@ impl PlacementState {
         let next_start = self.segments.len();
         checked_grow(next_start, count)?;
         self.segments
-            .try_reserve(count)
+            .try_reserve_cold(count)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.translations
-            .try_reserve(count)
+            .try_reserve_cold(count)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.segment_instance_counts
-            .try_reserve(count)
+            .try_reserve_cold(count)
             .map_err(|_| EngineError::ResultTooLarge)?;
         for (segment, translation) in previous.segments[slice_start..slice_end]
             .iter()
@@ -662,13 +663,13 @@ impl PlacementState {
             return Err(EngineError::InvalidRequest);
         }
         self.segments
-            .try_reserve(slice_count)
+            .try_reserve_cold(slice_count)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.translations
-            .try_reserve(slice_count)
+            .try_reserve_cold(slice_count)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.segment_instance_counts
-            .try_reserve(slice_count)
+            .try_reserve_cold(slice_count)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.reserve_line_record()?;
 
@@ -818,10 +819,10 @@ impl PlacementState {
 
     fn reserve_line_record(&mut self) -> Result<(), EngineError> {
         self.line_segment_starts
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.line_segment_counts
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
         Ok(())
     }
@@ -905,7 +906,7 @@ fn hinted_run_matches(
 fn prepare_run_lookup(lookup: &mut Vec<u64>, runs: &[LayoutRun]) -> Result<(), EngineError> {
     lookup.clear();
     lookup
-        .try_reserve(runs.len())
+        .try_reserve_cold(runs.len())
         .map_err(|_| EngineError::ResultTooLarge)?;
     for (index, run) in runs.iter().enumerate() {
         #[cfg(test)]

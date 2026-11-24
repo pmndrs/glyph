@@ -1,6 +1,8 @@
 //! Planner-scoped identity reconciles retained placement occurrences by logical key.
 //! Dense slots use generations and remain quarantined until renderer acknowledgement.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::retained_rope::{LEAF_CAPACITY, RetainedRope, RopeRecord, RopeSummary};
 use super::sort;
 use alloc::vec::Vec;
@@ -826,7 +828,7 @@ where
 
 fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), PlacementSlotError> {
     values
-        .try_reserve(additional)
+        .try_reserve_cold(additional)
         .map_err(|_| PlacementSlotError::AllocationFailed)
 }
 

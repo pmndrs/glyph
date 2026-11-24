@@ -1,3 +1,4 @@
+use crate::cold_growth::ColdGrowth as _;
 use alloc::vec::Vec;
 use core::{
     cell::{Cell, RefCell},
@@ -254,7 +255,7 @@ impl LayoutDirtyRanges {
             last.end = range.end;
         } else {
             self.ranges
-                .try_reserve(1)
+                .try_reserve_cold(1)
                 .map_err(|_| EngineError::ResultTooLarge)?;
             self.ranges.push(range);
         }
@@ -287,7 +288,7 @@ impl LayoutRunArena {
 
     fn push(&mut self, run: LayoutRun) -> Result<(), EngineError> {
         self.runs
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.runs.push(run);
         Ok(())
@@ -678,16 +679,6 @@ impl ClusterArena {
             .get(preceding + 1)
             .is_none_or(|flags| flags & CLUSTER_SAFE_BEFORE != 0)
     }
-}
-
-fn is_hard_break(text: &[u16], start: u32) -> Result<bool, EngineError> {
-    let unit = *text
-        .get(usize::try_from(start).map_err(|_| EngineError::InvalidRequest)?)
-        .ok_or(EngineError::InvalidRequest)?;
-    Ok(matches!(
-        unit,
-        0x0a | 0x0b | 0x0c | 0x0d | 0x85 | 0x2028 | 0x2029
-    ))
 }
 
 #[derive(Clone, Copy)]
@@ -1417,6 +1408,7 @@ mod tests {
             x_offsets: vec![0; 3],
             y_offsets: vec![0; 3],
             glyph_flags: vec![0; 3],
+            beyond_pairs: Vec::new(),
         };
         let metrics = |_| {
             Some(FontMetrics {
@@ -1582,6 +1574,7 @@ mod tests {
             x_offsets: vec![0; 3],
             y_offsets: vec![0; 3],
             glyph_flags: vec![0; 3],
+            beyond_pairs: Vec::new(),
         };
         let metrics = |_| {
             Some(FontMetrics {
@@ -1664,6 +1657,7 @@ mod tests {
             x_offsets: vec![0; 3],
             y_offsets: vec![0; 3],
             glyph_flags: vec![0; 3],
+            beyond_pairs: Vec::new(),
         };
         let metrics = |_| {
             Some(FontMetrics {
@@ -1772,6 +1766,7 @@ mod tests {
             x_offsets: vec![0],
             y_offsets: vec![0],
             glyph_flags: vec![GLYPH_UNSAFE_TO_BREAK],
+            beyond_pairs: Vec::new(),
         };
         let mut clusters = ClusterArena::default();
         clusters
@@ -2026,6 +2021,7 @@ mod tests {
             x_offsets: vec![0],
             y_offsets: vec![0],
             glyph_flags: vec![GLYPH_UNSAFE_TO_BREAK],
+            beyond_pairs: Vec::new(),
         };
         let mut clusters = ClusterArena::default();
         clusters
@@ -2063,282 +2059,6 @@ mod tests {
     }
 
     #[test]
-    fn source_run_rebuild_resets_break_corrections_only_near_the_rebuilt_run() {
-        let text: Vec<u16> = "a".repeat(20).encode_utf16().collect();
-        let mut unicode = UnicodeAnalysis::default();
-        unicode.analyze(&text).unwrap();
-        let style = ResolvedStyle::test_typography(16.0, 1.0, 0.0);
-        let styles = [StyleSegment {
-            text_start: 0,
-            text_end: 20,
-            style,
-        }];
-        let run = |text_start, text_end| ShapingRun {
-            text_start,
-            text_end,
-            script: u32::from_be_bytes(*b"Latn"),
-            direction: 4,
-            bidi_level: 0,
-            style,
-        };
-        let runs = [run(0, 2), run(2, 20)];
-        let shaped = |source_run, text_start, text_end, glyph_start| ShapedRun {
-            source_run,
-            binding_handle: 19,
-            font_handle: 9,
-            text_start,
-            text_end,
-            glyph_start,
-            glyph_count: text_end - text_start,
-        };
-        let make_shape = |first_glyph| ShapeArena {
-            runs: vec![shaped(0, 0, 2, 0), shaped(1, 2, 20, 2)],
-            glyph_ids: std::iter::once(first_glyph).chain([1; 19]).collect(),
-            clusters: (0..20).collect(),
-            x_advances: vec![500; 20],
-            y_advances: vec![0; 20],
-            x_offsets: vec![0; 20],
-            y_offsets: vec![0; 20],
-            glyph_flags: vec![0; 20],
-        };
-        let metrics = |_| {
-            Some(FontMetrics {
-                units_per_em: 1_000,
-                ascender: 800,
-                cap_height: 700,
-                x_height: 500,
-                height_fallbacks: 0,
-                descender: -200,
-                line_gap: 0,
-                underline_position: -100,
-                underline_thickness: 50,
-                strikeout_position: 300,
-                strikeout_size: 50,
-            })
-        };
-        let ids: Vec<u32> = (1..=20).collect();
-        let shape = make_shape(1);
-        let input = |shape| ClusterBuildInput {
-            text: &text,
-            text_unit_ids: &ids,
-            unicode: &unicode,
-            styles: &styles,
-            runs: &runs,
-            shape,
-        };
-        let mut previous = ClusterArena::default();
-        previous.build(input(&shape), metrics).unwrap();
-        // A paragraph without a correctable boundary keeps no lane; size one as pricing would.
-        previous
-            .break_corrections
-            .resize_with(previous.starts.len(), Default::default);
-        let marker = Correction {
-            advance: 7,
-            space: 0,
-            trailing: 0,
-        };
-        for slot in previous.break_corrections.iter().flatten() {
-            slot.set(Some(marker));
-        }
-        let mut copy = ClusterArena::default();
-        copy.copy_from(&previous, false).unwrap();
-        assert!(
-            copy.break_corrections
-                .iter()
-                .flatten()
-                .all(|slot| slot.get().is_some())
-        );
-
-        let mut retained = ClusterArena::default();
-        retained
-            .rebuild_source_run_if_topology_is_stable(&previous, input(&shape), 0, false, metrics)
-            .unwrap()
-            .unwrap();
-        // Run 0 is clusters 0..2; the island after it plus 5 clusters of context reach slot 8.
-        let kept: Vec<bool> = retained
-            .break_corrections
-            .iter()
-            .map(|slot| slot[1].get().is_some())
-            .collect();
-        assert!(
-            kept[..8].iter().all(|kept| !kept),
-            "inside the rebuilt run and its context"
-        );
-        assert!(
-            kept[8..].iter().all(|kept| *kept),
-            "beyond the context survives"
-        );
-        assert_eq!(retained.island(9), (9, 10));
-
-        let mut restyled = ClusterArena::default();
-        restyled
-            .refresh_styles_from_stream(&previous, &styles, &runs, true)
-            .unwrap()
-            .unwrap();
-        assert!(
-            restyled
-                .break_corrections
-                .iter()
-                .flatten()
-                .all(|slot| slot.get().is_none())
-        );
-    }
-
-    #[test]
-    fn retained_source_run_rebuild_matches_the_cold_cluster_oracle() {
-        let old_text: Vec<u16> = "ab".encode_utf16().collect();
-        let new_text: Vec<u16> = "ac".encode_utf16().collect();
-        let mut old_unicode = UnicodeAnalysis::default();
-        old_unicode.analyze(&old_text).unwrap();
-        let mut new_unicode = UnicodeAnalysis::default();
-        new_unicode.analyze(&new_text).unwrap();
-        let style = ResolvedStyle::test_typography(16.0, 1.0, 0.0);
-        let styles = [StyleSegment {
-            text_start: 0,
-            text_end: 2,
-            style,
-        }];
-        let runs = [ShapingRun {
-            text_start: 0,
-            text_end: 2,
-            script: u32::from_be_bytes(*b"Latn"),
-            direction: 4,
-            bidi_level: 0,
-            style,
-        }];
-        let make_shape = |second_glyph, second_advance| ShapeArena {
-            runs: vec![ShapedRun {
-                source_run: 0,
-                binding_handle: 19,
-                font_handle: 9,
-                text_start: 0,
-                text_end: 2,
-                glyph_start: 0,
-                glyph_count: 2,
-            }],
-            glyph_ids: vec![1, second_glyph],
-            clusters: vec![0, 1],
-            x_advances: vec![500, second_advance],
-            y_advances: vec![0; 2],
-            x_offsets: vec![0; 2],
-            y_offsets: vec![0; 2],
-            glyph_flags: vec![0; 2],
-        };
-        let old_shape = make_shape(2, 500);
-        let new_shape = make_shape(3, 600);
-        let metrics = |_| {
-            Some(FontMetrics {
-                units_per_em: 1_000,
-                ascender: 800,
-                cap_height: 700,
-                x_height: 500,
-                height_fallbacks: 0,
-                descender: -200,
-                line_gap: 0,
-                underline_position: -100,
-                underline_thickness: 50,
-                strikeout_position: 300,
-                strikeout_size: 50,
-            })
-        };
-        let mut previous = ClusterArena::default();
-        previous
-            .build(
-                ClusterBuildInput {
-                    text: &old_text,
-                    text_unit_ids: &[10, 20],
-                    unicode: &old_unicode,
-                    styles: &styles,
-                    runs: &runs,
-                    shape: &old_shape,
-                },
-                metrics,
-            )
-            .unwrap();
-        let mut next_id = 1;
-        previous
-            .assign_stable_glyph_ids(
-                &ClusterArena::default(),
-                &mut IdentityIndex::default(),
-                &mut next_id,
-            )
-            .unwrap();
-        let mut cold = ClusterArena::default();
-        cold.build(
-            ClusterBuildInput {
-                text: &new_text,
-                text_unit_ids: &[10, 30],
-                unicode: &new_unicode,
-                styles: &styles,
-                runs: &runs,
-                shape: &new_shape,
-            },
-            metrics,
-        )
-        .unwrap();
-        let mut cold_next_id = next_id;
-        cold.assign_stable_glyph_ids(&previous, &mut IdentityIndex::default(), &mut cold_next_id)
-            .unwrap();
-        let mut retained = ClusterArena::default();
-        let (cluster_start, cluster_end) = retained
-            .rebuild_source_run_if_topology_is_stable(
-                &previous,
-                ClusterBuildInput {
-                    text: &new_text,
-                    text_unit_ids: &[10, 30],
-                    unicode: &new_unicode,
-                    styles: &styles,
-                    runs: &runs,
-                    shape: &new_shape,
-                },
-                0,
-                false,
-                metrics,
-            )
-            .unwrap()
-            .unwrap();
-        let mut retained_next_id = next_id;
-        retained
-            .assign_stable_glyph_ids_in_range(
-                &previous,
-                cluster_start,
-                cluster_end,
-                &mut IdentityIndex::default(),
-                &mut retained_next_id,
-            )
-            .unwrap();
-        macro_rules! assert_lane {
-            ($field:ident) => {
-                assert_eq!(retained.$field, cold.$field, stringify!($field));
-            };
-        }
-        assert_lane!(starts);
-        assert_lane!(ends);
-        assert_lane!(advances);
-        assert_lane!(advance_units);
-        assert_lane!(units_per_em);
-        assert_lane!(flags);
-        assert_lane!(style_indexes);
-        assert_lane!(source_runs);
-        assert_lane!(binding_handles);
-        assert_lane!(font_handles);
-        assert_lane!(stable_ids);
-        assert_lane!(glyph_starts);
-        assert_lane!(glyph_counts);
-        assert_lane!(glyph_ids);
-        assert_lane!(glyph_clusters);
-        assert_lane!(glyph_x_advances);
-        assert_lane!(glyph_x_offsets);
-        assert_lane!(glyph_y_offsets);
-        assert_lane!(glyph_shape_flags);
-        assert_lane!(glyph_stable_ids);
-        assert_lane!(index_at);
-        assert_lane!(shaped);
-        assert_lane!(unsafe_before);
-        assert_eq!(retained_next_id, cold_next_id);
-    }
-
-    #[test]
     fn identity_scatter_admits_only_ordered_tiling_runs() {
         let shape = |glyph_start, clusters: Vec<u32>| ShapeArena {
             runs: vec![ShapedRun {
@@ -2357,6 +2077,7 @@ mod tests {
             x_offsets: vec![0; 3],
             y_offsets: vec![0; 3],
             glyph_flags: vec![0; 3],
+            beyond_pairs: Vec::new(),
         };
         assert!(scatter_is_identity(&shape(0, vec![0, 1, 2])));
         assert!(scatter_is_identity(&shape(0, vec![0, 0, 2])));
@@ -2406,6 +2127,7 @@ mod tests {
             x_offsets: vec![0; 3],
             y_offsets: vec![0; 3],
             glyph_flags: vec![0; 3],
+            beyond_pairs: Vec::new(),
         };
         let metrics = |_| {
             Some(FontMetrics {

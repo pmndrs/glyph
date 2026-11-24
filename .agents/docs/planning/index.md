@@ -7,6 +7,7 @@
 - [Three.js text API](three-api.md) — authoritative `glyph.fontFace()`, `ThreeConfig`, `TextGroup`, and `Text` surface, including roots, font leases, ordering, and render-loop synchronization.
 - [Planner-assisted detached glyph slices](detached-glyph-slice.md) — synchronous committed-record copies, independent Three.js `Glyphs` and decoration objects, matrix ownership, and first-frame upload invariants.
 - [Failure inventory and dispositions](failure-inventory.md) — every failure of the text pipeline, where it surfaces, what state remains, how it recovers, and the test that scripts it.
+- [0.2.0 package issues](issues-0.2.0/index.md) — local issue records for the hero and docs-site findings: reproduction, root cause, chosen fix, and status.
 - [Migrating from 0.1.0](migration-from-0.1.0.md) — every breaking change since the published 0.1.0, for application authors and renderer integrators, with what to change.
 - [Glyph integration API](core-api.md) — authoritative application and integrator API for fonts, measurement, GlyphConfig, Codec command data, CommandBufferView, DisplayList, renderer decode, handles, and roots.
 - [Session handoff](session-handoff.md) — the decisions, corrections, and open questions from the API hardening session, including why measurement is two calls and what they should be named.

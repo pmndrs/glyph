@@ -1,3 +1,4 @@
+use crate::cold_growth::ColdGrowth as _;
 // UAX #14 rule behavior is ported from @cto.af/linebreak 4.0.3. Its MIT license is retained in
 // LICENSES/cto-af-linebreak-MIT.txt; the implementation is specialized to retained no_std Rust storage.
 use alloc::vec::Vec;
@@ -610,6 +611,14 @@ pub(crate) fn properties(code_point: u32) -> Option<u32> {
     Some(u32::from(generated::LINE_BREAK_VALUES[usize::from(index)]))
 }
 
+pub(crate) use generated::ALPHANUMERIC;
+
+/// `char::is_alphanumeric` at Unicode 17, from the line-break trie's `ALPHANUMERIC` bit, so the
+/// module does not link `core`'s own Alphabetic and N tables.
+pub(crate) fn is_alphanumeric(character: char) -> bool {
+    properties(character as u32).is_some_and(|bits| bits & ALPHANUMERIC != 0)
+}
+
 fn is_one_of(class: i16, values: &[u8]) -> bool {
     values.iter().any(|value| class == i16::from(*value))
 }
@@ -636,7 +645,7 @@ fn decode_scalar(text: &[u16], index: usize) -> Result<(u32, usize), UnicodeErro
 fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), UnicodeError> {
     if values.capacity() < capacity {
         values
-            .try_reserve_exact(capacity.saturating_sub(values.len()))
+            .try_reserve_exact_cold(capacity.saturating_sub(values.len()))
             .map_err(|_| UnicodeError::ResultTooLarge)?;
     }
     Ok(())
@@ -645,6 +654,21 @@ fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), UnicodeError> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The bit replaces `char::is_alphanumeric` in word motion. Both are Unicode 17 today; when
+    /// rustc moves on, this fails until the generator's UCD does too.
+    #[test]
+    fn alphanumeric_bit_equals_core_at_every_scalar() {
+        assert_eq!(char::UNICODE_VERSION, (17, 0, 0));
+        for character in (0..=0x10_ffff).filter_map(char::from_u32) {
+            assert_eq!(
+                is_alphanumeric(character),
+                character.is_alphanumeric(),
+                "U+{:04X}",
+                character as u32
+            );
+        }
+    }
 
     fn positions(text: &str) -> Vec<u32> {
         let mut analysis = LineBreakAnalysis::default();

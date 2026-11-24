@@ -295,7 +295,7 @@ impl<'a> GlyphMetrics<'a> {
                 origin
             } else {
                 let mut advance = self.ascent as i32 - self.descent as i32;
-                if let Some(mvar) = self.mvar.as_ref() {
+                if let Some(mvar) = self.mvar_deltas() {
                     advance += mvar
                         .metric_delta(Tag::new(b"hasc"), coords)
                         .unwrap_or_default()
@@ -310,7 +310,7 @@ impl<'a> GlyphMetrics<'a> {
             }
         } else {
             let mut ascent = self.ascent as i32;
-            if let Some(mvar) = self.mvar.as_ref() {
+            if let Some(mvar) = self.mvar_deltas() {
                 ascent += mvar
                     .metric_delta(Tag::new(b"hasc"), coords)
                     .unwrap_or_default()
@@ -319,6 +319,17 @@ impl<'a> GlyphMetrics<'a> {
             ascent
         };
         Some(origin)
+    }
+
+    /// MVAR, when its deltas can apply. Without `variations` the coordinates are always empty and
+    /// every MVAR delta is zero, so the delta calls are compiled out.
+    #[inline]
+    fn mvar_deltas(&self) -> Option<&Mvar<'a>> {
+        if cfg!(feature = "variations") {
+            self.mvar.as_ref()
+        } else {
+            None
+        }
     }
 
     fn bounds(&self, gid: impl Into<GlyphId>, coords: &[F2Dot14]) -> Option<BoundingBox<i32>> {

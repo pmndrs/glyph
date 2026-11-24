@@ -227,6 +227,20 @@ impl GlyphFlags {
     /// without interrupting text shaping.
     pub const SAFE_TO_INSERT_TATWEEL: Self = Self(0x0000_0004);
 
+    /// pmndrs/glyph fork addition (see GLYPH-FORK.md), produced instead of
+    /// [`Self::SAFE_TO_INSERT_TATWEEL`] with
+    /// [`BufferFlags::PRODUCE_UNSAFE_TO_CONCAT_BEYOND_PAIRS`]: the glyph is
+    /// [`Self::UNSAFE_TO_CONCAT`] for a reason other than a pair adjustment of two adjacent
+    /// glyphs that the two glyphs alone decide.
+    ///
+    /// Such an adjustment is a `PairPos` match with an empty second value record, or a pair of
+    /// a legacy `kern` table that is not cross-stream, when no glyph was skipped between the
+    /// two. It reads nothing but the two glyphs and writes nothing but their positions and
+    /// these flags, so text that changes on one side of a cluster boundary this flag is clear
+    /// on can change the other side only in the glyph next to the boundary, and only when the
+    /// glyph it is paired with changes.
+    pub const UNSAFE_TO_CONCAT_BEYOND_PAIRS: Self = Self(0x0000_0004);
+
     /// All the currently defined flags.
     pub const ALL: Self = Self(Self::DEFINED_BITS);
 
@@ -1270,6 +1284,34 @@ impl hb_buffer_t {
         );
     }
 
+    /// pmndrs/glyph fork addition (see GLYPH-FORK.md): `unsafe_to_break` for a pair adjustment
+    /// of two adjacent glyphs they alone decide.
+    pub fn unsafe_to_break_pair(&mut self, start: Option<usize>, end: Option<usize>) {
+        self.set_glyph_flags_within_pairs(
+            GlyphFlags::UNSAFE_TO_BREAK | GlyphFlags::UNSAFE_TO_CONCAT,
+            start,
+            end,
+            Some(true),
+            None,
+        );
+    }
+
+    /// pmndrs/glyph fork addition (see GLYPH-FORK.md): `unsafe_to_concat` for a pair adjustment
+    /// of two adjacent glyphs they alone decide.
+    pub fn unsafe_to_concat_pair(&mut self, start: Option<usize>, end: Option<usize>) {
+        if !self.flags.contains(BufferFlags::PRODUCE_UNSAFE_TO_CONCAT) {
+            return;
+        }
+
+        self.set_glyph_flags_within_pairs(
+            GlyphFlags::UNSAFE_TO_CONCAT,
+            start,
+            end,
+            Some(false),
+            None,
+        );
+    }
+
     pub fn safe_to_insert_tatweel(&mut self, start: Option<usize>, end: Option<usize>) {
         if !self
             .flags
@@ -1334,10 +1376,41 @@ impl hb_buffer_t {
         }
     }
 
+    /// pmndrs/glyph fork addition (see GLYPH-FORK.md). Adds glyph flags as
+    /// `set_glyph_flags_within_pairs` does; a range that is unsafe to concatenate also marks the
+    /// boundaries it reaches across, which are all its clusters but the first, as unsafe beyond
+    /// pairs when the buffer produces that flag.
+    #[inline(never)]
+    fn set_glyph_flags(
+        &mut self,
+        flags: GlyphFlags,
+        start: Option<usize>,
+        end: Option<usize>,
+        interior: Option<bool>,
+        from_out_buffer: Option<bool>,
+    ) {
+        self.set_glyph_flags_within_pairs(flags, start, end, interior, from_out_buffer);
+        const PRODUCED: u32 = BufferFlags::PRODUCE_UNSAFE_TO_CONCAT_BEYOND_PAIRS.bits()
+            | BufferFlags::PRODUCE_UNSAFE_TO_CONCAT.bits();
+        if flags.contains(GlyphFlags::UNSAFE_TO_CONCAT)
+            && self.flags.bits()
+                & (PRODUCED | BufferFlags::PRODUCE_SAFE_TO_INSERT_TATWEEL.bits())
+                == PRODUCED
+        {
+            self.set_glyph_flags_within_pairs(
+                GlyphFlags::UNSAFE_TO_CONCAT_BEYOND_PAIRS,
+                start,
+                end,
+                Some(true),
+                from_out_buffer,
+            );
+        }
+    }
+
     /// Adds glyph flags in mask to infos with clusters between start and end.
     /// The start index will be from out-buffer if from_out_buffer is true.
     /// If interior is true, then the cluster having the minimum value is skipped. */
-    fn set_glyph_flags(
+    fn set_glyph_flags_within_pairs(
         &mut self,
         flags: GlyphFlags,
         start: Option<usize>,
@@ -1395,6 +1468,7 @@ impl hb_buffer_t {
             Some(false),
             Some(true),
         );
+
     }
 
     pub fn move_to(&mut self, i: usize) -> bool {

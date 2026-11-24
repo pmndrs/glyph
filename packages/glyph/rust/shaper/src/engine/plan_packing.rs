@@ -1,5 +1,7 @@
 //! Shared codec execution and capacity arithmetic for retained plan compilers.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use core::{mem, slice};
 
 #[cfg(test)]
@@ -59,7 +61,7 @@ pub fn push_pending_allocation(
     capacity: u32,
 ) -> Result<(), PackingError> {
     allocations
-        .try_reserve(1)
+        .try_reserve_cold(1)
         .map_err(|_| PackingError::AllocationFailed)?;
     allocations.push(Some(PendingAllocation {
         state: PhysicalBufferState::new(id, generation, program_id, schema, capacity)?,
@@ -81,7 +83,7 @@ impl PhysicalBufferState {
             .ok_or(PackingError::ArithmeticOverflow)?;
         let mut bytes = alloc::vec::Vec::new();
         bytes
-            .try_reserve_exact(length)
+            .try_reserve_exact_cold(length)
             .map_err(|_| PackingError::AllocationFailed)?;
         bytes.resize(length, 0);
         Ok(Self {
@@ -347,7 +349,7 @@ pub fn collect_range_jobs(
         .iter()
         .try_fold(0_usize, |total, ranges| total.checked_add(ranges.len()))
         .ok_or(PackingError::ArithmeticOverflow)?;
-    jobs.try_reserve(range_count)
+    jobs.try_reserve_cold(range_count)
         .map_err(|_| PackingError::AllocationFailed)?;
     for (buffer_index, ranges) in buffer_ranges[..buffer_count].iter().enumerate() {
         for range in ranges.iter().copied() {
@@ -363,7 +365,7 @@ pub fn collect_range_jobs(
     }
     sort_pairs.clear();
     sort_pairs
-        .try_reserve(jobs.len())
+        .try_reserve_cold(jobs.len())
         .map_err(|_| PackingError::AllocationFailed)?;
     for (index, job) in jobs.iter().enumerate() {
         sort_pairs.push((

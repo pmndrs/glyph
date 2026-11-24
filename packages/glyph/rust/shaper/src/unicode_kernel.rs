@@ -20,6 +20,8 @@
 //! The exhaustive and fuzz tests in `unicode_kernel_tests.rs` are the proof of both the rules
 //! and the cuts.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 
 #[allow(clippy::unreadable_literal, dead_code)]
@@ -100,9 +102,6 @@ pub(crate) struct Kernel {
     safe: Vec<u64>,
     /// Half-open unit ranges handed to the scalar analysis, ascending and disjoint.
     pub(crate) windows: Vec<(u32, u32)>,
-    /// One byte per ASCII unit seen, indexed by `unit & 0x7f`.
-    pub(crate) ascii_seen: Vec<u8>,
-    pub(crate) non_ascii: bool,
 }
 
 #[derive(Default)]
@@ -129,7 +128,6 @@ impl Kernel {
         let blocks = units / BLOCK + 1;
         reserve(&mut self.classes, blocks * BLOCK)?;
         reserve(&mut self.scripts, units)?;
-        reserve(&mut self.ascii_seen, 128)?;
         reserve(&mut self.allowed, blocks)?;
         reserve(&mut self.required, blocks)?;
         reserve(&mut self.dirty, blocks)?;
@@ -149,10 +147,7 @@ impl Kernel {
         self.classes.resize(blocks * BLOCK, 0);
         self.scripts.clear();
         self.scripts.resize(text.len(), 0);
-        self.ascii_seen.clear();
-        self.ascii_seen.resize(128, 0);
         let tables = lanes::AsciiTables::new();
-        let mut non_ascii = 0u16;
         let mut start = 0;
         while start < text.len() {
             let end = (start + lanes::LANE).min(text.len());
@@ -164,18 +159,9 @@ impl Kernel {
                     let value = unit_value(*unit);
                     *class = (value & 0xff) as u8;
                     *script = (value >> 8) as u8;
-                    non_ascii |= *unit;
                 }
             }
             start = end;
-        }
-        // Only a paragraph of ASCII units reads which units it uses; any other is not printable
-        // ASCII, and its mask stays empty.
-        self.non_ascii = non_ascii >= 0x80;
-        if !self.non_ascii {
-            for unit in text {
-                self.ascii_seen[usize::from(*unit & 0x7f)] = 1;
-            }
         }
     }
 
@@ -668,7 +654,7 @@ fn decide_block(
 fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), ()> {
     if values.capacity() < capacity {
         values
-            .try_reserve_exact(capacity.saturating_sub(values.len()))
+            .try_reserve_exact_cold(capacity.saturating_sub(values.len()))
             .map_err(|_| ())?;
     }
     Ok(())

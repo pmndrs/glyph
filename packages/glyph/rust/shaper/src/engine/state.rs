@@ -1,3 +1,4 @@
+use crate::cold_growth::ColdGrowth as _;
 use alloc::{boxed::Box, vec::Vec};
 
 use super::id_map::IdMap;
@@ -6,7 +7,7 @@ use core::{cell::RefCell, num::NonZeroU32};
 use crate::{
     STATUS_RESULT_TOO_LARGE, ShapeRangeRef, ShapeRunRef, ShaperRegistry,
     bidi::{BidiAnalysis, BidiError, DIRECTION_AUTO, analyze_into as analyze_bidi_into},
-    unicode::{PrintableAsciiFacts, UnicodeAnalysis, UnicodeError},
+    unicode::{UnicodeAnalysis, UnicodeError},
     valid_utf16_boundary,
 };
 
@@ -25,8 +26,8 @@ use super::{
     flow_geometry::{FlowGeometryArena, LocalizedGeometryChange},
     font_binding::FontRenderBinding,
     frame::{
-        CommittedUpdate, MeasuredParagraph, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE,
-        PreparedUpdate, RootRevision, UpdateRequest, WRAP_WORD,
+        CommittedUpdate, MeasuredParagraph, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, PreparedUpdate,
+        RootRevision, UpdateRequest, WRAP_WORD,
     },
     identity_index::IdentityIndex,
     inline_leaf::{InlineLeaf, PreparedLayout},
@@ -226,14 +227,38 @@ struct ShapeWindow {
     probe_end: u32,
     old_glyph_start: usize,
     old_glyph_end: usize,
+    /// Whether an end is a boundary between two clusters that stand alone rather than one no
+    /// glyph flags unsafe to concatenate: only an edit's window has such ends.
+    start_alone: bool,
+    end_alone: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ShapeAttempt {
     Prepared,
     RetryWholeRun,
+    /// The fresh shape refused these ends of an edit's window.
+    Widen {
+        start: bool,
+        end: bool,
+    },
     NeedsFallback,
 }
+
+/// How a fresh shape's agreement to the windows' ends is checked.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum VerifyWindows {
+    /// The window is the run.
+    No,
+    /// Same-length edits between boundaries no glyph flags.
+    Sparse,
+    /// One edit's window.
+    Edit,
+}
+
+/// HarfRust buffer flags of every shaping whose glyphs the paragraph's shape retains:
+/// `PRODUCE_UNSAFE_TO_CONCAT` and the fork's `PRODUCE_UNSAFE_TO_CONCAT_BEYOND_PAIRS`.
+const SHAPE_FLAGS: u32 = 0x140;
 
 impl TextEdit {
     fn is_same_length(self) -> bool {
@@ -339,7 +364,6 @@ struct PreflightTextCandidate {
     paragraph_id: u32,
     buffers: CandidateBuffers,
     unicode_state: CandidateUnicode,
-    reused_ascii_facts: Option<PrintableAsciiFacts>,
     edit_start: usize,
     edit_end: usize,
     text: Vec<u16>,
@@ -561,20 +585,14 @@ impl ParagraphInputSpans {
     }
 }
 
-/// Full clipped inspection is derived during preparation and adopted with that same
-/// revision. Its buffers survive candidate discards without exposing a rejected candidate.
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
+/// Whether `intrinsic_flow_layout_scratch` holds the unbounded layout of the measured
+/// revision, which a measurement of an overflowed paragraph reads its full content extent
+/// from. Derived during preparation and adopted with that same revision.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum IntrinsicInspection {
     #[default]
     None,
     Flow,
-    Positioned,
-}
-
-#[derive(Default)]
-struct ClippedLayoutInspection {
-    mode: IntrinsicInspection,
-    positioned: PositionedGlyphArena,
 }
 
 /// Edits a paragraph's word and sentence lanes are carried through without a query reading
@@ -587,8 +605,9 @@ struct ParagraphState {
     change_since_publication: ParagraphChange,
     #[cfg(test)]
     disable_inline: bool,
+    /// Reshape an edited run whole, as a cold shape would, instead of in windows.
     #[cfg(test)]
-    disable_ascii_anchor: bool,
+    force_whole_run_shape: bool,
     #[cfg(test)]
     fail_after_shape_once: bool,
     #[cfg(test)]
@@ -608,15 +627,10 @@ struct ParagraphState {
     unicode_reused_for_text_edit: bool,
     /// Text edits since a word or sentence query last read the boundary lanes.
     boundary_lane_idle_edits: u8,
-    pending_reused_ascii_facts: Option<PrintableAsciiFacts>,
     bidi: Staged<BidiAnalysis>,
     shaping_runs: Staged<ShapingRunArena>,
     prepared_layout: Staged<PreparedLayout>,
     shape: Staged<ShapeArena>,
-    /// Zero-free private registry serial for the accepted sole General raw run.
-    /// Exhaustion disables only this acceleration, never font registration.
-    accepted_shape_font_instance: Option<u64>,
-    pending_shape_font_instance: Option<u64>,
     shape_window_scratch: Vec<ShapeWindow>,
     layout_dirty: LayoutDirtyRanges,
     incremental_shape_source_run: Option<u32>,
@@ -639,7 +653,7 @@ struct ParagraphState {
     intrinsic_flow_layout_scratch: FlowLayoutArena,
     intrinsic_widths_cache: Option<(u8, super::cluster_state::IntrinsicWidths)>,
     intrinsic_flow_slot_scratch: super::flow_geometry::InlineSlotArena,
-    clipped_inspection: Staged<ClippedLayoutInspection>,
+    intrinsic_inspection: Staged<IntrinsicInspection>,
     intrinsic_boundary_shape: BoundaryShapeArena,
     boundary_shape: BoundaryShapeArena,
     /// The committed boundary glyphs' stable ids, indexed for the flow being prepared.
@@ -804,7 +818,7 @@ fn shaper_error(status: u32) -> EngineError {
 fn reserve_vec<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), EngineError> {
     if values.capacity() < capacity {
         values
-            .try_reserve_exact(capacity.saturating_sub(values.len()))
+            .try_reserve_exact_cold(capacity.saturating_sub(values.len()))
             .map_err(|_| EngineError::ResultTooLarge)?;
     }
     Ok(())
@@ -926,6 +940,7 @@ mod unsafe_break_tests;
 
 #[cfg(test)]
 mod tests {
+    use super::super::frame::OVERFLOW_CLIP;
     use super::super::positioning::{SEMANTIC_F32_FIELD_COUNT, SEMANTIC_U32_FIELD_COUNT};
     use super::super::semantic_wire::ParagraphOrderMutationBatch;
     use crate::engine::style_state::ResolvedStyle;
@@ -1390,6 +1405,7 @@ mod tests {
             x_offsets: vec![],
             y_offsets: vec![],
             glyph_flags: vec![],
+            beyond_pairs: Vec::new(),
         };
         let mut records = Vec::new();
         collect_cluster_records(
@@ -1442,6 +1458,7 @@ mod tests {
             x_offsets: vec![],
             y_offsets: vec![],
             glyph_flags: vec![],
+            beyond_pairs: Vec::new(),
         };
         let mut records = Vec::new();
         collect_cluster_records(&shape, &[0, 1, 3, 4, 5], &mut records, &mut Vec::new()).unwrap();
@@ -2304,7 +2321,7 @@ mod tests {
         )
         .unwrap();
         assert!(visible_extents.consumed_clusters < paragraph.clusters.committed().starts.len());
-        assert!(paragraph.clipped_inspection.active().mode == IntrinsicInspection::None);
+        assert!(*paragraph.intrinsic_inspection.active() == IntrinsicInspection::None);
         assert_eq!(engine.gather.view().plan_input().glyphs.len(), 1);
         let prior_high_water = engine.planners.get(&4).unwrap().next_content_revision;
 
@@ -2900,8 +2917,15 @@ mod tests {
         }
     }
 
+    /// What a borrowed-layout read of paragraph 1 of root 4 serves, after the read's entry
+    /// settles owed positioning as the binding does.
+    fn settled_layout_count(engine: &mut TextEngine, shaper: &ShaperRegistry) -> usize {
+        engine.settle_paragraph_positioning(shaper, 4, 1).unwrap();
+        engine.borrowed_paragraph_layout(4, 1).unwrap()
+    }
+
     #[test]
-    fn clipped_inspection_follows_measure_commit_and_failure() {
+    fn intrinsic_inspection_follows_measure_commit_and_failure() {
         const INTER: &[u8] =
             include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
         const GLYPH_COUNT: u32 = 2937;
@@ -2991,11 +3015,7 @@ mod tests {
             super::super::work_attribution::snapshot().intrinsic_flow_preparations,
             0
         );
-        assert_eq!(
-            super::super::work_attribution::snapshot().intrinsic_positioning_preparations,
-            0
-        );
-        let accepted_count = engine.borrowed_paragraph_layout(4, 1).unwrap();
+        let accepted_count = settled_layout_count(&mut engine, &shaper);
         let visible_count = engine
             .planners
             .get(&4)
@@ -3006,9 +3026,9 @@ mod tests {
             .positioned
             .active()
             .occurrence_count();
-        assert!(
-            accepted_count > visible_count,
-            "clipping must retain full inspection"
+        assert_eq!(
+            accepted_count, visible_count,
+            "a clipped read reports only the lines that fit"
         );
         let replacement: Vec<u16> = "new first\nnew second\nnew third\nnew fourth"
             .encode_utf16()
@@ -3025,10 +3045,7 @@ mod tests {
         let rejected = engine
             .measure_paragraph_with_shaper(&mut shaper, candidate, 1)
             .unwrap();
-        assert_ne!(
-            engine.borrowed_paragraph_layout(4, 1).unwrap(),
-            accepted_count
-        );
+        assert_ne!(settled_layout_count(&mut engine, &shaper), accepted_count);
         engine.invalidate_after_measure_failure(rejected).unwrap();
         assert_eq!(
             engine.borrowed_paragraph_layout(4, 1),
@@ -3043,9 +3060,9 @@ mod tests {
         let retry = engine
             .measure_paragraph_with_shaper(&mut shaper, candidate, 1)
             .unwrap();
-        let retry_count = engine.borrowed_paragraph_layout(4, 1).unwrap();
+        let retry_count = settled_layout_count(&mut engine, &shaper);
         engine.commit_measure(retry).unwrap();
-        assert_eq!(engine.borrowed_paragraph_layout(4, 1).unwrap(), retry_count);
+        assert_eq!(settled_layout_count(&mut engine, &shaper), retry_count);
         assert_ne!(retry_count, accepted_count);
         let mut inspection = repeated_read;
         inspection.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_MEASUREMENT
@@ -3098,20 +3115,10 @@ mod tests {
             super::super::work_attribution::snapshot().intrinsic_flow_preparations,
             0
         );
-        assert_eq!(
-            super::super::work_attribution::snapshot().intrinsic_positioning_preparations,
-            0
-        );
         engine.commit_update(prepared).unwrap();
-        assert_eq!(engine.borrowed_paragraph_layout(4, 1).unwrap(), retry_count);
+        assert_eq!(settled_layout_count(&mut engine, &shaper), retry_count);
         for (width, height, max_lines, overflow, mode) in [
-            (
-                54.0,
-                20.0,
-                0,
-                OVERFLOW_CLIP,
-                IntrinsicInspection::Positioned,
-            ),
+            (54.0, 20.0, 0, OVERFLOW_CLIP, IntrinsicInspection::Flow),
             (54.0, 20.0, 1, OVERFLOW_CLIP, IntrinsicInspection::Flow),
             (54.0, 20.0, 1, OVERFLOW_ELLIPSIS, IntrinsicInspection::Flow),
             (200.0, 1000.0, 0, OVERFLOW_CLIP, IntrinsicInspection::None),
@@ -3150,10 +3157,6 @@ mod tests {
                 work.intrinsic_flow_preparations,
                 usize::from(mode != IntrinsicInspection::None)
             );
-            assert_eq!(
-                work.intrinsic_positioning_preparations,
-                usize::from(mode == IntrinsicInspection::Positioned)
-            );
             engine.commit_measure(measured).unwrap();
             assert!(
                 engine
@@ -3163,10 +3166,9 @@ mod tests {
                     .paragraph(1)
                     .unwrap()
                     .state
-                    .clipped_inspection
+                    .intrinsic_inspection
                     .active()
-                    .mode
-                    == mode
+                    == &mode
             );
             let (mut cold, mut cold_shaper) = shaped_engine_with_font_styles_and_geometry(
                 "new first\nnew second\nnew third\nnew fourth",
@@ -3193,7 +3195,6 @@ mod tests {
             assert_eq!(engine.measured_semantic_views(measured).unwrap(), expected);
             let work = super::super::work_attribution::snapshot();
             assert_eq!(work.intrinsic_flow_preparations, 0);
-            assert_eq!(work.intrinsic_positioning_preparations, 0);
             engine.commit_measure(measured).unwrap();
         }
 
@@ -3247,7 +3248,6 @@ mod tests {
         let setter_shape_calls = crate::SHAPINGS.with(core::cell::Cell::get);
         let setter_work = super::super::work_attribution::snapshot();
         assert_eq!(setter_work.intrinsic_flow_preparations, 0);
-        assert_eq!(setter_work.intrinsic_positioning_preparations, 0);
         engine.commit_measure(setter).unwrap();
         let setter_preparation_revision = engine.planner_preparation_revision(4).unwrap();
         assert!(
@@ -3287,11 +3287,10 @@ mod tests {
                 .any(|record| { record.kind == super::super::semantic_view::SEMANTIC_LINE })
         );
         assert!(
-            engine.borrowed_paragraph_layout(4, 1).unwrap() > 0,
+            settled_layout_count(&mut engine, &shaper) > 0,
             "borrowed layout is available through its dedicated accessor"
         );
         assert_eq!(first_query_work.intrinsic_flow_preparations, 1);
-        assert_eq!(first_query_work.intrinsic_positioning_preparations, 0);
         assert_eq!(first_query_work.measurement_intrinsic_cluster_visits, 40);
         // The mask-zero setter left positioning owed. The query, a later read of the same
         // paragraph, settles it first; positioning measures each line's ink, and the summary
@@ -3421,7 +3420,6 @@ mod tests {
             0
         );
         assert_eq!(repeated_work.intrinsic_flow_preparations, 0);
-        assert_eq!(repeated_work.intrinsic_positioning_preparations, 0);
         engine.commit_measure(repeated).unwrap();
         let prepared_revision = engine.planner_preparation_revision(4).unwrap();
         assert_eq!(prepared_revision, setter_preparation_revision);
@@ -3438,7 +3436,6 @@ mod tests {
             0
         );
         assert_eq!(publication_work.intrinsic_flow_preparations, 0);
-        assert_eq!(publication_work.intrinsic_positioning_preparations, 0);
         let committed = engine.commit_update(prepared).unwrap();
         assert_eq!(committed.revision, RootRevision { engine: 2, root: 2 });
         assert_eq!(engine.root_revision(4).unwrap(), committed.revision);
@@ -3476,227 +3473,6 @@ mod tests {
             without_glyph_runtime_identity(&borrowed_glyphs(&cold)),
             "published borrowed glyphs remain cold-equivalent"
         );
-    }
-
-    #[test]
-    fn clipped_intrinsic_boundary_does_not_replace_visible_publication_source() {
-        const FREDOKA: &[u8] = include_bytes!(
-            "../../../../../../benches/fixtures/fonts/fredoka-issue-216/Fredoka-Regular.ttf"
-        );
-        let glyph_count = u32::from(
-            read_fonts::FontRef::new(FREDOKA)
-                .unwrap()
-                .maxp()
-                .unwrap()
-                .num_glyphs(),
-        );
-        const BASE: &str = "Reveals one grapheme at a time over a duration. Layout stays put and a trigger fires at the end.";
-        let text = alloc::format!("{BASE}\n{BASE}");
-        let units = utf16(&text);
-        let mut styles = root_style_bytes_for_text(7, units.len() as u32);
-        write_f32(
-            &mut styles,
-            ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize + abi::ENGINE_STYLE_MUTATION_FONT_SIZE,
-            24.0,
-        );
-        let mut geometry = multiline_root_geometry_bytes();
-        let constraint = ENGINE_UPDATE_REQUEST_HEADER_SIZE as usize;
-        let region = constraint + abi::ENGINE_CONSTRAINT_RECORD_SIZE as usize;
-        for (offset, value) in [
-            (constraint + abi::ENGINE_CONSTRAINT_WIDTH, 420.0),
-            (region + abi::ENGINE_REGION_INLINE_END, 420.0),
-            (region + abi::ENGINE_REGION_CLIP_INLINE_END, 420.0),
-            (constraint + abi::ENGINE_CONSTRAINT_HEIGHT, 100.0),
-            (
-                constraint + abi::ENGINE_CONSTRAINT_VIEWPORT_BLOCK_END,
-                100.0,
-            ),
-            (region + abi::ENGINE_REGION_BLOCK_END, 100.0),
-            (region + abi::ENGINE_REGION_CLIP_BLOCK_END, 100.0),
-        ] {
-            write_f32(&mut geometry, offset, value);
-        }
-        geometry[constraint + abi::ENGINE_CONSTRAINT_OVERFLOW] = OVERFLOW_CLIP;
-        geometry[constraint + abi::ENGINE_CONSTRAINT_DROP_CAP_LINES] = 3;
-        geometry[constraint + abi::ENGINE_CONSTRAINT_DROP_CAP_ALIGNMENT] = DROP_CAP_ALIGN_BASELINE;
-        geometry[constraint + abi::ENGINE_CONSTRAINT_DROP_CAP_SIDE] = DROP_CAP_SIDE_INLINE_START;
-        write_f32(
-            &mut geometry,
-            constraint + abi::ENGINE_CONSTRAINT_DROP_CAP_MARGIN_INLINE,
-            3.0,
-        );
-
-        let mut extents = vec![0; glyph_count as usize * 8];
-        let mut availability = vec![0; (glyph_count as usize).div_ceil(8)];
-        for glyph in 1..glyph_count as usize {
-            availability[glyph >> 3] |= 1 << (glyph & 7);
-            extents[glyph * 8 + 4..glyph * 8 + 6].copy_from_slice(&500_i16.to_le_bytes());
-            extents[glyph * 8 + 6..glyph * 8 + 8].copy_from_slice(&1_000_i16.to_le_bytes());
-        }
-        let mut shaper = ShaperRegistry::default();
-        assert_eq!(
-            shaper.register_font(1, FREDOKA, &extents, &availability, 0, 0),
-            0
-        );
-        let mut engine = TextEngine::default();
-        engine
-            .register_codec(9, validated_codec(TechniqueId(1)))
-            .unwrap();
-        engine
-            .register_font_binding(42, 1, glyph_count, render_binding(glyph_count, 1))
-            .unwrap();
-        engine.register_font_stack(7, &[42]).unwrap();
-        engine.create_root(4).unwrap();
-        let text_bytes = text_mutation_bytes(&[(0, 0, &units)]);
-        let mut setter = update(0, 0, 0);
-        setter.limits.max_clusters = 256;
-        setter.limits.max_lines = 256;
-        setter.limits.max_output_bytes = 1 << 20;
-        setter.semantic_view_mask = super::super::frame::SEMANTIC_VIEW_MEASUREMENT
-            | super::super::frame::SEMANTIC_VIEW_BORROWED_LAYOUT;
-        setter.text_mutations =
-            parse_text_mutations(&text_bytes, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
-        setter.style_mutations =
-            parse_style_mutations(&styles, ENGINE_UPDATE_REQUEST_HEADER_SIZE, 1).unwrap();
-        setter.geometry = parse_root_geometry(&geometry, setter.limits);
-        let measured = engine
-            .measure_paragraph_with_shaper(&mut shaper, setter, 1)
-            .unwrap();
-        engine.commit_measure(measured).unwrap();
-
-        let paragraph = &engine.planners.get(&4).unwrap().paragraph(1).unwrap().state;
-        assert!(matches!(
-            paragraph.clipped_inspection.active().mode,
-            IntrinsicInspection::Positioned
-        ));
-        let visible = paragraph.positioned.active();
-        let visible_count = visible.occurrence_count();
-        assert!(engine.borrowed_paragraph_layout(4, 1).unwrap() > visible_count);
-        assert!(
-            !paragraph.visible_boundary_shape().stable_ids.is_empty(),
-            "visible corrected boundary required: flow_prepared={} visible_fragments={:?} intrinsic_fragments={:?} corrected_breaks={:?} visible_ids={:?} committed_ids={:?} pending_ids={:?} intrinsic_ids={:?} visible_records={} intrinsic_records={}",
-            paragraph.flow_layout.is_prepared(),
-            paragraph
-                .flow_layout
-                .active()
-                .fragments
-                .iter()
-                .map(|fragment| (
-                    fragment.line.text_start,
-                    fragment.line.text_end,
-                    fragment.line.cluster_start,
-                    fragment.line.cluster_end,
-                    fragment.lead_index,
-                    fragment.tail_index,
-                    fragment.boundary_index,
-                ))
-                .collect::<Vec<_>>(),
-            paragraph
-                .intrinsic_flow_layout_scratch
-                .fragments
-                .iter()
-                .map(|fragment| (
-                    fragment.line.text_start,
-                    fragment.line.text_end,
-                    fragment.line.cluster_start,
-                    fragment.line.cluster_end,
-                    fragment.lead_index,
-                    fragment.tail_index,
-                    fragment.boundary_index,
-                ))
-                .collect::<Vec<_>>(),
-            {
-                let clusters = paragraph.clusters.active();
-                let mut advance_prefix = 0.0;
-                clusters
-                    .break_corrections
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(index, slots)| {
-                        advance_prefix += clusters.advances[index];
-                        slots.iter().any(|slot| slot.get().is_some()).then_some((
-                            index,
-                            clusters.starts[index],
-                            clusters.ends[index],
-                            clusters.flags[index],
-                            clusters.advances[index],
-                            advance_prefix,
-                        ))
-                    })
-                    .collect::<Vec<_>>()
-            },
-            paragraph.visible_boundary_shape().stable_ids,
-            paragraph.boundary_shape.stable_ids,
-            paragraph.pending_boundary_shape.stable_ids,
-            paragraph.intrinsic_boundary_shape.stable_ids,
-            paragraph.visible_boundary_shape().records.len(),
-            paragraph.intrinsic_boundary_shape.records.len(),
-        );
-        assert!(!visible.replacement_runs().is_empty());
-        assert_ne!(
-            paragraph.visible_boundary_shape().stable_ids,
-            paragraph.intrinsic_boundary_shape.stable_ids,
-            "the visible and intrinsic boundary arrays must differ for this fixture"
-        );
-        let mut cursor = visible.outlined_cursor(
-            paragraph.clusters.active(),
-            paragraph.visible_boundary_shape(),
-        );
-        let mut expected_ids = Vec::new();
-        let mut expected_packed = Vec::new();
-        let mut selected_boundary_owner_witness = false;
-        while let Some(mark) = cursor.next_mark().unwrap() {
-            let row = cursor.project(mark).unwrap();
-            if row.span.source == super::super::placement_state::GlyphSource::Boundary {
-                selected_boundary_owner_witness |= match visible.project_outlined_mark(
-                    mark,
-                    paragraph.clusters.active(),
-                    &paragraph.intrinsic_boundary_shape,
-                ) {
-                    Err(_) => true,
-                    Ok(intrinsic) => intrinsic.semantic.stable_id != row.semantic.stable_id,
-                };
-            }
-            expected_ids.push(row.semantic.stable_id);
-            expected_packed.extend_from_slice(&row.semantic.ink_inline_start.to_le_bytes());
-        }
-        assert!(
-            selected_boundary_owner_witness,
-            "a selected visible boundary glyph must differ from the indexed intrinsic owner"
-        );
-        assert!(!expected_ids.is_empty());
-        assert!(
-            expected_ids
-                .iter()
-                .any(|id| paragraph.visible_boundary_shape().stable_ids.contains(id))
-        );
-
-        let mut publication = update(0, 0, 0);
-        publication.limits = setter.limits;
-        let prepared = engine
-            .prepare_update_with_shaper(&mut shaper, publication, 1)
-            .unwrap();
-        let gathered_view = engine.gather.view();
-        let gathered = gathered_view.plan_input();
-        assert_eq!(
-            gathered
-                .glyphs
-                .iter()
-                .map(|glyph| glyph.stable_id)
-                .collect::<Vec<_>>(),
-            expected_ids,
-            "renderer selection must use the visible boundary owner"
-        );
-        engine.commit_update(prepared).unwrap();
-        let packed = engine
-            .planners
-            .get(&4)
-            .unwrap()
-            .plan
-            .buffer_bytes(1)
-            .unwrap();
-        assert_eq!(&packed[..expected_packed.len()], expected_packed);
-        assert!(engine.borrowed_paragraph_layout(4, 1).unwrap() > visible_count);
     }
 
     #[test]
@@ -3997,8 +3773,8 @@ mod tests {
         .unwrap();
         planner.paragraph_mut(1).unwrap().positioned_changed = true;
         {
-            let inspection = &mut planner.paragraph_mut(1).unwrap().state.clipped_inspection;
-            inspection.pending_mut().mode = IntrinsicInspection::Flow;
+            let inspection = &mut planner.paragraph_mut(1).unwrap().state.intrinsic_inspection;
+            *inspection.pending_mut() = IntrinsicInspection::Flow;
             inspection.mark_prepared();
         }
         super::super::work_attribution::reset();
@@ -4011,10 +3787,9 @@ mod tests {
                 .paragraph(1)
                 .unwrap()
                 .state
-                .clipped_inspection
+                .intrinsic_inspection
                 .active()
-                .mode
-                == IntrinsicInspection::Flow
+                == &IntrinsicInspection::Flow
         );
         assert!(planner.unpublished_preparation_ids.is_empty());
         assert!(planner.pending_preparation_ids.is_empty());
@@ -4097,7 +3872,7 @@ mod tests {
             state.clusters.mark_prepared();
             state.geometry.mark_prepared();
             state.flow_layout.mark_prepared();
-            state.clipped_inspection.mark_prepared();
+            state.intrinsic_inspection.mark_prepared();
             state.positioned.mark_prepared();
 
             if preserve_text {
@@ -4116,7 +3891,7 @@ mod tests {
                     state.clusters.is_prepared(),
                     state.geometry.is_prepared(),
                     state.flow_layout.is_prepared(),
-                    state.clipped_inspection.is_prepared(),
+                    state.intrinsic_inspection.is_prepared(),
                     state.positioned.is_prepared(),
                 ]
                 .into_iter()
@@ -4770,6 +4545,7 @@ mod tests {
                 x_offsets: vec![0; UNIT_COUNT],
                 y_offsets: vec![0; UNIT_COUNT],
                 glyph_flags: vec![0; UNIT_COUNT],
+                beyond_pairs: Vec::new(),
             };
             let before = crate::SPARSE_BOUNDARY_VISITS.with(core::cell::Cell::get);
             let mut windows = Vec::new();
@@ -7794,7 +7570,6 @@ mod tests {
                 < candidate.text.active().units.len()
         );
         let work = super::super::work_attribution::snapshot();
-        assert_eq!(work.cluster_copied_old_rows, 3);
         assert_eq!(work.cluster_full_builds, 0);
         engine.commit_measure(measured).unwrap();
         let (cold_engine, _) = shaped_inter_engine("e\u{301}bc");
@@ -7814,7 +7589,7 @@ mod tests {
     }
 
     #[test]
-    fn inter_4000_glyph_midpoint_isolates_whole_affected_run_and_matches_cold() {
+    fn inter_4000_glyph_midpoint_windows_the_affected_run_and_matches_cold() {
         const FONT: &[u8] =
             include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
         fn benchmark_styles(length: u32) -> (Vec<u8>, u32) {
@@ -7870,9 +7645,12 @@ mod tests {
         assert_eq!(original.as_bytes()[middle], b'\n');
         let grown = alloc::format!("{}x{}", &original[..middle], &original[middle..]);
         let (mut engine, mut shaper) = benchmark_engine(&original);
-        for (index, (value, old_end, new_end, shaped_units)) in [
-            (grown.as_str(), 2_456, 2_457, 351),
-            (original.as_str(), 2_457, 2_456, 350),
+        // The edit is at the end of the seventh paragraph's run, after `candidates.`. The `s`
+        // and the full stop each stand alone, so the window starts between them, and the probe
+        // four clusters before that.
+        for (index, (value, old_end, new_end, window_start, shaped_units)) in [
+            (grown.as_str(), 2_456, 2_457, 2_455, 6),
+            (original.as_str(), 2_457, 2_456, 2_455, 5),
         ]
         .into_iter()
         .enumerate()
@@ -7936,8 +7714,8 @@ mod tests {
             assert_eq!(candidate.incremental_shape_source_run, Some(6));
             assert_eq!(candidate.shape_window_scratch.len(), 1);
             let window = candidate.shape_window_scratch[0];
-            assert_eq!((window.old_start, window.old_end), (2_106, old_end));
-            assert_eq!((window.new_start, window.new_end), (2_106, new_end));
+            assert_eq!((window.old_start, window.old_end), (window_start, old_end));
+            assert_eq!((window.new_start, window.new_end), (window_start, new_end));
             assert_eq!(window.probe_end, new_end);
             engine.commit_update(prepared).unwrap();
             assert_eq!(
@@ -10156,37 +9934,6 @@ mod tests {
         assert_eq!(
             paragraph.unicode.active().grapheme_boundaries(),
             committed_boundaries
-        );
-    }
-
-    #[test]
-    fn reused_ascii_fact_is_visible_only_after_unicode_commit() {
-        let mut paragraph = ParagraphState::default();
-        paragraph
-            .unicode
-            .pair_mut()
-            .0
-            .analyze(&utf16("ab"))
-            .unwrap();
-        let old = paragraph.unicode.committed().printable_ascii_facts();
-        paragraph.text.pending_mut().units = utf16("az");
-        paragraph.text.mark_prepared();
-        let mut changed = old;
-        changed.include_unit('z' as u16);
-        let mut candidate = PreflightTextCandidate {
-            unicode_state: CandidateUnicode::ReuseCommitted,
-            reused_ascii_facts: Some(changed),
-            ..PreflightTextCandidate::default()
-        };
-        paragraph.prepare_unicode(Some(&mut candidate)).unwrap();
-        assert_eq!(paragraph.unicode.committed().printable_ascii_facts(), old);
-        paragraph.discard_unicode_candidate();
-        assert_eq!(paragraph.unicode.committed().printable_ascii_facts(), old);
-        paragraph.prepare_unicode(Some(&mut candidate)).unwrap();
-        paragraph.commit_unicode();
-        assert_eq!(
-            paragraph.unicode.committed().printable_ascii_facts(),
-            changed
         );
     }
 
@@ -14430,9 +14177,6 @@ mod tests {
     include!("state/refusal_tests.rs");
     include!("state/deferred_positioning_tests.rs");
     include!("state/run_local_prefix_tests.rs");
-    include!("state_ascii_anchor_runtime_oracle.rs");
-    include!("state_ascii_anchor_acceptance_tests.rs");
-    include!("state_ascii_anchor_policy_tests.rs");
-    include!("state_ascii_anchor_adversarial.rs");
+    include!("state/resized_window_tests.rs");
     include!("state_gather_equivalence_tests.rs");
 }

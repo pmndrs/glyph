@@ -162,11 +162,7 @@ pub(super) fn prepare_drop_cap(
         flow_thread_id: constraint.flow_thread_id,
         region_id: region.id,
         transform_index: region.transform_index,
-        clip_id: if constraint.overflow == OVERFLOW_CLIP {
-            region.id
-        } else {
-            0
-        },
+        clip_id: 0,
         fragment_count: 1,
         align: ALIGN_START,
         block_start: baseline + envelope.block_start,

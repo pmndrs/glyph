@@ -4,6 +4,8 @@
 //! performs one bounded registration-time pass over direct Wasm memory and retains typed codec
 //! data; frame updates never revisit these records.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 
 use super::render_plan::{PRIMITIVE_DECORATION, PRIMITIVE_GLYPH};
@@ -127,7 +129,7 @@ pub(crate) fn parse_codec(bytes: &[u8]) -> Result<ValidatedCodec, u32> {
 
     let mut decoded = Vec::new();
     decoded
-        .try_reserve_exact(usize::try_from(program_count).map_err(|_| STATUS_INVALID_REQUEST)?)
+        .try_reserve_exact_cold(usize::try_from(program_count).map_err(|_| STATUS_INVALID_REQUEST)?)
         .map_err(|_| STATUS_INVALID_REQUEST)?;
     for record in programs.chunks_exact(CODEC_PROGRAM_RECORD_SIZE as usize) {
         let primitive_kind = match read_u16(record, CODEC_PROGRAM_PRIMITIVE_KIND)? {
@@ -229,7 +231,7 @@ fn reject_overlaps(
 fn decode_inputs(records: &[u8]) -> Result<Vec<InputSource>, u32> {
     let mut inputs = Vec::new();
     inputs
-        .try_reserve_exact(records.len() / CODEC_INPUT_RECORD_SIZE as usize)
+        .try_reserve_exact_cold(records.len() / CODEC_INPUT_RECORD_SIZE as usize)
         .map_err(|_| STATUS_INVALID_REQUEST)?;
     for record in records.chunks_exact(CODEC_INPUT_RECORD_SIZE as usize) {
         if read_u16(record, CODEC_INPUT_RESERVED)? != 0 {
@@ -253,7 +255,7 @@ fn decode_inputs(records: &[u8]) -> Result<Vec<InputSource>, u32> {
 fn decode_capability_sets(records: &[u8]) -> Result<Vec<CapabilitySet>, u32> {
     let mut capability_sets = Vec::new();
     capability_sets
-        .try_reserve_exact(records.len() / CODEC_CAPABILITY_SET_RECORD_SIZE as usize)
+        .try_reserve_exact_cold(records.len() / CODEC_CAPABILITY_SET_RECORD_SIZE as usize)
         .map_err(|_| STATUS_INVALID_REQUEST)?;
     for record in records.chunks_exact(CODEC_CAPABILITY_SET_RECORD_SIZE as usize) {
         if read_u16(record, CODEC_CAPABILITY_SET_RESERVED)? != 0
@@ -311,7 +313,7 @@ fn indexed_records(records: &[u8], start: u32, count: u16, stride: u32) -> Resul
 fn decode_buffers(records: &[u8]) -> Result<Vec<BufferSchema>, u32> {
     let mut buffers = Vec::new();
     buffers
-        .try_reserve_exact(records.len() / CODEC_BUFFER_RECORD_SIZE as usize)
+        .try_reserve_exact_cold(records.len() / CODEC_BUFFER_RECORD_SIZE as usize)
         .map_err(|_| STATUS_INVALID_REQUEST)?;
     for record in records.chunks_exact(CODEC_BUFFER_RECORD_SIZE as usize) {
         if read_u16(record, CODEC_BUFFER_RESERVED0)? != 0 {
@@ -339,7 +341,7 @@ fn decode_buffers(records: &[u8]) -> Result<Vec<BufferSchema>, u32> {
 fn decode_operations(records: &[u8]) -> Result<Vec<Operation>, u32> {
     let mut operations = Vec::new();
     operations
-        .try_reserve_exact(records.len() / CODEC_OPERATION_RECORD_SIZE as usize)
+        .try_reserve_exact_cold(records.len() / CODEC_OPERATION_RECORD_SIZE as usize)
         .map_err(|_| STATUS_INVALID_REQUEST)?;
     for record in records.chunks_exact(CODEC_OPERATION_RECORD_SIZE as usize) {
         operations.push(decode_operation(record)?);

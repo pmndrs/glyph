@@ -3,6 +3,8 @@
 //! Local placed rows cannot reconstruct HarfRust's integer positions or full glyph flags. An
 //! inline owner therefore stores each original shaped glyph exactly once beside its local row.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 
 use crate::{FontGlyphExtents, FontMetrics, unicode::UnicodeAnalysis};
@@ -279,7 +281,7 @@ impl InlineLeaf {
         }
         self.clusters.clear();
         self.clusters
-            .try_reserve(boundaries.len().saturating_sub(1))
+            .try_reserve_cold(boundaries.len().saturating_sub(1))
             .map_err(|_| EngineError::ResultTooLarge)?;
         let metrics = metrics_for(run.font_handle)
             .ok_or(EngineError::FontMetricsMissing(super::FrameFault::default()))?;
@@ -1013,7 +1015,7 @@ impl InlineShape {
     pub(crate) fn copy_from(&mut self, other: &Self) -> Result<(), EngineError> {
         self.glyphs.clear();
         self.glyphs
-            .try_reserve(other.glyphs.len())
+            .try_reserve_cold(other.glyphs.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.glyphs.extend_from_slice(&other.glyphs);
         self.run = other.run;
@@ -1038,7 +1040,7 @@ impl InlineShape {
         let glyph_count =
             u32::try_from(shaped.len()).map_err(|_| crate::STATUS_RESULT_TOO_LARGE)?;
         self.glyphs
-            .try_reserve_exact(shaped.len())
+            .try_reserve_exact_cold(shaped.len())
             .map_err(|_| crate::STATUS_RESULT_TOO_LARGE)?;
         for (info, position) in shaped.glyph_infos().iter().zip(shaped.glyph_positions()) {
             self.glyphs.push(RawShapedGlyph {
@@ -1092,6 +1094,10 @@ impl InlineShape {
             target.x_offsets.push(glyph.x_offset);
             target.y_offsets.push(glyph.y_offset);
             target.glyph_flags.push(glyph.flags);
+            // The inline shape does not record why a glyph is unsafe to concatenate.
+            target
+                .beyond_pairs
+                .push(glyph.flags & super::shaping_state::GLYPH_FLAG_UNSAFE_TO_CONCAT != 0);
         }
         Ok(())
     }

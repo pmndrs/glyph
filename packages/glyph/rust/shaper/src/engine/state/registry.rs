@@ -1,5 +1,7 @@
 //! Font bindings, font stacks and codecs registered with the engine, shared by every root.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 impl TextEngine {
@@ -31,7 +33,7 @@ impl TextEngine {
             };
         }
         self.font_bindings
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.font_bindings.push(RegisteredFontBinding {
             handle,
@@ -111,11 +113,11 @@ impl TextEngine {
         };
         let mut retained = Vec::new();
         retained
-            .try_reserve_exact(fonts.len())
+            .try_reserve_exact_cold(fonts.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         retained.extend_from_slice(fonts);
         self.font_stacks
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.font_stacks.insert(
             insertion,

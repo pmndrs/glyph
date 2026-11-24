@@ -1,5 +1,7 @@
 //! Pairing retained rows with new ones, comparing their columns and adopting the changes.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 impl CodecGatherWorkspace {
@@ -337,7 +339,7 @@ impl CodecGatherWorkspace {
         chunk: &SourceChunk,
     ) -> Result<(), GatherError> {
         self.source_identities
-            .try_reserve(replaced.count_ones() as usize)
+            .try_reserve_cold(replaced.count_ones() as usize)
             .map_err(|_| GatherError::AllocationFailed)?;
         while replaced != 0 {
             let row = replaced.trailing_zeros() as usize;

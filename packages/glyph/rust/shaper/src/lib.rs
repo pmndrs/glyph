@@ -1,11 +1,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "256"]
+use crate::cold_growth::ColdGrowth as _;
 
 extern crate alloc;
 
 mod abi_contract;
-pub(crate) mod ascii_anchor_policy;
 pub mod bidi;
+mod cold_growth;
 pub mod engine;
 mod language_tags;
 pub mod line_break;
@@ -82,9 +83,6 @@ pub struct ShaperRegistry {
     /// the order sorted.
     font_handles: Vec<u32>,
     fonts: Vec<RegisteredFont>,
-    /// Zero denotes exhausted optional acceleration provenance; registration
-    /// continues with the existing public result and shaping still works.
-    next_font_instance: u64,
     last_font: Cell<usize>,
     shape_buffer: Option<UnicodeBuffer>,
     context_codepoints: Vec<u32>,
@@ -96,7 +94,6 @@ impl Default for ShaperRegistry {
         Self {
             font_handles: Vec::new(),
             fonts: Vec::new(),
-            next_font_instance: 0,
             last_font: Cell::new(usize::MAX),
             shape_buffer: Some(UnicodeBuffer::new()),
             context_codepoints: Vec::new(),
@@ -106,10 +103,6 @@ impl Default for ShaperRegistry {
 }
 
 struct RegisteredFont {
-    /// Nonzero for registrations with distinct optional acceleration identity.
-    instance: u64,
-    ascii_anchor_screen:
-        Option<Result<ascii_anchor_policy::FontScreen, ascii_anchor_policy::Unsupported>>,
     sfnt: Vec<u8>,
     extents: Vec<u8>,
     availability: Vec<u8>,
@@ -215,10 +208,12 @@ impl ShaperRegistry {
             return Err(STATUS_RESULT_TOO_LARGE);
         }
         self.context_codepoints
-            .try_reserve_exact(HARFRUST_CONTEXT_LIMIT.saturating_sub(self.context_codepoints.len()))
+            .try_reserve_exact_cold(
+                HARFRUST_CONTEXT_LIMIT.saturating_sub(self.context_codepoints.len()),
+            )
             .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
         self.shape_features
-            .try_reserve_exact(DEFAULT_SHAPE_FEATURE_CAPACITY)
+            .try_reserve_exact_cold(DEFAULT_SHAPE_FEATURE_CAPACITY)
             .map_err(|_| STATUS_RESULT_TOO_LARGE)
     }
 
@@ -297,16 +292,10 @@ impl ShaperRegistry {
             }
             Err(index) => {
                 let data = ShaperData::new(&font);
-                let instance = self.next_font_instance.checked_add(1).unwrap_or(0);
-                if instance != 0 {
-                    self.next_font_instance = instance;
-                }
                 self.font_handles.insert(index, handle);
                 self.fonts.insert(
                     index,
                     RegisteredFont {
-                        instance,
-                        ascii_anchor_screen: None,
                         sfnt: sfnt.to_vec(),
                         extents: extents.to_vec(),
                         availability: availability.to_vec(),
@@ -328,36 +317,15 @@ impl ShaperRegistry {
         if self.font_handles.get(last) == Some(&handle) {
             return Some(last);
         }
+        self.search_font_index(handle)
+    }
+
+    // The memo hit above is inlined into every caller; the search is not.
+    #[inline(never)]
+    fn search_font_index(&self, handle: u32) -> Option<usize> {
         let index = self.font_handles.binary_search(&handle).ok()?;
         self.last_font.set(index);
         Some(index)
-    }
-
-    pub(crate) fn font_instance(&self, handle: u32) -> Option<u64> {
-        let instance = self.fonts[self.font_index(handle)?].instance;
-        (instance != 0).then_some(instance)
-    }
-
-    /// Screen once per actual registered font; Unsupported is cached too.
-    pub(crate) fn ascii_anchor_screen(
-        &mut self,
-        handle: u32,
-    ) -> Result<&ascii_anchor_policy::FontScreen, ascii_anchor_policy::Unsupported> {
-        use ascii_anchor_policy::{Unsupported, bootstrap_nominals, screen_font};
-        let index = self.font_index(handle).ok_or(Unsupported::Descriptor)?;
-        let font = &mut self.fonts[index];
-        if font.ascii_anchor_screen.is_none() {
-            let result = screen_font(&font.sfnt).and_then(|mut screen| {
-                bootstrap_nominals(font, &mut screen)?;
-                Ok(screen)
-            });
-            font.ascii_anchor_screen = Some(result);
-        }
-        match font.ascii_anchor_screen.as_ref() {
-            Some(Ok(screen)) => Ok(screen),
-            Some(Err(reason)) => Err(*reason),
-            None => Err(Unsupported::Descriptor),
-        }
     }
 
     pub(crate) fn font_metrics(&self, handle: u32) -> Option<FontMetrics> {
@@ -746,7 +714,7 @@ fn shape_features(
 ) -> Result<(), u32> {
     output.clear();
     output
-        .try_reserve(run.features.len())
+        .try_reserve_cold(run.features.len())
         .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
     output.extend(run.features.iter().map(|feature| {
         let global = feature.start <= range.item_start && feature.end >= range.item_end;
@@ -881,7 +849,7 @@ fn decode_context_range_into(
     let units = text.get(start..end).ok_or(STATUS_INVALID_REQUEST)?;
     decoded.clear();
     decoded
-        .try_reserve_exact(HARFRUST_CONTEXT_LIMIT.min(units.len()))
+        .try_reserve_exact_cold(HARFRUST_CONTEXT_LIMIT.min(units.len()))
         .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
 
     let selected_start = match direction {
@@ -1125,39 +1093,6 @@ mod tests {
         assert_eq!(registry.dispose_font(9), STATUS_OK);
         assert_eq!(registry.dispose_font(9), STATUS_FONT_MISSING);
         assert_eq!(registry.font_count(), 1);
-    }
-
-    #[test]
-    fn optional_font_instance_never_authenticates_same_handle_reuse() {
-        const INTER: &[u8] =
-            include_bytes!("../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
-        let extents = alloc::vec![0u8; 2937 * 8];
-        let availability = alloc::vec![0u8; 2937_usize.div_ceil(8)];
-        let mut registry = ShaperRegistry::default();
-        assert_eq!(
-            registry.register_font(7, INTER, &extents, &availability, 0, 0),
-            STATUS_OK
-        );
-        let old = registry.font_instance(7).unwrap();
-        assert_eq!(
-            registry.register_font(7, INTER, &extents, &availability, 0, 0),
-            STATUS_OK
-        );
-        assert_eq!(registry.font_instance(7), Some(old));
-        assert_eq!(registry.dispose_font(7), STATUS_OK);
-        assert_eq!(
-            registry.register_font(7, INTER, &extents, &availability, 0, 0),
-            STATUS_OK
-        );
-        assert_ne!(registry.font_instance(7), Some(old));
-        assert_eq!(registry.dispose_font(7), STATUS_OK);
-        registry.next_font_instance = u64::MAX;
-        assert_eq!(
-            registry.register_font(7, INTER, &extents, &availability, 0, 0),
-            STATUS_OK
-        );
-        assert_eq!(registry.font_instance(7), None);
-        assert!(registry.font_metrics(7).is_some());
     }
 
     #[test]

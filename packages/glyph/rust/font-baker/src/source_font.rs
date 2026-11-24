@@ -1,13 +1,14 @@
 use read_fonts::{
-    FontRef,
+    FontRef, TopLevelTable,
     collections::IntSet,
-    tables::name::NameId,
+    tables::{cff::Cff, cff2::Cff2, name::NameId},
     types::{GlyphId, Tag},
 };
 use serde::{Deserialize, Serialize};
 use skera::{DEFAULT_DROP_TABLES, DEFAULT_LAYOUT_FEATURES, Plan, SubsetFlags};
 use skrifa::{GlyphNameSource, MetadataProvider};
 use std::{string::String, string::ToString, vec::Vec};
+use write_fonts::FontBuilder;
 
 use crate::{BakeError, BakeErrorCode};
 
@@ -98,23 +99,40 @@ pub fn prepare_font(
     name_ids.insert_range(NameId::from(0)..=NameId::from(6));
     let mut name_languages = IntSet::<u16>::empty();
     name_languages.insert(0x0409);
+    // skera has no CFF or CFF2 subsetter and leaves those tables out. Keeping every glyph at its source ID keeps the
+    // source charstrings valid for the glyphs the subset retains, so the source table is copied in afterwards.
+    let postscript_outlines = [Cff::TAG, Cff2::TAG]
+        .into_iter()
+        .find_map(|tag| font.table_data(tag).map(|data| (tag, data.as_bytes())));
+    let flags = if postscript_outlines.is_some() {
+        SubsetFlags::SUBSET_FLAGS_RETAIN_GIDS
+    } else {
+        SubsetFlags::default()
+    };
     let plan = Plan::new(
         &glyphs,
         &unicodes,
         &font,
-        SubsetFlags::default(),
+        flags,
         &drop_tables,
         &layout_scripts,
         &layout_features,
         &name_ids,
         &name_languages,
     );
-    let bytes = skera::subset_font(&font, &plan).map_err(|error| {
+    let mut bytes = skera::subset_font(&font, &plan).map_err(|error| {
         BakeError::new(
             BakeErrorCode::SubsettingFailed,
             format!("font subsetting failed: {error}"),
         )
     })?;
+    if let Some((tag, outlines)) = postscript_outlines {
+        let subset = parse_font(&bytes, 0)?;
+        bytes = FontBuilder::new()
+            .add_raw(tag, outlines)
+            .copy_missing_tables(subset)
+            .build();
+    }
     let prepared_font = parse_font(&bytes, 0)?;
     let glyph_count = prepared_font.glyph_names().num_glyphs();
     let report = PreparedFontReportV0 {
@@ -225,6 +243,62 @@ mod tests {
 
     const INTER: &[u8] =
         include_bytes!("../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+    const DANCING_SCRIPT: &[u8] = include_bytes!(
+        "../../../../../benches/fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf"
+    );
+    const NOTO_SANS_CJK_JP: &[u8] = include_bytes!(
+        "../../../../../benches/fixtures/fonts/noto-sans-cjk-2.004/NotoSansCJKjp-Regular.otf"
+    );
+
+    fn subset(source: &[u8], ranges: &[(u32, u32)]) -> PreparedFontV0 {
+        prepare_font(
+            source,
+            FontSelectionV0 {
+                format_version: 0,
+                font_face_index: 0,
+                unicode_ranges: ranges
+                    .iter()
+                    .map(|&(start, end)| UnicodeRangeV0 { start, end })
+                    .collect(),
+            },
+        )
+        .expect("subset")
+    }
+
+    #[derive(Default)]
+    struct CountingPen(usize);
+
+    impl skrifa::outline::OutlinePen for CountingPen {
+        fn move_to(&mut self, _x: f32, _y: f32) {
+            self.0 += 1;
+        }
+        fn line_to(&mut self, _x: f32, _y: f32) {
+            self.0 += 1;
+        }
+        fn quad_to(&mut self, _cx0: f32, _cy0: f32, _x: f32, _y: f32) {
+            self.0 += 1;
+        }
+        fn curve_to(&mut self, _cx0: f32, _cy0: f32, _cx1: f32, _cy1: f32, _x: f32, _y: f32) {
+            self.0 += 1;
+        }
+        fn close(&mut self) {}
+    }
+
+    fn outline_commands(font: &FontRef<'_>, character: char) -> usize {
+        let glyph = font.charmap().map(character).expect("mapped character");
+        let outline = font.outline_glyphs().get(glyph).expect("outline glyph");
+        let mut pen = CountingPen::default();
+        outline
+            .draw(
+                skrifa::outline::DrawSettings::unhinted(
+                    skrifa::instance::Size::unscaled(),
+                    skrifa::instance::LocationRef::default(),
+                ),
+                &mut pen,
+            )
+            .expect("draw outline");
+        pen.0
+    }
 
     #[test]
     fn prepares_a_shaping_complete_ascii_subset() {
@@ -284,5 +358,41 @@ mod tests {
         .expect_err("overlapping selection");
 
         assert_eq!(error.code, BakeErrorCode::InvalidSelection);
+    }
+
+    #[test]
+    fn cff_subsets_keep_their_outlines() {
+        for (name, source, ranges, characters) in [
+            (
+                "name-keyed DancingScript",
+                DANCING_SCRIPT,
+                &[(0x20, 0x7e)][..],
+                &['A', 'g'][..],
+            ),
+            (
+                "CID-keyed NotoSansCJKjp",
+                NOTO_SANS_CJK_JP,
+                &[(0x20, 0x7e), (0x3041, 0x3096), (0x65e5, 0x65e5)][..],
+                &['A', 'あ', '日'][..],
+            ),
+        ] {
+            let prepared = subset(source, ranges);
+            assert!(prepared.bytes.len() < source.len(), "{name} is smaller");
+            let font = FontRef::new(&prepared.bytes).expect("subset font");
+            assert!(
+                font.outline_glyphs().format().is_some(),
+                "{name} keeps an outline table"
+            );
+            let original = FontRef::new(source).expect("source font");
+            for &character in characters {
+                let commands = outline_commands(&font, character);
+                assert!(commands > 0, "{name} {character} has an outline");
+                assert_eq!(
+                    commands,
+                    outline_commands(&original, character),
+                    "{name} {character} keeps its source outline"
+                );
+            }
+        }
     }
 }

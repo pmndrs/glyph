@@ -34,6 +34,8 @@
 //! `Downstream`, or `Upstream` where no grapheme starts at the offset (the end of the text, the
 //! end of a line that ends in a hard break).
 
+use crate::cold_growth::ColdGrowth as _;
+
 mod boundary;
 mod caret;
 mod hit;
@@ -307,7 +309,7 @@ impl<S: LayoutSource> Editing<S> {
         let mut stops = Vec::new();
         let boundaries = self.boundaries();
         stops
-            .try_reserve_exact(boundaries.len())
+            .try_reserve_exact_cold(boundaries.len())
             .map_err(|_| EditingError::ResultTooLarge)?;
         let mut cache = line::LineCache::default();
         for &offset in boundaries {

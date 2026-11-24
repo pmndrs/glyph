@@ -220,7 +220,9 @@ impl<S: LayoutSource> Editing<S> {
         let units = &self.source.text()[start as usize..end as usize];
         char::decode_utf16(units.iter().copied())
             .filter_map(Result::ok)
-            .any(|character| character.is_alphanumeric() || is_pictograph(character as u32))
+            .any(|character| {
+                crate::line_break::is_alphanumeric(character) || is_pictograph(character as u32)
+            })
     }
 
     /// One visual step from `place`.

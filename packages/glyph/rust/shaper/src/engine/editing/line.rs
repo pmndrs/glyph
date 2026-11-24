@@ -5,6 +5,8 @@
 //! first glyph's pen position to the pen after its last. Cells of one shaping cluster share its
 //! advance: by the font's ligature carets when it has them, evenly otherwise.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::{rc::Rc, vec::Vec};
 
 use crate::unicode;
@@ -259,7 +261,7 @@ impl<S: LayoutSource> Editing<S> {
             .line_glyphs(line, &mut |glyph| glyphs.push(glyph))?;
         let mut boxes = Vec::new();
         boxes
-            .try_reserve_exact(facts.fragment_count + 1)
+            .try_reserve_exact_cold(facts.fragment_count + 1)
             .map_err(|_| EditingError::ResultTooLarge)?;
         if let Some(cap) = self.cap_of(line) {
             boxes.push(self.build_box(line, cap.top, cap.height, cap.fragment, &glyphs, true)?);
@@ -378,7 +380,7 @@ impl<S: LayoutSource> Editing<S> {
         drawn.dedup();
         let mut cells = Vec::new();
         cells
-            .try_reserve_exact(end_grapheme.saturating_sub(first_grapheme))
+            .try_reserve_exact_cold(end_grapheme.saturating_sub(first_grapheme))
             .map_err(|_| EditingError::ResultTooLarge)?;
         for (index, owner) in owners.iter().enumerate() {
             if owner.marker {
