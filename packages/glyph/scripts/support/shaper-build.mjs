@@ -42,6 +42,11 @@ export function shaperCargoArguments(simd) {
   ];
 }
 
+// The shaper's final pass runs at `-O3`, not the `-Oz` the bakers keep. On the same Rust input the
+// two are equal speed and `-O3` gzips 753 bytes smaller (7,473 raw bytes larger), so the size level
+// buys nothing here. `-O4` is 2-4% slower on the engine lanes, and dropping the one-caller inlining
+// cap costs about 6 kB gzip and 8-15% on a cold first frame. Evidence: the shaper-build-flags-2026-11
+// decision.
 export function shaperOptimizationArguments(simd) {
   return [
     '--enable-bulk-memory',
@@ -49,9 +54,9 @@ export function shaperOptimizationArguments(simd) {
     ...(simd ? ['--enable-simd'] : []),
     '--one-caller-inline-max-function-size=0',
     '--merge-similar-functions',
-    '-Oz',
+    '-O3',
     '--merge-similar-functions',
-    '-Oz',
+    '-O3',
   ];
 }
 
