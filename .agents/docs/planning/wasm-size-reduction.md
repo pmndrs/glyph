@@ -823,6 +823,51 @@ now vendored with its four category lookups (grapheme, word, sentence, emoji) an
 57-tuple category, about 3.9 kB gzip, generated from the crate's own tables and compared with them at every scalar value;
 whole-wasm gzip fell by 23,478 bytes. The UAX #29 algorithms are untouched.
 
+### 2026-11-24 size-audit cuts
+
+Branch `experiments/sil-sizecuts` from `sil-green-64`, building the cuts ranked in
+[the core size audit](core-size-audit-2026-11-23.md) plus the dead Flat gather path from the engine size report. Same
+build as above (package flags, `-O3` since `sil-green-63`, isolated target; the control is byte-identical to the
+package's `dist/text-shaper.wasm`, 1,417,876 raw). Gzip is GNU `gzip -9`; Brotli is Node quality 11. Every row is
+stacked on the rows above it, in commit order.
+
+| Audit # | Cut                                                                                    |       Δ raw |           Δ gzip -9 |    Δ Brotli |
+| ------: | -------------------------------------------------------------------------------------- | ----------: | ------------------: | ----------: |
+|       1 | HarfRust `ucd_table` split per property (fork; generated, checked at every code point) |     −13,976 |              −4,820 |      −4,047 |
+|       3 | Fallible `Vec` growth out of line (`ColdGrowth`, 164 call sites)                       |      −6,631 |              −2,341 |      −1,401 |
+|       6 | `add_feature` `#[inline(never)]` (fork)                                                |      −6,133 |              −1,243 |        −856 |
+|       7 | ASCII bootstrap through `UnicodeBuffer::add`                                           |      −2,338 |                −906 |        −932 |
+|       8 | `add_pause` `#[inline(never)]` (fork)                                                  |      −3,673 |                −505 |        −566 |
+|      11 | MVAR and FeatureVariations calls compiled out without `variations` (fork)              |      −1,585 |                −662 |        +197 |
+|       4 | `is_word` from an `ALPHANUMERIC` bit in the line-break trie                            |      +5,527 |                −750 |      −1,490 |
+|       5 | `InCB_Extend` as a fifth column of the segmentation trie (fork)                        |      −3,453 |              −1,502 |        −705 |
+|       2 | `Staged<T>` fills both values from one out-of-line `T::default()`                      |      −3,929 |              −1,589 |        −868 |
+|       9 | `font_index` binary search out of line                                                 |      −1,681 |                −449 |        −386 |
+|       — | Flat gather path (`GatherInput::Flat`, `LayoutPlanInput`) compiled only for tests      |     −16,875 |              −8,383 |      −5,677 |
+|         | **Total: 1,417,876 → 1,363,129 raw, 562,607 → 539,457 gzip, 450,595 → 433,864 Brotli** | **−54,747** | **−23,150 (−4.1%)** | **−16,731** |
+
+- Cut 2 was built in its cheap form. The audit's `const` template needs a `const` constructor for every type under
+  `ParagraphState`; most of the 10.6 kB of stores was each `Staged<T>` initializing its two `T` inline, so an
+  out-of-line `fresh::<T>()` halves it (`empty()` 2,432 bytes plus about 3.1 kB of `fresh` bodies). A runtime template
+  copy was larger than the control (+509 gzip), since `default()` stays linked.
+- Cut 4 grows the line-break trie (74 values instead of 61) but removes `core`'s Alphabetic and N tables; the bit sits
+  above the existing property bits, so the hot `properties` lookup is unchanged. A test pins `core`'s Unicode version
+  and compares the bit with `char::is_alphanumeric` at every scalar.
+- Cut 9 measured +337 Brotli when stacked directly on cuts 1, 3, 6, 7 and 8; on the full stack it is −386.
+- Dropped: cut 12 (the four test-only exports) is −239 raw / −45 gzip / +410 Brotli on the tip and would move about
+  thirty test and benchmark call sites off `textUpdate`. Cut 10 and `TableRange::new` were not built (owner direction).
+- Behaviour: native and wasm32+simd128 layout oracles with the adversarial fonts give 596 cases equal and no rejected or
+  unlisted divergence; the shaper, fork and segmentation tests pass.
+
+Speed, tip against `sil-green-64` with only `text-shaper.wasm` differing (same package JavaScript), interleaved. The
+host was not quiet: another workspace's build kept the load average at 8 to 28, so ranges are wide.
+
+- Browser headline (`headline.js`, 6 rounds; paired median candidate/baseline): every edit, sweep and ASCII-frame row
+  is 0.95 to 1.03 except `latin15k` sweep (1.08 CPU, range 0.86 to 1.20). A 10-round `latin15k` rerun put every row
+  at 1.03 CPU or less with ranges of about ±15%: within noise, but the one lane to recheck on a quiet host.
+- Engine Labs (`--suite engine --wasm`, 4 rounds, order alternated): every row 0.82 to 1.02.
+- `benchmark:headline-bidi-edit` (5 rounds): 0.97 to 1.02.
+
 ### Not now: estimates
 
 - **Data-driven syllabic interpreter (research step 7).** The Indic, Khmer, Myanmar and USE shapers plus vowel constraints
