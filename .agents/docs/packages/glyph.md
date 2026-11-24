@@ -1339,7 +1339,10 @@ it; the sampled GPU frame remained a separate 1–5 ms concern.
 
 `createFontStack()` accepts fonts from one runtime in explicit fallback order. Members may use different raster formats.
 The font carries both shaping identity and raster binding, so `Text` has no redundant format property. Rust resolves the
-font for each cluster and partitions the command buffer according to the active renderer's supported Codec programs.
+font for each extended grapheme cluster and partitions the command buffer according to the active renderer's supported
+Codec programs. A grapheme moves to the next font of the stack whole when any glyph of it is missing, so a ZWNJ, a
+prepended mark's digit or any other Extend or Prepend code point that HarfRust reports as a cluster of its own stays in
+its base's font.
 
 This permits an MSDF or Bitmap prose font to fall back to a Slug emoji font while keeping third-party renderers safe: an
 unregistered raster format fails at the Codec boundary instead of producing an unsupported draw.

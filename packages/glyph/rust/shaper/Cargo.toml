@@ -31,6 +31,11 @@ path = "tests/incremental_equals_cold.rs"
 required-features = ["std", "oracle"]
 
 [[test]]
+name = "fallback_graphemes"
+path = "tests/fallback_graphemes.rs"
+required-features = ["std", "oracle"]
+
+[[test]]
 name = "ellipsis_line_advance"
 path = "tests/ellipsis_line_advance.rs"
 required-features = ["std", "oracle"]

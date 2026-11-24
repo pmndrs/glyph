@@ -1392,7 +1392,13 @@ mod tests {
             glyph_flags: vec![],
         };
         let mut records = Vec::new();
-        collect_cluster_records(&shape, &mut records, &mut Vec::new()).unwrap();
+        collect_cluster_records(
+            &shape,
+            &[0, 1, 2, 3, 4, 5, 6],
+            &mut records,
+            &mut Vec::new(),
+        )
+        .unwrap();
         assert_eq!(
             records,
             vec![
@@ -1411,6 +1417,46 @@ mod tests {
                     cluster: 4,
                     missing: true,
                 },
+            ]
+        );
+    }
+
+    /// HarfRust reports a ZWNJ (or the digit after U+0600) as a cluster of its own; fallback
+    /// judges it with the grapheme it extends, which is missing when any part is.
+    #[test]
+    fn fallback_records_join_the_grapheme_they_extend() {
+        let shape = ShapeArena {
+            runs: vec![crate::engine::shaping_state::ShapedRun {
+                source_run: 0,
+                binding_handle: 11,
+                font_handle: 11,
+                text_start: 0,
+                text_end: 5,
+                glyph_start: 0,
+                glyph_count: 5,
+            }],
+            glyph_ids: vec![4, 3, 9, 0, 5],
+            clusters: vec![4, 3, 2, 1, 0],
+            x_advances: vec![],
+            y_advances: vec![],
+            x_offsets: vec![],
+            y_offsets: vec![],
+            glyph_flags: vec![],
+        };
+        let mut records = Vec::new();
+        collect_cluster_records(&shape, &[0, 1, 3, 4, 5], &mut records, &mut Vec::new()).unwrap();
+        let record = |cluster, missing| ClusterRecord {
+            source_run: 0,
+            cluster,
+            missing,
+        };
+        assert_eq!(
+            records,
+            vec![
+                record(0, false),
+                record(1, true),
+                record(3, false),
+                record(4, false)
             ]
         );
     }
