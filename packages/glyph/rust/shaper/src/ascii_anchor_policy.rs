@@ -9,7 +9,7 @@ use super::{
     BufferClusterLevel, BufferFlags, BuiltinFontFuncs, Direction, FlatExtents, FontFuncs, FontRef,
     GlyphExtents, RegisteredFont, ShapeOptions, ShapePlan, Tag, UnicodeBuffer,
 };
-use alloc::{string::String, vec::Vec};
+use alloc::vec::Vec;
 use core::convert::TryFrom;
 use read_fonts::tables::{
     gpos::{PairPos, PositionSubtables, SinglePos},
@@ -598,18 +598,15 @@ pub(crate) fn bootstrap_nominals(
     let script = harfrust::Script::from_iso15924_tag(Tag::from_be_bytes(*b"Latn"))
         .ok_or(Unsupported::Descriptor)?;
     let plan = ShapePlan::new(&shaper, Direction::LeftToRight, Some(script), None, &[]);
-    let mut ascii = String::new();
-    ascii
-        .try_reserve_exact(95)
-        .map_err(|_| Unsupported::Resource)?;
-    for codepoint in 0x20..=0x7e {
-        ascii.push(char::from_u32(codepoint).ok_or(Unsupported::Descriptor)?);
-    }
     let mut buffer = UnicodeBuffer::new();
     if !buffer.reserve(95) {
         return Err(Unsupported::Resource);
     }
-    buffer.push_str(&ascii);
+    // Printable ASCII, each character its own cluster at its UTF-8 offset, as `push_str` of the
+    // same string would add them.
+    for (cluster, character) in (0_u32..).zip(' '..='~') {
+        buffer.add(character, cluster);
+    }
     buffer.set_direction(Direction::LeftToRight);
     buffer.set_script(script);
     buffer.set_cluster_level(BufferClusterLevel::MonotoneGraphemes);
