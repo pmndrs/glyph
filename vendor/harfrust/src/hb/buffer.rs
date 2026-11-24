@@ -1284,6 +1284,27 @@ impl hb_buffer_t {
         );
     }
 
+    /// pmndrs/glyph fork addition (see GLYPH-FORK.md): marks the boundaries a range reaches
+    /// across as unsafe beyond pairs without flagging the range unsafe to concatenate, for a
+    /// stage upstream leaves unflagged.
+    pub fn unsafe_beyond_pairs(&mut self, start: Option<usize>, end: Option<usize>) {
+        if self.flags.bits()
+            & (BufferFlags::PRODUCE_UNSAFE_TO_CONCAT_BEYOND_PAIRS.bits()
+                | BufferFlags::PRODUCE_UNSAFE_TO_CONCAT.bits()
+                | BufferFlags::PRODUCE_SAFE_TO_INSERT_TATWEEL.bits())
+            == (BufferFlags::PRODUCE_UNSAFE_TO_CONCAT_BEYOND_PAIRS.bits()
+                | BufferFlags::PRODUCE_UNSAFE_TO_CONCAT.bits())
+        {
+            self.set_glyph_flags_within_pairs(
+                GlyphFlags::UNSAFE_TO_CONCAT_BEYOND_PAIRS,
+                start,
+                end,
+                Some(true),
+                None,
+            );
+        }
+    }
+
     /// pmndrs/glyph fork addition (see GLYPH-FORK.md): `unsafe_to_break` for a pair adjustment
     /// of two adjacent glyphs they alone decide.
     pub fn unsafe_to_break_pair(&mut self, start: Option<usize>, end: Option<usize>) {
@@ -1901,6 +1922,10 @@ pub const HB_BUFFER_SCRATCH_FLAG_HAS_CGJ: u32 = 0x0000_0010;
 pub const HB_BUFFER_SCRATCH_FLAG_HAS_BROKEN_SYLLABLE: u32 = 0x0000_0020;
 pub const HB_BUFFER_SCRATCH_FLAG_HAS_VARIATION_SELECTOR_FALLBACK: u32 = 0x0000_0040;
 pub const HB_BUFFER_SCRATCH_FLAG_HAS_CONTINUATIONS: u32 = 0x0000_0080;
+// pmndrs/glyph fork additions (see GLYPH-FORK.md): the plan kerns through a legacy `kern`
+// table, and a subtable of it flagged the whole buffer unsafe to concatenate.
+pub const HB_BUFFER_SCRATCH_FLAG_KERN_TABLE: u32 = 0x0000_0100;
+pub const HB_BUFFER_SCRATCH_FLAG_KERN_TABLE_FLAGGED: u32 = 0x0000_0200;
 
 /* Reserved for shapers' internal use. */
 pub const HB_BUFFER_SCRATCH_FLAG_SHAPER0: u32 = 0x0100_0000;
@@ -2109,6 +2134,15 @@ impl Default for UnicodeBuffer {
 pub struct GlyphBuffer(pub(crate) hb_buffer_t);
 
 impl GlyphBuffer {
+    /// pmndrs/glyph fork addition (see GLYPH-FORK.md). `None` when the plan did not kern
+    /// through a legacy `kern` table; otherwise whether a subtable of it could match a glyph
+    /// of this buffer, in which case every glyph is flagged unsafe to concatenate. A buffer
+    /// that holds this one's glyphs is flagged when this one is.
+    pub fn kern_table_flagged(&self) -> Option<bool> {
+        (self.0.scratch_flags & HB_BUFFER_SCRATCH_FLAG_KERN_TABLE != 0)
+            .then_some(self.0.scratch_flags & HB_BUFFER_SCRATCH_FLAG_KERN_TABLE_FLAGGED != 0)
+    }
+
     /// Returns the length of the data of the buffer.
     ///
     /// When called before shaping this is the number of unicode codepoints
