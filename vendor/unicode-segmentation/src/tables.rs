@@ -361,6 +361,7 @@ pub mod derived_property {
         super::util::bsearch_range_table(c, Alphabetic_table)
     }
 
+    #[cfg(test)]
     const InCB_Extend_table: &[(char, char)] = &[
         ('\u{300}', '\u{36f}'), ('\u{483}', '\u{489}'), ('\u{591}', '\u{5bd}'), ('\u{5bf}',
         '\u{5bf}'), ('\u{5c1}', '\u{5c2}'), ('\u{5c4}', '\u{5c5}'), ('\u{5c7}', '\u{5c7}'),
@@ -482,6 +483,12 @@ pub mod derived_property {
 
     #[inline]
     pub fn InCB_Extend(c: char) -> bool {
+        crate::category_trie::categories(c).4
+    }
+
+    /// The original range-table lookup, kept as the oracle for the trie.
+    #[cfg(test)]
+    pub fn InCB_Extend_by_range(c: char) -> bool {
         super::util::bsearch_range_table(c, InCB_Extend_table)
     }
 
@@ -3405,6 +3412,7 @@ mod category_trie_tests {
             assert_eq!(word::word_category(c).2, word::word_category_by_range(c).2, "{c:?}");
             assert_eq!(sentence::sentence_category(c).2, sentence::sentence_category_by_range(c).2, "{c:?}");
             assert_eq!(emoji::emoji_category(c).2, emoji::emoji_category_by_range(c).2, "{c:?}");
+            assert_eq!(super::derived_property::InCB_Extend(c), super::derived_property::InCB_Extend_by_range(c), "{c:?}");
         }
     }
 }
