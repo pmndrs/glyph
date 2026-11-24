@@ -153,7 +153,7 @@ impl FlowLayoutArena {
         if constraint.wrap == WRAP_WORD {
             cursor.start_correction = corrections.right(cursor_start)?;
         }
-        let mut block = if let Some(line) = last_prefix_line {
+        let block = if let Some(line) = last_prefix_line {
             line.block_start + line.height
         } else {
             let constraint_region_start = usize::try_from(constraint.region_start)
@@ -190,74 +190,12 @@ impl FlowLayoutArena {
             .ok_or(EngineError::InvalidRequest)?;
         let mut next_old_index = prefix_end;
         let mut old_candidate = None;
-        let block_end = f64::from(region.record.block_end);
-        while !cursor.is_complete(clusters.starts.len())
-            && self.lines.len().saturating_sub(thread_line_start) < constraint_line_limit
-            && self.lines.len() < max_lines
-            && block < block_end
-        {
-            let estimate = extents_for_cluster(
-                clusters,
-                styles,
-                cursor
-                    .cluster()
-                    .min(clusters.starts.len().saturating_sub(1)),
-                metrics_for,
-                first_font_for_stack,
-            )?;
-            let estimate = positive_extents(estimate, styles, clusters, cursor.cluster())?;
-            let composed_block = block;
-            let Some(height) = self.compose_band(
-                geometry,
-                region_index,
-                constraint.flow_thread_id,
-                region.record.id,
-                region.record.transform_index,
-                if constraint.overflow == OVERFLOW_CLIP {
-                    region.record.id
-                } else {
-                    0
-                },
-                clusters,
-                bidi,
-                styles,
-                slots,
-                &mut cursor,
-                block,
-                block_end,
-                estimate,
-                match drop_cap.as_ref() {
-                    Some(cap) => cap.cut_for_band(
-                        geometry,
-                        self.lines.len().saturating_sub(thread_line_start),
-                        block,
-                        block + estimate.height(),
-                    )?,
-                    None => None,
-                },
-                constraint.wrap,
-                constraint.align,
-                false,
-                f64::from(constraint.first_line_indent),
-                constraint_word_space_shrink(&constraint),
-                max_slots_per_band,
-                metrics_for,
-                first_font_for_stack,
-                corrections,
-                None,
-            )?
-            else {
-                block += estimate.height();
-                continue;
-            };
-            if self.lines.len() == thread_line_start + 1
-                && let (Some(cap), Some(line)) = (drop_cap.as_mut(), self.lines.iter().next_back())
-            {
-                cap.align_to_body_baseline(line.block_start + line.baseline);
-            }
-            block += height;
+        // The line the new flow rejoins the previous one at: the first composed at or below
+        // the dirty band that is, record for record, the previous line of its index.
+        let mut converged_line = None;
+        let mut rejoins = |flow: &Self, composed_block: f64| -> Result<bool, EngineError> {
             if composed_block < dirty.block_end {
-                continue;
+                return Ok(false);
             }
             loop {
                 if old_candidate.is_none() && next_old_index < region_line_end {
@@ -283,39 +221,63 @@ impl FlowLayoutArena {
                 break;
             }
             let Some((old_line_index, old_line, old_fragments)) = old_candidate.as_ref() else {
-                continue;
+                return Ok(false);
             };
-            let new_line_index = self
+            let new_line_index = flow
                 .lines
                 .len()
                 .checked_sub(1)
                 .ok_or(EngineError::InvalidRequest)?;
-            let new_line = self
+            let new_line = flow
                 .lines
                 .iter()
                 .next_back()
                 .copied()
                 .ok_or(EngineError::InvalidRequest)?;
-            let new_fragment_start = self
+            let new_fragment_start = flow
                 .fragments
                 .len()
                 .checked_sub(usize::from(new_line.fragment_count))
                 .ok_or(EngineError::InvalidRequest)?;
-            let new_fragments = self
+            let new_fragments = flow
                 .fragments
-                .range(new_fragment_start..self.fragments.len())
+                .range(new_fragment_start..flow.fragments.len())
                 .ok_or(EngineError::InvalidRequest)?;
             if *old_line_index != new_line_index
                 || !same_flow_line_records(new_line, &new_fragments, *old_line, old_fragments)
             {
-                continue;
+                return Ok(false);
             }
+            converged_line = Some(*old_line_index);
+            Ok(true)
+        };
+        self.compose_region_bands(
+            geometry,
+            region_index,
+            &constraint,
+            clusters,
+            bidi,
+            styles,
+            slots,
+            &mut cursor,
+            block,
+            &mut drop_cap,
+            thread_line_start,
+            constraint_line_limit.min(max_lines.saturating_sub(thread_line_start)),
+            max_slots_per_band,
+            metrics_for,
+            first_font_for_stack,
+            corrections,
+            None,
+            Some(&mut rejoins),
+        )?;
+        if let Some(old_line_index) = converged_line {
             self.append_converged_suffix(
                 previous,
                 geometry,
                 constraint.flow_thread_id,
                 drop_cap,
-                *old_line_index,
+                old_line_index,
             )?;
             self.mark_recomposed_lines(
                 prefix_end

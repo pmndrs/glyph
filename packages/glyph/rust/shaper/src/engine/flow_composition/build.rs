@@ -144,73 +144,26 @@ impl FlowLayoutArena {
                         block += f64::from(constraint.space_before);
                     }
                 }
-                let block_end = f64::from(region.record.block_end);
-                while !cursor.is_complete(clusters.starts.len())
-                    && self.lines.len().saturating_sub(thread_line_start) < constraint_line_limit
-                    && self.lines.len() < max_lines
-                    && block < block_end
-                {
-                    let estimate = extents_for_cluster(
-                        clusters,
-                        styles,
-                        cursor
-                            .cluster()
-                            .min(clusters.starts.len().saturating_sub(1)),
-                        metrics_for,
-                        first_font_for_stack,
-                    )?;
-                    let estimate = positive_extents(estimate, styles, clusters, cursor.cluster())?;
-                    match self.compose_band(
-                        geometry,
-                        region_index,
-                        constraint.flow_thread_id,
-                        region.record.id,
-                        region.record.transform_index,
-                        if constraint.overflow == OVERFLOW_CLIP {
-                            region.record.id
-                        } else {
-                            0
-                        },
-                        clusters,
-                        bidi,
-                        styles,
-                        slots,
-                        &mut cursor,
-                        block,
-                        block_end,
-                        estimate,
-                        match drop_cap.as_ref() {
-                            Some(cap) => cap.cut_for_band(
-                                geometry,
-                                self.lines.len().saturating_sub(thread_line_start),
-                                block,
-                                block + estimate.height(),
-                            )?,
-                            None => None,
-                        },
-                        constraint.wrap,
-                        constraint.align,
-                        constraint.width_mode != AXIS_EXACT,
-                        f64::from(constraint.first_line_indent),
-                        constraint_word_space_shrink(&constraint),
-                        max_slots_per_band,
-                        metrics_for,
-                        first_font_for_stack,
-                        corrections,
-                        reuse.as_mut(),
-                    )? {
-                        Some(height) => {
-                            if self.lines.len() == thread_line_start + 1
-                                && let (Some(cap), Some(line)) =
-                                    (drop_cap.as_mut(), self.lines.iter().next_back())
-                            {
-                                cap.align_to_body_baseline(line.block_start + line.baseline);
-                            }
-                            block += height;
-                        }
-                        None => block += estimate.height(),
-                    }
-                }
+                self.compose_region_bands(
+                    geometry,
+                    region_index,
+                    &constraint,
+                    clusters,
+                    bidi,
+                    styles,
+                    slots,
+                    &mut cursor,
+                    block,
+                    &mut drop_cap,
+                    thread_line_start,
+                    constraint_line_limit.min(max_lines.saturating_sub(thread_line_start)),
+                    max_slots_per_band,
+                    metrics_for,
+                    first_font_for_stack,
+                    corrections,
+                    reuse.as_mut(),
+                    None,
+                )?;
             }
             if constraint.overflow == OVERFLOW_ELLIPSIS {
                 let final_fragment_overflows = self.lines.iter().next_back().is_some_and(|line| {
@@ -244,5 +197,119 @@ impl FlowLayoutArena {
             }
         }
         Ok(())
+    }
+}
+
+/// Asked after each line a region composes, with the block offset its band started at:
+/// whether the flow from here on is one the caller already holds.
+pub(super) type BandStop<'a> =
+    &'a mut dyn FnMut(&FlowLayoutArena, f64) -> Result<bool, EngineError>;
+
+impl FlowLayoutArena {
+    /// Composes the bands of `constraint`'s thread down one region from `block`, until the
+    /// text, the region or `line_limit` lines of the thread end, or `stop` says so. Returns
+    /// whether `stop` ended it. Out of line and called per region: the full build and the
+    /// rebuild after an exclusion change walk a region with the same loop, and only the
+    /// rebuild passes a `stop`.
+    #[allow(clippy::too_many_arguments)]
+    #[inline(never)]
+    pub(super) fn compose_region_bands(
+        &mut self,
+        geometry: &FlowGeometryArena,
+        region_index: usize,
+        constraint: &FlowConstraint,
+        clusters: &ClusterArena,
+        bidi: &BidiAnalysis,
+        styles: &[StyleSegment],
+        slots: &mut InlineSlotArena,
+        cursor: &mut LineCursor,
+        mut block: f64,
+        drop_cap: &mut Option<FlowDropCap>,
+        thread_line_start: usize,
+        line_limit: usize,
+        max_slots_per_band: usize,
+        metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
+        first_font_for_stack: impl Fn(u32) -> Option<u32> + Copy,
+        corrections: &mut impl BreakCorrections,
+        mut reuse: Option<&mut FitReuse<'_>>,
+        mut stop: Option<BandStop<'_>>,
+    ) -> Result<bool, EngineError> {
+        let region = geometry
+            .regions
+            .get(region_index)
+            .ok_or(EngineError::InvalidRequest)?
+            .record;
+        let block_end = f64::from(region.block_end);
+        while !cursor.is_complete(clusters.starts.len())
+            && self.lines.len().saturating_sub(thread_line_start) < line_limit
+            && block < block_end
+        {
+            let estimate = extents_for_cluster(
+                clusters,
+                styles,
+                cursor
+                    .cluster()
+                    .min(clusters.starts.len().saturating_sub(1)),
+                metrics_for,
+                first_font_for_stack,
+            )?;
+            let estimate = positive_extents(estimate, styles, clusters, cursor.cluster())?;
+            let composed = self.compose_band(
+                geometry,
+                region_index,
+                constraint.flow_thread_id,
+                region.id,
+                region.transform_index,
+                if constraint.overflow == OVERFLOW_CLIP {
+                    region.id
+                } else {
+                    0
+                },
+                clusters,
+                bidi,
+                styles,
+                slots,
+                cursor,
+                block,
+                block_end,
+                estimate,
+                match drop_cap.as_ref() {
+                    Some(cap) => cap.cut_for_band(
+                        geometry,
+                        self.lines.len().saturating_sub(thread_line_start),
+                        block,
+                        block + estimate.height(),
+                    )?,
+                    None => None,
+                },
+                constraint.wrap,
+                constraint.align,
+                constraint.width_mode != AXIS_EXACT,
+                f64::from(constraint.first_line_indent),
+                constraint_word_space_shrink(constraint),
+                max_slots_per_band,
+                metrics_for,
+                first_font_for_stack,
+                corrections,
+                reuse.as_deref_mut(),
+            )?;
+            let Some(height) = composed else {
+                block += estimate.height();
+                continue;
+            };
+            if self.lines.len() == thread_line_start + 1
+                && let (Some(cap), Some(line)) = (drop_cap.as_mut(), self.lines.iter().next_back())
+            {
+                cap.align_to_body_baseline(line.block_start + line.baseline);
+            }
+            let composed_block = block;
+            block += height;
+            if let Some(stop) = stop.as_mut()
+                && stop(self, composed_block)?
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 }
