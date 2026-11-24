@@ -138,22 +138,22 @@ pub fn prepare_font(
     name_ids.insert_range(NameId::from(0)..=NameId::from(6));
     let mut name_languages = IntSet::<u16>::empty();
     name_languages.insert(0x0409);
-    // skera has no CFF or CFF2 subsetter and leaves those tables out. Keeping every glyph at its source ID keeps the
-    // source charstrings valid for the glyphs the subset retains, so the source table is copied in afterwards. A bake
-    // of every code point (one without `--unicodes`) keeps source glyph IDs too: they stay the IDs `glyph glyphs`
-    // reports, and the legacy `kern` table, which skera drops, stays valid and is copied in the same way.
+    // skera has no CFF, CFF2 or legacy `kern` subsetter and leaves those tables out. Keeping every glyph at its source
+    // ID keeps the source tables valid for the glyphs the subset retains, so they are copied in afterwards: a subset of
+    // a kern-only font then kerns like a full bake. A bake of every code point (one without `--unicodes`) keeps source
+    // glyph IDs too, so they stay the IDs `glyph glyphs` reports. The cost of retaining IDs is per-glyph metadata (glyph
+    // extents and raster records) for the empty IDs below the highest kept glyph.
     let postscript_outlines = [Cff::TAG, Cff2::TAG]
         .into_iter()
         .find_map(|tag| font.table_data(tag).map(|data| (tag, data.as_bytes())));
-    let retain_glyph_ids = postscript_outlines.is_some() || every_code_point;
+    let legacy_kern = font.table_data(LEGACY_KERN).map(|data| data.as_bytes());
+    let retain_glyph_ids =
+        postscript_outlines.is_some() || legacy_kern.is_some() || every_code_point;
     let flags = if retain_glyph_ids {
         SubsetFlags::SUBSET_FLAGS_RETAIN_GIDS
     } else {
         SubsetFlags::default()
     };
-    let legacy_kern = retain_glyph_ids
-        .then(|| font.table_data(LEGACY_KERN).map(|data| data.as_bytes()))
-        .flatten();
     let plan = Plan::new(
         &glyphs,
         &unicodes,
@@ -555,6 +555,81 @@ mod tests {
         )
         .expect_err("variable face");
         assert_eq!(error.code, BakeErrorCode::UnsupportedVariableFont);
+    }
+
+    /// Inter with its GPOS removed and a legacy `kern` table holding `pairs`, as a kern-only font is built.
+    fn kern_only_inter(pairs: &[(char, char, i16)]) -> (Vec<u8>, Vec<(u16, u16, i16)>) {
+        let source = FontRef::new(INTER).expect("Inter");
+        let mut ids = pairs
+            .iter()
+            .map(|&(left, right, value)| {
+                let id = |c| source.charmap().map(c).expect("mapped").to_u32() as u16;
+                (id(left), id(right), value)
+            })
+            .collect::<Vec<_>>();
+        ids.sort();
+        let mut kern = Vec::new();
+        kern.extend_from_slice(&0u16.to_be_bytes()); // version
+        kern.extend_from_slice(&1u16.to_be_bytes()); // nTables
+        kern.extend_from_slice(&0u16.to_be_bytes()); // subtable version
+        kern.extend_from_slice(&((14 + 6 * ids.len()) as u16).to_be_bytes());
+        kern.extend_from_slice(&1u16.to_be_bytes()); // horizontal, format 0
+        kern.extend_from_slice(&(ids.len() as u16).to_be_bytes());
+        kern.extend_from_slice(&[0, 6, 0, 0, 0, 0]); // searchRange, entrySelector, rangeShift
+        for (left, right, value) in &ids {
+            kern.extend_from_slice(&left.to_be_bytes());
+            kern.extend_from_slice(&right.to_be_bytes());
+            kern.extend_from_slice(&value.to_be_bytes());
+        }
+        let mut builder = FontBuilder::new();
+        for record in source.table_directory().table_records() {
+            let tag = record.tag();
+            if tag != Tag::new(b"GPOS") {
+                builder.add_raw(tag, source.table_data(tag).expect("table").as_bytes());
+            }
+        }
+        builder.add_raw(LEGACY_KERN, kern);
+        (builder.build(), ids)
+    }
+
+    /// The kerning value a legacy `kern` format 0 table gives a glyph pair.
+    fn legacy_kerning(font: &FontRef<'_>, left: u16, right: u16) -> Option<i16> {
+        let kern = font.table_data(LEGACY_KERN)?;
+        let bytes = kern.as_bytes();
+        let pairs = u16::from_be_bytes([bytes[10], bytes[11]]) as usize;
+        (0..pairs).map(|index| 18 + index * 6).find_map(|at| {
+            let pair = (
+                u16::from_be_bytes([bytes[at], bytes[at + 1]]),
+                u16::from_be_bytes([bytes[at + 2], bytes[at + 3]]),
+            );
+            (pair == (left, right)).then(|| i16::from_be_bytes([bytes[at + 4], bytes[at + 5]]))
+        })
+    }
+
+    #[test]
+    fn a_subset_of_a_kern_only_font_kerns_like_a_full_bake() {
+        let (source, pairs) = kern_only_inter(&[('A', 'V', -120), ('T', 'o', -90)]);
+        for ranges in [ASCII, EVERY_CODE_POINT] {
+            let prepared = subset(&source, ranges);
+            let font = FontRef::new(&prepared.bytes).expect("prepared font");
+            for &(left_char, right_char, _) in &[('A', 'V', 0), ('T', 'o', 0)] {
+                let left = font.charmap().map(left_char).expect("mapped").to_u32() as u16;
+                let right = font.charmap().map(right_char).expect("mapped").to_u32() as u16;
+                let expected = pairs
+                    .iter()
+                    .find(|pair| (pair.0, pair.1) == (left, right))
+                    .map(|pair| pair.2);
+                assert!(
+                    expected.is_some(),
+                    "{ranges:?} keeps source glyph IDs for {left_char}{right_char}"
+                );
+                assert_eq!(
+                    legacy_kerning(&font, left, right),
+                    expected,
+                    "{ranges:?} {left_char}{right_char} kerning"
+                );
+            }
+        }
     }
 
     #[test]
