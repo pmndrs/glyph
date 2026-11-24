@@ -1,0 +1,259 @@
+---
+title: Styling
+description: TextStyle — size, spacing, color, opacity, outline, shadow, decoration, OpenType features, language and direction — and how styles compose.
+nav: 21
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
+{/*
+reader
+- Has text on screen and wants it to look a certain way. Knows CSS `font-size`, `line-height`, `letter-spacing`;
+  may not know what an OpenType feature tag is. Arrives asking "what can I set, in what units, and what happens
+  when I get it wrong?", should leave able to write a style, compose named styles with conditions, and know which
+  effects need which format.
+
+write · intro
+- Question: what is `style`, and what units is it in?
+- Say: `style` is the inherited presentation of a paragraph; a span overrides what it names and inherits the rest.
+  Every length is in paragraph-local units — the units `fontSize` is in — so a style scales with the text it
+  decorates.
+- Anchor: "the CSS you already know, with one unit".
+- Shape: two sentences.
+
+write · keypoints
+- Every member is optional and validated at the boundary; a bad value throws with the property named.
+- `style` accepts a list — `[base, active && emphasis, { opacity }]` — merged left to right; `TextStyle.create` names rules once.
+- `outline` and `shadow` exist only on MSDF; Bitmap and Slug throw rather than draw something wrong.
+- Decoration is `solid` only today; other line styles are rejected, not drawn solid.
+
+notes · internals for the page
+- `TextStyle` — `text-properties.ts:85–103`; units doc `:90`, `:99–102`
+- validation — `text-properties.ts#assertTextStyle` (`:182–219`), called at construction — `three/text.ts:1438`
+- lists — `text-properties.ts#PropertyList` (`:32–33`), `property-list.ts#mergePropertyList` (`:4–17`); D-291
+- effects per format — `raster/msdf.ts:72`, `raster/bitmap.ts:83`, `raster/slug.ts:59`;
+  `engine-encoding.ts#assertTextEffectsSupported` (`:199–212`)
+- decoration `solid` only — `text-properties.ts:315–317`, `engine-encoding.ts:214–217`; D-248
+*/}
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text
+  font={Inter}
+  style={{
+    fontSize: 0.5,
+    lineHeight: 1.25,
+    letterSpacing: 0.01,
+    color: '#f4f7ff',
+    opacity: 0.9,
+    outline: { color: '#0a0c12', width: 0.02 },
+    shadow: { color: [0, 0, 0, 0.5], offset: [0.02, -0.02] },
+    decoration: { underline: true },
+    features: [{ tag: 'ss01' }, { tag: 'tnum' }],
+    language: 'en',
+  }}
+>
+  Styled
+</Text>;
+```
+
+<glyph-proxy fit="cover" root="scenes" data-scene="styling" aria-label="Every TextStyle property, one control each" aspect="16 / 9" />
+
+<details>
+<summary>TextStyle members</summary>
+
+| Property | Type | Notes |
+| --- | --- | --- |
+| `fontSize` | `number` | em size in paragraph-local units; positive |
+| `lineHeight` | `number` | multiple of `fontSize`; resolved per style segment; leading clamps at zero |
+| `letterSpacing` | `number` | added per cluster |
+| `wordSpacing` | `number` | added per word-separating space |
+| `language` | `string` | BCP 47; affects shaping and line breaking |
+| `direction` | `'auto' \| 'ltr' \| 'rtl'` | paragraph base direction |
+| `features` | `FontFeature[]` | `{ tag, value?, start?, end? }` |
+| `decoration` | `TextDecorationStyle` | see below |
+| `color` | `'#rrggbb' \| '#rrggbbaa' \| [r, g, b, a]` | hex, or a linear RGBA tuple; other CSS forms are rejected |
+| `opacity` | `number` | in `[0, 1]`; inherited independently of color |
+| `outline` | `{ color, width }` | MSDF; width in paragraph-local units |
+| `shadow` | `{ color, offset: [x, y] }` | MSDF; hard shadow |
+
+</details>
+
+{/*
+write
+- Question: what is on the menu?
+- One sentence above the code: this block sets every member once so you can see the shapes; the table is the
+  reference and the scene lets you move each one.
+- Avoid: repeating the table in prose.
+
+notes · internals
+- `fontSize`, `lineHeight` positive finite — `text-properties.ts:184–185`; `letterSpacing`, `wordSpacing` finite `:186–187`
+- `lineHeight` × `fontSize` per style segment, leading clamped at zero — `rust/shaper/src/engine/flow_composition.rs:884–903`
+- `language` tag grammar — `text-properties.ts#validLanguage` (`:369–377`); `direction` `:193–195`
+- `features` — `#assertFeature` (`:284–300`); `decoration` — `#assertDecoration` (`:302–318`); `color` — `#assertColor` (`:320–334`)
+- `opacity` in `[0, 1]` `:202–204`; `outline.width` required, nonnegative `:205–209`; `shadow.offset` two finite numbers `:210–218`
+*/}
+
+## Composing styles
+
+```ts
+import { TextStyle } from '@pmndrs/glyph';
+
+const styles = TextStyle.create({
+  base: { fontSize: 0.5, color: '#f4f7ff' },
+  emphasis: [{ fontSize: 0.5, color: '#f4f7ff' }, { color: '#ffd166' }], // a rule may itself be a list
+});
+
+declare const active: boolean;
+declare const opacity: number;
+three.createText({ font: Inter, text: 'Styled', style: [styles.base, active && styles.emphasis, { opacity }] });
+```
+
+{/*
+write
+- Question: how do I reuse a style and switch parts of it on and off?
+- Paragraph 1: a style is a value or a nested left-to-right list; `false` and `null` entries are ignored, so a
+  condition reads naturally in the list. `TextStyle.create({ name: rule })` validates each named rule once, merges
+  any list it was given, and returns the rules frozen.
+- Paragraph 2: public boundaries merge and validate known values; unknown keys are ignored, malformed known values
+  throw with the property named.
+- Anchor: React Native's style arrays.
+- Shape: two short paragraphs.
+
+notes · internals
+- `PropertyList` — `text-properties.ts:32–33`; merge, `false`/`null` skipped — `property-list.ts:4–17`
+- `TextStyle.create` — `text-properties.ts:146–147`, `#createPropertyRegistry` (`:158–179`): merge, validate, freeze per rule
+- validation checks known keys only; `Object.assign` carries unknown ones through — `property-list.ts:13`,
+  `text-properties.ts:182–219`; D-291
+*/}
+
+## Color and opacity
+
+{/*
+write
+- Question: which colour forms work, and why not `hsl()`?
+- One paragraph: a string is `#rrggbb` or `#rrggbbaa` (sRGB, converted to linear at the boundary); a tuple is
+  already linear RGBA in `[0, 1]`; any other CSS form throws `… must be #rrggbb, #rrggbbaa, or linear RGBA`, so
+  animate a hue by converting to hex or a tuple yourself. Opacity multiplies alpha and is inherited on its own, so a
+  span can fade without restating colour.
+- Shape: one paragraph.
+
+notes · internals
+- accepted forms and the throw — `text-properties.ts#assertColor` (`:320–334`)
+- packing: hex parsed as sRGB bytes, tuples encoded through the sRGB transfer, alpha × opacity —
+  `engine-encoding.ts#packedForeground` (`:249–257`), `#linearColorBytes` (`:280–286`)
+- opacity inherited independently — `text-properties.ts:97–98`
+- the GPU-side decode: packed colours are sRGB bytes decoded through `unpackSrgbRgba` in the shaders — MSDF's
+  outline and shadow colours at `tsl/msdf-shader.ts:70–71` (`:4` import), decorations per the convention stated at
+  `tsl/decoration-shader.ts:27–29` (D-248). [verify] the fill colour's path (`instance.fillColor`) before writing
+  "every colour is converted to linear"
+*/}
+
+## Outline and shadow
+
+{/*
+write
+- Question: why does my outline throw on one font and draw on another?
+- Paragraph 1: MSDF renders both from the distance field — the outline as a ring around the true distance, the
+  shadow as a second sample at an offset that shows only where the fill leaves alpha. Bitmap and Slug have no field
+  and reject `outline` and `shadow` at the boundary, naming the format, rather than degrading.
+- Paragraph 2: width and offset are in paragraph-local units; how far an outline or shadow can reach is bounded by
+  the bake's `pixelRange` (link Raster formats → MSDF).
+- Shape: two paragraphs.
+
+notes · internals
+- declared effects — `raster/msdf.ts:72` (`['outline', 'shadow']`), `raster/bitmap.ts:83`, `raster/slug.ts:59`
+- the throw, per format in the selection — `engine-encoding.ts:199–212`; checked for the root font and every span
+  font at construction — `three/text.ts:1457–1472`
+- shader: outline ring `max(outlineCoverage − fillCoverage, 0)` — `tsl/msdf-shader.ts:88–89`; shadow sample at an
+  offset, masked by `1 − glyphAlpha` — `:90–101`
+- reach bounded by the bake — `internal/msdf-contract.ts:18` (`MSDF_MAX_OUTLINE_ATLAS_PIXELS = pixelRange / 2`)
+- `outline.width`: the shader adds `instance.outlineWidth` to the true signed distance before coverage —
+  `tsl/msdf-shader.ts:88`; the realizer derives that node from the page's `z` component —
+  `three/internal/material-realizer.ts:216`. [verify] the scale factor on that line before quoting a bound in
+  paragraph units
+*/}
+
+<glyph-proxy fit="cover" root="scenes" data-scene="effects" aria-label="Outline, shadow, animated color" aspect="16 / 9" />
+
+## Decoration
+
+<glyph-proxy fit="cover" root="scenes" data-scene="decorations" aria-label="Every decoration line and style, and a custom decoration material" aspect="16 / 9" />
+
+```ts
+three.createText({
+  font: Inter,
+  text: 'Underlined',
+  style: { decoration: { underline: true, lineThrough: false, color: '#ffd166', thickness: 0.03, offset: 0 } },
+});
+```
+
+{/*
+write
+- Question: where do the lines come from, and what can I change?
+- Paragraph 1: geometry comes from the font's baked `underlinePosition`/`underlineThickness` and
+  `strikeoutPosition`/`strikeoutSize`; `thickness` and `offset` override when nonzero; `color` defaults to the text
+  colour. One continuous line spans nested size changes at the declaring span's scale; underline and overline draw
+  under the glyphs, line-through over.
+- A `> [!NOTE]` callout: `decoration.style` is typed as five values, but only `solid` is implemented; any other
+  value throws `… style '…' is not implemented; only 'solid' is supported` at construction. The others are reserved
+  in the wire format and land with the decoration work.
+- Shape: one paragraph and the callout.
+
+notes · internals
+- type — `text-properties.ts#TextDecorationStyle` (`:105–119`); `solid` only, the throw — `:315–317`; also in the
+  encoder — `engine-encoding.ts:214–217`; colour defaults to the style's `color` — `:220`
+- metrics from the bake — `font.ts#FontMetrics` (`:6–15`), `rust/font-baker/src/sfnt.rs:121–135`; D-246
+- one line per decorating box, under before glyphs and line-through after — D-248; draw order in `breakApart` —
+  `three/text.ts:819–828`, `three/decorations.ts#decorationDraws` (`:38–43`)
+- wire reserves `none solid double dotted dashed wavy` — `internal/frame-wire.ts:52`
+- the decoration collapse this repository's outline recorded at 4ed218c1d no longer reproduces: the decorations
+  scene draws every row at the current build (still captured 2026-09-03)
+*/}
+
+## OpenType features
+
+```ts
+three.createText({
+  font: Inter,
+  text: 'Ligatures off, small caps, tabular numbers 0123456789',
+  style: { features: [{ tag: 'liga', value: 0 }, { tag: 'smcp' }, { tag: 'tnum', start: 43, end: 53 }] },
+});
+```
+
+{/*
+write
+- Question: how do I turn a feature on, off, or on for part of a run?
+- One paragraph: a feature is its four-letter tag; `value` defaults to 1, `0` turns a default-on feature off, and
+  `start`/`end` restrict it to a UTF-16 range inside the run that carries the style. A range outside the run throws.
+- Shape: one paragraph; three examples in the code (off, on, ranged).
+
+notes · internals
+- `FontFeature` — `font-feature.ts:1–6`; tag is four printable ASCII bytes, `value` a u32 — `text-properties.ts#assertFeature` (`:284–300`)
+- `value` defaults to 1 — `engine-encoding.ts:175`
+- ranges must lie inside the styled scope — `text-properties.ts#assertTextStyleFeatureRanges` (`:222–230`), applied
+  to the paragraph `three/text.ts:1446` and to each span `:1517`
+*/}
+
+## Language and direction
+
+{/*
+write
+- Question: when do I set `language` or `direction`?
+- One paragraph: `language` selects locale-specific shaping and line-break classes and must be a well-formed tag;
+  `direction: 'auto'` runs the bidi algorithm on the paragraph and picks the base direction from its first strong
+  character, so set `rtl` explicitly for a paragraph that starts with neutrals. `align: 'start'` follows the base
+  direction (link Paragraph layout → Direction).
+- Shape: one paragraph.
+
+notes · internals
+- tag grammar — `text-properties.ts#validLanguage` (`:369–377`); direction enum `:193–195`
+- language reaches the shaper per run — `rust/shaper/src/engine/state.rs:3986–3990`; HarfRust 0.12 — `rust/shaper/Cargo.toml:25`
+- bidi: `auto` → no default level, `ltr`/`rtl` → forced level; Unicode 17 data — `rust/shaper/src/bidi.rs:52–57`
+- UAX #14 line breaking — `rust/shaper/src/line_break.rs:1–2`
+- `start`/`end` swap by paragraph level — `rust/shaper/src/engine/positioning.rs:1691–1692`
+*/}

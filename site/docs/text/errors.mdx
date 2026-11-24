@@ -1,0 +1,223 @@
+---
+title: Errors
+description: TextFrameError names its cause and the span that caused it; where errors throw, where they are retained, and what the renderer keeps showing.
+nav: 29
+sourcecode: packages/glyph/src/three/frame-error.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+
+{/*
+reader
+- Something went wrong and the screen either kept the old text or shows nothing. Knows try/catch and error
+  boundaries; does not know that a frame can be refused after `set()` succeeded. Arrives asking "where did my error
+  go?", should leave knowing which calls throw, which errors are retained on the object, what the renderer keeps
+  showing, and how to branch on a cause.
+
+write · intro
+- Question: where does a bad input fail, and what stays on screen?
+- Say: malformed input fails where it enters — construction, `set()`, a query — with the offending value in the
+  message, and desired state is left as it was. A rejection the engine reports during `glyph.shape()` is retained on
+  the text and its group and forwarded to `onError`; that root keeps its last accepted draw while every other root's
+  publication proceeds.
+- Anchor: "throw at the door; retain in the room".
+- Shape: two sentences.
+
+write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
+- Construction and `set()` throw synchronously and change nothing.
+- A refused frame lands on `text.error`, `group.error`, `onError`, and `commitState()`.
+- The last accepted draw stays; an unchanged frame is not retried.
+- `TextFrameError.rejection.cause` names the fault and the span that caused it.
+
+notes · internals for the page
+- `TextFrameError`, `TextFrameRejection`, `TextFrameSubject` — `three/frame-error.ts:17–62`; exported from `/three` — `three.ts:24–25`; D-268
+- `GlyphEngineStatusError` with `code` and `status` — `engine-error.ts:59–70`; exported from the root — `index.ts:22–28`
+- retention and `onError` — `three/text.ts#Text.#reportError` (`:918–922`), `#ThreeRoot.#reportError` (`:494–502`)
+- no scene here by design: an error is a message, not something to see; the table below is the reference
+*/}
+
+```ts
+import { GlyphEngineStatusError } from '@pmndrs/glyph';
+import { TextFrameError } from '@pmndrs/glyph/three';
+
+text.onError = (error) => {
+  if (error instanceof TextFrameError) console.warn(error.rejection.cause, error.rejection);
+  else if (error instanceof GlyphEngineStatusError) console.warn(error.code, error.status); // what the tree raises today
+};
+```
+
+
+## Causes
+
+| `rejection.cause` | Meaning | You fix it by |
+| --- | --- | --- |
+| `span-range` | a span is inverted, reaches past the text, or splits a surrogate pair | authoring valid offsets |
+| `cluster-boundary` | a style boundary falls inside a grapheme cluster | nothing — `Text` resolves this before the engine; reaching it is a defect |
+| `span-overlap` | two spans partially overlap | nesting or disjoint ranges |
+| `paragraph-root` | the paragraph's root style is missing, duplicated, or does not cover the text | supplying `style` |
+| `font-stack-missing` | a style names a font the engine does not hold | loading and binding the font first |
+| `font-metrics-missing` | a font in the laid-out text has no registered metrics | re-baking |
+| `capacity` | the frame did not fit the encoder arenas after they grew; carries `requiredRequestBytes`, `requiredResultBytes` | filing it, with the two numbers |
+| `engine` | any status the engine does not classify; names nothing | filing it |
+
+{/*
+write
+- Question: what does the error tell me, and what do I do about it?
+- Open with an `> [!IMPORTANT]` callout, three sentences: in the current tree `TextFrameError` and its `cause` union
+  are exported but nothing constructs them yet; a refused `glyph.shape()` reaches `text.error`, `onError`,
+  `group.error`, and `commitState()` as the engine's `GlyphEngineStatusError` with codes such as
+  `style-range-invalid`, `font-stack-missing`, `result-too-large`, or as the renderer's own error; handle those
+  until the taxonomy is wired, and branch on `code`, never on the message.
+- Paragraph after the table: `rejection.subject` says which object — the `Text`, or the span and its index in the
+  text's spans — so a handler can point at what the user wrote. Six causes are caller-actionable and named;
+  `engine` keeps every internal invariant and is a defect report, not something to correct in the input.
+- Avoid: describing the Rust status codes; link How it works.
+- Shape: callout, table, one paragraph.
+
+notes · internals
+- the union and each cause's doc — `three/frame-error.ts:28–44`; `subject` — `:17–20`; the status → cause map —
+  `#CAUSE_BY_CODE` (`:67–75`); `capacity` numbers from `glyphEngineStatusErrorDetails` — `:85–93`, `engine-error.ts:72–90`
+- messages: `spans[i] (start, end) states a range that is inverted…` — `three/frame-error.ts:100–137`
+- the engine codes — `engine-error.ts#GlyphEngineStatusCode` (`:13–34`)
+- `textFrameError()` has no caller at HEAD: `grep -rn 'textFrameError(' packages/glyph/src` finds only its
+  definition (`three/frame-error.ts:83`); the finding — `.agents/docs/planning/docs-site-outline.md:505`
+- the split by actionability and the `FrameFault { paragraph_id, style_id }` in the result header — D-268
+- there is no knob for `capacity`: `defineThreeConfig` fixes `commands` internally — limits, `requestBytes`
+  64 KiB, `resultBytes` 256 KiB (`three/handle.ts:217–229`) — and `ThreeConfigOptions` does not expose it
+  (`:93–99`), so the fix column stays "file it"; the cause doc says
+  the handle already grew the arenas (`three/frame-error.ts:41`). Until an option exists, the fix column says "file it"
+*/}
+
+## Where errors surface
+
+| Entry | Behaviour |
+| --- | --- |
+| `createText`, `set()`, a property setter | throw synchronously; desired state is left as it was |
+| `createText({ font })` on an unloaded face | throws `GlyphFontError` `FONT_FACE_FORMAT_NOT_LOADED` |
+| `glyph.shape()` | per root: retained on `text.error` and `group.error`, `onError` called once per distinct error; other roots still publish; then it throws, an `AggregateError` when more than one root refused |
+| `measure()` / `glyphs()` | throw on a disposed text; invalid constraints throw at the call |
+| a font load | rejects the selection's `load()` promise with `GlyphFontError`; the failed operation is evicted so a retry is a new load |
+
+{/*
+write
+- Question: which calls throw, and which ones swallow?
+- Paragraph 1: the boundary throws. `createText`, `set()`, and every property setter validate the whole next state
+  before assigning it, so a `TypeError` or `RangeError` there leaves the text exactly as it was; the message names
+  the field and the value. A face that has not finished loading is a `GlyphFontError` at `createText`.
+- Paragraph 2: the traversal retains. `glyph.shape()` stages every dirty root, and a root that is refused gets its
+  error attributed to every one of its texts in the scene and every `TextGroup` above them, then `onError` fires
+  once per new error; the other roots are accepted in the same call. The call then throws the error (or an
+  `AggregateError`), which the three.js traversal catches for you; in vanilla three.js, catch it around your own
+  `glyph.shape()`.
+- Paragraph 3: fonts reject their promise and evict the failed operation, so calling `load()` again is a fresh attempt
+  rather than the same rejection replayed.
+- Shape: three paragraphs; the table is the index.
+
+notes · internals
+- `set()` builds the next state before assigning — `three/text.ts:712–731`; validation throws — `#normalizeDesired`
+  (`:1428–1487`), `#assertSpanRanges` (`:1505–1522`), `#assertRange` (`:1524–1532`)
+- `createText` acquires the face's loaded font or throws `FONT_FACE_FORMAT_NOT_LOADED` — `three/text.ts:256–283`,
+  `font-face.ts#requiredFontFaceFormat` (`:636–649`); a family string that is not declared throws `FONT_FACE_NOT_FOUND` — `three/text.ts:578–586`
+- a non-immutable font in `set({ font })` throws — `loaded-font.ts#immutableFontSelectionFonts` (`:83–95`)
+- per-root settle: `accepted()` or `rejected(error)` per participant, then one throw or an `AggregateError` —
+  `glyph-engine.ts#_shape` (`:387–433`), `#settleShapeParticipants` (`:531–556`)
+- attribution to texts and groups — `three/text.ts#ThreeRoot.rejectShape` (`:462–466`), `#reportError` (`:494–502`);
+  `onError` once per distinct error — `#Text.#reportError` (`:918–922`); `text.error` falls back to the group's — `:658–660`
+- the Three traversal swallows the rethrow after attribution — `three/text.ts#ThreeRoot.#commitTraversal` (`:478–492`)
+- disposed text throws — `three/text.ts#Text.#assertActive` (`:928–930`); constraints are validated at the call
+- `GlyphFontError` `code` and `url` — `loader.ts:208–218`; eviction on rejection — `font-face.ts:518–522`, `:548–551`; D-310
+*/}
+
+## What the renderer keeps
+
+```ts
+const state = text.commitState();
+if (state.status === 'failed') console.error(state.error);       // the last accepted draw is still on screen
+text.material = undefined;                                        // any renderer-relevant change requests a fresh publication
+```
+
+{/*
+write
+- Question: what is on screen after a failure?
+- Paragraph 1: the last accepted draw. Realisation is prepare-then-commit: a candidate is validated whole before any
+  device state changes, so a failure never leaves half a frame. `commitState()` reports `{ status: 'failed', error }`
+  and placement queries answer `undefined` until a later checkpoint succeeds.
+- Paragraph 2: an unchanged frame is not retried — the root re-enters the batch only when something renderer-relevant
+  changes: text, style, material, order, a transform binding. A malformed emitted plan is an engine defect, never a
+  recovery path.
+- Shape: two paragraphs.
+
+notes · internals
+- prepare then commit, last accepted plan kept, no retry of unchanged frames — D-279, D-285
+- the rejected flag gates placement — `three/text.ts:1283–1286`, `#canonicalInspection` (`:1343–1357`); cleared on accept — `:1272–1274`
+- `commitState()` — `three/text.ts:756–764`
+- only dirty roots enter the batch — `glyph-engine.ts:390`; a root is dirty when reconcile finds a change —
+  `three/text.ts#ThreeRootPublication.needsReconcile` (`:1157–1172`), `#ThreeRoot.#commitTraversal` (`:483`)
+- material assignment stages a fresh publication — `three/text.ts:708–710`, `:1008–1012`
+*/}
+
+## Fixed capacity is not an error
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
+
+// UTF-16 units across a root's texts; over budget keeps the last draw
+const hud = glyph.handle('hud', defineThreeConfig({ capacity: { size: 4096, policy: 'fixed' } }));
+```
+
+{/*
+write
+- Question: what happens when a `fixed` root runs out of room?
+- Paragraph 1: nothing is thrown and nothing is retained as an error. The root is skipped for that traversal: the last
+  draw stays, `commitState()` stays `pending`, and `measure()` still answers for the desired text because it does not
+  go through the shape. The bound is a text-length upper bound computed before shaping, so you can size content
+  against the cap instead of discovering it after the fact.
+- Paragraph 2: raising the capacity re-enters the root; `grow` and `chunk` resize instead and never skip.
+- Close by pointing at Text, roots, and TextGroup → Capacity.
+- Shape: two paragraphs, one pointer.
+
+notes · internals
+- the policy — `text-properties.ts#GlyphBufferCapacity` (`:7–16`)
+- over budget returns `false` from prepare and records `capacityExceeded` — `three/text.ts:1260–1269`, `:1111–1113`;
+  a `false` prepare is `SKIPPED`: neither accepted nor rejected — `glyph-engine.ts:451–453`, `:538`, `config/glyph.ts:651`
+- raising capacity invalidates when exceeded — `three/text.ts:1115–1119`; the root setter — `:240–246`
+- `fixed` re-admitted after D-267 removed it — D-282
+- "retried on every traversal" overstates: staging removes the root from the dirty set whatever `stage()` answered
+  (`glyph-engine.ts:441–446`), so an unchanged over-budget root re-enters only after an invalidation such as a text
+  edit; write "retried on the next traversal that touches the root". D-282 says "retries the capacity decision every
+  traversal without a rejection latch". Check `three/text.ts#ThreeRoot.#commitTraversal` (`:478–492`) → `needsReconcile` on an unchanged root before stating either
+*/}
+
+## React
+
+```tsx
+import type { GlyphFontError } from '@pmndrs/glyph';
+import { GlyphProvider, Text, TextGroup } from '@pmndrs/glyph/react';
+
+<GlyphProvider errorFallback={(error: GlyphFontError) => <group name={error.code} />}>
+  <TextGroup onError={console.error}>
+    <Text font={Inter} onError={console.error}>
+      Hello
+    </Text>
+  </TextGroup>
+</GlyphProvider>;
+```
+
+{/*
+write
+- Question: where do these land in React?
+- Two sentences: `onError` on `<Text>` and `<TextGroup>` is the same retained callback, assigned to the underlying
+  object; `GlyphProvider`'s `errorFallback` is an error boundary that renders for a `GlyphFontError` thrown beneath
+  it and rethrows anything else to your own boundary. A construction error is a throw in render, so keep a boundary
+  above the canvas too.
+- Shape: two sentences.
+
+notes · internals
+- `onError` props — `react.ts:94`, `:101`; assigned to the element — `:547`, `:613`
+- `errorFallback` — `react.ts:198`; the boundary catches only `GlyphFontError` and rethrows the rest — `#GlyphFontErrorBoundary` (`:361–374`), wrapped at `:247–248`
+- the boundary does not check where the font came from; the fact sheet's "only from its own `fontFaces`" is narrower than the code (`react.ts:371`)
+- the finding: a thrown construction error under React became a retry loop with no boundary — `.agents/docs/planning/docs-site-outline.md:499`
+*/}

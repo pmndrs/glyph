@@ -1,0 +1,1 @@
+export { ObjectShowcaseScene } from './scene';

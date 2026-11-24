@@ -1,0 +1,6 @@
+dist/
+.next/
+.npx-cache/
+docs/assets/*
+!docs/assets/fonts/
+!docs/assets/fonts/**
