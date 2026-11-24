@@ -27,6 +27,7 @@
     "test": "vitest run --config vitest.config.ts",
     "typecheck": "tsc --noEmit",
     "verify:browser": "node ./scripts/verify-explainers.mts",
+    "verify:pages": "node ./scripts/verify-pages.mts",
     "format": "oxfmt docs/components landing/src examples/src scripts .oxlintrc.json package.json tsconfig.json tsconfig.examples.json vite.config.ts vite.examples.config.ts vitest.config.ts"
   },
   "dependencies": {

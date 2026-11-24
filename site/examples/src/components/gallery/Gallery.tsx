@@ -25,6 +25,7 @@ export function Gallery() {
         max-slots="2"
         idle-ttl="15000"
         max-dpr="1.5"
+        posters={`${import.meta.env.BASE_URL}thumbnails/`}
         opaque
       />
       <section className="masonry">

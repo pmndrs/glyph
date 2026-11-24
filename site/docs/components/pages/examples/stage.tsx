@@ -3,7 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber/webgpu';
 import { useEffect, useLayoutEffect, type ReactNode } from 'react';
 import { AgXToneMapping, NoToneMapping, PerspectiveCamera, type WebGPURenderer } from 'three/webgpu';
 
-import type { StageOptions } from '../../../../examples/src/catalog';
+import type { StageOptions } from '../../../../examples/src/catalog/types';
 import { GROUND, WORLD_WIDTH } from '../../../../examples/src/theme';
 
 export const FOV = 32;

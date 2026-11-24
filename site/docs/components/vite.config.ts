@@ -38,6 +38,16 @@ export default defineConfig({
       input: 'docs/components/load-explainers.ts',
       output: {
         assetFileNames: (asset) => (asset.name?.endsWith('.css') ? 'explainer.css' : '[name][extname]'),
+        // A section's table and each scene are named for what they are, so a page's network log says which
+        // sections and scenes it fetched; `verify:pages` reads those names.
+        chunkFileNames: (chunk) => {
+          const module = chunk.facadeModuleId ?? '';
+          const section = /\/docs\/components\/pages\/([\w-]+)\/index\.tsx$/.exec(module);
+          if (section !== null) return `assets/section-${section[1]}-[hash].js`;
+          const scene = /\/examples\/src\/scenes\/([\w-]+)\/scene\.tsx$/.exec(module);
+          if (scene !== null) return `assets/scene-${scene[1]}-[hash].js`;
+          return 'assets/[name]-[hash].js';
+        },
         entryFileNames: 'explainer.js',
       },
     },

@@ -7,7 +7,7 @@ sourcecode: packages/glyph/src/text-editing.ts
 
 <link rel="stylesheet" href="/docs/assets/explainer.css" />
 <script type="module" src="/docs/assets/explainer.js"></script>
-<glyph-explainer-root id="scenes" data-explainer-page="examples" max-slots="2" max-dpr="1.5" opaque />
+<glyph-explainer-root id="scenes" data-explainer-page="editing" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
 
 A `Text` answers the geometry an editable field needs and applies one exact edit. Selection state, caret drawing,
 keyboard, pointer, clipboard and undo stay in your application.
@@ -21,7 +21,7 @@ const rects = text.rangeRects(word.start, word.end); // LayoutBox[]
 text.replace(word.start, word.end, 'glyph');
 ```
 
-<glyph-proxy fit="cover" root="scenes" data-scene="caret" poster="/examples/thumbnails/caret.webp" aria-label="Click to place a caret, drag to select" aspect="16 / 9" />
+<glyph-proxy fit="cover" root="scenes" data-scene="caret" aria-label="Click to place a caret, drag to select" aspect="16 / 9" />
 
 Click in the scene to place the caret; drag to select.
 

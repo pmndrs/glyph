@@ -1,12 +1,12 @@
-import { installExplainerPages, type ExplainerPageDefinition } from './explainer';
+import { explainerPageNames, installExplainerPages, type ExplainerPageDefinition } from './explainer';
 
 const pageModules = import.meta.glob<{ default: ExplainerPageDefinition }>('./pages/*/index.tsx');
 
 async function registerPageExplainers() {
   const pages = new Set(
-    [...document.querySelectorAll<HTMLElement>('[data-explainer-page]')]
-      .map((element) => element.dataset.explainerPage)
-      .filter((page): page is string => page !== undefined),
+    [...document.querySelectorAll<HTMLElement>('[data-explainer-page]')].flatMap((element) =>
+      explainerPageNames(element.dataset.explainerPage),
+    ),
   );
   const definitions = await Promise.all(
     [...pages].map((page) => {

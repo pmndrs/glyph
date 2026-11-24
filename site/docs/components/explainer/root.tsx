@@ -48,6 +48,7 @@ export type { GlyphSceneInput } from './channel';
 type GlyphProxyHandle = HTMLElement & {
   bind(root: GlyphOffscreenRootElement): void;
   channelId: string;
+  refreshPoster(): void;
   copy(surface: OffscreenCanvas | HTMLCanvasElement, frame: GlyphSurfaceSize, opaque: boolean): void;
   releaseFrame(): void;
   rootId: string | undefined;
@@ -103,7 +104,7 @@ function GlyphSlotPresenter({ present }: { present: (state: GlyphSlotPresentatio
  * paused in its slot until the slot is recycled for another proxy or retired after the idle TTL.
  */
 export abstract class GlyphOffscreenRootElement extends HTMLElement {
-  static observedAttributes = ['id', 'max-slots', 'idle-ttl', 'activation', 'max-dpr'];
+  static observedAttributes = ['id', 'max-slots', 'idle-ttl', 'activation', 'max-dpr', 'posters'];
 
   #pool = new GlyphRenderPool<GlyphProxyHandle>(2);
   #slots = new Map<number, GlyphRenderSlot>();
@@ -223,7 +224,18 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
       this.#cancelIntent();
     }
     if (name === 'max-dpr') this.#frameSizeDirty = true;
+    if (name === 'posters') for (const proxy of this.#proxies) proxy.refreshPoster();
     this.#scheduleReconcile();
+  }
+
+  /**
+   * The poster a proxy shows when it names none itself: `<posters>/<scene>.webp`, when the root has a `posters`
+   * base. One attribute on the root then gives every scene on the page its still.
+   */
+  posterFor(scene: string): string | undefined {
+    const base = this.getAttribute('posters');
+    if (base === null || base === '') return undefined;
+    return `${base.endsWith('/') ? base : `${base}/`}${encodeURIComponent(scene)}.webp`;
   }
 
   /** Queue a scene change for a proxy, or the most visible proxy when no target is supplied. */
@@ -1010,7 +1022,10 @@ export class GlyphProxyElement extends HTMLElement {
 
   attributeChangedCallback(name: string) {
     if (!this.isConnected) return;
-    if (name === 'data-scene') this.#root?.updateProxyScene(this);
+    if (name === 'data-scene') {
+      this.#root?.updateProxyScene(this);
+      this.#applyPoster();
+    }
     if (name === 'aspect' || name === 'width' || name === 'height') this.#applySize();
     if (name === 'poster') this.#applyPoster();
     if (name === 'fade') this.#applyFade();
@@ -1021,6 +1036,12 @@ export class GlyphProxyElement extends HTMLElement {
     if (this.#root === root) return;
     this.#root?.unregister(this);
     this.#root = root;
+    this.#applyPoster();
+  }
+
+  /** Re-read the poster after the root's `posters` base changed. */
+  refreshPoster() {
+    this.#applyPoster();
   }
 
   /** The lease ended: stop at the last frame. A proxy that never received one keeps showing its poster. */
@@ -1071,7 +1092,10 @@ export class GlyphProxyElement extends HTMLElement {
   }
 
   #applyPoster() {
-    const source = this.getAttribute('poster');
+    // An upgrade reports the element's attributes before it connects; the shadow tree is built on connection.
+    const canvas = this.#canvas;
+    if (canvas === undefined) return;
+    const source = this.getAttribute('poster') ?? this.#root?.posterFor(this.scene) ?? null;
     if (source === null || source === '') {
       this.#poster?.remove();
       this.#poster = undefined;
@@ -1086,7 +1110,7 @@ export class GlyphProxyElement extends HTMLElement {
       poster.loading = 'lazy';
       poster.draggable = false;
       this.#poster = poster;
-      this.#canvas?.before(poster);
+      canvas.before(poster);
     }
     if (poster.getAttribute('src') !== source) poster.src = source;
   }
@@ -1315,11 +1339,23 @@ const pageDefinitions = new Map<string, ExplainerPageDefinition>();
 
 class GlyphExplainerRootElement extends GlyphOffscreenRootElement {
   protected createScene(props: GlyphSceneProps) {
-    const page = this.dataset.explainerPage;
-    const definition = page === undefined ? undefined : pageDefinitions.get(page);
-    if (definition === undefined) throw new TypeError(`Unknown docs explainer page: ${page ?? '(missing)'}`);
-    return createElement(definition.scenes[props.scene] ?? definition.fallback, props);
+    const names = explainerPageNames(this.dataset.explainerPage);
+    const definitions = names.map((name) => {
+      const definition = pageDefinitions.get(name);
+      if (definition === undefined) throw new TypeError(`Unknown docs explainer page: ${name}`);
+      return definition;
+    });
+    const [first] = definitions;
+    if (first === undefined) throw new TypeError('glyph-explainer-root needs a data-explainer-page');
+    // A root may name several sections; a scene is looked up in the order they are named.
+    const owner = definitions.find((definition) => Object.hasOwn(definition.scenes, props.scene));
+    return createElement(owner?.scenes[props.scene] ?? first.fallback, props);
   }
+}
+
+/** The sections a root names: `data-explainer-page="layout styling"` is two. */
+export function explainerPageNames(value: string | undefined): readonly string[] {
+  return (value ?? '').split(/\s+/).filter((name) => name !== '');
 }
 
 /** Install loaded page definitions before upgrading the generic root custom element. */

@@ -22,7 +22,6 @@ export function Card({ slug, entry }: { readonly slug: ExampleSlug; readonly ent
           fit="cover"
           fade="220"
           root="gallery"
-          poster={`${import.meta.env.BASE_URL}thumbnails/${slug}.webp`}
           data-scene={slug}
           role="button"
           tabIndex={0}

@@ -5,12 +5,20 @@
   "writes": "Screenshots under site/.cache/verify-explainers or the given directory"
 } */
 
-import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 
-import { chromium, type BrowserContext, type Page } from 'playwright';
+import type { BrowserContext, Page } from 'playwright';
+
+import {
+  gpuCounters as gpu,
+  instrument,
+  launch,
+  serve,
+  SITE,
+  waitForProxyState as waitForState,
+  watch,
+} from './browser.mts';
 
 /**
  * Drives the built site in a GPU-enabled Chromium and checks what the explainer element promises:
@@ -22,15 +30,9 @@ import { chromium, type BrowserContext, type Page } from 'playwright';
  *
  * Every wait is on a page condition. Screenshots are evidence for a reader, not the assertion.
  */
-const SITE = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(process.argv[2] ?? resolve(SITE, '.cache/verify-explainers'));
 const PORT = 4391;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
-
-interface GpuCounters {
-  readonly devices: number;
-  readonly contexts: readonly string[];
-}
 
 const failures: string[] = [];
 function check(condition: boolean, claim: string): void {
@@ -38,77 +40,8 @@ function check(condition: boolean, claim: string): void {
   if (!condition) failures.push(claim);
 }
 
-async function serve(): Promise<() => void> {
-  const child = spawn(process.execPath, [resolve(SITE, 'scripts/preview.mts')], {
-    cwd: SITE,
-    env: { ...process.env, PORT: String(PORT) },
-    stdio: ['ignore', 'pipe', 'inherit'],
-  });
-  await new Promise<void>((ready, fail) => {
-    child.stdout.once('data', () => ready());
-    child.once('error', fail);
-    child.once('exit', (code) => fail(new Error(`preview server exited with ${code}; is dist/ built?`)));
-  });
-  return () => child.kill();
-}
-
-/** Counts every GPU device and every rendering context the page creates, from before its first script. */
-async function instrument(context: BrowserContext): Promise<void> {
-  await context.addInitScript(() => {
-    const counters = { devices: 0, contexts: [] as string[] };
-    Object.defineProperty(window, '__glyphGpu', { value: counters });
-    const adapter = (globalThis as { GPUAdapter?: { prototype: { requestDevice: (...args: unknown[]) => unknown } } })
-      .GPUAdapter;
-    if (adapter !== undefined) {
-      const requestDevice = adapter.prototype.requestDevice;
-      adapter.prototype.requestDevice = function (...args: unknown[]) {
-        counters.devices += 1;
-        return requestDevice.apply(this, args);
-      };
-    }
-    const seen = new WeakSet<object>();
-    for (const canvas of [HTMLCanvasElement, OffscreenCanvas]) {
-      const getContext = canvas.prototype.getContext as (this: object, type: string, ...rest: unknown[]) => unknown;
-      (canvas.prototype as { getContext: unknown }).getContext = function (
-        this: object,
-        type: string,
-        ...rest: unknown[]
-      ) {
-        const result = getContext.call(this, type, ...rest);
-        if (result !== null && !seen.has(this)) {
-          seen.add(this);
-          counters.contexts.push(type);
-        }
-        return result;
-      };
-    }
-  });
-}
-
-function watch(page: Page, label: string): string[] {
-  const problems: string[] = [];
-  page.on('console', (message) => {
-    if (message.type() === 'error') problems.push(`${label}: console error: ${message.text()}`);
-  });
-  page.on('pageerror', (error) => problems.push(`${label}: uncaught: ${error.message}`));
-  page.on('response', (response) => {
-    if (response.status() >= 400) problems.push(`${label}: HTTP ${response.status()} ${response.url()}`);
-  });
-  return problems;
-}
-
-const gpu = (page: Page) =>
-  page.evaluate(() => (window as unknown as { __glyphGpu: GpuCounters }).__glyphGpu) as Promise<GpuCounters>;
-
 const stateOf = (page: Page, selector: string) =>
   page.evaluate((query) => document.querySelector(query)?.getAttribute('data-glyph-state') ?? 'missing', selector);
-
-const waitForState = (page: Page, selector: string, state: string) =>
-  page.waitForFunction(
-    ([query, wanted]) => document.querySelector(query!)?.getAttribute('data-glyph-state') === wanted,
-    [selector, state] as const,
-    { timeout: 30_000 },
-  );
 
 const rootAttribute = (page: Page, name: string) =>
   page.evaluate((attribute) => document.querySelector('glyph-explainer-root')?.getAttribute(attribute) ?? '', name);
@@ -329,8 +262,8 @@ async function verifyPreview(context: BrowserContext): Promise<void> {
 }
 
 await mkdir(OUT, { recursive: true });
-const stop = await serve();
-const browser = await chromium.launch({ args: ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-webgpu'] });
+const stop = await serve(PORT);
+const browser = await launch();
 try {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
   await instrument(context);

@@ -20,6 +20,7 @@ declare module 'react' {
           'max-slots'?: string;
           'idle-ttl'?: string;
           'max-dpr'?: string;
+          posters?: string;
           opaque?: boolean;
           stats?: boolean;
         }

@@ -20,12 +20,18 @@ export function Preview({ slug, entry }: { readonly slug: ExampleSlug; readonly 
 
   return (
     <div ref={shell} className="preview-shell">
-      <glyph-explainer-root id="preview" data-explainer-page="examples" max-slots="1" max-dpr="1.5" opaque />
+      <glyph-explainer-root
+        id="preview"
+        data-explainer-page="examples"
+        max-slots="1"
+        max-dpr="1.5"
+        posters={`${import.meta.env.BASE_URL}thumbnails/`}
+        opaque
+      />
       <glyph-proxy
         fit="cover"
         className="preview"
         root="preview"
-        poster={`${import.meta.env.BASE_URL}thumbnails/${slug}.webp`}
         data-scene={slug}
         tabIndex={0}
         aria-label={entry.title}
