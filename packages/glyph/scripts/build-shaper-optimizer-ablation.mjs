@@ -11,7 +11,20 @@ import { relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { captureCommand } from './support/capture-command.mjs';
 import { attachOptimizerFunctionNames, deriveNamedShaper, sha256, wasmSections } from './support/named-shaper.mjs';
-import { assertDiagnosticOutputOutsideDist, shaperOptimizationArguments } from './support/shaper-build.mjs';
+import { assertDiagnosticOutputOutsideDist } from './support/shaper-build.mjs';
+
+// The frozen artifact below was optimized under the D-244 `-Oz` pipeline, so the control replays
+// exactly those flags rather than whatever the release build uses today.
+const frozenReleaseOptimization = [
+  '--enable-bulk-memory',
+  '--enable-nontrapping-float-to-int',
+  '--enable-simd',
+  '--one-caller-inline-max-function-size=0',
+  '--merge-similar-functions',
+  '-Oz',
+  '--merge-similar-functions',
+  '-Oz',
+];
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const expected = {
@@ -59,7 +72,7 @@ if (
   diagnosticManifest.sourceRevision !== expected.sourceRevision ||
   diagnosticManifest.sourceDirty !== '' ||
   diagnosticManifest.simd !== true ||
-  JSON.stringify(diagnosticManifest.optimization) !== JSON.stringify(shaperOptimizationArguments(true))
+  JSON.stringify(diagnosticManifest.optimization) !== JSON.stringify(frozenReleaseOptimization)
 ) {
   throw new Error('Diagnostic manifest does not identify the clean original SIMD release build');
 }
@@ -95,7 +108,7 @@ try {
   const treatmentPath = resolve(temporary, 'treatment.wasm');
   const frozenInputPath = resolve(temporary, 'input.wasm');
   await writeFile(frozenInputPath, input);
-  const controlFlags = shaperOptimizationArguments(true);
+  const controlFlags = frozenReleaseOptimization;
   const treatmentFlags = controlFlags.filter((flag) => flag !== '--one-caller-inline-max-function-size=0');
   if (controlFlags.length !== treatmentFlags.length + 1) throw new Error('Unexpected optimizer flag delta');
   await captureCommand(wasmOpt, [...controlFlags, frozenInputPath, '-o', controlPath]);

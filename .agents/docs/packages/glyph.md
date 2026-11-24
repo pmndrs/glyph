@@ -2124,11 +2124,13 @@ run was 19.42/6.59/3.10/14.24 ms median; process-separated samples support no re
 reduction, not causal attribution.
 
 The canonical direct benchmark loads the packaged `dist/text-shaper.wasm`: Cargo release optimization, LTO, one codegen
-unit, default-on `simd128`, stripping, and `wasm-opt -Oz --enable-simd` have already run. On the identical Rust artifact,
-Binaryen `-O3` and `-O4` added 11,976 and 13,661 raw bytes without a demonstrated latency improvement. The
-evidence-backed pipeline is now `--merge-similar-functions -Oz --merge-similar-functions -Oz` (D-244): the merge pass
-finds nothing after `-Oz` alone, but sandwiched runs remove 8,248 raw bytes from the shaper and 29,289 across the four
-bakers with hot-path lanes unchanged within noise. Explicit `#[inline(never)]` stage seams in the update path measured
+unit, default-on `simd128`, stripping, and `wasm-opt` with `--enable-simd` have already run. The D-244 merge sandwich
+stays: `--merge-similar-functions` before each level pass finds nothing after a level pass alone, but sandwiched runs
+removed 8,248 raw bytes from the shaper and 29,289 across the four bakers. The bakers keep `-Oz`; the shaper's level is
+`-O3` since the [shaper build flags decision](../planning/decisions/shaper-build-flags-2026-11.md): on one Rust input
+`-O3` and `-Oz` time the same in the browser headline and the engine Labs, and `-O3` is 753 gzip bytes smaller (7,473
+raw larger). `-O4` is 2-4% slower on the engine lanes. `-Zfmt-debug=none` and `-Zlocation-detail=none` leave the Rust
+output byte-identical under `-Cpanic=immediate-abort`. Explicit `#[inline(never)]` stage seams in the update path measured
 size-neutral (+241 raw) and were rejected — the large export body is stage aggregation, not duplication.
 
 SIMD expansion follows recorded kernel-lab admission (D-245). The complete scalar/auto-vectorized/explicit comparison
