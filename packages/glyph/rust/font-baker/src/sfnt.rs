@@ -80,17 +80,7 @@ pub(crate) fn build_shaping_payload(
             format!("failed to read font face {face_index}: {error}"),
         )
     })?;
-
-    reject_tables(
-        &font,
-        &VARIABLE_TABLES,
-        BakeErrorCode::UnsupportedVariableFont,
-    )?;
-    reject_tables(
-        &font,
-        &UNSUPPORTED_SHAPING_TABLES,
-        BakeErrorCode::UnsupportedShapingSystem,
-    )?;
+    reject_unsupported_face(&font)?;
 
     let head = font.head().map_err(|_| missing("head"))?;
     let maxp = font.maxp().map_err(|_| missing("maxp"))?;
@@ -187,7 +177,35 @@ pub(crate) fn build_shaping_payload(
     })
 }
 
-fn reject_envelope(source: &[u8]) -> Result<(), BakeError> {
+/// The face's typographic family name, else its family name, for messages that name the font.
+pub(crate) fn family_name(source: &[u8], face_index: u32) -> Option<String> {
+    let font = FontRef::from_index(source, face_index).ok()?;
+    [
+        skrifa::string::StringId::TYPOGRAPHIC_FAMILY_NAME,
+        skrifa::string::StringId::FAMILY_NAME,
+    ]
+    .into_iter()
+    .find_map(|id| font.localized_strings(id).english_or_first())
+    .map(|name| name.chars().collect::<String>())
+    .filter(|name| !name.is_empty())
+}
+
+/// Refuses the faces the shaping payload cannot represent. Preparation calls it first, because a subset would drop
+/// the AAT and Graphite tables and leave a face that bakes but no longer shapes.
+pub(crate) fn reject_unsupported_face(font: &FontRef<'_>) -> Result<(), BakeError> {
+    reject_tables(
+        font,
+        &VARIABLE_TABLES,
+        BakeErrorCode::UnsupportedVariableFont,
+    )?;
+    reject_tables(
+        font,
+        &UNSUPPORTED_SHAPING_TABLES,
+        BakeErrorCode::UnsupportedShapingSystem,
+    )
+}
+
+pub(crate) fn reject_envelope(source: &[u8]) -> Result<(), BakeError> {
     let signature = source.get(..4).ok_or_else(|| {
         BakeError::new(
             BakeErrorCode::InvalidFont,

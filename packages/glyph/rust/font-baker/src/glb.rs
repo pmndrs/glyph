@@ -1,5 +1,5 @@
 use serde_json::json;
-use std::{string::ToString, vec::Vec};
+use std::{string::String, string::ToString, vec::Vec};
 
 use crate::{
     error::{BakeError, BakeErrorCode},
@@ -14,9 +14,16 @@ pub(crate) struct GlbArtifact {
     pub padding_bytes: usize,
 }
 
+/// The source layout features a bake dropped, and the family that names the font when text asks for one.
+pub(crate) struct LayoutFeatureRecord {
+    pub dropped: Vec<String>,
+    pub family: Option<String>,
+}
+
 pub(crate) fn build_font_glb(
     shaping: &ShapingPayload,
     outlines: Option<&OutlinePayload>,
+    layout_features: Option<&LayoutFeatureRecord>,
     provenance: ProvenanceV0,
 ) -> Result<GlbArtifact, BakeError> {
     let mut sections: Vec<(&[u8], Option<usize>)> = vec![
@@ -64,6 +71,13 @@ pub(crate) fn build_font_glb(
     if outlines.is_some() {
         font["version"] = json!(1);
         font["outlines"] = json!({ "bufferView": sections.len() - 1 });
+    }
+    // Optional and version-neutral: a reader that predates it ignores it, and an artifact without it drops nothing.
+    if let Some(record) = layout_features {
+        font["layoutFeatures"] = json!({ "dropped": record.dropped });
+        if let Some(family) = &record.family {
+            font["layoutFeatures"]["family"] = json!(family);
+        }
     }
     let document = json!({
         "asset": { "version": "2.0", "generator": "@pmndrs/glyph" },

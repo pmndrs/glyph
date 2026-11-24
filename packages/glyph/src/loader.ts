@@ -24,6 +24,7 @@ import {
   deleteRegisteredFontData,
   getRegisteredFontData,
   setRegisteredFontData,
+  type RegisteredFontData,
   type RegisteredBufferView,
   type RegisteredRasterResourceData,
   type RegisteredRasterResourceCandidate,
@@ -39,7 +40,7 @@ import type {
   RegisteredRaster,
 } from './raster.js';
 import type { BakeProgressListener, RasterBakeArtifact } from './bake.js';
-import { normalizeUnicodeRanges } from './internal/font-selection.js';
+import { normalizeLayoutFeatures, normalizeUnicodeRanges } from './internal/font-selection.js';
 import { canonicalJson, compatibilityFingerprint, deriveRasterKey } from './internal/raster-identity.js';
 import type { RuntimeBakeRaster, RuntimeBakeUnicodeRange } from './internal/runtime-bake-protocol.js';
 import { workerRasterKinds } from './internal/runtime-bake-protocol.js';
@@ -92,6 +93,8 @@ export type LoadFontInput =
       readonly source: string | URL | FontBytesInput;
       readonly runtimeBake: RuntimeFontBake;
       readonly unicodeRanges?: readonly RuntimeBakeUnicodeRange[];
+      /** `--layout-features` tokens for the runtime bake; omitted keeps the common features. */
+      readonly layoutFeatures?: readonly string[];
     };
 
 /** Nonempty raster-input tuple used by one multi-raster font load. */
@@ -153,6 +156,8 @@ export interface RuntimeFontBakeRequest {
   /** Persistent derived-artifact lifetime inherited from the source response. Omitted means memory-only. */
   readonly cache?: { readonly expiresAt: number };
   readonly unicodeRanges?: readonly RuntimeBakeUnicodeRange[];
+  /** `--layout-features` tokens; omitted keeps the common features. */
+  readonly layoutFeatures?: readonly string[];
   readonly rasters?: readonly RuntimeBakeRaster[];
   readonly signal?: AbortSignal;
   readonly onProgress?: BakeProgressListener;
@@ -355,6 +360,7 @@ export class FontRegistry {
       rasterSources,
       resources: new Map(),
       unicodeVersion: string(provenance.unicodeVersion, 'provenance.unicodeVersion'),
+      ...(artifact.layoutFeatures === undefined ? {} : { layoutFeatures: artifact.layoutFeatures }),
     });
     mergeRasterSources(font, binaryBytes, document, views, references, context.artifactUrl, context.fetch);
     this.#fontsByKey.set(key, font);
@@ -781,6 +787,7 @@ interface PreparedFontFaceSourceRequest {
   readonly input: FontInput;
   readonly runtimeBake?: RuntimeFontBake;
   readonly unicodeRanges?: readonly RuntimeBakeUnicodeRange[];
+  readonly layoutFeatures?: readonly string[];
   readonly initialRasters: readonly PreparedRasterRequest[];
   readonly key: string;
 }
@@ -1401,6 +1408,7 @@ async function loadFontFaceSourceFont(
     return bake({
       ...request,
       ...(prepared.unicodeRanges === undefined ? {} : { unicodeRanges: prepared.unicodeRanges }),
+      ...(prepared.layoutFeatures === undefined ? {} : { layoutFeatures: prepared.layoutFeatures }),
       rasters: workerRasters,
     });
   };
@@ -1499,12 +1507,14 @@ async function runtimeBakeFormat<
       `${format.kind} runtime generation requires retained source bytes`,
     );
   }
+  const source = await runtimeRasterSourceBytes(registered);
+  signal.throwIfAborted();
   const imported = await loadBaker();
   signal.throwIfAborted();
   const baker = 'default' in imported ? imported.default : imported;
   assertMatchingBaker(format, baker);
   const bakeRequest = Object.assign({}, request, {
-    source: registered.sourceBytes.slice(),
+    source: source.slice(),
     sourceFingerprint: registered.sourceFingerprint,
     font,
     fontFaceIndex: registered.fontFaceIndex,
@@ -1559,10 +1569,11 @@ function prepareFontFaceSourceRequest(
     input: normalizedInput.input,
     ...(normalizedInput.runtimeBake === undefined ? {} : { runtimeBake: normalizedInput.runtimeBake }),
     ...(normalizedInput.unicodeRanges === undefined ? {} : { unicodeRanges: normalizedInput.unicodeRanges }),
+    ...(normalizedInput.layoutFeatures === undefined ? {} : { layoutFeatures: normalizedInput.layoutFeatures }),
     initialRasters: rasters,
     key: `${requestKey(resolved)}:runtime:${functionIdentity(normalizedInput.runtimeBake ?? config.runtimeBake)}:ranges:${canonicalJson(
       normalizedInput.unicodeRanges?.map(({ start, end }) => ({ start, end })) ?? null,
-    )}:font-face-source`,
+    )}:features:${canonicalJson(normalizedInput.layoutFeatures ?? null)}:font-face-source`,
   };
 }
 
@@ -1590,6 +1601,7 @@ function prepareLoadInput(value: unknown): {
   readonly input: FontInput;
   readonly runtimeBake?: RuntimeFontBake;
   readonly unicodeRanges?: readonly RuntimeBakeUnicodeRange[];
+  readonly layoutFeatures?: readonly string[];
 } {
   if (isNonArrayObject(value) && Object.hasOwn(value, 'runtimeBake')) {
     const runtimeBake = value.runtimeBake;
@@ -1598,10 +1610,15 @@ function prepareLoadInput(value: unknown): {
     if (source === undefined) throw new TypeError('runtime-baked font request requires a source');
     const unicodeRanges =
       value.unicodeRanges === undefined ? undefined : normalizeUnicodeRangeInput(value.unicodeRanges);
+    const layoutFeatures =
+      value.layoutFeatures === undefined
+        ? undefined
+        : normalizeLayoutFeatures(value.layoutFeatures as readonly string[], 'font request layoutFeatures');
     return {
       input: { source, baked: null },
       runtimeBake,
       ...(unicodeRanges === undefined ? {} : { unicodeRanges }),
+      ...(layoutFeatures === undefined ? {} : { layoutFeatures }),
     };
   }
   return { input: validatedFontInput(value) };
@@ -2221,6 +2238,36 @@ function matchRasterExtension(
     );
   }
   return matches[0]!;
+}
+
+/**
+ * The bytes a runtime raster bakes from. A runtime bake retains the original source, but every bake prepares it first
+ * (it keeps the common layout features), so the prepared bytes are rebuilt once and kept in place of the original.
+ */
+async function runtimeRasterSourceBytes(registered: RegisteredFontData): Promise<Uint8Array> {
+  if (registered.preparedSourceBytes !== undefined) return registered.preparedSourceBytes;
+  const original = registered.sourceBytes!;
+  // A font baked from its source as it is (before bakes prepared every source, or a face too large to prepare) names
+  // the original bytes; any other full bake names the bytes its preparation produced.
+  let bytes: Uint8Array | undefined =
+    fingerprint128(original, fingerprintDomain.source) === registered.sourceFingerprint ? original : undefined;
+  if (bytes === undefined) {
+    const { prepareRasterSource } = await import('./internal/raster-source-preparation.js');
+    bytes = await prepareRasterSource(
+      original,
+      registered.fontFaceIndex,
+      registered.layoutFeatures?.dropped ?? [],
+      registered.sourceFingerprint,
+    );
+  }
+  if (bytes === undefined) {
+    throw new GlyphFontError(
+      'RASTER_SOURCE_UNAVAILABLE',
+      'runtime raster generation could not reproduce the source this font was baked from',
+    );
+  }
+  registered.preparedSourceBytes = bytes;
+  return bytes;
 }
 
 function generatedRasterExtension(

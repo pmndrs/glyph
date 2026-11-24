@@ -12,6 +12,7 @@ import {
   type ParagraphLayoutSummary,
 } from '../layout.js';
 import { requireGlyphOutlineStore, storedGlyphOutline, type GlyphOutlineStore } from '../glyph-outline.js';
+import { assertLayoutFeaturesBaked } from './baked-layout-features.js';
 import {
   assertConstraints,
   assertParagraphLayout,
@@ -2786,7 +2787,7 @@ function resolveTextOptions(
     const transform = handleState._retainOpaqueBinding(transformBinding, 'transform');
     leases.push(transform);
     if (createdTransform) transformBinding.dispose();
-    const spans = formattedText.spans.map((span) => {
+    const spans = formattedText.spans.map((span, spanIndex) => {
       const spanFont = span.font === undefined ? undefined : handleState._retainFontStackBinding(span.font);
       if (spanFont !== undefined) leases.push(spanFont);
       if (span.style !== undefined) {
@@ -2795,6 +2796,12 @@ function resolveTextOptions(
           spanFont?.formats ?? font.formats,
           `text engine span [${span.start}, ${span.end}) style`,
         );
+        assertLayoutFeaturesBaked(span.style, (spanFont ?? font).layoutFeatureGaps, [
+          'text',
+          'spans',
+          spanIndex,
+          'style',
+        ]);
       }
       const spanMaterial = span.material === undefined ? undefined : retainMaterial(span.material);
       return Object.freeze({
@@ -2805,6 +2812,12 @@ function resolveTextOptions(
         style: span.style,
       });
     });
+    // The paragraph style reaches every span, so it is checked against every font a run can resolve to.
+    assertLayoutFeaturesBaked(
+      style,
+      [font, ...spans.flatMap((span) => span.font ?? [])].flatMap((binding) => binding.layoutFeatureGaps),
+      ['style'],
+    );
     const flowTransforms: HandleBindingLease<HandleTransformBinding>[] = [];
     for (const flowRegion of value.flow?.regions ?? []) {
       const retained = handleState._retainOpaqueBinding(flowRegion.region.transform, 'transform');

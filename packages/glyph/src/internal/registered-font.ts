@@ -2,6 +2,7 @@ import type { RegisteredFont } from '../font.js';
 import type { GlyphOutlineStore } from '../glyph-outline.js';
 import type { Fingerprint } from '../identity.js';
 import type { JsonValue, RasterReference, RasterResourceResolver } from '../raster.js';
+import type { BakedLayoutFeatureGaps } from './baked-layout-features.js';
 
 export interface RegisteredBufferView {
   readonly byteOffset: number;
@@ -48,6 +49,8 @@ export interface RegisteredFontData {
   readonly fontFaceIndex: number;
   readonly sourceFingerprint: Fingerprint;
   sourceBytes?: Uint8Array;
+  /** `sourceBytes` as the bake prepared them, rebuilt the first time a runtime raster needs them. */
+  preparedSourceBytes?: Uint8Array;
   readonly sourceCandidates: RegisteredFontSourceCandidate[];
   readonly shapingSfnt: Uint8Array;
   readonly glyphExtents: Uint8Array;
@@ -58,6 +61,8 @@ export interface RegisteredFontData {
   /** Authenticated external resources shared by every raster through canonical content identity. */
   readonly resources: Map<string, RegisteredRasterResourceData>;
   readonly unicodeVersion: string;
+  /** Source layout features the bake dropped; absent for an artifact that records none, including older artifacts. */
+  readonly layoutFeatures?: BakedLayoutFeatureGaps;
 }
 
 export interface RegisteredFontSourceCandidate {
@@ -77,6 +82,11 @@ export function getRegisteredFontData(font: RegisteredFont): RegisteredFontData 
   const data = dataByFont.get(font);
   if (data === undefined) throw new TypeError('font is not registered by this package');
   return data;
+}
+
+/** The dropped layout features of a registered font, or `undefined` when it records none. */
+export function registeredFontLayoutFeatures(font: RegisteredFont): BakedLayoutFeatureGaps | undefined {
+  return dataByFont.get(font)?.layoutFeatures;
 }
 
 export function deleteRegisteredFontData(font: RegisteredFont): void {

@@ -36,6 +36,10 @@ export type PmndrsFontExtension = {
   readonly outlines?: {
     readonly bufferView: number;
   };
+  readonly layoutFeatures?: {
+    readonly dropped: readonly (string)[];
+    readonly family?: string;
+  };
   readonly rasters: readonly ({
     readonly rasterKey: string;
     readonly kind: string;

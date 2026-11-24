@@ -9,7 +9,7 @@ import { pathToFileURL } from 'node:url';
 
 import type { RasterBakePlan } from '../bake.js';
 import type { UnicodeRange } from '../font-baker/index.js';
-import { isOpenTypeTag, normalizeLayoutFeatures, normalizeUnicodeRanges } from '../internal/font-selection.js';
+import { normalizeLayoutFeatures, normalizeUnicodeRanges } from '../internal/font-selection.js';
 import { assertDistinctInputOutputs, isMissing, publishFilesWithRollback } from '../internal/node-file-publication.js';
 import { resolveRasterBakePlan, type ResolvedRasterBakePlan } from '../internal/raster-bake-plan.js';
 import {
@@ -71,6 +71,7 @@ export async function runCli(
         io.stdout.write(`${parsed.direct.input} -> ${parsed.direct.output}\n`);
         io.stdout.write(`Baked 1 font in ${report.execution.timingsMs.total.toFixed(2)} ms.\n`);
       }
+      for (const warning of report.warnings ?? []) io.stderr.write(`${warning.code}: ${warning.message}\n`);
       const missing = report.preparation?.missingLayoutFeatures;
       if (missing !== undefined) {
         io.stderr.write(`--layout-features the font does not have, ignored: ${missing.join(', ')}\n`);
@@ -357,7 +358,10 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
     } else if (argument === '--layout-features') {
       if (layoutFeaturesSet) throw new TypeError('--layout-features may be provided only once');
       layoutFeaturesSet = true;
-      layoutFeatures = parseLayoutFeatures(valueAfter(argv, ++index, argument));
+      // A removal token such as `-liga` starts with a dash; only another `--` option ends the value.
+      const value = argv[++index];
+      if (value === undefined || value.startsWith('--')) throw new TypeError(`${argument} requires a value`);
+      layoutFeatures = parseLayoutFeatures(value);
     } else if (argument === '--check') {
       check = true;
     } else if (argument === '--split') {
@@ -455,16 +459,8 @@ function parseUnicodeSet(value: string): readonly UnicodeRange[] {
   return normalizeUnicodeRanges(ranges);
 }
 
-/** `*` keeps every feature, the same as omitting the option. */
-function parseLayoutFeatures(value: string): readonly string[] | undefined {
-  if (value === '*') return undefined;
-  const tags = value.split(',');
-  if (!tags.every(isOpenTypeTag)) {
-    throw new TypeError(
-      "--layout-features requires '*' or comma-separated four-character OpenType tags such as smcp,tnum",
-    );
-  }
-  return normalizeLayoutFeatures(tags);
+function parseLayoutFeatures(value: string): readonly string[] {
+  return normalizeLayoutFeatures(value.split(','), '--layout-features');
 }
 
 async function bakeDirect(
@@ -785,12 +781,16 @@ Direct font options:
   --unicodes <set>       Unicode set used to prepare a smaller source font
                         Example: U+0020-007E,U+00A0-00FF,U+4E00-9FFF
                         Selects code points, not raw glyph IDs
-  --layout-features <tags>
-                        OpenType features to keep, comma-separated (default: *, every feature)
-                        Example: smcp,tnum,ss01
-                        Features shaping needs (ccmp, locl, liga, kern, mark, calt, complex-script
-                        features, ...) are always kept; glyphs only a dropped feature reaches are
-                        not baked. Applies with or without --unicodes
+  --layout-features <tokens>
+                        OpenType features to keep, comma-separated, with or without --unicodes
+                        Default: the common set (liga, kern, calt, frac, ccmp, locl, mark,
+                        vertical and complex-script features, ...); discretionary features such
+                        as smcp, onum, tnum, zero, ssXX and cvXX are dropped
+                        smcp or +smcp adds, -liga removes, * (first only) starts from every feature
+                        Examples: smcp,onum  *  *,-ss01,-ss02  -liga
+                        Features script shaping needs (ccmp, locl, rvrn, mark, mkmk, curs, rlig,
+                        rclt, complex-script features) cannot be removed. Text that enables a
+                        dropped feature throws where it is bound to the font
   --outlines             Also keep every glyph's outline, read with outlineAt() on glyphs() or readGlyphs()
 
 Raster options:
@@ -822,7 +822,7 @@ Output options:
 Examples:
   glyph bake --input Inter-Regular.ttf --output inter.font.glb --bitmap 16,32 --msdf --slug
   glyph bake --input Inter-Regular.ttf --output inter-latin.font.glb --unicodes U+0020-007E --msdf
-  glyph bake --input Inter-Regular.ttf --output inter-latin.font.glb --unicodes U+0020-007E --layout-features tnum --msdf
+  glyph bake --input Inter-Regular.ttf --output inter-latin.font.glb --unicodes U+0020-007E --layout-features tnum,zero --msdf
   glyph bake --input fa-solid-900.ttf --output icons.font.glb --unicodes U+F000-F8FF --glyph-map icons.json --msdf
   glyph bake --input Inter-Regular.ttf --output inter-small.font.glb --msdf em-size=32
   glyph bake --project-root . --output-root public/generated

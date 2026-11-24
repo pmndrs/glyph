@@ -39,6 +39,7 @@ fn public_api_rejects_an_unknown_descriptor_version_before_font_parsing() {
             format_version: 1,
             font_face_index: 0,
             outlines: false,
+            dropped_layout_features: Vec::new(),
         },
     )
     .expect_err("descriptor version 1 must be rejected");
@@ -161,6 +162,39 @@ fn outlines_cost_about_the_face_outline_tables() {
         added < outline_tables + 1_024,
         "{added} bytes for {outline_tables} bytes of outline tables"
     );
+}
+
+#[test]
+fn the_artifact_records_the_layout_features_its_preparation_dropped() {
+    let plain = bake_font(INTER, BakeDescriptorV0::new(0)).expect("plain Inter");
+    assert!(
+        font_extension(&plain.artifacts[0].bytes)
+            .get("layoutFeatures")
+            .is_none()
+    );
+
+    let dropped = bake_font(
+        INTER,
+        BakeDescriptorV0 {
+            dropped_layout_features: vec!["ss01".into(), "smcp".into(), "ss01".into()],
+            ..BakeDescriptorV0::new(0)
+        },
+    )
+    .expect("Inter with dropped features");
+    assert_eq!(
+        font_extension(&dropped.artifacts[0].bytes)["layoutFeatures"],
+        serde_json::json!({ "dropped": ["smcp", "ss01"], "family": "Inter" })
+    );
+
+    let error = bake_font(
+        INTER,
+        BakeDescriptorV0 {
+            dropped_layout_features: vec!["smcpx".into()],
+            ..BakeDescriptorV0::new(0)
+        },
+    )
+    .expect_err("malformed tag");
+    assert_eq!(error.code, BakeErrorCode::InvalidDescriptor);
 }
 
 fn outlined_descriptor() -> BakeDescriptorV0 {

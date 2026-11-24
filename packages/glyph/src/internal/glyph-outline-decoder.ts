@@ -22,16 +22,19 @@ interface OutlineDecoderExports {
   readonly glyphOutlineLength: () => number;
 }
 
-const loadDecoderModule = cacheSuccessfulPromise<WebAssembly.Module>(async () => {
-  const url = new URL(fontBakerWasmUrl);
-  if (url.protocol === 'file:' && typeof process !== 'undefined' && typeof process.getBuiltinModule === 'function') {
-    const fileSystem = process.getBuiltinModule('node:fs') as typeof import('node:fs');
-    return WebAssembly.compile(Uint8Array.from(fileSystem.readFileSync(url)));
-  }
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`glyph outline decoder Wasm request failed with HTTP ${response.status}`);
-  return compileWasmResponse(response);
-});
+/** The font baker module, compiled once per realm; runtime raster source preparation shares it. */
+export const loadDecoderModule: () => Promise<WebAssembly.Module> = cacheSuccessfulPromise<WebAssembly.Module>(
+  async () => {
+    const url = new URL(fontBakerWasmUrl);
+    if (url.protocol === 'file:' && typeof process !== 'undefined' && typeof process.getBuiltinModule === 'function') {
+      const fileSystem = process.getBuiltinModule('node:fs') as typeof import('node:fs');
+      return WebAssembly.compile(Uint8Array.from(fileSystem.readFileSync(url)));
+    }
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`glyph outline decoder Wasm request failed with HTTP ${response.status}`);
+    return compileWasmResponse(response);
+  },
+);
 
 function readDecoderExports(instance: WebAssembly.Instance): OutlineDecoderExports {
   const memory = instance.exports[fontBakerAbi.memory];

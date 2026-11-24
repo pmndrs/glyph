@@ -5,7 +5,7 @@ import test, { before } from 'node:test';
 
 import { bitmapBakerFromCore, createBitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
 import { BitmapArtifactValidationError, validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
-import { interShapingFingerprint, interSourceFingerprint } from '../support/inter-identity.mjs';
+import { interShapingFingerprint, interSourceFingerprint, readInterPrepared } from '../support/inter-identity.mjs';
 import { compatibilityFingerprint } from '../../dist/internal/raster-identity.js';
 import { bitmapDescriptor, bitmapRasterKey } from '../../dist/internal/bitmap-contract.js';
 
@@ -23,12 +23,13 @@ let golden;
 let sourceBytes;
 
 before(async () => {
-  const [wasm, source, goldenBytes] = await Promise.all([
+  const [wasm, original, { source }, goldenBytes] = await Promise.all([
     readFile(new URL('../../dist/bitmap-baker.wasm', import.meta.url)),
     readFile(new URL('../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url)),
+    readInterPrepared(),
     readFile(new URL('../fixtures/inter-bitmap-v0.json', import.meta.url)),
   ]);
-  sourceBytes = source;
+  sourceBytes = original;
   golden = JSON.parse(goldenBytes);
   rasterKey = bitmapRasterKey({ strikes: [16] });
   const baker = bitmapBakerFromCore(await createBitmapBaker(wasm));

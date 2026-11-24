@@ -20,10 +20,20 @@ const fixturePromise = Promise.all([
   readFile(new URL('Inter-Regular.ttf', fixtureDirectory)),
   readFile(new URL(fontBakerWasmUrl)),
 ]).then(async ([source, wasm]) => {
+  // Every bake prepares its source first: a bake without Unicode ranges prepares every code point with the common
+  // layout features, and the core records what that dropped.
   const baker = await createFontBaker(wasm);
-  const result = baker.bake({
+  const prepared = baker.prepare({
     source,
-    descriptor: { formatVersion: 0, fontFaceIndex: 0 },
+    selection: { formatVersion: 0, fontFaceIndex: 0, unicodeRanges: [{ start: 0, end: 0x10ffff }] },
+  });
+  const result = baker.bake({
+    source: prepared.bytes,
+    descriptor: {
+      formatVersion: 0,
+      fontFaceIndex: 0,
+      droppedLayoutFeatures: prepared.report.droppedLayoutFeatures,
+    },
   });
   return { source, artifact: result.artifacts[0].bytes };
 });
@@ -201,7 +211,7 @@ test('the Worker entry runs the portable baker and transfers the exact canonical
     output: offlineOutput,
     font: { fontFaceIndex: 0 },
   });
-  assert.deepEqual(await readFile(offlineOutput), Buffer.from(expected));
+  assert.ok((await readFile(offlineOutput)).equals(Buffer.from(expected)), 'the offline bake equals the fixture');
   const originals = {
     addEventListener: globalThis.addEventListener,
     fetch: globalThis.fetch,
@@ -241,7 +251,7 @@ test('the Worker entry runs the portable baker and transfers the exact canonical
   assert.equal(value.id, 7);
   assert.equal(value.ok, true);
   assert.equal(value.artifacts.length, 1);
-  assert.deepEqual(Buffer.from(value.artifacts[0].bytes), Buffer.from(expected));
+  assert.ok(Buffer.from(value.artifacts[0].bytes).equals(Buffer.from(expected)), 'the Worker bake equals the fixture');
   assert.deepEqual(transfer, [value.artifacts[0].bytes]);
 });
 
@@ -306,12 +316,13 @@ test('a runtime-bake cache hit returns before loading baker Wasm', async (t) => 
   assert.deepEqual(transfer, [value.artifacts[0].bytes]);
 });
 
-test('the Worker prepares once and matches the Node canonical GLB for every built-in raster', async (t) => {
+test('the Worker prepares once and matches the Node canonical GLB for every built-in raster and feature selection', async (t) => {
   const { source } = await fixturePromise;
   const outputRoot = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-runtime-subset-parity-'));
   const output = join(outputRoot, 'Inter-ascii.font.glb');
   t.after(() => rm(outputRoot, { recursive: true, force: true }));
   const unicodeRanges = [{ start: 0x20, end: 0x7e }];
+  const layoutFeatures = ['*', '-ss01'];
   const rasterPlans = [
     { baker: bitmapBaker, packaging: embeddedPackaging(), options: { strikes: [16] } },
     { baker: msdfBaker, packaging: embeddedPackaging(), options: undefined },
@@ -323,6 +334,7 @@ test('the Worker prepares once and matches the Node canonical GLB for every buil
     output,
     font: { fontFaceIndex: 0 },
     unicodeRanges,
+    layoutFeatures,
     rasters: rasterPlans,
   });
   const expected = await readFile(output);
@@ -355,6 +367,7 @@ test('the Worker prepares once and matches the Node canonical GLB for every buil
       source: source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength),
       font: { formatVersion: 0, fontFaceIndex: 0 },
       unicodeRanges,
+      layoutFeatures,
       rasters: plans.map(({ baker, descriptor, rasterKey }) => ({
         kind: baker.kind,
         extension: baker.extension,
@@ -389,6 +402,7 @@ test('one portable source load sends its normalized ranges and complete raster t
         { start: 0x41, end: 0x5a },
         { start: 0x20, end: 0x7e },
       ],
+      layoutFeatures: ['tnum', 'smcp', '-liga', 'smcp'],
     },
     [bitmap({ strikes: [32] }), msdf, slug],
   );
@@ -400,6 +414,7 @@ test('one portable source load sends its normalized ranges and complete raster t
 
   assert.equal(requests.length, 1);
   assert.deepEqual(requests[0].unicodeRanges, [{ start: 0x20, end: 0x7e }]);
+  assert.deepEqual(requests[0].layoutFeatures, ['smcp', 'tnum', '-liga']);
   assert.deepEqual(
     requests[0].rasters.map(({ kind }) => kind),
     ['bitmap', 'msdf', 'slug'],
@@ -418,6 +433,21 @@ test('one portable source load sends its normalized ranges and complete raster t
     'different raster variants over one shaping backing retain distinct binding identities',
   );
   bitmapClone.dispose();
+});
+
+test('a runtime-baked font request validates its layout feature tokens', async () => {
+  await assert.rejects(
+    async () =>
+      loadFont(
+        {
+          source: 'data:font/ttf;base64,AA==',
+          runtimeBake: async () => new Uint8Array(),
+          layoutFeatures: ['smcp', '*'],
+        },
+        bitmap({ strikes: [16] }),
+      ),
+    { name: 'TypeError', message: /font request layoutFeatures token 1: '\*' must be the first token/ },
+  );
 });
 
 test('external techniques bake through their own declared baker, never the Worker plan', async (t) => {

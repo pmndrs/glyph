@@ -26,6 +26,8 @@ export interface RuntimeBakeRequest {
   readonly font: FontBakeDescriptor;
   readonly cache?: { readonly expiresAt: number };
   readonly unicodeRanges?: readonly RuntimeBakeUnicodeRange[];
+  /** `--layout-features` tokens, already normalized by the host. */
+  readonly layoutFeatures?: readonly string[];
   readonly rasters?: readonly RuntimeBakeRaster[];
 }
 
@@ -92,6 +94,10 @@ export function isRuntimeBakeRequest(value: unknown): value is RuntimeBakeReques
         Number.isSafeInteger(value.cache.expiresAt) &&
         (value.cache.expiresAt as number) > 0)) &&
     (value.unicodeRanges === undefined || isUnicodeRanges(value.unicodeRanges)) &&
+    (value.layoutFeatures === undefined ||
+      (Array.isArray(value.layoutFeatures) &&
+        value.layoutFeatures.length <= 1_024 &&
+        value.layoutFeatures.every((token) => typeof token === 'string'))) &&
     (value.rasters === undefined || isRasters(value.rasters))
   );
 }

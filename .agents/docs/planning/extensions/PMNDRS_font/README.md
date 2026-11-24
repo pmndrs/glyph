@@ -1,7 +1,7 @@
 ---
 type: glTF Extension Specification
 title: PMNDRS_font
-description: Defines the core font, shaping payload, metrics, provenance, optional outlines, and raster directory extension.
+description: Defines the core font, shaping payload, metrics, provenance, optional outlines, dropped layout features, and raster directory extension.
 tags: [gltf, extension, font, shaping]
 sources:
   - id: 'citation-1'
@@ -154,6 +154,26 @@ each CFF cubic as four equal-parameter quadratics. This version does not define 
 
 The outline view is a core view, distinct from the shaping views and from every raster's views. It is not part of
 `shaping.fingerprint`: baking outlines changes neither the shaping identity nor any raster's compatibility.
+
+### Layout features
+
+An optional `layoutFeatures` object records the source face's OpenType layout features that the bake did not keep
+(`glyph bake --layout-features`). It is version-neutral: a version 0 or 1 consumer that predates it ignores it, and a
+font without it dropped nothing a consumer needs to report. A baker writes it only when it dropped at least one tag.
+
+```json
+"layoutFeatures": {
+  "dropped": ["c2sc", "onum", "smcp", "ss01", "tnum", "zero"],
+  "family": "Source Serif 4"
+}
+```
+
+`dropped` lists feature tags present in the source face's `GSUB` or `GPOS` feature list that the prepared face no longer
+carries, sorted and without duplicates. It never lists a tag the source did not have. `family` is the source face's
+typographic family name (name ID 16, else 1), used only to name the font in messages. A consumer that shapes text whose
+style enables a dropped tag SHOULD refuse it where the style meets the font, naming the tag, rather than silently shaping
+the default glyphs. The record is not part of `shaping.fingerprint`; the shaping payload already reflects the dropped
+features.
 
 ### Raster directory
 

@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import bitmapBaker from '@pmndrs/glyph/bakers/bitmap';
@@ -8,11 +7,10 @@ import { bitmap, msdf } from '@pmndrs/glyph';
 import { normalizeBitmapOptions, bitmapDescriptor, bitmapRasterKey } from '../../dist/internal/bitmap-contract.js';
 import { normalizeMsdfOptions, msdfDescriptor, msdfRasterKey } from '../../dist/internal/msdf-contract.js';
 import { startRasterBakeWorker } from '../../dist/internal/raster-bake-worker-entry.js';
-import { interShapingFingerprint, interSourceFingerprint } from '../support/inter-identity.mjs';
+import { interShapingFingerprint, interSourceFingerprint, readInterPrepared } from '../support/inter-identity.mjs';
 const sourceFingerprint = '0'.repeat(32);
 const shapingFingerprint = '1'.repeat(32);
 const rasterKey = '2'.repeat(32);
-const interUrl = new URL('../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 
 test('Bitmap and MSDF runtime bakers execute through lazy module Workers', async (t) => {
   const originalWorker = globalThis.Worker;
@@ -299,7 +297,7 @@ test('the raster Worker entry frees its baker result before transferring exact a
 });
 
 test('Node and serial Worker entry produce identical bounded Bitmap and MSDF artifacts', async (t) => {
-  const source = new Uint8Array(await readFile(interUrl));
+  const { source } = await readInterPrepared();
   const font = {
     source,
     sourceFingerprint: interSourceFingerprint,

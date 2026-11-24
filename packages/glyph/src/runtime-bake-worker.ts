@@ -68,6 +68,7 @@ async function handleMessage(value: RuntimeBakeRequest): Promise<void> {
       source,
       fontFaceIndex: value.font.fontFaceIndex,
       ...(value.unicodeRanges === undefined ? {} : { unicodeRanges: value.unicodeRanges }),
+      ...(value.layoutFeatures === undefined ? {} : { layoutFeatures: value.layoutFeatures }),
       rasters,
       onProgress(progress) {
         scope.postMessage(

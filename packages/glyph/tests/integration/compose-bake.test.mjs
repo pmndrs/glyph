@@ -12,6 +12,7 @@ import { fingerprint128, fingerprintDomain } from '../../dist/internal/content-d
 import { compatibilityFingerprint } from '../../dist/internal/raster-identity.js';
 import { bitmapDescriptor, bitmapRasterKey } from '../../dist/internal/bitmap-contract.js';
 import { parseGlb } from '../../dist/font-baker/validator.js';
+import { readInterPrepared } from '../support/inter-identity.mjs';
 
 let core;
 let bitmapEmbedded;
@@ -20,8 +21,8 @@ let context;
 let golden;
 
 before(async () => {
-  const [source, fontWasm, bitmapWasm, goldenBytes] = await Promise.all([
-    readFile(new URL('../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url)),
+  const [{ source, droppedLayoutFeatures }, fontWasm, bitmapWasm, goldenBytes] = await Promise.all([
+    readInterPrepared(),
     readFile(new URL('../../dist/font-baker.wasm', import.meta.url)),
     readFile(new URL('../../dist/bitmap-baker.wasm', import.meta.url)),
     readFile(new URL('../fixtures/inter-bitmap-v0.json', import.meta.url)),
@@ -29,7 +30,7 @@ before(async () => {
   golden = JSON.parse(goldenBytes);
   const fontBaker = await createFontBaker(fontWasm);
   const sourceFingerprint = fingerprint128(source, fingerprintDomain.source);
-  core = fontBaker.bake({ source, descriptor: { formatVersion: 0, fontFaceIndex: 0 } });
+  core = fontBaker.bake({ source, descriptor: { formatVersion: 0, fontFaceIndex: 0, droppedLayoutFeatures } });
   const coreValidation = await validateFontArtifact(core.artifacts[0].bytes);
   const descriptor = bitmapDescriptor({ strikes: [16] });
   const rasterKey = bitmapRasterKey({ strikes: [16] });

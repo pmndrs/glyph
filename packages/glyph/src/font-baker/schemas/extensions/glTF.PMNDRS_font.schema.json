@@ -204,6 +204,35 @@
         "bufferView"
       ]
     },
+    "layoutFeatures": {
+      "description": "Optional. The source font's OpenType layout features this bake did not keep (`glyph bake --layout-features`). A runtime refuses text that enables one of them; a tag the source never had is not listed. Absent when the bake dropped none, and in artifacts written before it existed.",
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "glTFProperty.schema.json"
+        }
+      ],
+      "properties": {
+        "dropped": {
+          "description": "Dropped feature tags, sorted, without duplicates.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[!-~][ -~]{3}$"
+          },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "family": {
+          "description": "The source face's family name, used to name the font in messages.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "dropped"
+      ]
+    },
     "rasters": {
       "type": "array",
       "items": {

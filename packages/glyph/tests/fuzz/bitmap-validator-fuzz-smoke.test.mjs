@@ -6,14 +6,15 @@ import test from 'node:test';
 import { bitmapBakerFromCore, createBitmapBaker } from '../../dist/bakers/bitmap.js';
 import { BitmapArtifactValidationError, validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 import { ARTIFACT_FUZZ_SEED, mutateArtifact } from '../support/artifact-mutations.mjs';
-import { interShapingFingerprint, interSourceFingerprint } from '../support/inter-identity.mjs';
+import { interShapingFingerprint, interSourceFingerprint, readInterPrepared } from '../support/inter-identity.mjs';
+
 import { bitmapDescriptor, bitmapRasterKey } from '../../dist/internal/bitmap-contract.js';
 
 const shapingFingerprint = interShapingFingerprint;
 
 test('fixed-seed bitmap artifact mutations fail safely and deterministically', async () => {
-  const [source, wasm] = await Promise.all([
-    readFile(new URL('../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url)),
+  const [{ source }, wasm] = await Promise.all([
+    readInterPrepared(),
     readFile(new URL('../../dist/bitmap-baker.wasm', import.meta.url)),
   ]);
   const descriptor = bitmapDescriptor({ strikes: [16] });

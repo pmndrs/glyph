@@ -5,19 +5,18 @@ import test from 'node:test';
 import { bitmapBakerFromCore, createBitmapBaker, createBitmapBakerFromInstance } from '@pmndrs/glyph/bakers/bitmap';
 import { bitmap } from '@pmndrs/glyph';
 import { validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
-import { interShapingFingerprint, interSourceFingerprint } from '../support/inter-identity.mjs';
+import { interShapingFingerprint, interSourceFingerprint, readInterPrepared } from '../support/inter-identity.mjs';
 import { bitmapBakerAbi } from '../../dist/generated/bitmap-baker-abi.js';
 import { bitmapDescriptor, bitmapRasterKey } from '../../dist/internal/bitmap-contract.js';
 
 const wasmUrl = new URL('../../dist/bitmap-baker.wasm', import.meta.url);
-const fontUrl = new URL('../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const sourceFingerprint = interSourceFingerprint;
 const shapingFingerprint = interShapingFingerprint;
 const publishedAbi = bitmapBakerAbi;
 const progressImports = { env: { pmndrs_glyph_bake_progress() {} } };
 
 async function setup() {
-  const [wasm, source] = await Promise.all([readFile(wasmUrl), readFile(fontUrl)]);
+  const [wasm, { source }] = await Promise.all([readFile(wasmUrl), readInterPrepared()]);
   const module = await WebAssembly.compile(wasm);
   const instance = await WebAssembly.instantiate(module, progressImports);
   const core = await createBitmapBaker(module);

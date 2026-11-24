@@ -4,6 +4,7 @@ import { GlyphError } from '../glyph-error.js';
 import type { Fingerprint } from '../identity.js';
 import type { RegisteredBufferView } from './registered-font.js';
 import { readGlb, type ParsedGlb } from './glb-reader.js';
+import type { BakedLayoutFeatureGaps } from './baked-layout-features.js';
 
 const FONT_EXTENSION = 'PMNDRS_font';
 
@@ -15,6 +16,8 @@ export interface RuntimeFontArtifact {
   readonly glyphExtents: Uint8Array;
   readonly glyphExtentsAvailability: Uint8Array;
   readonly glyphOutlines?: Uint8Array;
+  /** Source layout features the bake dropped. Absent in artifacts that drop none and in artifacts older than it. */
+  readonly layoutFeatures?: BakedLayoutFeatureGaps;
   readonly shapingFingerprint: Fingerprint;
   readonly sourceFingerprint: Fingerprint;
 }
@@ -59,6 +62,7 @@ export function readRuntimeFontArtifact(bytes: Uint8Array): RuntimeFontArtifact 
     'glyphExtentsAvailabilityBufferView',
   );
   const outlines = extension.outlines;
+  const layoutFeatures = readLayoutFeatures((extension as { readonly layoutFeatures?: unknown }).layoutFeatures);
   return {
     parsed,
     extension,
@@ -69,8 +73,27 @@ export function readRuntimeFontArtifact(bytes: Uint8Array): RuntimeFontArtifact 
     ...(outlines === undefined
       ? {}
       : { glyphOutlines: viewAt(parsed, bufferViews, outlines.bufferView, 'outlines.bufferView') }),
+    ...(layoutFeatures === undefined ? {} : { layoutFeatures }),
     shapingFingerprint: text(extension.shaping.fingerprint, 'shaping.fingerprint') as Fingerprint,
     sourceFingerprint: text(extension.provenance.sourceFingerprint, 'provenance.sourceFingerprint') as Fingerprint,
+  };
+}
+
+function readLayoutFeatures(value: unknown): BakedLayoutFeatureGaps | undefined {
+  if (value === undefined) return undefined;
+  const layoutFeatures = value as { readonly dropped?: unknown; readonly family?: unknown } | null;
+  if (
+    typeof layoutFeatures !== 'object' ||
+    layoutFeatures === null ||
+    !Array.isArray(layoutFeatures.dropped) ||
+    !layoutFeatures.dropped.every((tag) => typeof tag === 'string') ||
+    (layoutFeatures.family !== undefined && typeof layoutFeatures.family !== 'string')
+  ) {
+    throw new RuntimeFontArtifactError('FONT_LAYOUT_FEATURES_INVALID', 'PMNDRS_font.layoutFeatures is malformed');
+  }
+  return {
+    dropped: new Set(layoutFeatures.dropped as readonly string[]),
+    ...(layoutFeatures.family === undefined ? {} : { family: layoutFeatures.family }),
   };
 }
 

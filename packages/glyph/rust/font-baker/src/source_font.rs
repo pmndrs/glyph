@@ -5,16 +5,20 @@ use read_fonts::{
     types::{GlyphId, Tag},
 };
 use serde::{Deserialize, Serialize};
-use skera::{DEFAULT_DROP_TABLES, DEFAULT_LAYOUT_FEATURES, Plan, SubsetFlags};
+use skera::{DEFAULT_DROP_TABLES, Plan, SubsetFlags};
 use skrifa::{GlyphNameSource, MetadataProvider};
 use std::{string::String, string::ToString, vec::Vec};
 use write_fonts::FontBuilder;
 
-use crate::{BakeError, BakeErrorCode};
+use crate::{
+    BakeError, BakeErrorCode,
+    layout_features::{LayoutFeatureSelection, ResolvedLayoutFeatures},
+    sfnt::{reject_envelope, reject_unsupported_face},
+};
 
 const MAX_UNICODE_RANGES: usize = 4_096;
-const MAX_LAYOUT_FEATURES: usize = 1_024;
 const MAX_UNICODE: u32 = 0x10_ffff;
+const LEGACY_KERN: Tag = Tag::new(b"kern");
 const SURROGATE_START: u32 = 0xd800;
 const SURROGATE_END: u32 = 0xdfff;
 
@@ -31,8 +35,8 @@ pub struct FontSelectionV0 {
     pub format_version: u8,
     pub font_face_index: u32,
     pub unicode_ranges: Vec<UnicodeRangeV0>,
-    /// OpenType layout features to keep, added to the features shaping needs (hb-subset's default list), which are
-    /// always kept. `None` keeps every feature.
+    /// `--layout-features` tokens: `*` (first only) starts from every feature, otherwise the bake starts from
+    /// hb-subset's default list; `tag` or `+tag` adds, `-tag` removes. `None` keeps the default list.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layout_features: Option<Vec<String>>,
 }
@@ -52,9 +56,12 @@ pub struct PreparedFontReportV0 {
     pub font_face_index: u32,
     pub glyph_count: u32,
     pub fingerprint: String,
-    /// Requested layout features the source has no GSUB or GPOS feature for, sorted.
+    /// Added layout features the source has no GSUB or GPOS feature for, sorted.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub missing_layout_features: Vec<String>,
+    /// Source layout features this preparation did not keep, sorted. The core bake records them in the artifact.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub dropped_layout_features: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -89,53 +96,64 @@ pub fn prepare_font(
     selection: FontSelectionV0,
 ) -> Result<PreparedFontV0, BakeError> {
     let unicode_ranges = validate_selection(&selection)?;
-    let requested_features = selection
+    let feature_selection = selection
         .layout_features
         .as_deref()
-        .map(parse_layout_features)
-        .transpose()?;
+        .map(LayoutFeatureSelection::parse)
+        .transpose()?
+        .unwrap_or_default();
+    reject_envelope(source)?;
     let font = parse_font(source, selection.font_face_index)?;
+    reject_unsupported_face(&font)?;
     let mut unicodes = IntSet::<u32>::empty();
     for range in unicode_ranges {
         insert_scalar_range(&mut unicodes, range);
     }
+    let every_code_point = matches!(
+        unicode_ranges,
+        [UnicodeRangeV0 {
+            start: 0,
+            end: MAX_UNICODE
+        }]
+    );
 
-    let glyphs = IntSet::<GlyphId>::empty();
+    // A bake of every code point keeps the source's glyph count as well as its IDs (below): the last glyph is kept
+    // explicitly, so the original source still rasterizes the prepared font glyph for glyph.
+    let mut glyphs = IntSet::<GlyphId>::empty();
+    if every_code_point {
+        let count = font.glyph_names().num_glyphs();
+        if count > 0 {
+            glyphs.insert(GlyphId::new(count - 1));
+        }
+    }
     let drop_tables = DEFAULT_DROP_TABLES.iter().copied().collect::<IntSet<Tag>>();
     let mut layout_scripts = IntSet::<Tag>::empty();
     layout_scripts.invert();
-    // By default every feature, not hb-subset's default-on list: style `features` may enable any tag the source has,
-    // so a code-point subset keeps discretionary features (`smcp`, `tnum`, `ss01`, ...) and the alternates they reach.
-    // A selection adds to the features shaping needs; it can never drop them.
-    let mut layout_features = IntSet::<Tag>::empty();
-    let mut missing_layout_features = Vec::new();
-    match &requested_features {
-        None => layout_features.invert(),
-        Some(requested) => {
-            layout_features.extend(DEFAULT_LAYOUT_FEATURES.iter().copied());
-            let present = source_feature_tags(&font);
-            for &tag in requested {
-                layout_features.insert(tag);
-                if !present.contains(tag) {
-                    missing_layout_features.push(tag.to_string());
-                }
-            }
-        }
-    }
+    let ResolvedLayoutFeatures {
+        kept: layout_features,
+        missing: missing_layout_features,
+        dropped: dropped_layout_features,
+    } = feature_selection.resolve(&font);
     let mut name_ids = IntSet::<NameId>::empty();
     name_ids.insert_range(NameId::from(0)..=NameId::from(6));
     let mut name_languages = IntSet::<u16>::empty();
     name_languages.insert(0x0409);
     // skera has no CFF or CFF2 subsetter and leaves those tables out. Keeping every glyph at its source ID keeps the
-    // source charstrings valid for the glyphs the subset retains, so the source table is copied in afterwards.
+    // source charstrings valid for the glyphs the subset retains, so the source table is copied in afterwards. A bake
+    // of every code point (one without `--unicodes`) keeps source glyph IDs too: they stay the IDs `glyph glyphs`
+    // reports, and the legacy `kern` table, which skera drops, stays valid and is copied in the same way.
     let postscript_outlines = [Cff::TAG, Cff2::TAG]
         .into_iter()
         .find_map(|tag| font.table_data(tag).map(|data| (tag, data.as_bytes())));
-    let flags = if postscript_outlines.is_some() {
+    let retain_glyph_ids = postscript_outlines.is_some() || every_code_point;
+    let flags = if retain_glyph_ids {
         SubsetFlags::SUBSET_FLAGS_RETAIN_GIDS
     } else {
         SubsetFlags::default()
     };
+    let legacy_kern = retain_glyph_ids
+        .then(|| font.table_data(LEGACY_KERN).map(|data| data.as_bytes()))
+        .flatten();
     let plan = Plan::new(
         &glyphs,
         &unicodes,
@@ -153,12 +171,16 @@ pub fn prepare_font(
             format!("font subsetting failed: {error}"),
         )
     })?;
-    if let Some((tag, outlines)) = postscript_outlines {
+    if postscript_outlines.is_some() || legacy_kern.is_some() {
         let subset = parse_font(&bytes, 0)?;
-        bytes = FontBuilder::new()
-            .add_raw(tag, outlines)
-            .copy_missing_tables(subset)
-            .build();
+        let mut builder = FontBuilder::new();
+        if let Some((tag, outlines)) = postscript_outlines {
+            builder.add_raw(tag, outlines);
+        }
+        if let Some(kern) = legacy_kern {
+            builder.add_raw(LEGACY_KERN, kern);
+        }
+        bytes = builder.copy_missing_tables(subset).build();
     }
     let prepared_font = parse_font(&bytes, 0)?;
     let glyph_count = prepared_font.glyph_names().num_glyphs();
@@ -173,6 +195,7 @@ pub fn prepare_font(
             pmndrs_glyph_raster_artifact::SOURCE_FINGERPRINT_V0,
         ),
         missing_layout_features,
+        dropped_layout_features,
     };
     Ok(PreparedFontV0 { bytes, report })
 }
@@ -256,56 +279,6 @@ fn validate_selection(selection: &FontSelectionV0) -> Result<&[UnicodeRangeV0], 
     Ok(&selection.unicode_ranges)
 }
 
-/// Parses OpenType tags (four printable ASCII characters, space-padded at the end only) into a sorted, deduplicated list.
-fn parse_layout_features(tags: &[String]) -> Result<Vec<Tag>, BakeError> {
-    if tags.len() > MAX_LAYOUT_FEATURES {
-        return Err(BakeError::new(
-            BakeErrorCode::InvalidSelection,
-            format!("font selection exceeds {MAX_LAYOUT_FEATURES} layout features"),
-        ));
-    }
-    let mut parsed = Vec::with_capacity(tags.len());
-    for tag in tags {
-        let bytes = tag.as_bytes();
-        let valid = bytes.len() == 4
-            && bytes[0] != b' '
-            && bytes.iter().all(|byte| (0x20..=0x7e).contains(byte))
-            && !bytes
-                .windows(2)
-                .any(|pair| pair[0] == b' ' && pair[1] != b' ');
-        if !valid {
-            return Err(BakeError::new(
-                BakeErrorCode::InvalidSelection,
-                format!("layout feature {tag:?} is not a four-character OpenType tag"),
-            ));
-        }
-        parsed.push(Tag::new(&[bytes[0], bytes[1], bytes[2], bytes[3]]));
-    }
-    parsed.sort();
-    parsed.dedup();
-    Ok(parsed)
-}
-
-fn source_feature_tags(font: &FontRef<'_>) -> IntSet<Tag> {
-    use read_fonts::TableProvider;
-    let mut tags = IntSet::<Tag>::empty();
-    if let Ok(list) = font.gsub().and_then(|gsub| gsub.feature_list()) {
-        tags.extend(
-            list.feature_records()
-                .iter()
-                .map(|record| record.feature_tag()),
-        );
-    }
-    if let Ok(list) = font.gpos().and_then(|gpos| gpos.feature_list()) {
-        tags.extend(
-            list.feature_records()
-                .iter()
-                .map(|record| record.feature_tag()),
-        );
-    }
-    tags
-}
-
 fn insert_scalar_range(unicodes: &mut IntSet<u32>, range: &UnicodeRangeV0) {
     if range.start < SURROGATE_START {
         unicodes.insert_range(range.start..=range.end.min(SURROGATE_START - 1));
@@ -318,7 +291,6 @@ fn insert_scalar_range(unicodes: &mut IntSet<u32>, range: &UnicodeRangeV0) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use read_fonts::TableProvider;
 
     const INTER: &[u8] =
         include_bytes!("../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
@@ -356,19 +328,6 @@ mod tests {
         )
     }
 
-    fn gsub_feature_tags(font: &FontRef<'_>) -> Vec<String> {
-        let gsub = font.gsub().expect("GSUB");
-        let features = gsub.feature_list().expect("feature list");
-        let mut tags = features
-            .feature_records()
-            .iter()
-            .map(|record| record.feature_tag().to_string())
-            .collect::<Vec<_>>();
-        tags.sort();
-        tags.dedup();
-        tags
-    }
-
     #[derive(Default)]
     struct CountingPen(usize);
 
@@ -404,10 +363,186 @@ mod tests {
         pen.0
     }
 
+    fn layout_feature_tags(font: &FontRef<'_>) -> String {
+        let mut tags = crate::layout_features::source_feature_tags(font)
+            .iter()
+            .map(|tag| tag.to_string())
+            .collect::<Vec<_>>();
+        tags.sort();
+        tags.join(" ")
+    }
+
+    const ASCII: &[(u32, u32)] = &[(0x20, 0x7e)];
+    const EVERY_CODE_POINT: &[(u32, u32)] = &[(0, MAX_UNICODE)];
+
     #[test]
     fn prepares_a_shaping_complete_ascii_subset() {
-        let result = prepare_font(
-            INTER,
+        let result = subset(INTER, ASCII);
+        assert!(result.bytes.len() < INTER.len());
+        let font = FontRef::new(&result.bytes).expect("subset font");
+        assert!(font.charmap().map('A').is_some());
+        assert!(font.charmap().map('é').is_none());
+    }
+
+    /// Each selection's features and glyph count equal `hb-subset --unicodes=20-7e` (HarfBuzz 14.4.0) with the
+    /// matching `--layout-features` options, an independent subsetter run on the same input.
+    #[test]
+    fn ascii_selections_match_hb_subset() {
+        for (name, source, tokens, features, glyphs) in [
+            // `hb-subset` defaults: the common set.
+            (
+                "Source Serif 4",
+                SOURCE_SERIF,
+                None,
+                "dnom frac kern liga locl numr",
+                167,
+            ),
+            ("Inter", INTER, None, "calt dnom frac kern numr", 178),
+            (
+                "Inter",
+                INTER,
+                Some(&[][..]),
+                "calt dnom frac kern numr",
+                178,
+            ),
+            // `--layout-features+=smcp,onum`
+            (
+                "Source Serif 4",
+                SOURCE_SERIF,
+                Some(&["smcp", "+onum"][..]),
+                "dnom frac kern liga locl numr onum smcp",
+                224,
+            ),
+            // `--layout-features-=liga`
+            (
+                "Source Serif 4",
+                SOURCE_SERIF,
+                Some(&["-liga"][..]),
+                "dnom frac kern locl numr",
+                158,
+            ),
+            // `--layout-features='*'`. Source Serif's `ss01`/`ss02` are Cyrillic alternates an ASCII subset drops.
+            (
+                "Source Serif 4",
+                SOURCE_SERIF,
+                Some(&["*"][..]),
+                "aalt c2sc case dnom frac kern liga lnum locl numr onum ordn pnum sinf size smcp subs sups tnum zero",
+                330,
+            ),
+            // `--layout-features='*' --layout-features-=ss01,ss02`
+            (
+                "Inter",
+                INTER,
+                Some(&["*", "-ss01", "-ss02"][..]),
+                "aalt calt case cpsp cv01 cv02 cv03 cv04 cv05 cv06 cv08 cv09 cv10 cv11 cv12 cv13 dlig dnom frac kern \
+                 numr ordn pnum salt sinf ss03 ss04 ss05 ss06 ss07 subs sups tnum zero",
+                484,
+            ),
+        ] {
+            let prepared = subset_with_features(source, ASCII, tokens).expect("subset");
+            let font = FontRef::new(&prepared.bytes).expect("subset font");
+            assert_eq!(layout_feature_tags(&font), features, "{name} {tokens:?}");
+            assert_eq!(prepared.report.glyph_count, glyphs, "{name} {tokens:?}");
+        }
+    }
+
+    #[test]
+    fn a_full_bake_and_a_subset_bake_keep_the_same_features() {
+        // A bake without `--unicodes` prepares every code point with the same default, so for the same code points the
+        // two agree. A full bake keeps source glyph IDs.
+        for (name, source) in [("Source Serif 4", SOURCE_SERIF), ("Inter", INTER)] {
+            let source_font = FontRef::new(source).expect("source font");
+            let full = subset(source, EVERY_CODE_POINT);
+            let full_font = FontRef::new(&full.bytes).expect("full font");
+            let mapped = source_font
+                .charmap()
+                .mappings()
+                .map(|(code_point, _)| (code_point, code_point))
+                .collect::<Vec<_>>();
+            let covered = subset(source, &mapped);
+            let covered_font = FontRef::new(&covered.bytes).expect("covered font");
+            assert_eq!(
+                layout_feature_tags(&full_font),
+                layout_feature_tags(&covered_font),
+                "{name}"
+            );
+            assert_eq!(
+                full.report.dropped_layout_features,
+                covered.report.dropped_layout_features
+            );
+            assert_eq!(
+                full_font.charmap().map('A'),
+                source_font.charmap().map('A'),
+                "{name} keeps glyph IDs"
+            );
+            assert_eq!(
+                full.report.glyph_count,
+                source_font.glyph_names().num_glyphs(),
+                "{name} keeps the glyph count"
+            );
+        }
+    }
+
+    #[test]
+    fn the_default_drops_discretionary_features_and_reports_them() {
+        let prepared = subset(SOURCE_SERIF, EVERY_CODE_POINT);
+        let font = FontRef::new(&prepared.bytes).expect("full font");
+        let kept = layout_feature_tags(&font);
+        for tag in ["smcp", "c2sc", "onum", "tnum", "zero", "ss01"] {
+            assert!(!kept.split(' ').any(|kept| kept == tag), "{tag} dropped");
+            assert!(
+                prepared
+                    .report
+                    .dropped_layout_features
+                    .iter()
+                    .any(|dropped| dropped == tag),
+                "{tag} reported"
+            );
+        }
+        // `hb-subset --unicodes='*' --retain-gids` keeps the same features.
+        assert_eq!(kept, "ccmp dnom frac kern liga locl mark mkmk numr");
+
+        let every = subset_with_features(SOURCE_SERIF, EVERY_CODE_POINT, Some(&["*"]))
+            .expect("every feature");
+        assert!(every.report.dropped_layout_features.is_empty());
+        let without = subset_with_features(SOURCE_SERIF, EVERY_CODE_POINT, Some(&["*", "-ss01"]))
+            .expect("all but ss01");
+        assert_eq!(without.report.dropped_layout_features, ["ss01"]);
+    }
+
+    #[test]
+    fn shaping_floor_features_survive_and_cannot_be_removed() {
+        let prepared =
+            subset_with_features(INTER, EVERY_CODE_POINT, Some(&["-liga", "-kern", "-calt"]))
+                .expect("subset");
+        let font = FontRef::new(&prepared.bytes).expect("subset font");
+        assert_eq!(
+            layout_feature_tags(&font),
+            "ccmp dnom frac locl mark mkmk numr"
+        );
+        let error = subset_with_features(INTER, ASCII, Some(&["-mark"])).expect_err("floor");
+        assert_eq!(error.code, BakeErrorCode::InvalidSelection);
+        assert!(error.message.contains("'mark'"), "{}", error.message);
+    }
+
+    #[test]
+    fn layout_feature_selection_reports_absent_tags() {
+        let prepared =
+            subset_with_features(INTER, ASCII, Some(&["smcp", "ss01", "zzzz"])).expect("subset");
+        assert_eq!(prepared.report.missing_layout_features, ["smcp", "zzzz"]);
+    }
+
+    #[test]
+    fn preparation_refuses_faces_the_shaping_payload_cannot_represent() {
+        let mut variable = INTER.to_vec();
+        let table_count = u16::from_be_bytes([variable[4], variable[5]]) as usize;
+        let record = (0..table_count)
+            .map(|index| 12 + index * 16)
+            .find(|&record| &variable[record..record + 4] == b"GSUB")
+            .expect("GSUB record");
+        variable[record..record + 4].copy_from_slice(b"fvar");
+        let error = prepare_font(
+            &variable,
             FontSelectionV0 {
                 format_version: 0,
                 font_face_index: 0,
@@ -418,140 +553,8 @@ mod tests {
                 }],
             },
         )
-        .expect("ASCII subset");
-
-        assert!(result.bytes.len() < INTER.len());
-        // `hb-subset --unicodes=20-7e --layout-features='*'` (HarfBuzz 14.4.0) keeps the same 484 glyphs.
-        assert_eq!(result.report.glyph_count, 484);
-        let font = FontRef::new(&result.bytes).expect("subset font");
-        assert!(font.charmap().map('A').is_some());
-        assert!(font.charmap().map('é').is_none());
-    }
-
-    #[test]
-    fn subsets_keep_every_feature_the_selection_reaches() {
-        // GSUB features of `hb-subset --unicodes=20-7e --layout-features='*'` (HarfBuzz 14.4.0), an independent
-        // subsetter run on the same selection. Source Serif's `ss01` and `ss02` are Cyrillic alternates, so an ASCII
-        // subset rightly drops them; Inter's stylistic sets reach ASCII.
-        let references: [(&str, &[u8], &str); 2] = [
-            (
-                "Source Serif 4",
-                SOURCE_SERIF,
-                "aalt c2sc case dnom frac liga lnum locl numr onum ordn pnum sinf smcp subs sups tnum zero",
-            ),
-            (
-                "Inter",
-                INTER,
-                "aalt calt case cv01 cv02 cv03 cv04 cv05 cv06 cv08 cv09 cv10 cv11 cv12 cv13 dlig dnom frac numr ordn \
-                 pnum salt sinf ss01 ss02 ss03 ss04 ss05 ss06 ss07 subs sups tnum zero",
-            ),
-        ];
-        for (name, source, reference) in references {
-            let prepared = subset(source, &[(0x20, 0x7e)]);
-            let font = FontRef::new(&prepared.bytes).expect("subset font");
-            assert_eq!(
-                gsub_feature_tags(&font).join(" "),
-                reference,
-                "{name} GSUB features"
-            );
-        }
-
-        // The alternates come with their features: small capitals add a glyph per lowercase letter that no code point
-        // maps to.
-        let prepared = subset(SOURCE_SERIF, &[(0x20, 0x7e)]);
-        let font = FontRef::new(&prepared.bytes).expect("subset font");
-        let mapped = font
-            .charmap()
-            .mappings()
-            .map(|(_, glyph)| glyph)
-            .collect::<std::collections::BTreeSet<_>>()
-            .len() as u32;
-        assert!(
-            prepared.report.glyph_count >= mapped + 26,
-            "{} glyphs for {mapped} mapped",
-            prepared.report.glyph_count
-        );
-        assert_eq!(
-            prepared.report.glyph_count, 330,
-            "hb-subset keeps 330 glyphs"
-        );
-    }
-
-    fn layout_feature_tags(font: &FontRef<'_>) -> String {
-        let mut tags = source_feature_tags(font)
-            .iter()
-            .map(|tag| tag.to_string())
-            .collect::<Vec<_>>();
-        tags.sort();
-        tags.join(" ")
-    }
-
-    #[test]
-    fn a_subset_of_every_code_point_keeps_the_full_fonts_features() {
-        // A bake without `--unicodes` keeps the source as it is, so the default selection must keep the same features.
-        for (name, source) in [("Source Serif 4", SOURCE_SERIF), ("Inter", INTER)] {
-            let full = FontRef::new(source).expect("source font");
-            let prepared = subset(source, &[(0, MAX_UNICODE)]);
-            let font = FontRef::new(&prepared.bytes).expect("subset font");
-            assert_eq!(
-                layout_feature_tags(&font),
-                layout_feature_tags(&full),
-                "{name}"
-            );
-        }
-    }
-
-    #[test]
-    fn a_layout_feature_selection_drops_the_other_discretionary_features() {
-        // `hb-subset --unicodes=20-7e --layout-features+=tnum,onum` (HarfBuzz 14.4.0) keeps the same features and 185
-        // glyphs. Source Serif's default figures are already tabular, so `tnum` reaches no kept glyph and is pruned.
-        let prepared = subset_with_features(SOURCE_SERIF, &[(0x20, 0x7e)], Some(&["tnum", "onum"]))
-            .expect("subset");
-        let font = FontRef::new(&prepared.bytes).expect("subset font");
-        assert_eq!(
-            layout_feature_tags(&font),
-            "dnom frac kern liga locl numr onum"
-        );
-        assert_eq!(prepared.report.glyph_count, 185);
-        assert!(prepared.report.missing_layout_features.is_empty());
-    }
-
-    #[test]
-    fn features_shaping_needs_survive_any_selection() {
-        // hb-subset's default list (`skera::DEFAULT_LAYOUT_FEATURES`) is always kept, so an empty selection equals
-        // `hb-subset --unicodes=20-7e` (HarfBuzz 14.4.0): the same features and glyph counts.
-        for (name, source, expected, glyphs) in [
-            (
-                "Source Serif 4",
-                SOURCE_SERIF,
-                "dnom frac kern liga locl numr",
-                167,
-            ),
-            ("Inter", INTER, "calt dnom frac kern numr", 178),
-        ] {
-            let prepared =
-                subset_with_features(source, &[(0x20, 0x7e)], Some(&[])).expect("subset");
-            let font = FontRef::new(&prepared.bytes).expect("subset font");
-            assert_eq!(layout_feature_tags(&font), expected, "{name}");
-            assert_eq!(prepared.report.glyph_count, glyphs, "{name}");
-        }
-    }
-
-    #[test]
-    fn layout_feature_selection_reports_absent_tags_and_rejects_malformed_ones() {
-        let prepared = subset_with_features(
-            INTER,
-            &[(0x20, 0x7e)],
-            Some(&["smcp", "ss01", "zzzz", "smcp"]),
-        )
-        .expect("subset");
-        assert_eq!(prepared.report.missing_layout_features, ["smcp", "zzzz"]);
-
-        for tag in ["", "smc", "smcps", " smc", "s mc", "sm\u{e9}"] {
-            let error = subset_with_features(INTER, &[(0x20, 0x7e)], Some(&[tag])).expect_err(tag);
-            assert_eq!(error.code, BakeErrorCode::InvalidSelection, "{tag:?}");
-        }
-        subset_with_features(INTER, &[(0x20, 0x7e)], Some(&["cv1 "])).expect("space-padded tag");
+        .expect_err("variable face");
+        assert_eq!(error.code, BakeErrorCode::UnsupportedVariableFont);
     }
 
     #[test]

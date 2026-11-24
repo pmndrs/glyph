@@ -5,8 +5,23 @@ use std::{string::String, vec::Vec};
 use std::io::Write;
 
 use crate::error::{BakeError, BakeErrorCode};
+use read_fonts::types::Tag;
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+const MAX_DROPPED_LAYOUT_FEATURES: usize = 4_096;
+
+/// An OpenType tag: four printable ASCII characters, space-padded at the end only.
+pub(crate) fn parse_tag(value: &str) -> Option<Tag> {
+    let bytes = value.as_bytes();
+    let valid = bytes.len() == 4
+        && bytes[0] != b' '
+        && bytes.iter().all(|byte| (0x20..=0x7e).contains(byte))
+        && !bytes
+            .windows(2)
+            .any(|pair| pair[0] == b' ' && pair[1] != b' ');
+    valid.then(|| Tag::new(&[bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BakeDescriptorV0 {
     pub format_version: u8,
@@ -14,6 +29,10 @@ pub struct BakeDescriptorV0 {
     /// Also keep the face's outline tables in the core font.
     #[serde(default)]
     pub outlines: bool,
+    /// Source layout features the preparation dropped (its report's `droppedLayoutFeatures`). The artifact records
+    /// them so text that enables one can be refused where it is bound to the font.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dropped_layout_features: Vec<String>,
 }
 
 impl BakeDescriptorV0 {
@@ -22,10 +41,11 @@ impl BakeDescriptorV0 {
             format_version: 0,
             font_face_index,
             outlines: false,
+            dropped_layout_features: Vec::new(),
         }
     }
 
-    pub(crate) fn validate(self) -> Result<Self, BakeError> {
+    pub(crate) fn validate(mut self) -> Result<Self, BakeError> {
         if self.format_version != 0 {
             return Err(BakeError::new(
                 BakeErrorCode::InvalidDescriptor,
@@ -35,6 +55,24 @@ impl BakeDescriptorV0 {
                 ),
             ));
         }
+        if self.dropped_layout_features.len() > MAX_DROPPED_LAYOUT_FEATURES {
+            return Err(BakeError::new(
+                BakeErrorCode::InvalidDescriptor,
+                format!("dropped layout features exceed {MAX_DROPPED_LAYOUT_FEATURES} tags"),
+            ));
+        }
+        if let Some(tag) = self
+            .dropped_layout_features
+            .iter()
+            .find(|tag| parse_tag(tag).is_none())
+        {
+            return Err(BakeError::new(
+                BakeErrorCode::InvalidDescriptor,
+                format!("dropped layout feature {tag:?} is not a four-character OpenType tag"),
+            ));
+        }
+        self.dropped_layout_features.sort();
+        self.dropped_layout_features.dedup();
         Ok(self)
     }
 }

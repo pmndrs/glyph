@@ -3,7 +3,9 @@ import { GlyphEngineStatusError, setGlyphEngineStatusErrorDetails, type GlyphEng
 import type { Font } from '../font.js';
 import type { GlyphOutlineStore, GlyphOutlineView } from '../glyph-outline.js';
 import type { FontHandle } from '../identity.js';
-import { immutableFontStackFonts, type FontStack } from '../loaded-font.js';
+import { immutableFontResources, immutableFontStackFonts, type FontStack } from '../loaded-font.js';
+import type { BakedLayoutFeatureGaps } from './baked-layout-features.js';
+import { registeredFontLayoutFeatures } from './registered-font.js';
 import type { RasterFormatMetadata } from '../config/raster-format.js';
 import { onRuntimeShaperRestart, runtimeShaperEngineExports, type RuntimeShaper } from '../shaper.js';
 import { compileRasterFont, type CompiledRasterFont } from '../config/raster.js';
@@ -230,6 +232,8 @@ interface RetainedHandleFontStackBinding {
   readonly identity: object;
   readonly handle: FontStackHandle;
   readonly bindings: readonly HandleFontBindingImpl[];
+  /** The fonts in the stack that dropped layout features at bake time. */
+  readonly layoutFeatureGaps: readonly BakedLayoutFeatureGaps[];
   leases: number;
   disposed: boolean;
 }
@@ -505,6 +509,9 @@ export class GlyphHandleState {
         identity: stack,
         handle,
         bindings: Object.freeze(bindings),
+        layoutFeatureGaps: Object.freeze(
+          fonts.flatMap((font) => registeredFontLayoutFeatures(immutableFontResources(font).font) ?? []),
+        ),
         leases: 1,
         disposed: false,
       };
@@ -554,6 +561,7 @@ export class GlyphHandleState {
     handle: FontStackHandle;
     binding: HandleFontStackBinding;
     formats: readonly RasterFormatMetadata[];
+    layoutFeatureGaps: readonly BakedLayoutFeatureGaps[];
     dispose(): void;
   }> {
     this.#assertActive();
@@ -568,6 +576,7 @@ export class GlyphHandleState {
       handle: entry.state.handle,
       binding: retained,
       formats: Object.freeze(entry.state.bindings.map((fontBinding) => fontBinding.raster)),
+      layoutFeatureGaps: entry.state.layoutFeatureGaps,
       dispose: () => retained.dispose(),
     });
   }

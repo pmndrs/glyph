@@ -10,6 +10,8 @@ export interface FontBakeDescriptor {
   readonly formatVersion: 0;
   readonly fontFaceIndex: number;
   readonly outlines?: boolean;
+  /** The preparation's `droppedLayoutFeatures`, recorded in the artifact so text cannot enable them unnoticed. */
+  readonly droppedLayoutFeatures?: readonly string[];
 }
 
 export interface FontBakeRequest {
@@ -27,8 +29,9 @@ export interface FontBakeSelection {
   readonly fontFaceIndex: number;
   readonly unicodeRanges: readonly UnicodeRange[];
   /**
-   * OpenType layout feature tags to keep, in addition to the features shaping needs, which are always kept. Omitted
-   * keeps every feature.
+   * `--layout-features` tokens. `*` (first only) starts from every feature, otherwise the bake starts from hb-subset's
+   * default list; `tag` or `+tag` adds and `-tag` removes. Features script shaping needs cannot be removed. Omitted
+   * keeps the default list.
    */
   readonly layoutFeatures?: readonly string[];
 }
@@ -45,8 +48,10 @@ export interface PreparedFontReport {
   readonly fontFaceIndex: 0;
   readonly glyphCount: number;
   readonly fingerprint: Fingerprint;
-  /** Requested layout features the source font does not have; present only when some are missing. */
+  /** Added layout features the source font does not have; present only when some are missing. */
   readonly missingLayoutFeatures?: readonly string[];
+  /** Source layout features the selection did not keep; present only when some were dropped. */
+  readonly droppedLayoutFeatures?: readonly string[];
 }
 
 export interface PreparedFont {
@@ -458,10 +463,13 @@ function isPreparedFontReport(value: unknown): value is PreparedFontReport {
     value.fontFaceIndex === 0 &&
     isNonnegativeSafeInteger(value.glyphCount) &&
     isFingerprint(value.fingerprint) &&
-    (value.missingLayoutFeatures === undefined ||
-      (Array.isArray(value.missingLayoutFeatures) &&
-        value.missingLayoutFeatures.every((tag) => typeof tag === 'string')))
+    isOptionalStringList(value.missingLayoutFeatures) &&
+    isOptionalStringList(value.droppedLayoutFeatures)
   );
+}
+
+function isOptionalStringList(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every((entry) => typeof entry === 'string'));
 }
 
 function isFontInspection(value: unknown): value is FontInspection {

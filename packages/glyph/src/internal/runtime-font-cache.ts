@@ -48,6 +48,8 @@ export function createCache(storage: CacheStorage, origin: string, now: () => nu
         rasters: request.rasters ?? [],
         sourceFingerprint,
         unicodeRanges: request.unicodeRanges ?? null,
+        // Present in every key: artifacts cached before bakes pruned layout features never match.
+        layoutFeatures: request.layoutFeatures ?? null,
       });
       return fingerprint128(textEncoder.encode(identity), fingerprintDomain.cache);
     },

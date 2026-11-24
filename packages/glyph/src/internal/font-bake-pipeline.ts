@@ -1,10 +1,10 @@
-import type { BakeProgressListener } from '../bake.js';
+import type { BakeProgressListener, BakeWarning } from '../bake.js';
 import type { FontBakeCore, PreparedFontReport } from '../font-baker/index.js';
 
 import { composeFontBake, type ComposedFontBakeResult } from './compose-bake.js';
 import { soleCoreFontArtifact } from './core-bake-policy.js';
 import { readRuntimeFontArtifact } from './font-artifact-reader.js';
-import { preparationSelection } from './font-selection.js';
+import { prepareBakeSource } from './bake-source.js';
 import type { ResolvedRasterBakePlan } from './raster-bake-plan.js';
 
 export interface FontBakePipelineOptions {
@@ -13,7 +13,7 @@ export interface FontBakePipelineOptions {
   readonly fontFaceIndex: number;
   readonly outlines?: boolean;
   readonly unicodeRanges?: readonly { readonly start: number; readonly end: number }[];
-  /** Layout features to keep beyond the ones shaping needs; omitted keeps every feature. */
+  /** `--layout-features` tokens; omitted keeps hb-subset's default list. */
   readonly layoutFeatures?: readonly string[];
   readonly rasters: readonly ResolvedRasterBakePlan[];
   readonly signal?: AbortSignal;
@@ -31,7 +31,9 @@ export interface FontBakePipelineTimings {
 
 export interface FontBakePipelineResult {
   readonly composed: ComposedFontBakeResult;
+  /** Absent when the source could not be prepared and was baked as it is (see `warning`). */
   readonly preparation?: PreparedFontReport;
+  readonly warning?: BakeWarning;
   readonly timings: FontBakePipelineTimings;
 }
 
@@ -41,17 +43,24 @@ export async function bakeFontPipeline(options: FontBakePipelineOptions): Promis
   options.signal?.throwIfAborted();
 
   let phase = performance.now();
-  const selection = preparationSelection(options.fontFaceIndex, options.unicodeRanges, options.layoutFeatures);
-  const preparation =
-    selection === undefined ? undefined : options.fontBaker.prepare({ source: options.source, selection });
-  const source = preparation?.bytes ?? options.source;
-  const fontFaceIndex = preparation?.report.fontFaceIndex ?? options.fontFaceIndex;
+  const prepared = prepareBakeSource(
+    options.fontBaker,
+    options.source,
+    options.fontFaceIndex,
+    options.unicodeRanges,
+    options.layoutFeatures,
+  );
+  const source = prepared.bytes;
+  const preparation = prepared.preparation;
+  const fontFaceIndex = preparation?.fontFaceIndex ?? options.fontFaceIndex;
+  const dropped = preparation?.droppedLayoutFeatures;
   const core = options.fontBaker.bake({
     source,
     descriptor: {
       formatVersion: 0,
       fontFaceIndex,
       ...(options.outlines === undefined ? {} : { outlines: options.outlines }),
+      ...(dropped === undefined ? {} : { droppedLayoutFeatures: dropped }),
     },
   });
   timings.coreBake = performance.now() - phase;
@@ -104,7 +113,8 @@ export async function bakeFontPipeline(options: FontBakePipelineOptions): Promis
 
   return {
     composed,
-    ...(preparation === undefined ? {} : { preparation: preparation.report }),
+    ...(preparation === undefined ? {} : { preparation }),
+    ...(prepared.warning === undefined ? {} : { warning: prepared.warning }),
     timings,
   };
 }

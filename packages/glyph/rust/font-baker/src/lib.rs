@@ -15,6 +15,8 @@ mod report;
 mod sfnt;
 
 #[cfg(feature = "subsetting")]
+mod layout_features;
+#[cfg(feature = "subsetting")]
 mod source_font;
 
 #[cfg(target_arch = "wasm32")]
@@ -53,9 +55,15 @@ pub fn bake_font(source: &[u8], descriptor: BakeDescriptorV0) -> Result<BakeResu
         .then(|| outline::build_outline_payload(source, descriptor.font_face_index))
         .transpose()?;
     let outline_report = outlines.as_ref().map(|outlines| outlines.report.clone());
+    let layout_features =
+        (!descriptor.dropped_layout_features.is_empty()).then(|| glb::LayoutFeatureRecord {
+            dropped: descriptor.dropped_layout_features.clone(),
+            family: sfnt::family_name(source, descriptor.font_face_index),
+        });
     let artifact = glb::build_font_glb(
         &shaping,
         outlines.as_ref(),
+        layout_features.as_ref(),
         ProvenanceV0 {
             source_fingerprint,
             font_face_index: descriptor.font_face_index,

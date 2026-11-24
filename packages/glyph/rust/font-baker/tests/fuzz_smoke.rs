@@ -16,9 +16,10 @@ fn arbitrary_font_bytes_fail_safely_and_deterministically() {
             format_version: if case % 4 == 0 { 1 } else { 0 },
             font_face_index: random.next(),
             outlines: case % 2 == 1,
+            dropped_layout_features: Vec::new(),
         };
 
-        let first = bake_font(&source, descriptor);
+        let first = bake_font(&source, descriptor.clone());
         let second = bake_font(&source, descriptor);
         match (first, second) {
             (Err(first), Err(second)) => {

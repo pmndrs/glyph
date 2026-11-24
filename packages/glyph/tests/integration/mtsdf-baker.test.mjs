@@ -8,7 +8,7 @@ import { MSDF_EM_SIZE, MSDF_PIXEL_RANGE } from '@pmndrs/glyph/core';
 import { msdf } from '@pmndrs/glyph';
 import { mtsdfBakerAbi, mtsdfBakerAbi as msdfBakerAbi } from '../../dist/mtsdf-baker-abi.js';
 import { fingerprint128, fingerprintDomain } from '../../dist/internal/content-digest.js';
-import { interShapingFingerprint, interSourceFingerprint } from '../support/inter-identity.mjs';
+import { interShapingFingerprint, interSourceFingerprint, readInterPrepared } from '../support/inter-identity.mjs';
 import {
   MSDF_EXTENSION,
   MSDF_PLANE_UNITS_PER_EM,
@@ -17,7 +17,6 @@ import {
 } from '../../dist/internal/msdf-contract.js';
 
 const wasmUrl = new URL('../../dist/mtsdf-baker.wasm', import.meta.url);
-const fontUrl = new URL('../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf', import.meta.url);
 const showcaseFontUrl = new URL(
   '../../../../benches/fixtures/fonts/noto-sans-cjk-showcase-v0/NotoSansCJKjp-Showcase.otf',
   import.meta.url,
@@ -28,7 +27,7 @@ const publishedAbi = mtsdfBakerAbi;
 const progressImports = { env: { pmndrs_glyph_bake_progress() {} } };
 
 async function setup() {
-  const [wasm, source] = await Promise.all([readFile(wasmUrl), readFile(fontUrl)]);
+  const [wasm, { source }] = await Promise.all([readFile(wasmUrl), readInterPrepared()]);
   const module = await WebAssembly.compile(wasm);
   const instance = await WebAssembly.instantiate(module, progressImports);
   return {
@@ -544,12 +543,12 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
   assert.equal(data.pages.length, 10);
   assert.deepEqual(data.binding, { width: 1024, height: 1024, layers: 10 });
   // Decoded pages carry their own bytes, not the padded binding. This Inter atlas has unequal page sizes inside a
-  // 1024x1024x10 binding, so retaining actual page bytes holds 37.3 MiB where padding every page to the binding would
-  // hold 40 MiB. The technique ends at CPU data; padding into the texture array is the engine target's work.
+  // 1024x1024x10 binding, so retaining actual page bytes holds 36.9 MiB where padding every page to the binding would
+  // hold 40 MiB. (The bake keeps the common layout features, so the discretionary alternates are not drawn.) The technique ends at CPU data; padding into the texture array is the engine target's work.
   const paddedBindingBytes = data.binding.width * data.binding.height * data.binding.layers * 4;
   const decodedPageBytes = data.pages.reduce((bytes, page) => bytes + page.bytes.byteLength, 0);
   assert.equal(paddedBindingBytes, 41_943_040);
-  assert.equal(decodedPageBytes, 39_111_736);
+  assert.equal(decodedPageBytes, 38_667_084);
   assert.ok(decodedPageBytes < paddedBindingBytes, 'decoded pages must not carry the binding padding');
 
   const glyphIds = firstPresentGlyphByPage(records, data.pages.length);

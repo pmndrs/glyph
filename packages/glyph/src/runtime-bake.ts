@@ -3,7 +3,7 @@ import { FontBakeError } from './font-baker/index.js';
 import type { RuntimeFontBake, RuntimeFontBakeRequest } from './loader.js';
 import { fontBakeDescriptor } from './internal/core-bake-policy.js';
 import { copyToOwnedArrayBuffer } from './internal/owned-array-buffer.js';
-import { normalizeUnicodeRanges } from './internal/font-selection.js';
+import { normalizeLayoutFeatures, normalizeUnicodeRanges } from './internal/font-selection.js';
 import {
   isRuntimeBakeResult,
   type RuntimeBakeRequest,
@@ -33,6 +33,9 @@ const host = new SerialWorkerHost<
         ...(request.unicodeRanges === undefined
           ? {}
           : { unicodeRanges: normalizeUnicodeRanges(request.unicodeRanges) }),
+        ...(request.layoutFeatures === undefined
+          ? {}
+          : { layoutFeatures: normalizeLayoutFeatures(request.layoutFeatures) }),
         ...(request.rasters === undefined ? {} : { rasters: request.rasters }),
       },
       transfer: [source],

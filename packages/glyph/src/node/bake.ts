@@ -47,7 +47,7 @@ import type {
 } from '../discovery.js';
 import { fontBakeDescriptor } from '../internal/core-bake-policy.js';
 import { bakeFontPipeline } from '../internal/font-bake-pipeline.js';
-import { preparationSelection } from '../internal/font-selection.js';
+import { prepareBakeSource } from '../internal/bake-source.js';
 import { NodeBakeError } from '../internal/node-bake-error.js';
 import { assertDistinctInputOutputs, publishFilesWithRollback } from '../internal/node-file-publication.js';
 import { resolveRasterBakePlan, type ResolvedRasterBakePlan } from '../internal/raster-bake-plan.js';
@@ -62,9 +62,12 @@ export interface NodeBakeOptions<Rasters extends readonly object[] = readonly []
   readonly font: Omit<FontBakeDescriptor, 'formatVersion'>;
   readonly unicodeRanges?: readonly UnicodeRange[];
   /**
-   * OpenType layout feature tags to keep, such as `['smcp', 'tnum']`. The features shaping needs (hb-subset's default
-   * list: `ccmp`, `locl`, `liga`, `kern`, `mark`, `calt`, the complex-script features, ...) are always kept. Omitted
-   * keeps every feature, with or without `unicodeRanges`; glyphs reachable only through a dropped feature are not baked.
+   * The OpenType layout features the bake keeps, as `--layout-features` tokens. Omitted, a bake keeps hb-subset's
+   * default list (what shaping applies unasked, `frac numr dnom`, vertical, direction and complex-script features),
+   * with or without `unicodeRanges`. `'*'`, only as the first token, starts from every feature instead; `'smcp'` or
+   * `'+smcp'` adds and `'-liga'` removes. Features script shaping needs (`ccmp`, `locl`, `mark`, `mkmk`, `curs`,
+   * `rlig`, the complex-script features, ...) cannot be removed. Glyphs reachable only through a dropped feature are
+   * not baked, and text that enables a dropped feature throws `GlyphInputError` where it is bound to the font.
    */
   readonly layoutFeatures?: readonly string[];
   readonly rasters?: Rasters;
@@ -105,7 +108,9 @@ export interface NodeBakeExecutionReport {
 }
 
 export interface NodeFontBakeReport extends FontPayloadReport {
+  /** Absent when the source could not be prepared and the bake kept it as it is; `warnings` says why. */
   readonly preparation?: PreparedFontReport;
+  readonly warnings?: readonly BakeWarning[];
   readonly execution: NodeBakeExecutionReport;
 }
 
@@ -205,7 +210,7 @@ async function bakeFontWithResolvedPlans<const Rasters extends readonly object[]
   timings.rasterBake = pipeline.timings.rasterBake;
   timings.compose = pipeline.timings.compose;
   timings.validate = pipeline.timings.validate;
-  const { composed, preparation } = pipeline;
+  const { composed, preparation, warning } = pipeline;
   phase = performance.now();
   const report = finalizeTransport(composed.report, composed.artifacts);
   timings.transport = performance.now() - phase;
@@ -221,6 +226,7 @@ async function bakeFontWithResolvedPlans<const Rasters extends readonly object[]
   return {
     ...report,
     ...(preparation === undefined ? {} : { preparation }),
+    ...(warning === undefined ? {} : { warnings: [warning] }),
     execution: {
       timingsMs: { ...timings, total: performance.now() - started },
       memory: {
@@ -488,15 +494,16 @@ export async function fontIsUpToDate(request: {
   }
 
   const source = await readFile(request.input);
-  // Mirror the bake exactly: naming no ranges and no layout features bakes the source as it is. The
-  // prepared bytes carry the whole selection, so their fingerprint changes whenever it does.
-  let baked: Uint8Array = source;
-  const selection = preparationSelection(request.fontFaceIndex, request.unicodeRanges, request.layoutFeatures);
-  if (selection !== undefined) {
-    const baker = await defaultFontBaker();
-    baked = baker.prepare({ source, selection }).bytes;
-  }
-  const sourceFingerprint = fingerprint128(baked, fingerprintDomain.source);
+  // Mirror the bake exactly. The prepared bytes carry the code points and the kept features; the dropped
+  // list, which the artifact records, is compared below because two selections can prepare equal bytes.
+  const prepared = prepareBakeSource(
+    await defaultFontBaker(),
+    source,
+    request.fontFaceIndex,
+    request.unicodeRanges,
+    request.layoutFeatures,
+  );
+  const sourceFingerprint = fingerprint128(prepared.bytes, fingerprintDomain.source);
 
   let document: Readonly<Record<string, unknown>>;
   try {
@@ -512,6 +519,10 @@ export async function fontIsUpToDate(request: {
   }
   if (font.provenance?.bakerVersion !== FONT_BAKER_VERSION) {
     return { fresh: false, reason: 'a different core baker produced this font' };
+  }
+  const recorded = (font.layoutFeatures as { readonly dropped?: unknown } | undefined)?.dropped ?? [];
+  if (JSON.stringify(recorded) !== JSON.stringify(prepared.preparation?.droppedLayoutFeatures ?? [])) {
+    return { fresh: false, reason: 'the font records different dropped layout features' };
   }
   if ((font.outlines !== undefined) !== (request.outlines === true)) {
     return {

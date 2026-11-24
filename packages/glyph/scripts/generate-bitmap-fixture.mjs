@@ -17,14 +17,27 @@ const glyphCount = 2937;
 const options = { strikes: [16] };
 const descriptor = bitmapDescriptor(options);
 const rasterKey = bitmapRasterKey(options);
-const [source, wasm, fontWasm] = await Promise.all([
+const [original, wasm, fontWasm] = await Promise.all([
   readFile(sourceUrl),
   readFile(wasmUrl),
   readFile(new URL(fontBakerWasmUrl)),
 ]);
 const baker = bitmapBakerFromCore(await createBitmapBaker(wasm));
 const fontBaker = await createFontBaker(fontWasm);
-const core = fontBaker.bake({ source, descriptor: { formatVersion: 0, fontFaceIndex: 0 } });
+// As the Node bake does: prepare every code point with the default layout features, then bake the prepared bytes.
+const prepared = fontBaker.prepare({
+  source: original,
+  selection: { formatVersion: 0, fontFaceIndex: 0, unicodeRanges: [{ start: 0, end: 0x10ffff }] },
+});
+const source = prepared.bytes;
+const core = fontBaker.bake({
+  source,
+  descriptor: {
+    formatVersion: 0,
+    fontFaceIndex: 0,
+    droppedLayoutFeatures: prepared.report.droppedLayoutFeatures,
+  },
+});
 const coreValidation = await validateFontArtifact(core.artifacts[0].bytes);
 const font = {
   source,
@@ -80,8 +93,8 @@ const fixture = {
   schemaVersion: 0,
   source: {
     fixture: 'benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf',
-    bytes: source.byteLength,
-    sha256: hash(source),
+    bytes: original.byteLength,
+    sha256: hash(original),
     fingerprint: coreValidation.sourceFingerprint,
     faceIndex: 0,
     glyphCount,
