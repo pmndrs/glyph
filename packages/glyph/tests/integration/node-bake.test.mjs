@@ -7,11 +7,14 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 
+import { bitmap, glyph } from '@pmndrs/glyph';
 import { bakeFont, bakeProject, NodeBakeError } from '@pmndrs/glyph/bake';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
 import { bitmapBaker } from '@pmndrs/glyph/bakers/bitmap';
 import { validateBitmapArtifact } from '../../dist/bakers/bitmap-validator.js';
 import { validateFontArtifact } from '@pmndrs/glyph/bake';
 
+import { loadFont } from '../../dist/loader.js';
 import { runCli } from '../../dist/node/cli.js';
 import { fingerprint128, fingerprintDomain } from '../../dist/internal/content-digest.js';
 import { bitmapDescriptor, bitmapRasterKey } from '../../dist/internal/bitmap-contract.js';
@@ -384,6 +387,54 @@ test('a Unicode subset of a CFF font keeps its outlines', async (t) => {
     bake.stderr(),
   );
   assert.ok((await readFile(output)).byteLength > 0);
+});
+
+test('a Unicode subset keeps the discretionary features that style features enable', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-subset-features-cli-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const input = fileURLToPath(
+    new URL('../../../../benches/fixtures/fonts/source-serif-4.005/SourceSerif4-Regular.ttf', import.meta.url),
+  );
+  const output = join(root, 'source-serif-ascii.font.glb');
+  const bake = captureIo();
+  assert.equal(
+    await runCli(
+      ['bake', '--input', input, '--output', output, '--unicodes', 'U+0020-007E', '--bitmap', '16'],
+      bake.io,
+    ),
+    0,
+    bake.stderr(),
+  );
+
+  await glyph.init();
+  const font = await loadFont({ baked: { bytes: await readFile(output) } }, bitmap({ strikes: [16] }));
+  const handle = glyph.handle(
+    'three:integration:subset-features',
+    defineThreeConfig({ capacity: { size: 256, policy: 'grow' } }),
+  );
+  t.after(() => {
+    handle.dispose();
+    font.dispose();
+  });
+  const glyphIds = (text, features) => {
+    const paragraph = handle.createText({ font, text, style: { fontSize: 16, features } });
+    const ids = Array.from(paragraph.glyphs().glyphIds);
+    paragraph.dispose();
+    return ids;
+  };
+
+  const letters = glyphIds('glyph', []);
+  const smallCaps = glyphIds('glyph', [{ tag: 'smcp' }]);
+  assert.equal(smallCaps.length, letters.length);
+  assert.ok(
+    smallCaps.every((id, index) => id !== letters[index]),
+    `smcp keeps no default lowercase glyph: ${smallCaps} vs ${letters}`,
+  );
+  // Source Serif's default figures are tabular lining, so `pnum`, `onum` and `zero` each select alternates.
+  const figures = glyphIds('1170', []);
+  for (const tag of ['pnum', 'onum', 'zero']) {
+    assert.notDeepEqual(glyphIds('1170', [{ tag }]), figures, `${tag} selects alternate figures`);
+  }
 });
 
 test('the CLI check reports a missing output or glyph map as stale without baking', async (t) => {

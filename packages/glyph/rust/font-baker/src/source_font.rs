@@ -5,7 +5,7 @@ use read_fonts::{
     types::{GlyphId, Tag},
 };
 use serde::{Deserialize, Serialize};
-use skera::{DEFAULT_DROP_TABLES, DEFAULT_LAYOUT_FEATURES, Plan, SubsetFlags};
+use skera::{DEFAULT_DROP_TABLES, Plan, SubsetFlags};
 use skrifa::{GlyphNameSource, MetadataProvider};
 use std::{string::String, string::ToString, vec::Vec};
 use write_fonts::FontBuilder;
@@ -91,10 +91,10 @@ pub fn prepare_font(
     let drop_tables = DEFAULT_DROP_TABLES.iter().copied().collect::<IntSet<Tag>>();
     let mut layout_scripts = IntSet::<Tag>::empty();
     layout_scripts.invert();
-    let layout_features = DEFAULT_LAYOUT_FEATURES
-        .iter()
-        .copied()
-        .collect::<IntSet<Tag>>();
+    // Every feature, not hb-subset's default-on list: style `features` may enable any tag the source has, so a
+    // code-point subset keeps discretionary features (`smcp`, `tnum`, `ss01`, ...) and the alternates they reach.
+    let mut layout_features = IntSet::<Tag>::empty();
+    layout_features.invert();
     let mut name_ids = IntSet::<NameId>::empty();
     name_ids.insert_range(NameId::from(0)..=NameId::from(6));
     let mut name_languages = IntSet::<u16>::empty();
@@ -240,9 +240,13 @@ fn insert_scalar_range(unicodes: &mut IntSet<u32>, range: &UnicodeRangeV0) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use read_fonts::TableProvider;
 
     const INTER: &[u8] =
         include_bytes!("../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");
+    const SOURCE_SERIF: &[u8] = include_bytes!(
+        "../../../../../benches/fixtures/fonts/source-serif-4.005/SourceSerif4-Regular.ttf"
+    );
     const DANCING_SCRIPT: &[u8] = include_bytes!(
         "../../../../../benches/fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf"
     );
@@ -263,6 +267,19 @@ mod tests {
             },
         )
         .expect("subset")
+    }
+
+    fn gsub_feature_tags(font: &FontRef<'_>) -> Vec<String> {
+        let gsub = font.gsub().expect("GSUB");
+        let features = gsub.feature_list().expect("feature list");
+        let mut tags = features
+            .feature_records()
+            .iter()
+            .map(|record| record.feature_tag().to_string())
+            .collect::<Vec<_>>();
+        tags.sort();
+        tags.dedup();
+        tags
     }
 
     #[derive(Default)]
@@ -316,10 +333,60 @@ mod tests {
         .expect("ASCII subset");
 
         assert!(result.bytes.len() < INTER.len());
-        assert!(result.report.glyph_count < 200);
+        // `hb-subset --unicodes=20-7e --layout-features='*'` (HarfBuzz 14.4.0) keeps the same 484 glyphs.
+        assert_eq!(result.report.glyph_count, 484);
         let font = FontRef::new(&result.bytes).expect("subset font");
         assert!(font.charmap().map('A').is_some());
         assert!(font.charmap().map('é').is_none());
+    }
+
+    #[test]
+    fn subsets_keep_every_feature_the_selection_reaches() {
+        // GSUB features of `hb-subset --unicodes=20-7e --layout-features='*'` (HarfBuzz 14.4.0), an independent
+        // subsetter run on the same selection. Source Serif's `ss01` and `ss02` are Cyrillic alternates, so an ASCII
+        // subset rightly drops them; Inter's stylistic sets reach ASCII.
+        let references: [(&str, &[u8], &str); 2] = [
+            (
+                "Source Serif 4",
+                SOURCE_SERIF,
+                "aalt c2sc case dnom frac liga lnum locl numr onum ordn pnum sinf smcp subs sups tnum zero",
+            ),
+            (
+                "Inter",
+                INTER,
+                "aalt calt case cv01 cv02 cv03 cv04 cv05 cv06 cv08 cv09 cv10 cv11 cv12 cv13 dlig dnom frac numr ordn \
+                 pnum salt sinf ss01 ss02 ss03 ss04 ss05 ss06 ss07 subs sups tnum zero",
+            ),
+        ];
+        for (name, source, reference) in references {
+            let prepared = subset(source, &[(0x20, 0x7e)]);
+            let font = FontRef::new(&prepared.bytes).expect("subset font");
+            assert_eq!(
+                gsub_feature_tags(&font).join(" "),
+                reference,
+                "{name} GSUB features"
+            );
+        }
+
+        // The alternates come with their features: small capitals add a glyph per lowercase letter that no code point
+        // maps to.
+        let prepared = subset(SOURCE_SERIF, &[(0x20, 0x7e)]);
+        let font = FontRef::new(&prepared.bytes).expect("subset font");
+        let mapped = font
+            .charmap()
+            .mappings()
+            .map(|(_, glyph)| glyph)
+            .collect::<std::collections::BTreeSet<_>>()
+            .len() as u32;
+        assert!(
+            prepared.report.glyph_count >= mapped + 26,
+            "{} glyphs for {mapped} mapped",
+            prepared.report.glyph_count
+        );
+        assert_eq!(
+            prepared.report.glyph_count, 330,
+            "hb-subset keeps 330 glyphs"
+        );
     }
 
     #[test]
