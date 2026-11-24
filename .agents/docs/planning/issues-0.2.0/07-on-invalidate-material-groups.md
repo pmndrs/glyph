@@ -18,7 +18,7 @@ generated:
 # Issue 07: `root.onInvalidate` does not fire for `root.material` or `TextGroup` changes
 
 - **Severity:** should-fix (an on-demand loop shows the old material until something else requests a frame)
-- **Status:** open
+- **Status:** fixed — `invalidateMaterial()` notifies the host; the layout-phase test covers all four writes
 
 ## What happens
 

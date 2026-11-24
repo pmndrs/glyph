@@ -655,10 +655,12 @@ export class ThreeRootHost {
     this.#placeSceneObjects();
   }
 
-  /** @internal Invalidate inherited material state after a TextGroup change. */
+  /** @internal Invalidate inherited material state after a root or TextGroup change; only setters call this. */
   invalidateMaterial(): void {
     this.#reconcileDirty = true;
     this.#binding?.invalidateMaterial();
+    // A forced re-shape does not pass the planner's dirty observer, so ask the host for the frame here.
+    this.notifyInvalidated();
   }
 
   /** @internal Reject host-side mutation while this root owns a staged publication. */

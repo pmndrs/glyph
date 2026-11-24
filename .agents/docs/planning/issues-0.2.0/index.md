@@ -12,7 +12,7 @@ against the `experiments/segment-indexed-layout` package and recorded with its r
 | [04](04-pixi3d-input-errors.md)                 | `Pixi3DText` throws `TypeError`/`RangeError` instead of `GlyphInputError` | should-fix   | open                       |
 | [05](05-react-disposed-font-resource.md)        | React can hand a disposed font resource to a mounting component           | should-fix   | not reproduced; planned    |
 | [06](06-three-order-unread.md)                  | `order` on Three text properties is typed but never read                  | should-fix   | fixed                      |
-| [07](07-on-invalidate-material-groups.md)       | `root.onInvalidate` misses `root.material` and `TextGroup` changes        | should-fix   | open                       |
+| [07](07-on-invalidate-material-groups.md)       | `root.onInvalidate` misses `root.material` and `TextGroup` changes        | should-fix   | fixed                      |
 | [08](08-drop-cap-layout-export.md)              | `DropCapLayout` is not exported from the root entry                       | should-fix   | fixed                      |
 | [09](09-coverage-at-rename-warnings.md)         | A second `shader.coverageAt` call floods renamed-declaration warnings     | should-fix   | open                       |
 | [10](10-bake-check-missing-output.md)           | `glyph bake --check` raw ENOENT; `--yes` unused                           | should-fix   | open                       |
