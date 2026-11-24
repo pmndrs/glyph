@@ -14,6 +14,8 @@ import { exactBaseTextureArrayBytes } from './texture-memory';
 interface FixtureIdentity {
   readonly directory: string;
   readonly glyphCount: number;
+  /** The `--layout-features` the fixture generators bake this font with, when not the default. */
+  readonly layoutFeatures?: readonly string[];
 }
 
 const fixtureRoot = new URL('../../fixtures/', import.meta.url);
@@ -33,7 +35,7 @@ const fixtureIdentities = {
     directory: 'fonts/noto-sans-cjk-showcase-v0/',
     glyphCount: 155,
   },
-  'source-serif-4': { directory: 'fonts/source-serif-4.005/', glyphCount: 1464 },
+  'source-serif-4': { directory: 'fonts/source-serif-4.005/', glyphCount: 1464, layoutFeatures: ['smcp'] },
   'dancing-script': { directory: 'fonts/dancing-script-3.000/', glyphCount: 1017 },
 } as const satisfies Readonly<Record<string, FixtureIdentity>>;
 type FixtureId = keyof typeof fixtureIdentities;
@@ -133,7 +135,10 @@ async function expectCompleteFont(
   identity: FixtureIdentity,
   fixtureId: FixtureId,
 ): Promise<void> {
-  const sourceFingerprint = await preparedSourceFingerprint(identity.directory);
+  const sourceFingerprint = await preparedSourceFingerprint(
+    identity.directory,
+    'layoutFeatures' in identity ? identity.layoutFeatures : undefined,
+  );
   const font = objectProperty(objectProperty(document, 'extensions', fixtureId), 'PMNDRS_font', fixtureId);
   const metrics = objectProperty(font, 'metrics', fixtureId);
   const provenance = objectProperty(font, 'provenance', fixtureId);
@@ -148,7 +153,7 @@ const preparedFingerprints = new Map<string, Promise<string>>();
  * The source identity a full bake of the authenticated font stamps: every bake prepares its source (every code point,
  * the common layout features), and a face the subsetter cannot prepare is baked as it is.
  */
-function preparedSourceFingerprint(directory: string): Promise<string> {
+function preparedSourceFingerprint(directory: string, layoutFeatures?: readonly string[]): Promise<string> {
   let fingerprint = preparedFingerprints.get(directory);
   if (fingerprint === undefined) {
     fingerprint = (async () => {
@@ -168,6 +173,7 @@ function preparedSourceFingerprint(directory: string): Promise<string> {
             formatVersion: 0,
             fontFaceIndex: manifest.face?.fontIndex ?? 0,
             unicodeRanges: [{ start: 0, end: 0x10ffff }],
+            ...(layoutFeatures === undefined ? {} : { layoutFeatures }),
           },
         }).report.fingerprint;
       } catch (error) {
