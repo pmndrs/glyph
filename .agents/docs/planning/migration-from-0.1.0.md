@@ -18,6 +18,9 @@ sources:
   - id: preparation-decision
     resource: decisions/deferred-never-stale-preparation.md
     title: Deferred, never-stale preparation
+  - id: render-time-errors-decision
+    resource: decisions/render-time-errors-throw.md
+    title: Render-time failures throw; onError and TextFrameError removed
 generated:
   by: anthropic/claude-fable-5-2
   at: '2026-11-22T23:30:00Z'
@@ -48,18 +51,34 @@ names the Scene before the first traversal; React and Vue call it for you.
 
 ## 2. Errors
 
-| 0.1.0                                                                          | Now                                                                                                                                         | What to change                                                                                        |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Invalid input threw `TypeError` or `RangeError` from the setter.               | It throws `GlyphInputError` (`code: 'invalid-input'`, `path: (string \| number)[]`, the old error as `cause`). The previous value stays.    | Replace `instanceof TypeError`/`RangeError` checks on setters with `GlyphInputError` or `error.code`. |
-| An engine failure threw from the setter.                                       | It surfaces at the frame: `text.error`, `text.onError`, `commitState().status === 'failed'`. A failure is one text's; its siblings publish. | Move `try`/`catch` around setters to `onError`.                                                       |
-| A lone surrogate threw `RangeError: text offset N is an unpaired … surrogate`. | Lone surrogates no longer throw; they render as the replacement character. `text.text` returns the string as assigned.                      | Remove the guard if you had one.                                                                      |
-| No per-text length limit.                                                      | A text longer than `maxTextUnits` (default 65,536 UTF-16 units) is invalid input.                                                           | Raise it with `defineThreeConfig({ maxTextUnits })` if you hold longer paragraphs.                    |
-| `Glyphs.glyphAt(i)` returned `undefined` out of range.                         | It throws `RangeError`.                                                                                                                     | Check the index against `count` first.                                                                |
-| React: an invalid prop surfaced however the setter did.                        | It throws while React commits and reaches the nearest error boundary; without one inside the canvas, the canvas unmounts.                   | Wrap Text in `<GlyphErrorBoundary fallback={…}>` (new) inside the canvas.                             |
-| Vue: not defined.                                                              | An invalid prop is emitted on `error` and rethrown to Vue's error handling; the component keeps its previous value.                         | Listen to `@error`.                                                                                   |
+| 0.1.0                                                                                         | Now                                                                                                                                      | What to change                                                                                        |
+| --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Invalid input threw `TypeError` or `RangeError` from the setter.                              | It throws `GlyphInputError` (`code: 'invalid-input'`, `path: (string \| number)[]`, the old error as `cause`). The previous value stays. | Replace `instanceof TypeError`/`RangeError` checks on setters with `GlyphInputError` or `error.code`. |
+| An engine failure threw from the setter.                                                      | It is thrown from the render that finds it, once; `text.error` and `commitState().status === 'failed'` name the text. Its siblings draw. | Move `try`/`catch` from setters to around `renderer.render()` (see below).                            |
+| `Text.onError`, `TextGroup.onError`, R3F `onError` prop, Vue `error` event, `TextFrameError`. | Removed. A failure found while rendering is thrown from that render (see below) as the underlying error.                                 | Delete the handlers; catch the render instead.                                                        |
+| A lone surrogate threw `RangeError: text offset N is an unpaired … surrogate`.                | Lone surrogates no longer throw; they render as the replacement character. `text.text` returns the string as assigned.                   | Remove the guard if you had one.                                                                      |
+| No per-text length limit.                                                                     | A text longer than `maxTextUnits` (default 65,536 UTF-16 units) is invalid input.                                                        | Raise it with `defineThreeConfig({ maxTextUnits })` if you hold longer paragraphs.                    |
+| `Glyphs.glyphAt(i)` returned `undefined` out of range.                                        | It throws `RangeError`.                                                                                                                  | Check the index against `count` first.                                                                |
+| React: an invalid prop surfaced however the setter did.                                       | It throws while React commits and reaches the nearest error boundary; without one inside the canvas, the canvas unmounts.                | Wrap Text in `<GlyphErrorBoundary fallback={…}>` (new) inside the canvas.                             |
+| Vue: not defined.                                                                             | An invalid prop, and a FontFace that fails to load, reach Vue's error handling; the component keeps its previous value.                  | Use `onErrorCaptured` or `app.config.errorHandler`.                                                   |
 
 Engine traps no longer take a root down: the engine instance is replaced, every text restates itself, and the next
-frame retries. An input that always traps is refused alone and reported on that text.
+frame retries. An input that always traps is refused alone, and that text's `error` names it.
+
+**Catching a failure found while rendering.** There is no error callback. A paragraph the engine refused, a
+publication the renderer rejected, an engine restart, a fixed capacity exceeded and an exception from your own
+`onLayout` are thrown from `renderer.render(scene, camera)` (TypeGPU: from `root.draw()`; PixiJS 3D: from
+`glyph.shape()`), after the frame was drawn and once per failure: the same standing failure is not thrown again on
+later frames, and the failed text draws nothing until its input changes while its siblings draw. Catch it where you
+render, or let it reach your global error handler (`window.onerror`, Sentry):
+
+```ts
+try {
+  renderer.render(scene, camera);
+} catch (error) {
+  report(error); // `text.error` and `commitState()` say which text failed
+}
+```
 
 ## 3. Renamed and removed application names
 
@@ -98,8 +117,7 @@ None of these require a change; they replace patterns that no longer work or wer
   `onLayout` on TypeGPU text. It receives what `measure()` returns, after the first preparation and whenever that
   summary changes, before the frame that draws it. Use it where 0.1.0 code read `measure()` after a frame to size
   something else. Inside it, writing a layout input of any text throws `GlyphLayoutPhaseError`.
-- `root.onError`, `root.onInvalidate`, `root.attach(scene)` on a Three root; `text.error` and `text.onError` on
-  TypeGPU text.
+- `root.onInvalidate`, `root.attach(scene)` on a Three root; `text.error` on TypeGPU text.
 - `@pmndrs/glyph/pixi3d`: PixiJS 3D text on WebGPU and WebGL2, a subpath of this package with optional peers `@pixi/3d`
   (`>=0.1.0 <0.2`) and `pixi.js` (`>=8.23.0 <9`). It is not a separate package. `Pixi3DText` has `measure`, `glyphs`,
   `split` and the editing methods below, including `replace`, and the entry exports `TextOffsetError` and the editing

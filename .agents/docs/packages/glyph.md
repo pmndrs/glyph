@@ -174,6 +174,19 @@ share one Rust layout pipeline. Publication consumes dirty ranges; it does not r
 descriptions below, and any text that says a setter prepares, are historical evidence superseded by those decisions. Main query-first behavior remains the correctness control;
 combined performance, size, failure-boundary, and visual gates are open in the [tracker](../planning/publication-frontier.md).
 
+A failure found while rendering is thrown, never reported to a callback ([render-time failures
+decision](../planning/decisions/render-time-errors-throw.md)); no integration has an `onError`. A refused paragraph, a
+renderer-rejected publication, an engine restart, a fixed capacity exceeded and an `onLayout` exception are deferred in
+one package-owned `RenderFailures` per root (`src/render-failures.ts`) and thrown once by the integration's render
+entry: a Three root's outermost `Scene.onAfterRender`, after Three restored its output target and drew the frame; a
+TypeGPU root's `draw()`, after recording. A failure the next frame finds again is standing and is not rethrown; Glyph's
+bookkeeping settles when the failure is found, so the failed text draws nothing until its input changes and its
+siblings draw. Explicit `glyph.shape()`/`glyph.prepare()` still throw what their roots reject; a Three traversal catches
+that throw and defers it to its render. While the engine is dead (an asynchronous restart, or one that could not
+restart) every call throws one stored `GlyphEngineRestartError`, so the render throws it once. `failure-inventory`,
+`frame-layout-phase` and the shared `preparation-model` scenario drive this through `tests/support/three-render.mjs`,
+which performs the traversal and Scene hooks `renderer.render()` does.
+
 Prepared inspection retains intrinsic flow and, when clipping requires it, positioned glyphs in the existing stage
 owner. Reads and explicit semantic publication reuse these results until semantic or geometry stages change. Split
 uses the same owned source layout that selected its glyph identities, then reconciles origins against its independently
@@ -633,9 +646,9 @@ A frame the engine refuses names its cause and the input that caused it (D-267).
 `styleRangeInvalid`, `styleSplitsCluster`, `styleNestingInvalid`, `styleRootInvalid`, `fontStackMissing`,
 `fontMetricsMissing` -- are separated from `invalidRequest`, which keeps every internal invariant violation and names
 nothing. Each carries the offending paragraph and style in two u32s of the result header's existing tail padding, so the
-header size and every prior field offset are unchanged. `/three` exports `TextFrameError`, whose `rejection` is a discriminated union over the cause and affected `Text`, but
-nothing throws it yet (`textFrameError` has no caller; an open question in the API summary), so a frame rejection reaches
-`onError` as the engine's own error. Span bookkeeping remains private to the structural compiler.
+header size and every prior field offset are unchanged. `/three` once exported a `TextFrameError` that resolved the cause
+onto the affected `Text`; nothing threw it, and it was removed with every `onError`, so a frame rejection is thrown as the
+engine's own error. Span bookkeeping remains private to the structural compiler.
 
 Publicly constructible frame inputs are validated where they enter `Text`, `TextGroup`, Codec assembly, or
 font registration; malformed data never waits for scene traversal to fail. A residual engine rejection therefore names an
@@ -1161,15 +1174,13 @@ notification remains pending and publishes through the ordinary next shape call.
 Public Text, root, and handle disposal first use the engine's existing mutation gate, so a disposal attempted from a
 borrowed publication callback rejects before changing lifecycle flags, root membership, or shape participation. Text
 preflights at the root-membership boundary even when it is detached and has no publication entry. The same gate remains
-closed until every shape participant captured for settlement has consumed its outcome, so an earlier root's `onError`
-cannot dispose a later root or handle and suppress its accepted-publication failure. Error attribution snapshots the
-publication's Text and live-group ownership, carries the accepted/rejected classification to both, installs every internal
-state, and only then invokes guarded notifications. The root retains only that error-path group ownership: replacement
+closed until every shape participant captured for settlement has consumed its outcome, so application code that runs
+during settlement (a matrix override reached by an accepted hook's transform synchronization) cannot dispose a later root
+or handle and suppress its accepted-publication failure. Error attribution snapshots the publication's Text and live-group
+ownership and carries the accepted/rejected classification to both; it calls no application code. The root retains only that error-path group ownership: replacement
 updates it, successful publication clears current Text state plus the retained group set directly without copying
 participants or rediscovering ancestry, and group disposal releases the group from the same set and clears its terminal
-error state after lifecycle preflight. The root admits only the outermost attribution through state installation and user
-notifications, so callback-driven scene traversal cannot replace that in-flight failure with a secondary reconciliation
-or transform error. One bounded root publication-cycle flag extends that ownership from preparation, before any captured
+error state after lifecycle preflight. One bounded root publication-cycle flag extends that ownership from preparation, before any captured
 root can consume renderer commands, through accepted or rejected settlement. A traversal failure raised while that cycle
 is active is retained in one explicit-value wrapper. The renderer's existing retirement wrapper remains the primary when
 present; otherwise the deferred traversal failure enters the same accepted hook and public throw instead of being lost.
@@ -1177,8 +1188,8 @@ This root ownership covers cross-root callbacks both before a later root commits
 and clears on every adapter skip, rejection, acceptance, throw settlement, or disposal exit. Nested traversal and ordinary
 Text edits remain allowed throughout, and the successful hot path allocates no participant or ancestry snapshot. Disposed
 groups cannot be reacquired by later attribution. Arbitrary callback throws, including
-`undefined`, `null`, and `0`, retain their identity through `onError` and the public shaping throw. The
-accepted hook also preserves that retirement value if reentrant notification changes hierarchy and the following initial
+`undefined`, `null`, and `0`, retain their identity through attribution and the public shaping throw. The
+accepted hook also preserves that retirement value if a callback changes hierarchy and the following initial
 transform synchronization throws: synchronization errors surface when no earlier publication failure exists, and failed
 initial synchronization remains pending for a later publication retry. The historical `Text.error`/`TextGroup.error`
 getters still return `undefined` for both no error and a thrown `undefined`; internal presence state keeps `commitState()`
@@ -2968,8 +2979,8 @@ and PixiJS 3D's `gl.header` reaches both stages, so MSDF and Slug put their deri
 derives from a fixed 16×9 light grid.
 
 Root hooks: `prepared()` resolves anchors after core prepared every dirty paragraph; `accepted` and `unchanged` accept
-placement and sync transforms; a rejected publication keeps the accepted meshes, reports once through
-`text.error`/`onError`, and is not retried until an edit. Text provides desired measurements, ink, glyph columns,
+placement and sync transforms; a rejected publication keeps the accepted meshes, is thrown once by `glyph.shape()` and
+kept as `text.error`, and is not retried until an edit. Text provides desired measurements, ink, glyph columns,
 the editing queries (`caret`, `hitTest`, `move`, `boundary`, `rangeRects`, `replace`) and native bounds; `split()` returns independently disposable glyph and decoration snapshots.
 `Pixi3DTextMaterial` appends shader bits, updates material data without reshaping, and may supply a factory for another
 `BaseMaterial3D`.
