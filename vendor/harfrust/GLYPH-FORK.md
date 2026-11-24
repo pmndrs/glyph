@@ -113,7 +113,8 @@ exists and still computes its coordinates; they simply have no effect. pmndrs/gl
 instance (the shaper shapes baked fonts at their default instance), so its shaping is unchanged.
 Variable-font shaping needs the feature back on: FeatureVariations selection, GPOS and GDEF
 variation deltas and HVAR/`gvar` advances are all behind it. In the shipped shaper it costs 13,165
-raw / 5,151 gzip bytes (measured 2026-11-22).
+raw / 5,151 gzip bytes (measured 2026-11-22). The last two rows compile out calls that already returned
+nothing without coordinates; they removed a further 1,585 raw / 662 gzip bytes (measured 2026-11-23).
 
 | File                                     | Change                                                                                                                              |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -121,6 +122,8 @@ raw / 5,151 gzip bytes (measured 2026-11-22).
 | `src/hb/ot/mod.rs`                       | Constructors drop coordinates and feature-variation indices without `variations`; `active_coords` and `active_var_store` read them. |
 | `src/hb/ot/gpos/mod.rs`                  | Value-record deltas read `active_var_store` and `active_coords`.                                                                    |
 | `src/hb/font_funcs.rs`, `src/hb/face.rs` | Metrics and `Shaper::coords` read `active_coords`.                                                                                  |
+| `src/hb/glyph_metrics.rs`                | MVAR ascender/descender deltas (vertical origin fallback) read MVAR through `mvar_deltas`, which is `None` without `variations`.    |
+| `src/hb/ot_map.rs`                       | The map compiler's feature-variation index is `None` without `variations`, so FeatureVariations substitution is not linked.         |
 
 ### Plan-builder helpers out of line
 

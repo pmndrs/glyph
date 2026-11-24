@@ -501,7 +501,13 @@ impl<'a> hb_ot_map_builder_t<'a> {
             let mut stage_index = 0;
             let mut last_lookup = 0;
 
-            let variation_index = self.face.ot_tables.feature_variations[table_index as usize];
+            // pmndrs/glyph fork: without `variations` the index is always `None` (see `OtTables`);
+            // saying so here compiles the FeatureVariations substitution out.
+            let variation_index = if cfg!(feature = "variations") {
+                self.face.ot_tables.feature_variations[table_index as usize]
+            } else {
+                None
+            };
 
             for stage in 0..self.current_stage[table_index] {
                 if let Some(feature_index) = required_feature_index[table_index] {
