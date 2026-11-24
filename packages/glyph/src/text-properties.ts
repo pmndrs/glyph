@@ -116,6 +116,14 @@ export interface ParagraphLayout {
   readonly maxLines?: number;
   readonly wrap?: 'none' | 'word' | 'character';
   readonly align?: 'start' | 'center' | 'end' | 'justify';
+  /**
+   * What happens to lines past a fixed `height` (or past the last column or flow region). `measure().overflowed` reports
+   * that text did not fit in every mode.
+   * - `'visible'` (default): only the lines that fit are laid out and drawn; the rest of the text is dropped.
+   * - `'clip'`: every line is laid out; the lines past the box continue below it (below the last column's foot with
+   *   `columns`). They are tagged with a clip boundary, but the built-in renderers do not clip pixels yet, so they draw.
+   * - `'ellipsis'`: like `'visible'`, and the last line that fits ends in an ellipsis.
+   */
   readonly overflow?: 'visible' | 'clip' | 'ellipsis';
   /** Extra inline offset for the paragraph's first line, in paragraph-local units. */
   readonly firstLineIndent?: number;

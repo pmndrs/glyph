@@ -18,7 +18,7 @@ generated:
 # Issue 12: release docs state removed or wrong behaviour
 
 - **Severity:** ship-blocker (the shipped migration guide contradicts the shipped behaviour)
-- **Status:** open
+- **Status:** fixed — MIGRATION-0.2.md describes default frustum culling, the stale `text.error` item is gone, and `ParagraphLayout.overflow` has TSDoc and a package-concept note measured against the build
 
 ## What happens and root cause
 

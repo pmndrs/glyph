@@ -21,7 +21,7 @@ generated:
 # Issue 01: `overflow: 'clip'` does not clip pixels in Three
 
 - **Severity:** should-fix (the interim TSDoc note is in 0.2.0; the pixel clip is not)
-- **Status:** planned — the fix needs engine-directory work owned by another lane; interim TSDoc landed
+- **Status:** planned — the fix needs engine-directory work owned by another lane; the interim TSDoc on `overflow` (issue 12 commit) states that built-in renderers do not clip yet
 
 ## What happens
 
