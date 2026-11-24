@@ -86,15 +86,17 @@ text, so a console or error report alone finds it; a refused text's `commitState
 
 ## 3. Renamed and removed application names
 
-| Entry                                      | 0.1.0                                                            | Now                                                                                                     |
-| ------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| three, typegpu, core `GlyphTextController` | `withGlyphs(read)`                                               | `readGlyphs(read)`, same signature                                                                      |
-| three                                      | `Text.breakApart()`                                              | `Text.split()`, same return type                                                                        |
-| three                                      | `DetachedGlyph.sourceIndex`, `ThreeGlyphMeasurement.sourceIndex` | Removed. Detached indices are dense over drawable glyphs.                                               |
-| three                                      | `Text.caretAt(x, y)`                                             | `text.hitTest({ x, y })`, then `text.caret(position)` for the rectangle                                 |
-| three                                      | `Text.selectionRects(start, end)`                                | `text.rangeRects(start, end)`                                                                           |
-| three, root                                | `GlyphCaret` (`offset`, `line`, `leading`, `rect`)               | `TextPosition` (`offset`, `affinity`) and `TextCaret` (`rect`, `line`, `level`, `secondary`, `clipped`) |
-| core                                       | `GlyphPlacements.caretAt`, `caretForOffset`, `selectionRects`    | Removed. Use `GlyphTextController.editing`.                                                             |
+| Entry                                      | 0.1.0                                                                    | Now                                                                                                     |
+| ------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| three, typegpu, core `GlyphTextController` | `withGlyphs(read)`                                                       | `readGlyphs(read)`, same signature                                                                      |
+| three                                      | `Text.breakApart()`                                                      | `Text.split()`, same return type                                                                        |
+| three                                      | `DetachedGlyph.sourceIndex`, `ThreeGlyphMeasurement.sourceIndex`         | Removed. Detached indices are dense over drawable glyphs.                                               |
+| three                                      | `Text.caretAt(x, y)`                                                     | `text.hitTest({ x, y })`, then `text.caret(position)` for the rectangle                                 |
+| three                                      | `Text.selectionRects(start, end)`                                        | `text.rangeRects(start, end)`                                                                           |
+| three, root                                | `GlyphCaret` (`offset`, `line`, `leading`, `rect`)                       | `TextPosition` (`offset`, `affinity`) and `TextCaret` (`rect`, `line`, `level`, `secondary`, `clipped`) |
+| core                                       | `GlyphPlacements.caretAt`, `caretForOffset`, `selectionRects`            | Removed. Use `GlyphTextController.editing`.                                                             |
+| three, react, vue                          | `order` on Three `TextProperties`/`TextUpdate`, R3F and Vue `Text` props | Removed. It was never read; Three paints in scene order with `renderOrder`. Delete the property.        |
+| CLI                                        | `glyph bake --yes`                                                       | Removed. It never did anything (the CLI does not prompt). Delete the flag.                              |
 
 `Text.caretAt` and `Text.selectionRects` existed in 0.1.0; `Text.caretForOffset` was added after it and is replaced
 by `text.caret({ offset, affinity })` before any release. What changes in behaviour, not only in name:
@@ -121,7 +123,8 @@ None of these require a change; they replace patterns that no longer work or wer
   `onLayout` on TypeGPU text. It receives what `measure()` returns, after the first preparation and whenever that
   summary changes, before the frame that draws it. Use it where 0.1.0 code read `measure()` after a frame to size
   something else. Inside it, writing a layout input of any text throws `GlyphLayoutPhaseError`.
-- `root.onInvalidate`, `root.attach(scene)` on a Three root; `text.error` on TypeGPU text.
+- `root.onInvalidate` (also run by `root.material`, `TextGroup.material`, `TextGroup.batching` and `TextGroup.dispose()`)
+  and `root.attach(scene)` on a Three root.
 - `@pmndrs/glyph/pixi3d`: PixiJS 3D text on WebGPU and WebGL2, a subpath of this package with optional peers `@pixi/3d`
   (`>=0.1.0 <0.2`) and `pixi.js` (`>=8.23.0 <9`). It is not a separate package. `Pixi3DText` has `measure`, `glyphs`,
   `split` and the editing methods below, including `replace`, and the entry exports `TextOffsetError` and the editing

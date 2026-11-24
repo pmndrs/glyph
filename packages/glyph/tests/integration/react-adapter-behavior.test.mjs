@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createElement, Suspense } from 'react';
+import { createElement, Suspense, useEffect, useLayoutEffect } from 'react';
 import { create, act } from '@react-three/test-renderer/webgpu';
 import { glyph } from '@pmndrs/glyph';
+import { Text as ThreeText, TextGroup as ThreeTextGroup } from '@pmndrs/glyph/three';
 import { Text, TextGroup } from '@pmndrs/glyph/react';
 import { adapterBehavior, adapterFont } from '../support/adapter-behavior.mjs';
 
@@ -143,6 +144,47 @@ test('React preserves layout across fresh equivalent nested text', async () => {
     assert.equal(host.text.measure(), accepted);
   } finally {
     await host.unmount();
+    font.dispose();
+  }
+});
+
+test('React: Text and TextGroup refs are set before the first layout and passive effects', async () => {
+  const font = await adapterFont();
+  const seen = [];
+  const refs = { text: null, group: null };
+  const textRef = (value) => {
+    refs.text = value;
+  };
+  const groupRef = (value) => {
+    refs.group = value;
+  };
+  function Consumer() {
+    useLayoutEffect(() => {
+      seen.push(['layout', refs.text, refs.group]);
+    }, []);
+    useEffect(() => {
+      seen.push(['passive', refs.text, refs.group]);
+    }, []);
+    return createElement(
+      TextGroup,
+      { ref: groupRef },
+      createElement(Text, { font: font.face, ref: textRef }, 'first effect'),
+    );
+  }
+  let renderer = await create(createElement(Suspense, { fallback: null }, createElement(Consumer)));
+  try {
+    assert.deepEqual(
+      seen.map(([phase, text, group]) => [phase, text instanceof ThreeText, group instanceof ThreeTextGroup]),
+      [
+        ['layout', true, true],
+        ['passive', true, true],
+      ],
+    );
+    await renderer.unmount();
+    renderer = undefined;
+    assert.deepEqual(refs, { text: null, group: null }, 'unmount clears both refs');
+  } finally {
+    await renderer?.unmount();
     font.dispose();
   }
 });

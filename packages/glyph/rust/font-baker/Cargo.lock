@@ -212,6 +212,7 @@ dependencies = [
  "skrifa",
  "talc",
  "thiserror",
+ "write-fonts",
 ]
 
 [[package]]

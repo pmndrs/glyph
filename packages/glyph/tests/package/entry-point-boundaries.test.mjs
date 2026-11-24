@@ -60,6 +60,8 @@ test('application values and types stay at root while integration construction l
     'LayoutPoint',
     'LineFontMetrics',
     'TypographicReferences',
+    // The type of the public `ParagraphLayout.dropCap` field.
+    'DropCapLayout',
   ]) {
     assert.equal(root.has(name), true, `applications must be able to name ${name} from the root`);
   }

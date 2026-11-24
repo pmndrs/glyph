@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { bitmap, glyph, span, txt } from '@pmndrs/glyph';
+import { bitmap, glyph, GlyphInputError, span, txt } from '@pmndrs/glyph';
 import { definePixi3DConfig, TextOffsetError } from '@pmndrs/glyph/pixi3d';
 import { TextOffsetError as ThreeTextOffsetError } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
@@ -183,4 +183,29 @@ test('the shared span vectors hold on a PixiJS 3D text, in the host and in the e
     );
     assert.deepEqual(sizes, expected, `${name}: engine styling`);
   }
+});
+
+test('PixiJS 3D text refuses invalid caller input with GlyphInputError, as Three does', async (t) => {
+  const font = await loadFont(t);
+  await glyph.init({ wasm: await readFile(shaperWasm) });
+  const handle = glyph.handle(`pixi3d:editing:${String(nextHandle++)}`, definePixi3DConfig());
+  t.after(() => handle.dispose());
+  const inputError = (path) => (error) => {
+    assert.ok(error instanceof GlyphInputError, `${error?.name}: ${error?.message}`);
+    assert.equal(error.code, 'invalid-input');
+    assert.deepEqual(error.path, path);
+    assert.ok(error.cause instanceof TypeError || error.cause instanceof RangeError);
+    return true;
+  };
+  assert.throws(() => handle.createText({ font, text: 7 }), inputError(['text']));
+  assert.throws(() => handle.createText({ font, text: 'a', material: {} }), inputError(['material']));
+  assert.throws(() => handle.createText({ font, text: 'a', style: { fontSize: Number.NaN } }), inputError([]));
+
+  const text = handle.createText({ font, text: 'kept' });
+  t.after(() => text.dispose());
+  assert.throws(() => text.update(7), inputError([]));
+  assert.throws(() => text.update({ style: { fontSize: -1 } }), inputError(['style']));
+  assert.throws(() => text.update({ material: undefined }), inputError(['material']));
+  assert.throws(() => text.update({ text: 'both', layout: { maxLines: 0 } }), inputError([]));
+  assert.equal(text.text, 'kept', 'a refused update changes nothing');
 });

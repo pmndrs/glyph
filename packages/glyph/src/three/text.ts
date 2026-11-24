@@ -89,7 +89,8 @@ const textBoundsGeometry = new THREE.BufferGeometry();
 export type TextSpan<Format extends RasterFormatMetadata> = Omit<ParagraphSpan<Format>, 'font'> &
   Readonly<{ font?: FontSelection<Format>; material?: ThreeTextMaterial }>;
 
-type TextBaseProperties<Format extends RasterFormatMetadata> = Omit<ParagraphBaseProperties<Format>, 'font'> &
+// Three orders paint by the scene graph and `renderOrder`; the core paragraph `order` is derived from traversal.
+type TextBaseProperties<Format extends RasterFormatMetadata> = Omit<ParagraphBaseProperties<Format>, 'font' | 'order'> &
   Readonly<{ font: FontSelection<Format> }>;
 
 type TextContentProperties<Format extends RasterFormatMetadata> = Readonly<{ text: TextInput<Format> }>;
@@ -654,10 +655,12 @@ export class ThreeRootHost {
     this.#placeSceneObjects();
   }
 
-  /** @internal Invalidate inherited material state after a TextGroup change. */
+  /** @internal Invalidate inherited material state after a root or TextGroup change; only setters call this. */
   invalidateMaterial(): void {
     this.#reconcileDirty = true;
     this.#binding?.invalidateMaterial();
+    // A forced re-shape does not pass the planner's dirty observer, so ask the host for the frame here.
+    this.notifyInvalidated();
   }
 
   /** @internal Reject host-side mutation while this root owns a staged publication. */

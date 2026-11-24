@@ -11,6 +11,11 @@ export interface SlugRenderOptions {
   readonly weightBoost: Node<'bool'>;
   readonly stemDarken?: Node<'float'>;
   readonly thicken?: Node<'float'>;
+  /**
+   * Appended to every declared variable name. Each evaluation in one shader needs its own, because TSL declares names
+   * per stage and renames (with a warning) on a collision. Defaults to none.
+   */
+  readonly nameSuffix?: string;
 }
 
 function namedFloat(node: Node<'float'>, name: string): Node<'float'> {
@@ -31,27 +36,31 @@ export function slugRender(
   renderCoordinate: Node<'vec2'>,
   options: SlugRenderOptions,
 ): Node<'float'> {
+  const suffix = options.nameSuffix ?? '';
   // These derivatives and reciprocal footprints are loop-invariant. Explicit
   // variables prevent TSL from re-emitting them once per candidate curve.
-  const emsPerPixel: Node<'vec2'> = namedVec2(vec2Fwidth(renderCoordinate), 'slugEmsPerPixel');
+  const emsPerPixel: Node<'vec2'> = namedVec2(vec2Fwidth(renderCoordinate), `slugEmsPerPixel${suffix}`);
   const minimumFootprintX: Node<'float'> = max(emsPerPixel.x, 1 / 65_536);
   const minimumFootprintY: Node<'float'> = max(emsPerPixel.y, 1 / 65_536);
-  const pixelsPerEmX: Node<'float'> = namedFloat(div(1, minimumFootprintX), 'slugPixelsPerEmX');
-  const pixelsPerEmY: Node<'float'> = namedFloat(div(1, minimumFootprintY), 'slugPixelsPerEmY');
+  const pixelsPerEmX: Node<'float'> = namedFloat(div(1, minimumFootprintX), `slugPixelsPerEmX${suffix}`);
+  const pixelsPerEmY: Node<'float'> = namedFloat(div(1, minimumFootprintY), `slugPixelsPerEmY${suffix}`);
   const pixelsPerEmSum: Node<'float'> = add(pixelsPerEmX, pixelsPerEmY);
-  const pixelsPerEm: Node<'float'> = namedFloat(mul(pixelsPerEmSum, 0.5), 'slugPixelsPerEm');
+  const pixelsPerEm: Node<'float'> = namedFloat(mul(pixelsPerEmSum, 0.5), `slugPixelsPerEm${suffix}`);
   const thickenFactor: Node<'float'> =
     options.thicken === undefined
       ? float(1)
-      : namedFloat(add(1, mul(options.thicken, max(0, sub(1, div(pixelsPerEm, 24))))), 'slugThickenFactor');
+      : namedFloat(add(1, mul(options.thicken, max(0, sub(1, div(pixelsPerEm, 24))))), `slugThickenFactor${suffix}`);
 
   // Coverage is evaluated a ten-thousandth of a pixel off the fragment centre, towards lower x and y, which is the
   // side an exact reference gives a tie. A centre lying exactly on an outline edge (aligned text puts many there) is a
   // tie for the ray that runs along the edge, and the last bit of the interpolated coordinate decides it; renderers
   // that round vertex positions differently then disagree at corners by up to half a pixel of coverage.
-  const sample: Node<'vec2'> = namedVec2(add(renderCoordinate, mul(emsPerPixel, SLUG_TIE_OFFSET)), 'slugSample');
-  const horizontal = evaluateBand(page, glyph, sample, 'horizontal', pixelsPerEmX, thickenFactor);
-  const vertical = evaluateBand(page, glyph, sample, 'vertical', pixelsPerEmY, thickenFactor);
+  const sample: Node<'vec2'> = namedVec2(
+    add(renderCoordinate, mul(emsPerPixel, SLUG_TIE_OFFSET)),
+    `slugSample${suffix}`,
+  );
+  const horizontal = evaluateBand(page, glyph, sample, 'horizontal', pixelsPerEmX, thickenFactor, suffix);
+  const vertical = evaluateBand(page, glyph, sample, 'vertical', pixelsPerEmY, thickenFactor, suffix);
 
   return calcCoverage(
     horizontal.coverage,
@@ -62,5 +71,6 @@ export function slugRender(
     options.weightBoost,
     options.stemDarken,
     pixelsPerEm,
+    suffix,
   );
 }
