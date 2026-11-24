@@ -22,12 +22,13 @@ function stableRoots(
   b: Node<'float'>,
   c: Node<'float'>,
   namePrefix: 'slugHorizontal' | 'slugVertical',
+  suffix: string,
 ): Node<'vec2'> {
   const bSquared: Node<'float'> = mul(b, b);
   const aTimesC: Node<'float'> = mul(a, c);
-  const discriminant: Node<'float'> = sub(bSquared, aTimesC).toVar(`${namePrefix}Discriminant`);
-  const t1: Node<'float'> = float(0).toVar(`${namePrefix}PolynomialRoot1`);
-  const t2: Node<'float'> = float(0).toVar(`${namePrefix}PolynomialRoot2`);
+  const discriminant: Node<'float'> = sub(bSquared, aTimesC).toVar(`${namePrefix}Discriminant${suffix}`);
+  const t1: Node<'float'> = float(0).toVar(`${namePrefix}PolynomialRoot1${suffix}`);
+  const t2: Node<'float'> = float(0).toVar(`${namePrefix}PolynomialRoot2${suffix}`);
   const absoluteA: Node<'float'> = abs(a);
   const linearAxis: Node<'bool'> = lessThan(absoluteA, 1 / 65_536);
 
@@ -45,13 +46,13 @@ function stableRoots(
     .Else(() => {
       // These variables are intentional code-generation hoists. `select` evaluates
       // both operands, so leaving the expressions inline duplicates sqrt/div work.
-      const distance: Node<'float'> = sqrt(discriminant).toVar(`${namePrefix}RootDistance`);
-      const bPositive: Node<'bool'> = greaterThanEqual(b, 0).toVar(`${namePrefix}BPositive`);
+      const distance: Node<'float'> = sqrt(discriminant).toVar(`${namePrefix}RootDistance${suffix}`);
+      const bPositive: Node<'bool'> = greaterThanEqual(b, 0).toVar(`${namePrefix}BPositive${suffix}`);
       const sign: Node<'float'> = select(bPositive, float(1), float(-1));
       const signedDistance: Node<'float'> = mul(sign, distance);
-      const q: Node<'float'> = add(b, signedDistance).toVar(`${namePrefix}Q`);
-      const rootA: Node<'float'> = div(q, a).toVar(`${namePrefix}RootA`);
-      const rootB: Node<'float'> = div(c, q).toVar(`${namePrefix}RootB`);
+      const q: Node<'float'> = add(b, signedDistance).toVar(`${namePrefix}Q${suffix}`);
+      const rootA: Node<'float'> = div(q, a).toVar(`${namePrefix}RootA${suffix}`);
+      const rootB: Node<'float'> = div(c, q).toVar(`${namePrefix}RootB${suffix}`);
       t1.assign(select(bPositive, rootB, rootA));
       t2.assign(select(bPositive, rootA, rootB));
     });
@@ -60,12 +61,17 @@ function stableRoots(
 }
 
 /** Solve a quadratic curve's intersections with a horizontal ray at y=0. */
-export function solveHorizontalPolynomial(p0: Node<'vec2'>, p1: Node<'vec2'>, p2: Node<'vec2'>): Node<'vec2'> {
+export function solveHorizontalPolynomial(
+  p0: Node<'vec2'>,
+  p1: Node<'vec2'>,
+  p2: Node<'vec2'>,
+  suffix: string,
+): Node<'vec2'> {
   const twiceP1Y: Node<'float'> = mul(p1.y, 2);
   const p0MinusTwiceP1Y: Node<'float'> = sub(p0.y, twiceP1Y);
   const a: Node<'float'> = add(p0MinusTwiceP1Y, p2.y);
   const b: Node<'float'> = sub(p0.y, p1.y);
-  const roots = stableRoots(a, b, p0.y, 'slugHorizontal');
+  const roots = stableRoots(a, b, p0.y, 'slugHorizontal', suffix);
   const twiceP1X: Node<'float'> = mul(p1.x, 2);
   const p0MinusTwiceP1X: Node<'float'> = sub(p0.x, twiceP1X);
   const ax: Node<'float'> = add(p0MinusTwiceP1X, p2.x);
@@ -82,12 +88,17 @@ export function solveHorizontalPolynomial(p0: Node<'vec2'>, p1: Node<'vec2'>, p2
 }
 
 /** Solve a quadratic curve's intersections with a vertical ray at x=0. */
-export function solveVerticalPolynomial(p0: Node<'vec2'>, p1: Node<'vec2'>, p2: Node<'vec2'>): Node<'vec2'> {
+export function solveVerticalPolynomial(
+  p0: Node<'vec2'>,
+  p1: Node<'vec2'>,
+  p2: Node<'vec2'>,
+  suffix: string,
+): Node<'vec2'> {
   const twiceP1X: Node<'float'> = mul(p1.x, 2);
   const p0MinusTwiceP1X: Node<'float'> = sub(p0.x, twiceP1X);
   const a: Node<'float'> = add(p0MinusTwiceP1X, p2.x);
   const b: Node<'float'> = sub(p0.x, p1.x);
-  const roots = stableRoots(a, b, p0.x, 'slugVertical');
+  const roots = stableRoots(a, b, p0.x, 'slugVertical', suffix);
   const twiceP1Y: Node<'float'> = mul(p1.y, 2);
   const p0MinusTwiceP1Y: Node<'float'> = sub(p0.y, twiceP1Y);
   const ay: Node<'float'> = add(p0MinusTwiceP1Y, p2.y);

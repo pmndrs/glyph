@@ -62,6 +62,7 @@ function accumulateCurveRoots(
   thickenFactor: Node<'float'>,
   coverage: Node<'float'>,
   weight: Node<'float'>,
+  suffix: string,
 ): void {
   const namePrefix = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical';
   const polynomial0: Node<'float'> = axis === 'horizontal' ? p0.y : p0.x;
@@ -69,7 +70,7 @@ function accumulateCurveRoots(
   const polynomial2: Node<'float'> = axis === 'horizontal' ? p2.y : p2.x;
   const rootCode: Node<'uint'> = namedUint(
     calcRootCode(polynomial0, polynomial1, polynomial2),
-    `${namePrefix}RootCode`,
+    `${namePrefix}RootCode${suffix}`,
   );
   // A curve wholly beyond the fragment's half-pixel window crosses the ray at full coverage with zero weight; its roots
   // lie within its control points' hull, so the solve is skipped with no change in either.
@@ -82,16 +83,19 @@ function accumulateCurveRoots(
   If(beyond, () => {
     coverage.addAssign(axis === 'horizontal' ? sub(crossing(0), crossing(8)) : sub(crossing(8), crossing(0)));
   }).ElseIf(greaterThan(float(rootCode), 0), () => {
-    const roots = axis === 'horizontal' ? solveHorizontalPolynomial(p0, p1, p2) : solveVerticalPolynomial(p0, p1, p2);
-    const firstRoot: Node<'float'> = namedFloat(mul(roots.x, pixelsPerEm), `${namePrefix}Root1`);
-    const secondRoot: Node<'float'> = namedFloat(mul(roots.y, pixelsPerEm), `${namePrefix}Root2`);
+    const roots =
+      axis === 'horizontal'
+        ? solveHorizontalPolynomial(p0, p1, p2, suffix)
+        : solveVerticalPolynomial(p0, p1, p2, suffix);
+    const firstRoot: Node<'float'> = namedFloat(mul(roots.x, pixelsPerEm), `${namePrefix}Root1${suffix}`);
+    const secondRoot: Node<'float'> = namedFloat(mul(roots.y, pixelsPerEm), `${namePrefix}Root2${suffix}`);
     const hasFirstRoot: Node<'bool'> = namedBool(
       greaterThan(float(uintBitAnd(rootCode, uint(1))), 0),
-      `${namePrefix}HasRoot1`,
+      `${namePrefix}HasRoot1${suffix}`,
     );
     const hasSecondRoot: Node<'bool'> = namedBool(
       greaterThan(float(uintBitAnd(rootCode, uint(0x100))), 0),
-      `${namePrefix}HasRoot2`,
+      `${namePrefix}HasRoot2${suffix}`,
     );
     const firstContribution: Node<'float'> = select(hasFirstRoot, saturate(add(mul(firstRoot, thickenFactor), 0.5)), 0);
     const secondContribution: Node<'float'> = select(
@@ -124,13 +128,14 @@ function evaluateBandCurve(
   localReferenceOffset: Node<'uint'>,
   coverage: Node<'float'>,
   weight: Node<'float'>,
+  suffix: string,
 ): void {
   const entry: Node<'uint'> = uintAdd(uintAdd(glyph.referenceBase, localReferenceOffset), uint(index));
   const curve = loadBandCurve(page, entry);
   const namePrefix = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical';
-  const p0: Node<'vec2'> = namedVec2(vec2Sub(curve.p0, renderCoordinate), `${namePrefix}P0`);
-  const p1: Node<'vec2'> = namedVec2(vec2Sub(curve.p1, renderCoordinate), `${namePrefix}P1`);
-  const p2: Node<'vec2'> = namedVec2(vec2Sub(curve.p2, renderCoordinate), `${namePrefix}P2`);
+  const p0: Node<'vec2'> = namedVec2(vec2Sub(curve.p0, renderCoordinate), `${namePrefix}P0${suffix}`);
+  const p1: Node<'vec2'> = namedVec2(vec2Sub(curve.p1, renderCoordinate), `${namePrefix}P1${suffix}`);
+  const p2: Node<'vec2'> = namedVec2(vec2Sub(curve.p2, renderCoordinate), `${namePrefix}P2${suffix}`);
   const maximum0: Node<'float'> = axis === 'horizontal' ? p0.x : p0.y;
   const maximum1: Node<'float'> = axis === 'horizontal' ? p1.x : p1.y;
   const maximum2: Node<'float'> = axis === 'horizontal' ? p2.x : p2.y;
@@ -138,7 +143,7 @@ function evaluateBandCurve(
   If(lessThan(maximum, -0.5), () => {
     index.assign(curveCount);
   }).Else(() => {
-    accumulateCurveRoots(p0, p1, p2, axis, pixelsPerEm, thickenFactor, coverage, weight);
+    accumulateCurveRoots(p0, p1, p2, axis, pixelsPerEm, thickenFactor, coverage, weight, suffix);
     index.addAssign(1);
   });
 }
@@ -150,6 +155,7 @@ export function evaluateBand(
   axis: 'horizontal' | 'vertical',
   pixelsPerEm: Node<'float'>,
   thickenFactor: Node<'float'>,
+  suffix: string,
 ): SlugBandEvaluation {
   const coordinate: Node<'float'> = axis === 'horizontal' ? renderCoordinate.y : renderCoordinate.x;
   const transformScale: Node<'float'> = axis === 'horizontal' ? glyph.bandTransform.y : glyph.bandTransform.x;
@@ -161,16 +167,22 @@ export function evaluateBand(
   const maximumBandIndex: Node<'float'> = sub(float(declaredBandCount), 1);
   const clampedBandIndex: Node<'float'> = clamp(transformedCoordinate, 0, maximumBandIndex);
   const bandIndex: Node<'uint'> = uint(clampedBandIndex);
-  const header: Node<'uint'> = loadHeader(page, uintAdd(headerBase, bandIndex), axis);
+  const header: Node<'uint'> = loadHeader(page, uintAdd(headerBase, bandIndex), axis, suffix);
   const localReferenceOffset: Node<'uint'> = namedUint(
     bandReferenceOffset(header),
-    axis === 'horizontal' ? 'slugHorizontalReferenceOffset' : 'slugVerticalReferenceOffset',
+    `${axis === 'horizontal' ? 'slugHorizontalReferenceOffset' : 'slugVerticalReferenceOffset'}${suffix}`,
   );
-  const coverage: Node<'float'> = namedFloat(float(0), axis === 'horizontal' ? 'slugXCoverage' : 'slugYCoverage');
-  const weight: Node<'float'> = namedFloat(float(0), axis === 'horizontal' ? 'slugXWeight' : 'slugYWeight');
+  const coverage: Node<'float'> = namedFloat(
+    float(0),
+    `${axis === 'horizontal' ? 'slugXCoverage' : 'slugYCoverage'}${suffix}`,
+  );
+  const weight: Node<'float'> = namedFloat(
+    float(0),
+    `${axis === 'horizontal' ? 'slugXWeight' : 'slugYWeight'}${suffix}`,
+  );
   const curveCount: Node<'int'> = int(bandCount(header));
   const curveIndex: Node<'int'> = int(0).toVar(
-    axis === 'horizontal' ? 'slugHorizontalCurveIndex' : 'slugVerticalCurveIndex',
+    `${axis === 'horizontal' ? 'slugHorizontalCurveIndex' : 'slugVerticalCurveIndex'}${suffix}`,
   );
   whileLoop(intLessThan(curveIndex, curveCount), () =>
     evaluateBandCurve(
@@ -185,6 +197,7 @@ export function evaluateBand(
       localReferenceOffset,
       coverage,
       weight,
+      suffix,
     ),
   );
 

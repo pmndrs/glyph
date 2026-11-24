@@ -95,8 +95,12 @@ export function slugShader(instance: TslSlugInstanceNodes, resources: TslSlugSha
   const position = TSL.Fn(() =>
     slugVertexPosition(instance, resources, renderCoordinate, { slugDilate, slugDilateMatrix }),
   )();
-  const coverageAt = (coordinate: Node<'vec2'>): Node<'float'> =>
-    TSL.Fn(() =>
+  // The default `coverage` is the first evaluation and keeps the plain names; each later call gets `At1`, `At2`, …
+  let evaluations = 0;
+  const coverageAt = (coordinate: Node<'vec2'>): Node<'float'> => {
+    const nameSuffix = evaluations === 0 ? '' : `At${evaluations}`;
+    evaluations += 1;
+    return TSL.Fn(() =>
       slugRender(
         resources.page,
         {
@@ -109,9 +113,10 @@ export function slugShader(instance: TslSlugInstanceNodes, resources: TslSlugSha
           bandTransform: instance.bandTransform,
         },
         coordinate,
-        renderOptions(resources.fillRule),
+        { ...renderOptions(resources.fillRule), nameSuffix },
       ),
     )();
+  };
   const coverage = coverageAt(renderCoordinate);
 
   return {

@@ -18,7 +18,7 @@ generated:
 # Issue 09: a second `shader.coverageAt` call floods the console with renamed-declaration warnings
 
 - **Severity:** should-fix (correct shader, but dozens of warnings per material build hide real ones)
-- **Status:** open
+- **Status:** fixed — each `coverageAt` evaluation after the first gets an `At<n>` name suffix; the shader test compiles three evaluations on both backends with no rename warning
 
 ## What happens
 

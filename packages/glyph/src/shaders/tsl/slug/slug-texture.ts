@@ -35,10 +35,11 @@ export function loadHeader(
   page: SlugShaderPage,
   index: Node<'uint'>,
   axis: 'horizontal' | 'vertical',
-  namePrefix: string = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical',
+  suffix: string,
 ): Node<'uint'> {
+  const namePrefix = axis === 'horizontal' ? 'slugHorizontal' : 'slugVertical';
   const texel: Node<'vec4'> = textureLoad(page.headerTexture, gridCoordinate(index, page.headerWidth));
-  return namedUint(uint(texel.x), `${namePrefix}Header`);
+  return namedUint(uint(texel.x), `${namePrefix}Header${suffix}`);
 }
 
 /** One band entry's curve, in one load. */

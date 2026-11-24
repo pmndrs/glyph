@@ -58,6 +58,49 @@ test('Slug material positions stay vertex-computed when a composed fragment read
   font.dispose();
 });
 
+test('Slug coverageAt evaluated beside the default coverage declares each variable once', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await loadFormatFont['pmndrs.slug']();
+  const material = defineTextMaterial((context) => {
+    const composed = context.createDefaultMaterial();
+    const { shader } = context;
+    const shifted = shader.coverageAt(shader.renderCoordinate.add(TSL.vec2(0.01, 0)));
+    const lifted = shader.coverageAt(shader.renderCoordinate.add(TSL.vec2(0, 0.01)));
+    composed.opacityNode = shader.coverage.add(shifted).add(lifted).div(3);
+    return composed;
+  });
+  const scene = new THREE.Scene();
+  const label = three.createText({ font, material, text: 'A' });
+  scene.add(label);
+  scene.updateMatrixWorld();
+  assertCommitted(label);
+  const draw = rootDraws(scene)[0];
+  assert.ok(draw, 'a real Slug draw must reach material realization');
+
+  const warnings = [];
+  const warn = console.warn;
+  console.warn = (...args) => warnings.push(args.join(' '));
+  let stages;
+  try {
+    stages = compileNodeMaterialBackends(draw, { scene });
+  } finally {
+    console.warn = warn;
+  }
+  assert.deepEqual(
+    warnings.filter((message) => message.includes('already in use')),
+    [],
+    'three coverage evaluations must not collide on declaration names',
+  );
+  for (const [backend, { fragment }] of Object.entries(stages)) {
+    for (const name of ['slugSample', 'slugSampleAt1', 'slugSampleAt2']) {
+      assert.match(fragment, new RegExp(`\\b${name}\\b`), `${backend} keeps a readable name for each evaluation`);
+    }
+  }
+
+  label.dispose();
+  font.dispose();
+});
+
 // Each built-in glyph format with an underline, so the decoration program is realized beside it.
 for (const shaders of ['stable', 'typegpu']) {
   for (const transformMode of ['direct', 'indexed']) {
