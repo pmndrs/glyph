@@ -1,26 +1,43 @@
 ---
 title: Examples
-description: Explore every Glyph example in the live gallery, then open focused demos for recording or inspection.
-nav: 3
+description: Every live demo in one gallery, and a clean full-page route for each.
+nav: 2
 ---
 
 <link rel="stylesheet" href="/docs/assets/explainer.css" />
 <script type="module" src="/docs/assets/explainer.js"></script>
-<glyph-explainer-root id="example-highlights" data-explainer-page="scene" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+<glyph-explainer-root id="scenes" data-explainer-page="motion scene" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
 
-# Examples
+The <a href="/examples/">examples gallery</a> lists every demo used on this site. A card starts when you rest on it,
+touch it or focus it, and each has a full-page route, `/examples/?example=<name>`, for recording or inspection.
 
-The [examples gallery](/examples/) is the canonical catalog. It is generated from one typed scene table, starts a
-card only after you engage it, and provides a focused fullscreen route for every demo. That keeps this documentation
-page light while ensuring newly added examples appear in one place rather than in several hand-maintained grids.
+Each demo is one feature and a few dozen lines. Its source is in the repository under
+`site/examples/src/scenes/<name>/`: `scene.tsx` is the React Three Fiber scene that runs, and `three.ts` states the
+same thing in plain three.js.
 
-## New material studies
+## Showcases
 
-These newer scenes are part of that same catalog and run through the same inline renderer as the rest of the docs.
+These combine several features. Each links to the guide that explains its main technique.
 
-<glyph-proxy fit="cover" root="example-highlights" data-scene="card-cycle" aria-label="Black and gold playing cards flipping between faces" aspect="16 / 9" />
+<glyph-proxy fit="cover" root="scenes" data-scene="kinetic" aria-label="Kinetic typography wrapped around a torus knot" aspect="16 / 9" />
 
-<glyph-proxy fit="cover" root="example-highlights" data-scene="marble-type" aria-label="Type striking procedural marble with cracks and camera shake" aspect="16 / 9" />
+Kinetic typography: a passage typed onto a render target that wraps a knot. See
+[Custom materials](/guides/scene/custom-materials).
 
-Open [Card cycle](/examples/?example=card-cycle) or [Marble type](/examples/?example=marble-type) directly when you
-need a clean recording surface.
+<glyph-proxy fit="cover" root="scenes" data-scene="split-flap" aria-label="A split-flap departure board" aspect="16 / 9" />
+
+A split-flap board built from grouped text. See [Group and batch](/guides/scene/group-and-batch).
+
+<glyph-proxy fit="cover" root="scenes" data-scene="card-cycle" aria-label="Playing cards flipping between faces" aspect="16 / 9" />
+
+Lit playing cards with text as part of the material. See [Custom materials](/guides/scene/custom-materials).
+
+<glyph-proxy fit="cover" root="scenes" data-scene="marble-type" aria-label="Type striking procedural marble" aspect="16 / 9" />
+
+Type struck into procedural marble. See [Custom materials](/guides/scene/custom-materials).
+
+## See also
+
+- [Introduction](/getting-started/introduction)
+- [Your first text with React Three Fiber](/tutorials/first-text-react)
+- [Animate glyphs](/guides/scene/animate-glyphs)

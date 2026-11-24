@@ -1,299 +1,89 @@
 ---
 title: Introduction
-description: Portable font baking, Unicode shaping, paragraph layout, and batched text rendering for every Canvas.
+description: What @pmndrs/glyph is, what it can do, and where to go next.
 nav: 0
 ---
 
-<Intro>
-  `@pmndrs/glyph` shapes and lays out text in Rust/Wasm, then publishes a retained render plan for the active renderer.
-  The maintained Three.js integration supports Bitmap, MSDF, and Slug through WebGPU and Three's WebGL fallback.
-</Intro>
-
-## Install
-
-```sh
-npm install @pmndrs/glyph
-```
-
-## Render text with React Three Fiber
-
-```tsx
-import { Text, TextGroup } from '@pmndrs/glyph/react';
-import { useMsdf } from '@pmndrs/glyph/react';
-
-const interUrl = '/fonts/Inter.font.glb';
-
-// Start the load before React first renders a component that asks for it.
-useMsdf.preload(interUrl);
-
-function Labels() {
-  const inter = useMsdf(interUrl);
-
-  return (
-    <TextGroup>
-      <Text
-        font={inter}
-        constraints={{ width: { mode: 'at-most', size: 480 } }}
-        layout={{ wrap: 'word' }}
-        style={{ color: '#f4f7ff', fontSize: 32, lineHeight: 1.2 }}
-      >
-        Hello <Text style={{ color: '#70d6ff' }}>world</Text>
-      </Text>
-    </TextGroup>
-  );
-}
-```
-
-A font is one source plus the raster format you want it read through. `useMsdf`, `useBitmap`, and `useSlug` are
-convenience hooks over the generic `useFont(src, { format })`, which takes any registered format — including
-`msdf({ emSize, pixelRange })` or `bitmap({ strikes: [16, 32] })` when the defaults are not what you want.
-
-`Text` is a retained paragraph and a Three `Object3D`. A nested `Text` is a span, and inherits the surrounding
-font, style, paint, and material unless it overrides them.
-
-`TextGroup` is an optional batching and ordering boundary. It collects descendant `Text` objects through the
-ordinary scene graph, so regular Three groups may appear between them. A standalone `Text` has the same text
-semantics and lazily owns an implicit batch of one.
-
-## Ordering and batching
-
-Glyph may coalesce compatible spans inside one `Text`; ordering between separate paragraphs remains explicit in the
-Three scene graph. Use `TextGroup` and ordinary Three hierarchy or `renderOrder` controls when text overlaps and its
-paint order matters. There is no compositing mode to configure on the Three adapter.
-
-```tsx
-import { glyph } from '@pmndrs/glyph';
-import { GlyphProvider } from '@pmndrs/glyph/react';
-import { defineThreeConfig } from '@pmndrs/glyph/three';
-import type { ReactNode } from 'react';
-
-await glyph.init();
-const handle = glyph.handle('my-app', defineThreeConfig());
-
-function Scene({ children }: { children: ReactNode }) {
-  return <GlyphProvider handle={handle}>{children}</GlyphProvider>;
-}
-```
-
-## An inline scene proxy
-
-The docs page can host a Three scene without making the docs application an R3F application. The root is a custom
-element that owns a bounded pool of logical R3F roots on one physical offscreen renderer; each proxy is an ordinary page
-element that receives a copied frame. Every scene uses one fixed virtual frame sized from the page's registered proxies.
-Each proxy centers that complete frame and lets its own HTML bounds clip it, so presentation can transfer the bitmap
-directly without a pixel crop. The same path uses one WebGPU device or one WebGL context. Proxies can be placed anywhere
-in the MDX document and bind to the root by id.
-
 <link rel="stylesheet" href="/docs/assets/explainer.css" />
 <script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="introduction" max-slots="2" idle-ttl="5000" opaque />
 
-<glyph-explainer-root
-  id="introduction-glyph-scene"
-  data-explainer-page="introduction"
-  max-slots="4"
-  idle-ttl="5000"
-  opaque
-/>
-
-<glyph-proxy
-  id="introduction-glyph-proxy"
-  height="18rem"
-  root="introduction-glyph-scene"
-  data-scene="glyph"
-  role="button"
-  aria-label="The glyph scene rendered by one offscreen Three host"
-/>
-
-<glyph-scene-control
-  root="introduction-glyph-scene"
-  proxy="introduction-glyph-proxy"
-  data-scene="glyph"
->
-  Glyph
-</glyph-scene-control>
-<glyph-scene-control
-  root="introduction-glyph-scene"
-  proxy="introduction-glyph-proxy"
-  data-scene="shaping"
->
-  Shaping
-</glyph-scene-control>
-
-Several targets may be visible together: the controller grows its pooled offscreen roots to the page's four-slot cap,
-then retires idle roots after the TTL. If more than four proxies intersect, the proxies nearest the viewport center keep
-their leases. A proxy without a lease keeps the last frame it was given, and its scene stays mounted and paused until
-its root is needed for another proxy, so scrolling back resumes it where it stopped. Scroll to move them in and out of
-the pool. Click either proxy
-to send a targeted pointerdown through the root's ordered page-local stream and change only that scene's word color. Pointer motion is
-coalesced to one update per 30 ms; clicks, keys, controls, and scene changes flush immediately in occurrence order.
-
-<glyph-proxy
-  id="introduction-canvas-proxy"
-  height="18rem"
-  root="introduction-glyph-scene"
-  data-scene="shaping"
-  role="button"
-  aria-label="The canvas scene rendered by the same offscreen Three host"
-/>
-
-The component is just HTML from the MDX compiler. Its JavaScript class is registered with
-`customElements.define`, so this remains compatible with the React components supplied by `pmndrs/docs` while
-keeping the Three renderer, font cache, and animation loop outside the docs React tree.
-
-## Explainer scenes
-
-Each feature below is a normal MDX proxy with its own declarative `data-scene`. The root keeps several scenes
-warm, pauses scenes whose proxies leave the viewport, and recycles the least recently used idle root when the pool
-limit is reached. A `poster` attribute names an image to show until the scene's first frame arrives.
-
-### Bitmap, MSDF, and Slug
-
-The title uses Lovers+Quarrel Slug, the subtitle uses Geist MSDF, and the small copy uses VT323 bitmap. They are
-three independent text objects in one scene, so the demo makes the technique choice visible instead of changing a
-CSS font.
+<Intro>
+  `@pmndrs/glyph` is a typography engine for web graphics. It bakes fonts ahead of time, shapes and lays out text in a
+  Rust/Wasm engine, and draws it as batched GPU text in three.js, React Three Fiber, Vue with TresJS, TypeGPU and
+  PixiJS 3D.
+</Intro>
 
 <glyph-proxy
   id="introduction-techniques-proxy"
   height="18rem"
-  root="introduction-glyph-scene"
+  root="scenes"
   data-scene="techniques"
-  aria-label="Slug, MSDF, and bitmap text techniques"
+  aria-label="One scene drawing a Slug title, an MSDF subtitle and bitmap small print"
 />
 
-### Styling and spans
+The title above is drawn from vector outlines in the shader (Slug), the subtitle from a multi-channel distance field
+(MSDF) and the small print from a bitmap strike. They are three ordinary scene objects in one WebGPU scene.
 
-Nested `Text` keeps one paragraph while letting each inline run carry its own style. The scene gently floats so the
-material and the retained text remain visibly live.
+## What it does
 
-<glyph-proxy
-  id="introduction-styling-proxy"
-  height="14rem"
-  root="introduction-glyph-scene"
-  data-scene="styling"
-  aria-label="Styled glyph spans"
-/>
-
-### Positioning
-
-Glyphs are regular Three objects, so they can sit at different positions and depths while a parent group animates.
-
-<glyph-proxy
-  id="introduction-positioning-proxy"
-  height="14rem"
-  root="introduction-glyph-scene"
-  data-scene="positioning"
-  aria-label="Positioned glyph objects"
-/>
-
-### Labels in a 3D scene
-
-This reusable explainer composes scene labels and interface text over a lightweight archviz environment. Drag to orbit
-six deterministic object types: their rounded forms share an instanced batch, while the centered icon and MSDF labels
-share a billboarded world-label layer.
+- **Real shaping.** Text is shaped by a HarfBuzz-compatible shaper, so ligatures, kerning, complex scripts and
+  right-to-left text come out as the font intends. See [Languages and scripts](/guides/text/languages-and-scripts)
+  and [Bidirectional text](/guides/text/bidirectional-text).
+- **Paragraph layout.** Wrapping, alignment, justification, truncation, columns, text that flows through regions and
+  around shapes, and drop caps. Start at [Size a paragraph](/guides/layout/size-a-paragraph).
+- **Three raster formats.** Bitmap, MSDF and Slug, chosen per font at load.
+  [Raster formats](/explanation/formats) explains the trade-offs.
+- **Rich text.** Spans with their own style, font and material inside one paragraph. See
+  [Rich text](/guides/text/rich-text).
+- **Measurement and inspection.** Paragraph and line metrics, per-glyph data and outlines, available before the
+  frame that draws them. See [Measure text](/guides/inspect/measure-text).
+- **Editing geometry.** Hit testing, carets, selection rectangles, movement by grapheme, word and line, and exact
+  edits. Build a field in [An editable text field](/tutorials/editable-text-field).
+- **Scene integration.** Text is a scene object: it takes transforms, depth, custom materials, post-processing and
+  frustum culling, and compatible draws batch. See [Place text in 3D](/guides/scene/place-text-in-3d).
+- **Per-glyph animation.** A laid-out paragraph can be split into glyphs you move yourself. See
+  [Animate glyphs](/guides/scene/animate-glyphs).
 
 <glyph-proxy
   id="introduction-object-showcase-proxy"
   height="22rem"
-  root="introduction-glyph-scene"
+  root="scenes"
   data-scene="object-showcase"
   role="application"
-  aria-label="Interactive labeled objects in a three-quarter 3D scene"
+  aria-label="Labeled objects in a 3D scene; drag to orbit"
 />
 
-### Columns
-
-The column example uses one paragraph with an exact content box and two ordered columns. Its small animated drift
-helps distinguish a live layout from a static screenshot.
-
-<glyph-proxy
-  id="introduction-columns-proxy"
-  height="18rem"
-  root="introduction-glyph-scene"
-  data-scene="columns"
-  aria-label="A two-column glyph paragraph"
-/>
-
-### A multilingual font stack
-
-The Latin MSDF face is primary and the bundled M PLUS 1p Japanese face is a fallback. The same paragraph therefore
-shapes `glyph`, `文字`, and `字形` through one `createFontStack` selection.
-
-<glyph-proxy
-  id="introduction-font-stack-proxy"
-  height="14rem"
-  root="introduction-glyph-scene"
-  data-scene="font-stack"
-  aria-label="A Latin and Japanese font stack"
-/>
-
-### Icons
-
-Font Awesome Solid is baked as a small MSDF subset. These icons are glyphs too, so they share the same layout and
-proxy path while the group rotates slowly.
-
-<glyph-proxy
-  id="introduction-icons-proxy"
-  height="14rem"
-  root="introduction-glyph-scene"
-  data-scene="icons"
-  aria-label="Animated Font Awesome icon glyphs"
-/>
-
-### Editing
-
-Focus the proxy and type to edit text. Click to move the caret, or drag across the line to select a range. The scene
-raycasts the pointer onto the `Text` plane, converts the hit to Text-local coordinates, and asks the text itself:
-`hitTest()` for the position, `caret()` and `rangeRects()` for what to draw, `move()` for the arrow keys and
-`replace()` for each keystroke.
-
-<glyph-proxy
-  id="introduction-editing-proxy"
-  height="14rem"
-  root="introduction-glyph-scene"
-  data-scene="editing"
-  role="textbox"
-  aria-multiline="false"
-  aria-label="Editable glyph text region"
-/>
-
-### Break apart and pulse
-
-Click the explainer to create two detached `Glyphs` branches: a Geist MSDF title and a tight VT323 bitmap copy block.
-Every glyph gets its own sleeping Box3D body, so a click wakes only the nearby glyphs and leaves the rest floating in
-place. Reset disposes the branches and makes the live `Text` objects visible again. Physics remains application-owned;
-`Glyphs.measurements` is the data a physics adapter can use to choose its own body shapes.
+Drag to orbit. The labels and the interface text are Glyph text in the same scene as the objects.
 
 <glyph-proxy
   id="introduction-physics-proxy"
   height="22rem"
-  root="introduction-glyph-scene"
+  root="scenes"
   data-scene="physics"
   role="button"
-  aria-label="Glyph break-apart impulse and reset demo"
+  aria-label="Click to break the text into glyphs driven by a physics engine"
 />
-<glyph-scene-control
-  root="introduction-glyph-scene"
-  proxy="introduction-physics-proxy"
-  data-action="reset"
->
-Reset physics
+<glyph-scene-control root="scenes" proxy="introduction-physics-proxy" data-action="reset">
+  Reset
 </glyph-scene-control>
 
-This example uses Isaac Mason's `box3d.js` WebAssembly bindings to create one sleeping rigid body per
-detached glyph and a six-sided boundary aligned to the proxy viewport. The physics adapter chooses
-box bodies from each glyph's `localInkBounds` transformed by the detached root's `matrixWorld`, applies a gentle
-world-space radial impulse from the click point, then hoists one inverse per detached root and writes each Box3D world
-transform through `worldToLocalMatrix()` and `Glyphs.setMatrixAt()`;
-the glyph package does not own the physics world. `box3d.js` and the Box3D engine are MIT licensed;
-their license notices remain in the installed package.
+Click the text. Each paragraph is split into glyphs, and an application-owned physics engine moves them.
 
-## Bake a font
+## Where to go next
 
-Fonts are baked ahead of time into a `.font.glb` carrying the shaping data and every raster you ask for.
+| You want to | Go to |
+| --- | --- |
+| Install the package | [Installation](/getting-started/installation) |
+| Put your first text on screen | [Your first text with React Three Fiber](/tutorials/first-text-react) or [with three.js](/tutorials/first-text-three) |
+| Complete a specific task | the guides, grouped in the sidebar by area: fonts, text, layout, editing, inspect, scene, renderers, project |
+| Look up a name, an option or an error | the reference, starting at [`glyph`](/reference/glyph), [`Text`](/reference/three-text) and [Errors](/reference/errors) |
+| Understand how it works | [How it works](/explanation/how-it-works) and [When layout runs](/explanation/when-layout-runs) |
+| Browse every live demo | [Examples](/getting-started/examples) |
+| Upgrade from 0.1 | [Migrate from 0.1](/guides/project/migrate-from-0.1) |
 
-```sh
-npx glyph bake --input Inter-Regular.ttf --output inter.font.glb \
-  --unicodes U+0020-007E --bitmap 32 --msdf --slug
-```
+## About the live demos
 
-`--unicodes` subsets the shaping font, so an artifact only carries the coverage you render.
+Every demo on this site is a real scene, not a video. A page has one renderer and one GPU device however many demos
+it shows. A demo shows a still image until its scene has loaded, runs while it is on screen, and holds its last frame
+when you scroll past it. Demos that take input say so in the sentence below them.

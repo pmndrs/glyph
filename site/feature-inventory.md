@@ -6,11 +6,12 @@ read from the package: `packages/glyph/package.json` `exports`, the entry module
 
 Status values:
 
-- **Page**: `done` (written for 0.2.0 and its snippets typecheck), `scaffold` (code blocks plus writing notes inherited
-  from the pre-0.2.0 branches; prose not written), `none`.
-- **Demo**: the scene slug under `site/examples/src/scenes/`, or `none`. `n/a` where a live scene would not clarify.
+- **Page**: the page under `site/docs/` that documents the feature. Every page listed is written for 0.2.0 and its
+  `ts`/`tsx` fences typecheck against the package (`site:check-snippets`).
+- **Demo**: the scene slug under `site/examples/src/scenes/`, `none` where a demo is still missing, or `n/a` where a
+  live scene would not clarify or cannot run on the docs host.
 - **Verified**: `yes` when `site:verify-pages` has driven the demo live on its docs page in Chromium with no console
-  error; `no` otherwise.
+  error (last run 2026-11-24); `n/a` without a demo.
 
 ## Information architecture
 
@@ -24,8 +25,9 @@ The site follows Diátaxis. Each page has one purpose; pages link across purpose
 | `reference/`          | reference     | look up a name, option, default or error | embeds a demo only where a picture defines the term                   |
 | `explanation/`        | explanation   | understand why it works this way         | `fonts`, `scene`                                                      |
 
-Renderer-specific pages (React Three Fiber, Vue/TresJS, TypeGPU, PixiJS 3D) are how-to guides under `guides/renderers/`
-and reference pages under `reference/`.
+Renderer-specific pages (three.js, React Three Fiber, Vue/TresJS, TypeGPU, PixiJS 3D) are how-to guides under
+`guides/renderers/` and reference pages under `reference/`. The site has 96 pages: 3 routing, 3 tutorials, 54 how-to
+guides, 28 reference and 8 explanation.
 
 ### Explainer sections
 
@@ -61,143 +63,127 @@ Listed so nobody looks for them: hyphenation, variable-font axes, vertical writi
 
 ### Setup and lifecycle
 
-| Feature                      | Public surface                                                                                                        | Page                                    | Demo     | Verified |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | -------- | -------- |
-| Install, peers, entry points | `package.json` `exports`                                                                                              | `getting-started/installation` scaffold | n/a      | n/a      |
-| Engine start                 | `glyph.init(options)`, `glyph.initialized`                                                                            | `reference/glyph` none                  | n/a      | n/a      |
-| Handles and roots            | `glyph.handle(name, config)`, `ThreeHandle`, `ThreeRoot`, `root.attach(scene)`, `root.onInvalidate`, `root.dispose()` | `reference/three/roots` none            | `groups` | no       |
-| Frame preparation            | `glyph.shape()`, `glyph.prepare()`, deferred never-stale reads                                                        | `explanation/when-layout-runs` none     | none     | no       |
-| Renderer config              | `defineThreeConfig({ capacity, transformMode, defaultFontFormat, material, msdfAtlas, maxTextUnits })`, `ThreeConfig` | `reference/three/config` none           | none     | no       |
-| Buffer capacity policy       | `GlyphBufferCapacity` `grow` / `chunk` / `fixed`                                                                      | `guides/performance/capacity` none      | none     | no       |
-| Publication state            | `text.commitState()` `unbound` / `pending` / `committed`                                                              | `reference/three/text` none             | none     | no       |
+| Feature                                   | Public surface                                                                               | Page                                                       | Demo         | Verified |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------ | -------- |
+| Install, peers, entry points              | `package.json` `exports`                                                                     | `getting-started/installation`                             | n/a          | n/a      |
+| Engine start, handles, fonts, frame calls | `glyph.init`, `glyph.handle`, `glyph.fontFace`, `glyph.prepare`, `glyph.shape`               | `reference/glyph`                                          | n/a          | n/a      |
+| Roots                                     | `ThreeHandle`, `ThreeRoot`, `attach`, `onInvalidate`, `dispose`                              | `reference/three-root`, `guides/renderers/three`           | `groups`     | yes      |
+| When layout runs                          | deferred, never-stale preparation; `commitState()`                                           | `explanation/when-layout-runs`                             | n/a          | n/a      |
+| Renderer config                           | `defineThreeConfig`, `ThreeConfig`, `capacity`, `transformMode`, `msdfAtlas`, `maxTextUnits` | `reference/three-config`                                   | n/a          | n/a      |
+| First text                                | React and three.js                                                                           | `tutorials/first-text-react`, `tutorials/first-text-three` | `first-text` | yes      |
 
 ### Fonts
 
-| Feature                           | Public surface                                                                                           | Page                                                  | Demo                                                | Verified |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------- | -------- |
-| Declaring a face                  | `glyph.fontFace(source, { format })`, `FontFace.load()`, `FontFaceSource`                                | `guides/fonts/load-a-font` scaffold (`fonts/loading`) | `first-text`                                        | no       |
-| Formats                           | `bitmap`, `msdf`, `slug` and their options                                                               | `explanation/formats` scaffold (`fonts/techniques`)   | `techniques`, `text-ladder`, `zoom`, `slug-anatomy` | no       |
-| Bitmap strikes and pixel snapping | `bitmap({ strikes })`, `rasterPixelRatio`, `TextGroup.pixelSnapping`                                     | `guides/fonts/pixel-perfect-bitmap` none              | `text-ladder`                                       | no       |
-| MSDF atlas memory                 | `msdfAtlas: 'msdf' \| 'sdf'`, on-demand page residency                                                   | `guides/performance/memory` none                      | none                                                | no       |
-| Fallback stacks                   | `createFontStack`, `FontStack`, `missingGlyphCount`                                                      | `guides/fonts/fallback-stacks` scaffold               | none                                                | no       |
-| Icon fonts                        | a baked icon subset in a stack                                                                           | `guides/fonts/icons` none                             | `labels`                                            | no       |
-| Font metrics                      | `Font.metrics`, `FontMetrics`, `measure().fontMetrics`                                                   | `reference/glyph/font` none                           | `measurement`                                       | no       |
-| Baking with the CLI               | `glyph` bin: `bake`, project discovery, inspect                                                          | `guides/fonts/bake-fonts` scaffold (`fonts/baking`)   | n/a                                                 | n/a      |
-| Baking from Node                  | `@pmndrs/glyph/bake`: `bakeFont`, `bakeProject`, `inspectFont`, `fontIsUpToDate`, `validateFontArtifact` | `reference/bake` none                                 | n/a                                                 | n/a      |
-| Raster bakers                     | `@pmndrs/glyph/bakers/{bitmap,msdf,slug}`, `@pmndrs/glyph/baker` `rasterBake`, `defineRasterBaker`       | `reference/bakers` none                               | n/a                                                 | n/a      |
-| Coverage subsets                  | `RasterCoverage`, `RasterUnicodeRange`                                                                   | `guides/fonts/subset-coverage` none                   | n/a                                                 | n/a      |
-| Runtime baking in a worker        | `@pmndrs/glyph/runtime-bake` `bakeFontInWorker`, `BakeProgress`                                          | `guides/fonts/runtime-baking` scaffold                | none                                                | no       |
-| Transferring faces between realms | `FontFaceTransfer`, `SerializedFontFace`                                                                 | `reference/glyph/font-face` none                      | n/a                                                 | n/a      |
+| Feature                           | Public surface                                                                     | Page                                                    | Demo                                                             | Verified |
+| --------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------- | -------- |
+| Declaring and loading a face      | `glyph.fontFace`, `FontFace.load`, hooks                                           | `guides/fonts/load-a-font`, `reference/font-face`       | `first-text`                                                     | yes      |
+| Formats                           | `bitmap`, `msdf`, `slug`                                                           | `explanation/formats`, `reference/formats`              | `techniques`, `text-ladder`, `zoom`, `slug-anatomy`              | yes      |
+| Bitmap strikes and pixel snapping | `bitmap({ strikes })`, `rasterPixelRatio`, `pixelSnapping`                         | `guides/fonts/pixel-perfect-bitmap`                     | `fonts-bitmap-strikes`                                           | yes      |
+| Fallback stacks                   | `createFontStack`, `missingGlyphCount`                                             | `guides/fonts/fallback-stacks`, `reference/font-stack`  | `fonts-fallback`                                                 | yes      |
+| Icon fonts                        | private-use code points, stacks and spans                                          | `guides/fonts/icons`                                    | `fonts-icons`                                                    | yes      |
+| Baking with the CLI               | `glyph bake`, `glyph glyphs`, project discovery                                    | `guides/fonts/bake-fonts`, `reference/cli`              | n/a                                                              | n/a      |
+| Baking from Node                  | `bakeFont`, `bakeProject`, `inspectFont`, `fontIsUpToDate`, `validateFontArtifact` | `reference/bake`                                        | n/a                                                              | n/a      |
+| Raster bakers                     | `bakers/{bitmap,msdf,slug}`, `rasterBake`, `defineRasterBaker`                     | `reference/bakers`                                      | n/a                                                              | n/a      |
+| Coverage subsets                  | `--unicodes`, `unicodeRanges`, `RasterCoverage`                                    | `guides/fonts/subset-coverage`                          | n/a                                                              | n/a      |
+| Runtime baking                    | `bakeFontInWorker`, `BakeProgress`                                                 | `guides/fonts/runtime-baking`, `reference/runtime-bake` | none (the worker bundle does not resolve on the built docs host) | n/a      |
 
 ### Text content and style
 
-| Feature                        | Public surface                                                                            | Page                                                                      | Demo          | Verified |
-| ------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------- | -------- |
-| Creating and updating text     | `root.createText`, `Text` setters, `text.set(update)`                                     | `tutorials/first-text-three` scaffold (`getting-started/your-first-text`) | `first-text`  | no       |
-| Style properties               | `TextStyle`: `fontSize`, `lineHeight`, `letterSpacing`, `wordSpacing`, `color`, `opacity` | `guides/text/style-text` scaffold (`text/styling`)                        | `styling`     | no       |
-| Property lists and named rules | `PropertyList`, `TextStyle.create`, `ParagraphLayout.create`, `Constraints.create`        | `guides/text/reuse-styles` none                                           | `styling`     | no       |
-| Inline spans                   | `span`, `txt`, `FormattedText`, nested `<Text>` in React                                  | `guides/text/rich-text` scaffold                                          | `rich-text`   | no       |
-| Outline and shadow             | `TextStyle.outline`, `TextStyle.shadow`, `RasterTextEffect` (MSDF)                        | `guides/text/outline-and-shadow` none                                     | `effects`     | no       |
-| Decorations                    | `TextStyle.decoration` underline / overline / lineThrough, `Decorations`                  | `guides/text/decorations` none                                            | `decorations` | no       |
-| OpenType features              | `TextStyle.features`, `FontFeature` ranges                                                | `guides/text/opentype-features` none                                      | `styling`     | no       |
-| Language and script shaping    | `TextStyle.language`, complex-script shaping                                              | `guides/text/languages-and-scripts` none                                  | `shaping`     | no       |
-| Direction and bidi             | `TextStyle.direction` `auto` / `ltr` / `rtl`, mixed runs                                  | `guides/text/bidirectional-text` none                                     | none          | no       |
-| Text length limit              | `maxTextUnits`, lone surrogates as U+FFFD                                                 | `reference/errors` done (`text/errors`)                                   | n/a           | n/a      |
+| Feature                               | Public surface                                         | Page                                                | Demo                                                         | Verified |
+| ------------------------------------- | ------------------------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------ | -------- |
+| Style properties                      | `TextStyle` size, line height, spacing, color, opacity | `guides/text/style-text`, `reference/text-style`    | `text-style-basics`                                          | yes      |
+| Property lists and named rules        | `PropertyList`, `TextStyle.create`                     | `guides/text/reuse-styles`                          | `text-style-composition`                                     | yes      |
+| Inline spans                          | `span`, `txt`, nested `<Text>`                         | `guides/text/rich-text`, `reference/formatted-text` | `text-spans`                                                 | yes      |
+| Outline and shadow                    | `TextStyle.outline`, `TextStyle.shadow` (MSDF)         | `guides/text/outline-and-shadow`                    | `text-outline-shadow`                                        | yes      |
+| Decorations                           | `TextStyle.decoration`                                 | `guides/text/decorations`                           | `decorations`                                                | yes      |
+| OpenType features                     | `TextStyle.features`, `FontFeature`                    | `guides/text/opentype-features`                     | `text-opentype-features`                                     | yes      |
+| Languages, scripts, CJK line breaking | `TextStyle.language`, UAX #14                          | `guides/text/languages-and-scripts`                 | `text-language-shaping`, `text-cjk-line-breaking`, `shaping` | yes      |
+| Direction and bidi                    | `TextStyle.direction`                                  | `guides/text/bidirectional-text`                    | `text-bidi`                                                  | yes      |
 
 ### Paragraph layout
 
-| Feature                            | Public surface                                                                         | Page                                                                | Demo               | Verified |
-| ---------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------ | -------- |
-| Constraints                        | `Constraints.width` / `height` with `unconstrained` / `at-most` / `exact`              | `guides/layout/size-a-paragraph` scaffold (`text/paragraph-layout`) | `paragraph-layout` | no       |
-| Anchor                             | `Constraints.anchor` `{ x, y }`, nine vertical references, `measure().anchorOffset`    | `guides/layout/anchor-text` none                                    | none               | no       |
-| Wrapping                           | `ParagraphLayout.wrap` `none` / `word` / `character`, UAX #14 breaks                   | `guides/layout/wrap-and-align` none                                 | `paragraph-layout` | no       |
-| Alignment                          | `ParagraphLayout.align` `start` / `center` / `end` / `justify`                         | `guides/layout/wrap-and-align` none                                 | `paragraph-layout` | no       |
-| Justification                      | `justify.minWordSpaceRatio` / `maxWordSpaceRatio` / `letterSpaceExpansion`, `lastLine` | `guides/layout/justify` none                                        | `justify`          | no       |
-| Overflow and truncation            | `overflow` `visible` / `clip` / `ellipsis`, `maxLines`                                 | `guides/layout/truncate` none                                       | none               | no       |
-| Indent and paragraph spacing       | `firstLineIndent`, `spaceBefore`, `spaceAfter`                                         | `guides/layout/indent-and-spacing` none                             | none               | no       |
-| Columns                            | `ParagraphLayout.columns` `{ count, gap }`                                             | `guides/layout/columns` none                                        | none               | no       |
-| Flow regions                       | `flow.regions`, `TextFlowRegion`, rectangle and polygon shapes, `clip`                 | `guides/layout/flow-through-regions` none                           | none               | no       |
-| Exclusions                         | `TextFlowExclusion` `wrapSide`, margins                                                | `guides/layout/wrap-around-shapes` none                             | none               | no       |
-| Projected flow                     | `projectTextFlowBounds`, `projectTextFlowSilhouette`                                   | `guides/layout/wrap-around-3d-objects` none                         | none               | no       |
-| Drop caps                          | `ParagraphLayout.dropCap` lines, align, side, margins, contour                         | `guides/layout/drop-caps` none                                      | none               | no       |
-| CJK and mixed-script line breaking | UAX #14, kinsoku through the shaper                                                    | `guides/text/languages-and-scripts` none                            | none               | no       |
+| Feature                 | Public surface                                       | Page                                                         | Demo                                              | Verified |
+| ----------------------- | ---------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------- | -------- |
+| Constraints             | `Constraints.width` / `height` modes                 | `guides/layout/size-a-paragraph`, `reference/constraints`    | `layout-constraints`                              | yes      |
+| Anchor                  | `Constraints.anchor`, `anchorOffset`                 | `guides/layout/anchor-text`                                  | `layout-anchor`, `layout-anchor-references`       | yes      |
+| Wrapping and alignment  | `wrap`, `align`                                      | `guides/layout/wrap-and-align`, `reference/paragraph-layout` | `layout-wrap`, `layout-align`, `paragraph-layout` | yes      |
+| Justification           | `justify` bounds, `lastLine`                         | `guides/layout/justify`                                      | `justify`, `layout-justify-bounds`                | yes      |
+| Overflow and truncation | `overflow`, `maxLines`                               | `guides/layout/truncate`                                     | `layout-truncate`                                 | yes      |
+| Indent and spacing      | `firstLineIndent`, `spaceBefore`, `spaceAfter`       | `guides/layout/indent-and-spacing`                           | `layout-indent-spacing`                           | yes      |
+| Columns                 | `columns`                                            | `guides/layout/columns`                                      | `layout-columns`                                  | yes      |
+| Flow regions            | `flow.regions`                                       | `guides/layout/flow-through-regions`, `reference/text-flow`  | `layout-flow-regions`                             | yes      |
+| Exclusions              | `TextFlowExclusion`, `wrapSide`                      | `guides/layout/wrap-around-shapes`                           | `layout-exclusion`, `layout-wrap-side`            | yes      |
+| Projected flow          | `projectTextFlowBounds`, `projectTextFlowSilhouette` | `guides/layout/wrap-around-3d-objects`                       | `layout-projected-exclusion`                      | yes      |
+| Drop caps               | `dropCap`                                            | `guides/layout/drop-caps`                                    | `layout-drop-cap`                                 | yes      |
 
 ### Measurement and inspection
 
-| Feature                      | Public surface                                                         | Page                                                        | Demo          | Verified |
-| ---------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------- | ------------- | -------- |
-| Paragraph measurement        | `text.measure()`, `ParagraphLayoutSummary`, intrinsic widths           | `guides/inspect/measure-text` scaffold (`text/measurement`) | `measurement` | no       |
-| Line metrics                 | `measure().lines`, `ParagraphLineMetrics`                              | `reference/glyph/measurement` none                          | none          | no       |
-| Glyph inspection             | `text.glyphs()`, `text.readGlyphs(read)`, `glyphFlags`                 | `guides/inspect/read-glyphs` none                           | none          | no       |
-| Glyph outlines               | `glyphs().outlineAt(index)`, `GlyphOutlineContour`                     | `guides/inspect/glyph-outlines` none                        | none          | no       |
-| Layout callback              | `text.onLayout`, `<Text onLayout>`, `@layout`, `GlyphLayoutPhaseError` | `guides/inspect/react-to-layout` none                       | none          | no       |
-| Bounding box                 | `text.boundingBox`, `computeBoundingBox()`                             | `reference/three/text` none                                 | `measurement` | no       |
-| Per-glyph Three measurements | `text.measureGlyphs()`, `ThreeGlyphMeasurement`, `GlyphAnchor`         | `reference/three/glyphs` none                               | none          | no       |
+| Feature                    | Public surface                                              | Page                                                   | Demo                                  | Verified |
+| -------------------------- | ----------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------- | -------- |
+| Paragraph and line metrics | `text.measure()`                                            | `guides/inspect/measure-text`, `reference/measurement` | `measurement`, `inspect-line-metrics` | yes      |
+| Glyph inspection           | `glyphs()`, `readGlyphs()`, `measureGlyphs()`, `glyphFlags` | `guides/inspect/read-glyphs`                           | `inspect-glyphs`                      | yes      |
+| Glyph outlines             | `outlineAt`                                                 | `guides/inspect/glyph-outlines`                        | `inspect-outlines`                    | yes      |
+| Layout callback            | `onLayout`, `GlyphLayoutPhaseError`                         | `guides/inspect/react-to-layout`                       | `inspect-on-layout`                   | yes      |
 
 ### Editing
 
-| Feature                       | Public surface                                            | Page                                                           | Demo      | Verified |
-| ----------------------------- | --------------------------------------------------------- | -------------------------------------------------------------- | --------- | -------- |
-| Hit testing                   | `text.hitTest(point)`                                     | `guides/editing/caret-and-selection` done (`text/interaction`) | `caret`   | yes      |
-| Caret geometry                | `text.caret(position)`, `TextCaret.secondary`, `clipped`  | same                                                           | `caret`   | yes      |
-| Selection rectangles          | `text.rangeRects(start, end)`                             | same                                                           | `caret`   | yes      |
-| Movement                      | `text.move(position, direction, unit, goalX)`             | same                                                           | none      | no       |
-| Boundaries                    | `text.boundary(position, unit)`                           | same                                                           | none      | no       |
-| Exact edits                   | `text.replace(start, end, insert)`, spans follow the edit | same                                                           | `editing` | no       |
-| Input methods                 | composition over `replace` and `rangeRects`               | `guides/editing/input-methods` none                            | none      | no       |
-| An editable field, end to end | all of the above                                          | `tutorials/editable-text-field` none                           | none      | no       |
+| Feature                       | Public surface                              | Page                                                      | Demo                                           | Verified |
+| ----------------------------- | ------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------- | -------- |
+| Hit testing, caret, selection | `hitTest`, `caret`, `rangeRects`            | `guides/editing/caret-and-selection`, `reference/editing` | `caret`, `editing-bidi-caret`                  | yes      |
+| Movement and boundaries       | `move`, `boundary`                          | `guides/editing/keyboard-movement`                        | `editing-movement`, `editing-boundary`         | yes      |
+| Exact edits                   | `replace`, `TextOffsetError`                | `guides/editing/edit-text`                                | `editing`                                      | yes      |
+| Input methods                 | composition over `replace` and `rangeRects` | `guides/editing/input-methods`                            | none (the host forwards no composition events) | n/a      |
+| An editable field, end to end | all of the above                            | `tutorials/editable-text-field`                           | `editing-field`                                | yes      |
 
 ### In a scene
 
-| Feature                      | Public surface                                                                                     | Page                                                             | Demo                            | Verified |
-| ---------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------- | -------- |
-| Text as scene objects        | transforms, depth, perspective                                                                     | `guides/scene/place-text-in-3d` scaffold (`text/in-3d`)          | `depth`, `off-axis`, `orbit`    | no       |
-| Billboards and labels        | application-owned orientation                                                                      | `guides/scene/labels` none                                       | `labels`                        | no       |
-| Groups, batching, draw order | `TextGroup`, `batching` `auto` / `shared` / `group`, `renderOrder`, `order`                        | `guides/scene/group-and-batch` scaffold (`text/text-and-groups`) | `groups`, `batching`            | no       |
-| Frustum culling              | on by default; `frustumCulled`, `boundsPadding`                                                    | `guides/scene/culling` none                                      | none                            | no       |
-| Materials                    | `defineTextMaterial`, `ThreeTextMaterial`, per-format contexts                                     | `guides/scene/custom-materials` scaffold (`text/materials`)      | `materials`, `relief`, `ripple` | no       |
-| Material positions           | `context.position`, `context.paragraphPosition`                                                    | same                                                             | `ripple`                        | no       |
-| Post-processing              | bloom over text                                                                                    | `guides/scene/post-processing` none                              | `bloom`                         | no       |
-| Detached glyphs              | `text.split()`, `Glyphs`, `setMatrixAt`, `Decorations`, `localToWorldMatrix`, `worldToLocalMatrix` | `guides/motion/animate-glyphs` scaffold (`text/break-apart`)     | `break-apart`, `arc`, `ribbon`  | no       |
-| Transform modes              | `transformMode` in `defineThreeConfig`                                                             | `reference/three/config` none                                    | none                            | no       |
+| Feature                      | Public surface                                        | Page                                                         | Demo                                                                                     | Verified |
+| ---------------------------- | ----------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | -------- |
+| Text as scene objects        | transforms, depth, perspective                        | `guides/scene/place-text-in-3d`                              | `depth`, `off-axis`, `orbit`                                                             | yes      |
+| Labels                       | billboards, anchors                                   | `guides/scene/labels`                                        | `labels`                                                                                 | yes      |
+| Groups, batching, draw order | `TextGroup`, `batching`, `renderOrder`                | `guides/scene/group-and-batch`, `reference/three-text-group` | `groups`, `batching`, `scene-draw-order`                                                 | yes      |
+| Frustum culling              | default culling, `frustumCulled`, `boundsPadding`     | `guides/scene/culling`                                       | `scene-culling`                                                                          | yes      |
+| Materials and positions      | `defineTextMaterial`, `position`, `paragraphPosition` | `guides/scene/custom-materials`, `reference/three-materials` | `materials`, `relief`, `ripple`, `scene-material-positions`, `card-cycle`, `marble-type` | yes      |
+| Post-processing              | bloom                                                 | `guides/scene/post-processing`                               | `bloom`                                                                                  | yes      |
+| Detached glyphs              | `split()`, `Glyphs`, `Decorations`                    | `guides/scene/animate-glyphs`, `reference/three-glyphs`      | `break-apart`, `arc`, `ribbon`                                                           | yes      |
+| `Text`                       | every property and method                             | `reference/three-text`                                       | n/a                                                                                      | n/a      |
 
 ### Renderers and frameworks
 
-| Feature                    | Public surface                                                                                                                  | Page                                                           | Demo                                   | Verified |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | -------------------------------------- | -------- |
-| Three.js                   | `@pmndrs/glyph/three`                                                                                                           | `guides/renderers/three` none                                  | every scene's `three.ts` twin          | n/a      |
-| React Three Fiber          | `@pmndrs/glyph/react`: `Text`, `TextGroup`, `GlyphProvider`, `GlyphErrorBoundary`, `useFont`, `useBitmap`, `useMsdf`, `useSlug` | `reference/react` scaffold (`react/components`, `react/hooks`) | every scene                            | no       |
-| Vue and TresJS             | `@pmndrs/glyph/vue`: `Text`, `TextGroup`, `GlyphProvider`, `useFont`, `preloadFont`, `clearFont`                                | `guides/renderers/vue` none                                    | none (link `apps/tres-playground`)     | n/a      |
-| TypeGPU                    | `@pmndrs/glyph/typegpu`: `defineTypeGpuConfig`, `TypeGpuText`, draw transforms                                                  | `guides/renderers/typegpu` none                                | none (link `apps/typegpu-hello-world`) | n/a      |
-| Three with TypeGPU shaders | `@pmndrs/glyph/three/typegpu`                                                                                                   | `guides/renderers/three-typegpu` none                          | none                                   | n/a      |
-| PixiJS 3D                  | `@pmndrs/glyph/pixi3d`: `definePixi3DConfig`, `Pixi3DText`, `Pixi3DTextMaterial`, shader bits, `Pixi3DTextSnapshot`             | `guides/renderers/pixi3d` none                                 | none                                   | n/a      |
+| Feature                       | Page                                                    | Demo                                                 | Verified |
+| ----------------------------- | ------------------------------------------------------- | ---------------------------------------------------- | -------- |
+| three.js                      | `guides/renderers/three`                                | every scene's `three.ts` twin (typechecked, not run) | n/a      |
+| React Three Fiber             | `guides/renderers/react-three-fiber`, `reference/react` | every scene                                          | yes      |
+| Vue and TresJS                | `guides/renderers/vue`, `reference/vue`                 | n/a (`apps/tres-playground`)                         | n/a      |
+| TypeGPU                       | `guides/renderers/typegpu`, `reference/typegpu`         | n/a (`apps/typegpu-hello-world`)                     | n/a      |
+| three.js with TypeGPU shaders | `guides/renderers/three-typegpu`                        | n/a                                                  | n/a      |
+| PixiJS 3D                     | `guides/renderers/pixi3d`, `reference/pixi3d`           | n/a                                                  | n/a      |
 
-### Errors
+### Errors, project tasks, integrators, explanation
 
-| Feature                       | Public surface                                                                                                                       | Page                                        | Demo | Verified |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- | ---- | -------- |
-| Error classes and codes       | `GlyphError`, `GlyphInputError`, `GlyphLayoutPhaseError`, `TextOffsetError`, `GlyphFontError`, `GlyphEngineStatusError`, bake errors | `reference/errors` done (`text/errors`)     | n/a  | n/a      |
-| Catching render-time failures | throw from `renderer.render`, once per failure                                                                                       | `guides/handle-errors` done (`text/errors`) | n/a  | n/a      |
+| Topic                   | Page                                                 |
+| ----------------------- | ---------------------------------------------------- |
+| Error classes and codes | `reference/errors`                                   |
+| Handling errors         | `guides/project/handle-errors`                       |
+| Performance tasks       | `guides/project/performance`                         |
+| Testing                 | `guides/project/testing`                             |
+| TypeScript              | `guides/project/typescript`                          |
+| Troubleshooting         | `guides/project/troubleshooting`                     |
+| Migrating from 0.1      | `guides/project/migrate-from-0.1`                    |
+| Custom raster format    | `guides/project/custom-format`                       |
+| `@pmndrs/glyph/core`    | `reference/core`                                     |
+| Shader libraries        | `reference/shaders`                                  |
+| How it works            | `explanation/how-it-works` (demo `shaping`)          |
+| Coordinate spaces       | `explanation/coordinate-spaces`                      |
+| Render plan             | `explanation/render-plan`                            |
+| Renderer integration    | `explanation/renderer-integration`                   |
+| Performance model       | `explanation/performance` (demos `batching`, `zoom`) |
+| Topologies              | `explanation/topologies`                             |
 
-### For integrators
+## Open items
 
-| Feature                    | Public surface                                                           | Page                                                                       | Demo           | Verified |
-| -------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------- | -------------- | -------- |
-| Renderer integration       | `@pmndrs/glyph/core`: `GlyphConfig`, roots, hooks, `GlyphTextController` | `explanation/renderer-integration` scaffold (`advanced/custom-renderers`)  | n/a            | n/a      |
-| Codec programs and schemas | `techniqueProgram`, `msdfSchema`, `slugSchema`, `decorationSchema`       | `reference/core/codec` scaffold (`advanced/codec`)                         | n/a            | n/a      |
-| Render plan                | display list, batches, resources                                         | `explanation/render-plan` scaffold                                         | n/a            | n/a      |
-| Custom raster formats      | `registerThreeRasterProgram`, `defineRasterBaker`                        | `guides/integrators/custom-format` scaffold (`advanced/custom-techniques`) | n/a            | n/a      |
-| Shader libraries           | `@pmndrs/glyph/shaders/tsl`, `@pmndrs/glyph/shaders/typegpu`             | `reference/shaders` none                                                   | `slug-anatomy` | no       |
-
-### Cross-cutting
-
-| Topic                                                        | Page                            | Status                             |
-| ------------------------------------------------------------ | ------------------------------- | ---------------------------------- |
-| How it works (pipeline)                                      | `explanation/how-it-works`      | scaffold (`advanced/how-it-works`) |
-| Performance model                                            | `explanation/performance`       | scaffold (`advanced/performance`)  |
-| Topologies (many roots, many canvases)                       | `explanation/topologies`        | scaffold                           |
-| Coordinate spaces (Text-local +Y down, Three +Y up, anchors) | `explanation/coordinate-spaces` | none                               |
-| TypeScript patterns                                          | `guides/typescript`             | scaffold (`advanced/typescript`)   |
-| Testing                                                      | `guides/testing`                | scaffold (`advanced/testing`)      |
-| Common pitfalls                                              | `guides/troubleshooting`        | scaffold (`advanced/pitfalls`)     |
-| Migrating from 0.1.0                                         | `guides/migrate-from-0.1`       | scaffold (`advanced/migration`)    |
+- Demos still missing: runtime baking (needs the worker and its imports to be emitted beside each other by the site
+  build) and input methods (needs composition events forwarded by the proxy).
+- Vue, TypeGPU and PixiJS 3D snippets that import their peer (`vue`, `@tresjs/core`, `typegpu`, `@pixi/3d`, `pixi.js`)
+  are marked `ts ignore` (11 fences) because those peers are not dependencies of the site package.
+- The `three.ts` twins are typechecked and never executed.
