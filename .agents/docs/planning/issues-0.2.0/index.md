@@ -23,3 +23,4 @@ against the `experiments/segment-indexed-layout` package and recorded with its r
 | [15](15-font-from-font-face.md)                 | No public `Font` from a `FontFace` outside the hooks                      | later        | planned (design)                                 |
 | [16](16-overflow-visible-clip-inverted.md)      | `overflow: 'visible'` drops lines while `'clip'` lays them all out        | should-fix   | fixed (`experiments/sil-overflow`)               |
 | [17](17-three-group-input-errors.md)            | Three `TextGroup` options and `Text.onLayout` throw raw errors            | later        | planned                                          |
+| [18](18-subset-drops-legacy-kern.md)            | A subset bake drops the legacy `kern` table                               | should-fix   | fixed                                            |

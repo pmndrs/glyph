@@ -500,15 +500,28 @@ publishes only to temporary storage and compares the complete GLB byte-for-byte 
 output (or glyph map) is reported as `STALE_OUTPUT` (`STALE_GLYPH_MAP`) before any bake. The CLI never prompts, and
 0.1.0's no-op `--yes` is gone. Skera 0.5.1 has no CFF/CFF2 subsetter, so a CFF-flavoured source is subset with retained
 glyph IDs and keeps its source `CFF `/`CFF2` table, which stays valid for every retained glyph; the subset carries every
-charstring, and only the rasters shrink to the selection. A subset keeps every OpenType layout feature (the
-`hb-subset --layout-features='*'` result) and the alternates the selection reaches, so style `features` work on it as on
-a full bake. `--layout-features <tags>` (`layoutFeatures` on `bakeFont()`, `fontIsUpToDate()` and `FontBakeSelection`)
-narrows that, with or without `--unicodes`, to the named tags plus `skera::DEFAULT_LAYOUT_FEATURES` (hb-subset's
-default list, which carries what script shaping needs and cannot be dropped); a list without `--unicodes` prepares every
-code point. Tags the font lacks are reported in `preparation.missingLayoutFeatures`. The prepared bytes carry the
-selection, so the source fingerprint, the up-to-date check and `--check` compare it without a separate artifact field.
-The Rust tests compare feature sets and glyph counts with HarfBuzz 14.4.0's `hb-subset`. It calls the
-same `bakeFont` host as programmatic consumers rather than maintaining an example-only composition path.
+charstring, and only the rasters shrink to the selection.
+
+Every bake prepares its source through the same Skera plan, with or without `--unicodes`: a bake without it prepares
+every code point, keeping source glyph IDs and the glyph count, so the original source still rasterizes it. Skera has no
+legacy `kern` subsetter, so a face with a `kern` table also keeps source glyph IDs in a subset and carries the table
+whole; a subset then kerns like a full bake ([issue 18](../planning/issues-0.2.0/18-subset-drops-legacy-kern.md)). The
+plan keeps the common OpenType layout features (`skera::DEFAULT_LAYOUT_FEATURES`, hb-subset's default list) unless
+`--layout-features <tokens>` (`layoutFeatures` on `bakeFont()`, `fontIsUpToDate()`, `FontBakeSelection` and a
+runtime-baked `loadFont` request) says otherwise: `*` (first token) starts from every feature, `tag`/`+tag` adds, `-tag`
+removes, and the shaping floor in `font-baker/src/layout_features.rs` (`ccmp locl rvrn mark mkmk curs rlig rclt`, the
+direction and complex-script features) cannot be removed. The preparation reports added tags the font lacks
+(`missingLayoutFeatures`) and the source tags it dropped (`droppedLayoutFeatures`); the core bake records the dropped
+tags and the family name in the optional `PMNDRS_font.layoutFeatures`. The render planner refuses, with
+`GlyphInputError`, a paragraph or span style that enables a dropped tag of any font it can resolve to
+(`internal/baked-layout-features.ts`), at text creation and every update. The up-to-date check compares the prepared
+bytes' fingerprint and the recorded dropped list. Skera 0.5.1 cannot serialize the GSUB of Noto Sans CJK's whole BMP; a
+bake that named neither option then keeps such a face as it is and reports `LAYOUT_FEATURES_KEPT`
+(`internal/bake-source.ts`), and a bake that named one fails. A runtime raster for a full runtime bake rebuilds the
+prepared bytes from the retained original source (`*` and `-tag` per dropped tag,
+`internal/raster-source-preparation.ts`). The Rust tests compare feature sets and glyph counts with HarfBuzz 14.4.0's
+`hb-subset`. The CLI calls the same `bakeFont` host as programmatic consumers rather than maintaining an example-only
+composition path.
 
 Project discovery uses Oxc Parser 0.150.0 for JS/JSX/TS/TSX syntax, Oxc Walker 1.1.1 for lexical scopes, and Oxc Resolver 11.24.2 for
 module resolution, including tsconfig paths and TypeScript source extension aliases. It scans `src` by default or the

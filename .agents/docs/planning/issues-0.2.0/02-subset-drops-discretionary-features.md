@@ -18,8 +18,9 @@ generated:
 # Issue 02: a subset bake drops discretionary OpenType features
 
 - **Severity:** ship-blocker (every documented app bake uses `--unicodes`; style `features` silently do nothing on it)
-- **Status:** fixed on `experiments/sil-subset`. Justin chose option 1 (2026-11-24: a subset limits characters, not
-  features) and asked for a `--layout-features` bake option to narrow it (below).
+- **Status:** fixed on `experiments/sil-subset`. Justin first chose option 1 (keep every feature), then, after
+  measuring the cost, the reworked rule below (2026-11-24): every bake keeps the common set, `--layout-features` adds or
+  removes, and text that asks for a dropped feature throws instead of silently shaping default glyphs.
 
 ## What happens
 
@@ -51,55 +52,72 @@ are not.
 
 ## Chosen fix
 
-Option 1. Style `features` accept any tag, so the prepared font must keep every feature the source has; a subset is a
-code-point selection, not a feature selection. The cost is the alternates of the selected code points, which is what a
-caller of style `features` needs.
+Final rule ([decision](../decisions/bake-layout-feature-selection.md)):
 
-## Layout feature selection (Justin, 2026-11-24)
-
-One option, `--layout-features <tags|*>` on the CLI and `layoutFeatures?: readonly string[]` on `bakeFont()`,
-`fontIsUpToDate()` and the core `FontBakeSelection`, named after hb-subset's `--layout-features` and mirroring
-`--unicodes`/`unicodeRanges`:
-
-- Omitted (or `*`) keeps every feature, with or without `--unicodes`: a full bake keeps the source as it is, and a
-  subset of every code point keeps exactly the source's GSUB/GPOS feature tags (Rust test).
-- A list keeps those tags plus `skera::DEFAULT_LAYOUT_FEATURES`, hb-subset's default list (`rvrn ccmp liga locl mark
-mkmk rlig frac numr dnom calt clig curs kern rclt`, vertical, direction, East Asian spacing and every complex-script
-  shaper's features). That set is always kept, so no list can break script shaping; an empty list equals
-  `hb-subset` with default features. Glyphs only a dropped feature reaches are not baked and the records are pruned.
-  Without `--unicodes`, a list prepares every code point.
-- Tags are validated at the boundary (TypeScript and the Wasm selection): four printable ASCII characters,
-  space-padded at the end only, at most 1,024, sorted and deduplicated. Malformed tags throw `TypeError` (CLI exit 2);
-  tags the source lacks are ignored and listed in `PreparedFontReport.missingLayoutFeatures` and on stderr.
-- The selection changes the prepared bytes, and the source fingerprint is taken over them, so the up-to-date check and
-  `--check` compare it without a new artifact field; two selections that prepare identical bytes are the same font.
-- The runtime (browser worker) bake in `loadFont` does not take the option yet.
+- **Every bake**, full or `--unicodes`, keeps the common set (`skera::DEFAULT_LAYOUT_FEATURES`, hb-subset's default
+  list). A full bake now prepares every code point with that plan, so full and subset bakes agree; it keeps source glyph
+  IDs, the glyph count and the legacy `kern` table. This is breaking for full bakes, which kept every feature before.
+- **`--layout-features <tokens>`** / `layoutFeatures: string[]`: `*` (first token only) starts from every feature;
+  otherwise the base is the common set; `tag`/`+tag` adds, `-tag` removes. Tokens are an order-independent set; a tag
+  both added and removed is an error. Accepted by the CLI, `bakeFont()`, `fontIsUpToDate()`, the core
+  `FontBakeSelection`, and a runtime-baked `loadFont({ source, runtimeBake, layoutFeatures })` request.
+- **Shaping floor**: `ccmp locl rvrn mark mkmk curs rlig rclt`, `ltra ltrm rtla rtlm` and every complex-script
+  feature cannot be removed (input error naming the tag). `liga clig calt kern frac numr dnom`, vertical, spacing,
+  `jalt`, `rand` are removable.
+- **Throw**: the core artifact records the source tags the bake dropped in an optional, version-neutral
+  `PMNDRS_font.layoutFeatures: { dropped, family? }` (schema and spec updated; written only when something was dropped).
+  Where a style meets its fonts in the render planner (text creation and every update through `resolveTextOptions`,
+  which every integration uses), a feature enabled in the paragraph style or a span style that any font it can resolve
+  to dropped throws `GlyphInputError` with path `['style', 'features', i]` or
+  `['text', 'spans', k, 'style', 'features', i]` and the message
+  `feature 'smcp' was not baked into Source Serif 4; bake with --layout-features smcp (layoutFeatures: ['smcp'])`.
+  The paragraph style is checked against its font stack and every span font, a span style against its own stack; the
+  stack's fonts are all known when the text binds, so no check waits for run resolution. `value: 0` and tags the source
+  never had stay silent. Artifacts without the record (older bakes) never throw.
+- A face Skera 0.5.1 cannot prepare (Noto Sans CJK's whole BMP overflows its GSUB serializer) is baked as it is when
+  the bake named neither `--unicodes` nor `--layout-features`: every feature kept, nothing recorded, and a
+  `LAYOUT_FEATURES_KEPT` warning in the report and on stderr. With either option it fails.
+- Freshness: the up-to-date check compares the prepared bytes' fingerprint and the recorded dropped list; `--check`
+  compares bytes.
+- A full runtime bake keeps the original source for later runtime rasters; the loader rebuilds the prepared bytes from
+  it (`*` plus `-tag` per dropped tag) the first time a runtime raster needs them.
 
 ## Tests
 
-- Rust (`source_font.rs`): an ASCII subset's GSUB features and glyph counts equal `hb-subset --unicodes=20-7e
---layout-features='*'` (HarfBuzz 14.4.0) for Source Serif 4 (330 glyphs, includes `smcp onum tnum zero`) and Inter
-  (484); a subset of every code point keeps the source's features; `--layout-features+=tnum,onum` and default-only
-  selections equal hb-subset's (185, 167 and 178 glyphs); missing tags are reported; malformed tags are rejected.
-- Node (`node-bake.test.mjs`): on a `--unicodes` bake `smcp`, `pnum`, `onum` and `zero` change the shaped glyphs (the
-  `smcp` assertion failed against the previous baker); `--layout-features onum` makes `smcp` a no-op while `onum` and
-  the default `liga` still apply, with and without `--unicodes`; `*` equals omitting it; the up-to-date check and
-  `--check` see a changed selection; CLI and `bakeFont` reject malformed tags.
+- Rust (`layout_features.rs`, `source_font.rs`, `tests/public_api.rs`): grammar (order independence, `*` position,
+  contradiction, floor, malformed tags); ASCII features and glyph counts equal `hb-subset --unicodes=20-7e` (HarfBuzz
+  14.4.0) for the default (Source Serif 167 glyphs, Inter 178), `+=smcp,onum` (224), `-=liga` (158), `'*'` (330/484)
+  and `'*' -=ss01,ss02`; a full bake keeps source glyph IDs and count and the same features as a subset of every mapped
+  code point; the default drops `smcp c2sc onum tnum zero ss01` and reports them; floor features survive; the artifact
+  records `{ dropped, family }` only when something was dropped.
+- Node (`tests/integration/layout-features.test.mjs`): full and ASCII default bakes refuse `smcp` with the exact
+  `GlyphInputError`, stay silent for `value: 0` and for `swsh` (absent from the source), keep `liga`; full and subset
+  bakes record the same dropped list; `smcp,+onum` shapes small caps and old-style figures and refuses `pnum`; `*`
+  keeps everything and `*,-ss01,-ss02` refuses `ss02`; `-liga` breaks the `fi` ligature and refuses explicit `liga`; a
+  span style and an update are refused and the update leaves the text unchanged; an artifact without the record never
+  throws; the runtime raster source is rebuilt byte-for-byte from the original and the dropped list; freshness and
+  `--check` see a selection change that only changes the dropped list; CLI syntax errors exit 2, a floor removal exits
+  1 naming the feature. `runtime-bake.test.mjs`: the Worker matches the Node bake for `*,-ss01`, and a runtime
+  `loadFont` request forwards and validates its tokens.
 
 ## Measured cost
 
-| Committed `--unicodes` asset (Bitmap 32 + MSDF + Slug)    | before      | after                      |
-| --------------------------------------------------------- | ----------- | -------------------------- |
-| `apps/r3f-hello-world/assets/inter-latin.font.glb`        | 2,355,620 B | 8,743,692 B                |
-| `apps/typegpu-hello-world/assets/inter-latin.font.glb`    | 2,355,620 B | 8,743,692 B                |
-| `apps/r3f-hello-world/assets/font-awesome-world.font.glb` | 184,508 B   | 184,508 B (byte-identical) |
+| Committed `--unicodes` app asset (Bitmap 32 + MSDF + Slug) | `sil-green-67` | every feature (first fix) | final (common set) |
+| ---------------------------------------------------------- | -------------- | ------------------------- | ------------------ |
+| `apps/r3f-hello-world/assets/inter-latin.font.glb`         | 2,355,620 B    | 8,743,692 B               | 2,355,908 B        |
+| `apps/typegpu-hello-world/assets/inter-latin.font.glb`     | 2,355,620 B    | 8,743,692 B               | 2,355,908 B        |
+| `apps/r3f-hello-world/assets/font-awesome-world.font.glb`  | 184,508 B      | 184,508 B                 | 184,508 B          |
 
-Each was rebaked with its own `bake:*` script and its `bake:check` passes. `font-baker.wasm`: 1,162,251 B at
-`sil-green-67`, 1,161,848 B with the fix alone, 1,170,666 B with the option (+8,415 B, +0.7%).
+The final Inter asset is 288 bytes larger than before the issue: the `layoutFeatures` record. Each was rebaked with its
+own `bake:*` script and its `bake:check` passes. The full-bake benchmark fixtures shrink where their fonts carry
+discretionary alternates (Source Serif 4 -28%, Amiri -10%, DotGothic16 -7%, Inter -1.5%; all 32 files 150.5 MB to
+139.6 MB) and are unchanged where they do not (the CJK and Devanagari showcase subsets, Font Awesome). The Noto Sans
+CJK conformance font, a full bake Skera cannot prepare, is byte-identical (kept as it is).
 
 ## Risk
 
-- Behaviour: subset fonts gain alternates; glyph IDs inside a subset may shift (they are renumbered in source order).
-  Nothing public exposes subset glyph IDs across bakes.
-- API: none.
-- Performance/size: subset fonts grow by the alternates of the selected code points (measured on the rebaked assets).
+- Behaviour: full bakes lose discretionary features unless asked for, and text that enabled one now throws. Every
+  committed fixture was rebaked; source fingerprints of every bake now name the prepared bytes.
+- Format: one optional, version-neutral field; older readers ignore it, older artifacts never throw.
+- API: one new option (CLI, `bakeFont`, `fontIsUpToDate`, `FontBakeSelection`, runtime `loadFont` request); new
+  report fields `preparation.missingLayoutFeatures` / `droppedLayoutFeatures`; `preparation` is now always present.

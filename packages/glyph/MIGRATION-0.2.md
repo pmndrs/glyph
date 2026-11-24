@@ -142,22 +142,36 @@ Three `Text` properties, R3F and Vue `Text` props no longer accept `order`: it w
 paints in scene order with `renderOrder`. `glyph bake` no longer accepts `--yes`: the CLI never prompts. Delete both.
 `glyph bake --check` against a missing output now fails with `STALE_OUTPUT` instead of a Node `ENOENT` stack.
 
-## Rebake `--unicodes` fonts, and narrow their features if they grew too much
+## Rebake every font, and ask for the OpenType features your text uses
 
-A `glyph bake --unicodes` subset now keeps every OpenType layout feature, as a bake without `--unicodes` always did.
-In 0.1.0 it kept only the default-on features, so style `features` such as `smcp`, `onum`, `tnum`, `zero`, `ss01` or
-`cv01` silently did nothing on a subset font. The alternates the selected code points reach are now baked too, so subset
-fonts grow: the ASCII Inter asset with Bitmap 32, MSDF and Slug went from 2,355,620 to 8,743,692 bytes. Rebake, and if
-you use only a few features, keep just those:
+Every bake, with or without `--unicodes`, now keeps the common OpenType layout features: what shaping applies by
+default (`liga`, `kern`, `calt`, `ccmp`, `locl`, `mark`, ...), `frac`/`numr`/`dnom`, and the vertical, direction and
+complex-script features. Discretionary features such as `smcp`, `c2sc`, `onum`, `lnum`, `tnum`, `pnum`, `zero`,
+`ssXX`, `cvXX`, `salt`, `swsh`, `dlig` and `case` are dropped unless the bake asks for them. In 0.1.0 a full bake kept
+every feature and a `--unicodes` bake silently dropped them, so style `features` naming them did nothing on a subset.
+
+Text whose style or span style enables a feature the bake dropped now throws `GlyphInputError` when the text is created
+or updated:
+
+```text
+feature 'smcp' was not baked into Inter; bake with --layout-features smcp (layoutFeatures: ['smcp'])
+```
+
+Add the features your text enables, remove defaults you do not want, or keep everything:
 
 ```sh
 glyph bake --input Inter-Regular.ttf --output inter-latin.font.glb --unicodes U+0020-007E --layout-features tnum,zero --msdf
+glyph bake --input Inter-Regular.ttf --output inter.font.glb --layout-features '*,-ss01' --msdf
+glyph bake --input Inter-Regular.ttf --output inter.font.glb --layout-features -liga --msdf
 ```
 
-`--layout-features` (`layoutFeatures` in `bakeFont()`) takes four-character OpenType tags; `*` or leaving it out keeps
-every feature. The features shaping needs (`ccmp`, `locl`, `liga`, `kern`, `mark`, `mkmk`, `calt`, the complex-script
-features and the rest of hb-subset's default list) are always kept, so no list can break a script's shaping. It applies
-to bakes with and without `--unicodes`. Tags the font does not have are ignored and listed in the bake report.
+`--layout-features` (`layoutFeatures` in `bakeFont()` and a runtime-baked `loadFont` request) takes comma-separated
+tokens: `*` (first only) starts from every feature, `tag` or `+tag` adds, `-tag` removes. Features script shaping needs
+(`ccmp`, `locl`, `rvrn`, `mark`, `mkmk`, `curs`, `rlig`, `rclt`, the direction and complex-script features) cannot be
+removed. A tag the font never had is ignored and listed in the bake report, and `{ tag, value: 0 }` never throws.
+Fonts baked before this change carry no record of dropped features and never throw. Rebaked fonts are smaller where
+they used to carry alternates no text asked for. A full bake of a face too large for the subsetter to prepare (Noto Sans CJK) keeps every feature
+and reports a `LAYOUT_FEATURES_KEPT` warning.
 
 ## Read glyph facts after `measure()` deliberately
 

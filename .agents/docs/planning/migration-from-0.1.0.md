@@ -195,11 +195,14 @@ Results that change without a code change:
 - An ellipsis follows the paragraph direction (it is at the end side of a right-to-left line), and an ellipsis line fits
   its slot, with the spaces its fit hung charged to it. Right-to-left lines fill exclusion slots in reading order.
 - Lone surrogates draw as U+FFFD, one unit for one unit (section 2); nothing is counted.
-- A `glyph bake --unicodes` subset keeps every OpenType layout feature and the alternates the selection reaches, so
-  style `features` such as `smcp`, `tnum` or `ss01` work on it (they did nothing in 0.1.0). Subset fonts grow: the
-  ASCII Inter app asset (Bitmap 32, MSDF, Slug) went from 2,355,620 to 8,743,692 bytes. The new
-  `--layout-features <tags>` (`layoutFeatures` in `bakeFont()`) keeps only the named features plus the ones shaping
-  needs, with or without `--unicodes` ([issue 02](issues-0.2.0/02-subset-drops-discretionary-features.md)).
+- Every bake (full or `--unicodes`) keeps the common OpenType layout features; discretionary ones (`smcp`, `onum`,
+  `tnum`, `zero`, `ssXX`, `cvXX`, ...) are dropped unless `--layout-features` (`layoutFeatures` in `bakeFont()`) adds
+  them. 0.1.0 kept every feature in a full bake and silently dropped them in a subset. Text that enables a dropped
+  feature throws `GlyphInputError` naming the tag, the font and the flag to add; `value: 0`, tags the font never had
+  and fonts baked before this change never throw. Tokens: `*` (first) for every feature, `tag`/`+tag` to add, `-tag`
+  to remove; the shaping floor cannot be removed
+  ([issue 02](issues-0.2.0/02-subset-drops-discretionary-features.md),
+  [decision](decisions/bake-layout-feature-selection.md)).
 - Fonts baked with outlines decode them inside the dynamically loaded font baker, not the text shaper. No name,
   signature or artifact changed; the first outline font fetches the baker if nothing had loaded it, and a cold decode
   of 65,535 CFF glyphs measured the same (375 ms against 371 ms in Node).
