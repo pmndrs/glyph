@@ -1,0 +1,457 @@
+---
+title: PixiJS 3D
+description: Reference for every export of @pmndrs/glyph/pixi3d, the PixiJS 3D renderer, with the config, the text class, the material class, the shader bits and the detached snapshot.
+nav: 733
+sourcecode: packages/glyph/src/pixi3d.ts
+---
+
+`@pmndrs/glyph/pixi3d` draws Glyph text through [PixiJS 3D](https://github.com/pixijs/3d). A text is a
+`Container3D` whose children are `Mesh3D` objects that Glyph builds and updates. The entry works on PixiJS's WebGPU
+and WebGL2 renderers with bitmap, MSDF and Slug fonts.
+
+Peer dependencies: `@pixi/3d` `>=0.1.0 <0.2` and `pixi.js` `>=8.23.0 <9`. Both are optional peers of
+`@pmndrs/glyph`, and no other entry imports them. The names `ShaderBit`, `Container3D`, `Mesh3D`, `Material3D`,
+`BaseMaterial3D`, `Box` and `Destroy3DOptions` on this page are types of `@pixi/3d`; `Texture` is from `pixi.js`.
+
+```ts
+import { glyph, msdf } from '@pmndrs/glyph';
+import { Pixi3DConfig } from '@pmndrs/glyph/pixi3d';
+
+await glyph.init();
+const handle = glyph.handle('app', Pixi3DConfig);
+const Inter = glyph.fontFace('/fonts/inter.font.glb', { format: msdf });
+await Inter.load();
+
+const title = handle.createText({ font: Inter, text: 'Hello', style: { fontSize: 0.5, color: '#ffffff' } });
+title.position.set(-1, 0.25, 0); // a Container3D: add it under view.root
+glyph.shape();
+```
+
+## Exports
+
+| Name | Kind | Summary |
+| --- | --- | --- |
+| [`Pixi3DConfig`](#pixi3dconfig) | value | A ready-made config for `glyph.handle`. |
+| [`definePixi3DConfig`](#definepixi3dconfig) | function | Creates a config. |
+| [`Pixi3DHandle`](#pixi3dhandle), [`Pixi3DRoot`](#pixi3droot) | types | The handle and its roots. |
+| [`Pixi3DText`](#pixi3dtext) | class | A retained text; a `Container3D`. |
+| [`Pixi3DTextOptions`](#createtext), [`Pixi3DTextUpdate`](#update), [`Pixi3DGlyphMeasurement`](#measureglyphs) | types | Arguments and results of `Pixi3DText`. |
+| [`Pixi3DTextSnapshot`](#pixi3dtextsnapshot) | class | A detached copy returned by `split()`. |
+| [`Pixi3DTextMaterial`](#pixi3dtextmaterial) | class | A material recipe shared by texts. |
+| `Pixi3DTextMaterialOptions`, `Pixi3DTextMaterialContext`, `Pixi3DTextMaterialFactory`, `Pixi3DTextMaterialFormat`, `Pixi3DTextMaterialData`, `Pixi3DTextMaterialValue` | types | Types of the material class. |
+| [`glyphBitmapBit`, `glyphMsdfBit`](#shader-bits) | values | The shader bits for bitmap and MSDF glyphs. |
+| [`createGlyphSlugBit`, `createGlyphSlugBits`](#createglyphslugbits), `GlyphSlugBits` | functions, type | The shader bits for Slug glyphs. |
+| [`bitmapWgsl`, `bitmapGlsl`, `msdfWgsl`, `msdfGlsl`, `msdfFragmentGlsl`, `slugWgsl`, `slugGlsl`, `slugFragmentGlsl`](#shader-sources) | strings | The generated shader source the bits include. |
+| `Pixi3DFontSelection` | type | The fonts a text accepts: a `FontFace` or one of its format selections in bitmap, MSDF or Slug. |
+| `Pixi3DFontFormats`, `Pixi3DGlyphConfig` | types | The formats the config registers, and the config's type. |
+| `TextOffsetError` | class | The same class as on `@pmndrs/glyph`. See [Errors](/reference/errors). |
+| `TextPosition`, `TextCaret`, `TextMovement`, `TextRange`, `TextUnit`, `TextDirection` | types | The editing types. See [Editing](/reference/editing). |
+
+## Pixi3DConfig
+
+```ts
+import type { Pixi3DGlyphConfig } from '@pmndrs/glyph/pixi3d';
+
+declare const Pixi3DConfig: Pixi3DGlyphConfig;
+```
+
+The config to pass to `glyph.handle(name, Pixi3DConfig)`. It registers the bitmap, MSDF and Slug formats; a
+`FontFace` given without a format selection uses MSDF.
+
+## definePixi3DConfig
+
+```ts
+import type { Pixi3DGlyphConfig } from '@pmndrs/glyph/pixi3d';
+
+declare function definePixi3DConfig(): Pixi3DGlyphConfig;
+```
+
+Returns a new config equivalent to `Pixi3DConfig`. It takes no options.
+
+## Pixi3DHandle
+
+The value `glyph.handle(name, Pixi3DConfig)` returns.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `handle(name)` | `(name: string) => Pixi3DRoot` | Returns the root with that name, creating it on first use. |
+| every member of [`Pixi3DRoot`](#pixi3droot) | | The handle is its own unnamed default root. |
+| `dispose()` | `() => void` | Disposes every root and every text of the handle. |
+
+## Pixi3DRoot
+
+A set of texts that are published together.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| [`createText(options)`](#createtext) | `(options: Pixi3DTextOptions) => Pixi3DText` | Creates a text owned by this root. |
+| `name` | `string \| undefined` | The root's name; `undefined` for the handle's default root. |
+| `handle` | `Pixi3DHandle` | The owning handle. |
+| `disposed` | `boolean` | |
+| `dispose()` | `() => void` | Disposes the root and its texts. |
+
+A root has no draw method. PixiJS draws the texts as part of the scene they are in. `glyph.shape()` publishes every
+changed root of every handle.
+
+### createText
+
+```ts
+import type { Pixi3DRoot, Pixi3DText, Pixi3DTextOptions } from '@pmndrs/glyph/pixi3d';
+
+declare const root: Pixi3DRoot;
+declare const options: Pixi3DTextOptions;
+
+const text: Pixi3DText = root.createText(options);
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `font` | `Pixi3DFontSelection` | required | A loaded `FontFace` or one of its format selections. |
+| `text` | `string` or [formatted text](/reference/formatted-text) | required | The content. Formatted text carries styled spans. |
+| `material` | [`Pixi3DTextMaterial`](#pixi3dtextmaterial) | the default lit material | The material recipe. Fixed for the text's lifetime. |
+| `style` | [`TextStyle`](/reference/text-style) | `{}` | Shaping and presentation. |
+| `layout` | [`ParagraphLayout`](/reference/paragraph-layout) | `{}` | Wrapping, alignment and line limits. |
+| `constraints` | [`Constraints`](/reference/constraints) | `{}` | The box and anchor. |
+| `flow` | [`TextFlow`](/reference/text-flow) | none | Flow regions and exclusions. |
+| `rasterPixelRatio` | `number` | `1` | Raster density. |
+
+Creating a text makes no layout engine call. The returned node has no meshes until the next `glyph.shape()`.
+
+Throws `TypeError` if `options` is not an object, if `text` is neither a string nor formatted text, or if `material`
+is not a `Pixi3DTextMaterial`. Other invalid values throw the validator's `TypeError` or `RangeError`. This renderer
+does not wrap input errors in `GlyphInputError`.
+
+## Pixi3DText
+
+A retained text. It extends `Container3D`, so it has `position`, `rotation`, `quaternion`, `scale`, `visible`,
+`addChild` and the rest of that class. Glyph constructs it with `label: 'Glyph Pixi3D Text'` and `hitVolume: 'box'`.
+Create one with `createText`, not with `new`.
+
+The node's local space is PixiJS 3D's: +X right, +Y up. The paragraph's top-left corner is at the node's origin
+(shifted by the anchor, if one is set), and lines run toward -Y. Sizes are in scene units.
+
+Its `Mesh3D` children belong to Glyph. Do not add, remove or modify them.
+
+### Properties
+
+| Property | Type | Access | Description |
+| --- | --- | --- | --- |
+| `text` | `string` or formatted text | read, write | The content, as assigned. |
+| `font` | `Pixi3DFontSelection` | read, write | The font selection. |
+| `style` | `TextStyle` | read, write | `{}` when not set. |
+| `layout` | `ParagraphLayout` | read, write | `{}` when not set. |
+| `constraints` | `Constraints` | read, write | `{}` when not set. |
+| `flow` | `TextFlow \| undefined` | read, write | |
+| `rasterPixelRatio` | `number` | read, write | `1` when not set. |
+| `material` | `Pixi3DTextMaterial \| undefined` | read | The recipe given at creation. |
+| `disposed` | `boolean` | read | |
+| `gpuBytes` | `number` | read | Bytes of GPU geometry this text's meshes reference. A buffer shared by several meshes of the text counts once. |
+
+A setter is `update()` with one property. It validates and records the value and marks the text changed; the layout
+runs at the next read or `glyph.shape()`.
+
+### update
+
+```ts
+import type { Pixi3DText, Pixi3DTextUpdate } from '@pmndrs/glyph/pixi3d';
+
+declare const text: Pixi3DText;
+
+const update: Pixi3DTextUpdate = { text: 'Changed', constraints: { width: { mode: 'at-most', size: 4 } } };
+text.update(update);
+```
+
+`Pixi3DTextUpdate` is every option of `createText` except `material`, all optional. A property that is present
+replaces the previous value as a whole.
+
+Throws `TypeError` if the argument is not an object or contains `material`. Invalid values throw the validator's
+`TypeError` or `RangeError`, and the text keeps its previous state. Throws `Error` on a disposed text.
+
+### measure and measureInk
+
+| Method | Returns | Description |
+| --- | --- | --- |
+| `measure()` | `ParagraphLayoutSummary` | The paragraph's metrics in its own space: origin top-left, +X right, +Y down, before the anchor. `anchorOffset` says how the anchor shifts the text; it is not applied to these metrics. |
+| `measureInk()` | `ParagraphLayoutSummary` | The same, with glyphs positioned so that the ink bounds are known. |
+
+Both prepare the text first if it changed. Neither publishes meshes. See [Measurement](/reference/measurement).
+
+### computeBoundingBox
+
+`computeBoundingBox(): Box`
+
+Returns the ink bounds as a new `Box` in the node's local space (+X right, +Y up), anchor included, before the
+node's own transform. `min.z` and `max.z` are `0`. The box is empty when the text has no ink. It describes the
+desired state, which can be ahead of what is drawn.
+
+### measureGlyphs
+
+`measureGlyphs(): readonly Pixi3DGlyphMeasurement[]`
+
+Returns one frozen record per glyph, in Text-local logical space: +X right, +Y down, anchor included, before the
+node's transform. Negate `y` to get PixiJS 3D's local Y.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `key` | `GlyphKey` | Identifies the glyph occurrence across reflow. |
+| `index` | `number` | The glyph's position among the paragraph's glyphs, in visual order. |
+| `cluster` | `number` | The UTF-16 offset of the source cluster the glyph belongs to. |
+| `line` | `number` | The index of the glyph's line. |
+| `x`, `y` | `number` | The glyph's origin (pen position). |
+| `advance` | `number` | The shaped advance: how far the pen moved. Not the ink width. |
+| `ink` | `LayoutBox` | The ink box. A glyph with no outline has zero extents. |
+| `bounds` | `LayoutBox` | The advance box: `advance` wide and as tall as the glyph's line box. |
+
+### glyphs and readGlyphs
+
+| Method | Returns | Description |
+| --- | --- | --- |
+| `glyphs()` | `GlyphLayoutInspection` | An owned copy of every glyph and line, in the paragraph's own space (+Y down, before the anchor). |
+| `readGlyphs(read)` | the callback's result | Calls `read` synchronously with a `BorrowedGlyphLayout`. The view is valid only until `read` returns. |
+
+### Editing methods
+
+```ts
+import type { Pixi3DText } from '@pmndrs/glyph/pixi3d';
+
+declare const text: Pixi3DText;
+
+const position = text.hitTest({ x: 0.8, y: 0.2 });
+const caret = text.caret(position);
+const next = text.move(position, 'forward', 'word');
+const word = text.boundary(position, 'word');
+const rects = text.rangeRects(word.start, word.end);
+text.replace(word.start, word.end, 'replacement');
+```
+
+| Method | Returns |
+| --- | --- |
+| `caret(position: TextPosition)` | `TextCaret` |
+| `hitTest(point: { x: number; y: number })` | `TextPosition` |
+| `move(position, direction, unit, goalX?)` | `TextMovement` |
+| `boundary(position, unit)` | `TextRange` |
+| `rangeRects(start, end)` | `readonly LayoutBox[]` |
+| `replace(start, end, insert)` | `void` |
+
+They are the methods described in [Editing](/reference/editing). Coordinates are Text-local logical space: +X right,
++Y down, anchor included, before the node's transform. To hit-test a point given in the node's local space, negate
+its `y`.
+
+An offset that is not a grapheme boundary of the text throws [`TextOffsetError`](/reference/errors) and changes
+nothing. `replace` keeps spans in step with the edit: inserted text takes the style of the grapheme before it. A
+non-string `insert` throws `GlyphInputError`.
+
+### split
+
+`split(): readonly [glyphs: Pixi3DTextSnapshot, decorations: Pixi3DTextSnapshot | undefined]`
+
+Copies the text's drawable glyphs into independent nodes.
+
+- `glyphs` has one `Container3D` child per drawable glyph, in layout order. Each child's position is the glyph's pen
+  origin (anchor included, +Y up), so rotating or scaling a child pivots there. Blank glyphs such as spaces have no
+  child.
+- `decorations` holds the decoration lines, or is `undefined` when the text has none.
+- Both snapshots copy the source's local `position`, `rotation`, `quaternion`, `scale` and `origin`. Add them to the
+  source's parent and hide or dispose the source for an exact replacement.
+- The copies own their GPU data. Later edits to the source, or disposing it, do not affect them. Dispose each
+  snapshot yourself.
+- It reads the desired state, so it works before the first `glyph.shape()` and right after an edit.
+
+Throws `Error` if the text has no drawable glyphs. Splitting creates one mesh per glyph and can increase draw calls.
+
+### dispose and destroy
+
+| Method | Description |
+| --- | --- |
+| `dispose()` | Releases the text's layout state and font lease. Idempotent. Its meshes are removed by the next `glyph.shape()`. Throws if called while a publication is in progress. |
+| `destroy(options?)` | `Container3D`'s `destroy`, preceded by `dispose()`. Destroying a parent with `{ children: true }` disposes the texts under it. |
+
+## Pixi3DTextSnapshot
+
+A detached copy made by [`split()`](#split). It extends `Container3D`.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `disposed` | `boolean` | |
+| `dispose()` | `() => void` | Releases the copied data and destroys the snapshot's children. Idempotent. |
+| `destroy(options?)` | | `Container3D`'s `destroy`, preceded by `dispose()`. |
+
+## Pixi3DTextMaterial
+
+Describes the material of one or more texts: extra shader bits, the values those bits read, and optionally a factory
+for the material itself. The bits are fixed at construction, as PixiJS 3D materials require; the values can change
+at any time.
+
+```ts
+import { Pixi3DTextMaterial } from '@pmndrs/glyph/pixi3d';
+
+const fading = new Pixi3DTextMaterial({
+  extraBits: [
+    {
+      name: 'labelFade',
+      bindings: { material: { uFade: 'f32' } },
+      gpu: { fragment: { material: '{ alpha = alpha * material.uFade; }' } },
+      gl: { fragment: { material: '{ alpha = alpha * material.uFade; }' } },
+    },
+  ],
+  data: { uFade: 1 },
+});
+
+fading.update({ uFade: 0.5 });
+```
+
+### Constructor options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `extraBits` | `readonly ShaderBit[]` | `[]` | Shader bits appended after Glyph's own bit for the font format, in order. |
+| `data` | `Record<string, number \| readonly number[]>` | `{}` | Initial values for the `bindings.material` fields the `extraBits` declare. |
+| `create` | `(context: Pixi3DTextMaterialContext) => BaseMaterial3D` | none | Builds the material. Omitted: the default material. |
+| `shared` | `boolean` | `false` | Lets texts with this recipe reuse one compatible native material instead of one per mesh. |
+| `nativeRecords` | `boolean` | `true` without `create`, `false` with it | Lets a draw of a single glyph record store its data in the material's native instance row on a shared quad, so separate texts can share an instanced draw. A recipe with `create` that opts in must build its material from `context.bits` and put every bit that reads Glyph's vertex inputs in `extraBits`. |
+
+Throws `TypeError` if the options are not an object, if an option has the wrong type, if a `data` name is not
+declared by any bit, or if a value does not fit its declared type.
+
+A `data` value must match the WGSL type its field declares:
+
+| Declared type | Value |
+| --- | --- |
+| `f32`, `i32`, `u32` | A finite number. |
+| `vec2<…>`, `vec3<…>`, `vec4<…>` | An array of 2, 3 or 4 finite numbers. |
+| `matCxR<f32>` | An array of C × R finite numbers. |
+| a texture, sampler or storage type | Not allowed. |
+
+### Members
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `extraBits` | `readonly ShaderBit[]` | A frozen copy of the option. |
+| `shared` | `boolean` | |
+| `nativeRecords` | `boolean` | |
+| `create` | the factory, or `undefined` | |
+| `update(values)` | `(values: Partial<Data>) => void` | Writes the given fields to every material built from this recipe. It does not lay out text or rebuild geometry. `undefined` values are skipped. Throws `TypeError` like the constructor. |
+
+### The material factory
+
+`create` is called with a frozen `Pixi3DTextMaterialContext`:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `format` | `'pmndrs.bitmap' \| 'pmndrs.msdf' \| 'pmndrs.slug'` | The font format the material will draw. |
+| `bits` | `readonly ShaderBit[]` | Glyph's bits for that format, followed by the recipe's `extraBits`. |
+| `textures` | `Record<string, Texture>` | The atlas textures the bits read. Glyph assigns them to the returned material. |
+| `createDefaultMaterial()` | `() => Material3D` | Returns the default material: `new Material3D({ alphaMode: 'blend', doubleSided: true, fog: false, extraBits: bits })`. |
+
+```ts
+import { Pixi3DTextMaterial } from '@pmndrs/glyph/pixi3d';
+
+const tuned = new Pixi3DTextMaterial({
+  create: (context) => {
+    const material = context.createDefaultMaterial();
+    material.roughness = 1;
+    return material;
+  },
+});
+```
+
+The factory must return a `BaseMaterial3D` that includes `context.bits`, and a new one on every call. Returning
+something else, or a material returned before, throws `TypeError`. Glyph owns the returned material and destroys it.
+An exception thrown by the factory rejects that publication: the text keeps its last drawn state, and the exception
+is thrown from `glyph.shape()`, once.
+
+The default material is lit and physically based. For unlit text return a `FlatMaterial` built from `context.bits`;
+see [Use Glyph with PixiJS 3D](/guides/renderers/pixi3d).
+
+## Shader bits
+
+These are the `ShaderBit` objects Glyph puts first in `context.bits`. They are exported for code that composes
+PixiJS 3D materials directly. Each sets `albedo` and `alpha` in the fragment `material` slot, so a bit that follows
+can read and change them.
+
+| Export | Format | Textures it declares | Material fields it declares |
+| --- | --- | --- | --- |
+| `glyphBitmapBit` | Bitmap | `glyphBitmapAtlas` | none |
+| `glyphMsdfBit` | MSDF, with outline and shadow | `glyphMsdfAtlas` | `uGlyphAtlasSize`, `uGlyphPixelRange`, `uGlyphEffectScale` |
+| `createGlyphSlugBit(page)` | Slug | `glyphSlugHeaders`, `glyphSlugBandCurves` | |
+
+The bits read per-vertex attributes that Glyph's meshes provide (names beginning `aGlyph`). They are not usable on
+other geometry.
+
+### createGlyphSlugBits
+
+```ts
+import type { GlyphSlugBits } from '@pmndrs/glyph/pixi3d';
+
+declare function createGlyphSlugBits(page: {
+  readonly headerSize: readonly [number, number];
+  readonly bandCurveSize: readonly [number, number];
+}): GlyphSlugBits;
+```
+
+Returns the Slug shader as two bits, so that another bit can run between them.
+
+| Field of `GlyphSlugBits` | Description |
+| --- | --- |
+| `setup` | Declares the Slug resources and, in the fragment `material` slot, a mutable `glyphSlugCoordinate`. |
+| `coverage` | Evaluates coverage once at the final `glyphSlugCoordinate` and sets `albedo` and `alpha`. |
+
+A bit placed between `setup` and `coverage` may change `glyphSlugCoordinate` in its `material` slot to warp the
+glyph.
+
+`page.headerSize` and `page.bandCurveSize` are the texel sizes of a Slug font's two lookup textures. The sizes are
+compiled into the shader. Results are cached per size pair, so equal sizes return the same object.
+
+`createGlyphSlugBit(page)` takes the same argument and returns one `ShaderBit` that is `setup` and `coverage`
+combined. This is the bit Glyph uses by default.
+
+Inside a material factory you do not call either function: `context.bits` already holds the Slug bit for the font
+being drawn.
+
+### Shader sources
+
+| Export | Language | Contents |
+| --- | --- | --- |
+| `bitmapWgsl`, `bitmapGlsl` | WGSL, GLSL ES 3.0 | Bitmap quad placement, atlas coordinates and coverage. |
+| `msdfWgsl`, `msdfGlsl` | WGSL, GLSL ES 3.0 | MSDF placement and, in WGSL, distance reconstruction with outline and shadow. |
+| `msdfFragmentGlsl` | GLSL ES 3.0 | The MSDF functions that take derivatives, for the fragment stage only. |
+| `slugWgsl`, `slugGlsl` | WGSL, GLSL ES 3.0 | Slug dilation and, in WGSL, the curve evaluation. |
+| `slugFragmentGlsl` | GLSL ES 3.0 | The Slug curve evaluation, for the fragment stage only. |
+
+Each is a string of helper functions generated at build time from the functions in
+`@pmndrs/glyph/shaders/typegpu`. The entry does not import TypeGPU at runtime. The fragment-only GLSL strings exist
+because GLSL ES 3.0 rejects derivative functions in a vertex shader.
+
+## Errors
+
+| Failure | Thrown from | Value |
+| --- | --- | --- |
+| Invalid input to `createText`, `update` or a setter | That call | `TypeError` or `RangeError` |
+| An offset that is not a grapheme boundary | The editing method | `TextOffsetError` |
+| A paragraph the engine refuses | `glyph.shape()`, once | `GlyphError` with `code: 'engine-failed'`; its message quotes the text |
+| A material factory that throws or returns an invalid material | `glyph.shape()`, once | The factory's exception or `TypeError` |
+| Use of a disposed text | The call | `Error` |
+
+A refused text draws nothing until its input changes. A text whose publication was rejected keeps its last drawn
+state and is not retried until it is edited. Other texts are published. There is no error property on a text and no
+error callback.
+
+## Differences from the three.js renderer
+
+| Feature | This renderer |
+| --- | --- |
+| Formatted text, decorations, flow regions, anchors, editing, `split()` | Supported |
+| `TextGroup` and ordered batching | Not available. Draw order between overlapping texts is PixiJS 3D's sort. |
+| `onLayout` | Not available |
+| MSDF atlas | The whole baked atlas is uploaded, and glyph cells are drawn untrimmed. |
+| Bitmap pixel snapping | Not available |
+| Default material | Lit `Material3D`; three.js text is unlit. |
+| `GlyphInputError` | Not thrown for invalid input; see [Errors](#errors). |
+
+## See also
+
+- [Use Glyph with PixiJS 3D](/guides/renderers/pixi3d)
+- [Editing](/reference/editing)
+- [Measurement](/reference/measurement)
+- [Errors](/reference/errors)
+- [Shaders](/reference/shaders)

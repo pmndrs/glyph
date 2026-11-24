@@ -1,0 +1,333 @@
+---
+title: Vue
+description: Reference for every export of @pmndrs/glyph/vue and its format subpaths, the TresJS components and font composables, with props tables and exact behavior.
+nav: 731
+sourcecode: packages/glyph/src/vue.ts
+---
+
+`@pmndrs/glyph/vue` is the Vue binding of the three.js renderer for [TresJS](https://tresjs.org). It exports three
+components (`GlyphProvider`, `Text`, `TextGroup`), three functions (`useFont`, `preloadFont`, `clearFont`) and their
+types. Three subpaths, `@pmndrs/glyph/vue/msdf`, `/vue/slug` and `/vue/bitmap`, export the same functions with the
+format filled in. The components create and update the objects described in [Text](/reference/three-text) and
+[TextGroup](/reference/three-text-group); this page lists what the Vue layer adds.
+
+Peer dependencies: `vue` `>=3.5 <4`, `@tresjs/core` `>=5.8.3 <6`, `three` `>=0.185.0`.
+
+The components and `useFont` must be used inside a `<TresCanvas>`. `preloadFont` and `clearFont` work anywhere.
+
+## Exports
+
+| Name | Kind | Summary |
+| --- | --- | --- |
+| [`Text`](#text) | component | One paragraph. |
+| [`TextGroup`](#textgroup) | component | A scene parent and batching boundary for texts. |
+| [`GlyphProvider`](#glyphprovider) | component | Selects a handle or root and names font faces for a subtree. |
+| [`useFont`](#usefont) | composable | Loads a font and holds it for the component's lifetime. |
+| [`preloadFont`](#preloadfont) | function | Starts a font load before a component needs it. |
+| [`clearFont`](#clearfont) | function | Releases a preloaded font. |
+| [`useMsdf`, `preloadMsdf`, `clearMsdf`](#format-subpaths) | `@pmndrs/glyph/vue/msdf` | The MSDF format. |
+| [`useSlug`, `preloadSlug`, `clearSlug`](#format-subpaths) | `@pmndrs/glyph/vue/slug` | The Slug format. |
+| [`useBitmap`, `preloadBitmap`, `clearBitmap`](#format-subpaths) | `@pmndrs/glyph/vue/bitmap` | The Bitmap format. |
+| `VueTextProps`, `VueTextGroupProps` | types | Props of `Text` and `TextGroup`. |
+| `VueTextInstance`, `VueTextGroupInstance` | types | What a template ref on each component holds. |
+| `GlyphProviderProps`, `GlyphProviderFontFace` | types | Props of the provider. |
+| `UseFontResult` | type | The return value of `useFont`. |
+| `TextComponent`, `TextGroupComponent`, `GlyphProviderComponent` | types | The components' constructor types. |
+
+## Text
+
+Renders one paragraph as a three.js [`Text`](/reference/three-text) object. The default slot is the paragraph's
+content.
+
+```html
+<template>
+  <Text
+    :font="font"
+    :text-style="{ fontSize: 0.4, color: '#e7ecf6' }"
+    :layout="{ wrap: 'word', align: 'center' }"
+    :constraints="{ width: { mode: 'exact', size: 6 } }"
+    :position="[0, 1, 0]"
+  >
+    A paragraph in the scene
+  </Text>
+</template>
+```
+
+### Props
+
+Props are written in camelCase here; in a template either form works (`text-style` or `textStyle`).
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `font` | `Font`, `FontStack`, `FontFace`, a face's format selection, or `string` | required on an outer `Text` | The font. See [The font prop](#the-font-prop). |
+| `textStyle` | `PropertyList<TextStyle>` | `{}` | Shaping and presentation, inherited by nested `Text`. See [TextStyle](/reference/text-style). The prop is not named `style`, which Vue reserves. |
+| `layout` | `PropertyList<ParagraphLayout>` | `{}` | Wrapping, alignment and line limits. Outer `Text` only. See [ParagraphLayout](/reference/paragraph-layout). |
+| `constraints` | `PropertyList<Constraints>` | `{}` | The box and anchor. Outer `Text` only. See [Constraints](/reference/constraints). |
+| `flow` | `TextFlow` | none | Flow regions and exclusions. Outer `Text` only. See [TextFlow](/reference/text-flow). |
+| `rasterPixelRatio` | `number` | none | Raster density override. |
+| `material` | `ThreeTextMaterial` | none | A custom material. See [Materials](/reference/three-materials). |
+| `pixelSnapping` | `boolean` | not set | Snap Bitmap vertices to physical pixels. Fixed at construction: changing it between `true` and not `true` recreates the object. |
+| any other attribute | | | `position`, `rotation`, `scale`, `visible`, `renderOrder`, `name` and the rest are passed to the three.js object by TresJS. |
+
+`Text` does not accept a `handle` attribute; passing one throws `TypeError`. Select a handle with
+[`GlyphProvider`](#glyphprovider).
+
+A `PropertyList` is a value, `false`, `null`, `undefined`, or a nested array of these, merged left to right.
+
+### Slot content
+
+| Content of the default slot | Effect |
+| --- | --- |
+| Text and interpolations (`{{ value }}`), numbers | Appended to the paragraph's string. |
+| A nested `<Text>` | An inline run. See [Nested Text](#nested-text). |
+| Fragments (`v-for`, `<template>`) | Their children, in order. |
+| Comments, `null`, `undefined`, booleans (for example a false `v-if`) | Nothing. |
+| Any other element or component | Throws `TypeError`. |
+
+### Events
+
+| Event | Arguments | Description |
+| --- | --- | --- |
+| `layout` | `(text: Text, layout: ParagraphLayoutSummary)` | The three.js `Text` and what its `measure()` returns. Emitted after the text is first prepared and whenever that summary changes, before the frame that draws it. |
+
+A `layout` handler may move other objects and write transforms, visibility, color, opacity and material. Writing a
+layout input of any text inside it throws [`GlyphLayoutPhaseError`](/reference/errors). Only a `Text` that has a
+`layout` listener keeps its summary current and waits for its handler before it is drawn. An exception thrown by the
+handler goes to Vue's error handling, like any other event handler.
+
+There is no `error` event.
+
+### Updates
+
+After each render the component applies the new desired state to the three.js object and calls TresJS's
+`invalidate()` if anything differed. Setting a prop makes no engine call: the text is prepared and published by the
+next frame. Reactive objects passed as `textStyle`, `layout`, `constraints` or `flow` are snapshotted, and a change
+inside one updates the text. A snapshot equal to the previous one causes no update.
+
+An invalid value (for example a negative `fontSize`) throws [`GlyphInputError`](/reference/errors). It reaches
+`onErrorCaptured` of the ancestors and `app.config.errorHandler`, and the text keeps its previous value.
+
+While at least one `Text` of a root is mounted, the root is attached to the TresJS scene and its `onInvalidate` hook
+requests a TresJS frame, so on-demand rendering also draws a change made directly on the three.js object.
+
+### Nested Text
+
+A `<Text>` inside another `<Text>` is an inline run. It creates no three.js object; the outer `Text` flattens its
+slot into one string with formatted spans.
+
+| Prop on a nested `Text` | Effect |
+| --- | --- |
+| default slot | The run's content. May nest further. |
+| `font` | The font for the run. Inherited by deeper runs. |
+| `textStyle` | Merged over the enclosing style, property by property. |
+| `material` | The material for the run. Inherited by deeper runs. |
+| any other prop or attribute | Throws `TypeError` naming it, for example `layout`, `constraints` or `position`. `key` and `ref` are ignored. |
+
+A nested `Text` with no content adds no span.
+
+```html
+<template>
+  <Text :font="font" :text-style="{ fontSize: 0.4 }">
+    Status: <Text :text-style="{ color: '#4ade80', decoration: { underline: true } }">online</Text>
+  </Text>
+</template>
+```
+
+### The font prop
+
+| Value | Behavior |
+| --- | --- |
+| A `Font` from a composable, or a `FontStack` | Used as is. |
+| A `FontFace` or one of its format selections (`Inter`, `Inter.slug`) | Used if that format is already loaded on the handle. Otherwise the load starts and the component renders nothing until it finishes. The `Text` holds the loaded font while it is mounted. |
+| A `string` | Looked up in the nearest provider's `fontFaces`, then among the live `FontFace` declarations by family. The face found is then treated as above. An unknown name throws `GlyphFontError` with `reason: 'FONT_FACE_NOT_FOUND'`. |
+| omitted on an outer `Text` | Throws `TypeError`. |
+
+All the fonts a paragraph needs, the outer one and those of nested runs, start loading together. There is no
+Suspense integration in `Text`: it renders nothing while it waits.
+
+A load that fails is thrown once, to `onErrorCaptured` and `app.config.errorHandler`, as the `GlyphFontError`. If
+several loads fail together they arrive as one `AggregateError`. The component keeps rendering what it rendered, and
+a re-render does not start the failed load again.
+
+### Template ref
+
+A template ref on `Text` holds a `VueTextInstance`:
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `instance` | `Text \| undefined` | The three.js `Text` from `@pmndrs/glyph/three`, or `undefined` until the engine is ready and every font has loaded. |
+
+```ts
+import type { msdf } from '@pmndrs/glyph';
+import type { VueTextInstance } from '@pmndrs/glyph/vue';
+
+declare const label: VueTextInstance<typeof msdf> | null;
+
+const lineCount = label?.instance?.measure().lineCount;
+```
+
+`VueTextInstance<Format>` is generic in the font's raster format. Use `RasterFormatMetadata` from `@pmndrs/glyph`
+when the format is not known statically. Hold the ref in a `shallowRef`: three.js objects do not survive Vue's deep
+proxies.
+
+## TextGroup
+
+Renders a three.js [`TextGroup`](/reference/three-text-group): a scene parent whose descendant texts may share draws.
+
+```html
+<template>
+  <TextGroup batching="shared" :render-order="2" :position="[0, 2, 0]">
+    <Text :font="font">One</Text>
+    <Text :font="font" :position="[0, -0.5, 0]">Two</Text>
+  </TextGroup>
+</template>
+```
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `batching` | `'auto' \| 'shared' \| 'group'` | `'auto'` | Where compatible descendant draws may be combined. See [TextGroup](/reference/three-text-group). |
+| `renderOrder` | `number` | not set | The group's render order. Must be finite. |
+| `material` | `ThreeTextMaterial` | none | The material for descendant texts that do not set their own. |
+| `pixelSnapping` | `boolean` | not set | Snap Bitmap vertices to physical pixels. Fixed at construction: changing it between `true` and not `true` recreates the object. |
+| any other attribute | | | Passed to the three.js object by TresJS. |
+
+A template ref holds a `VueTextGroupInstance` whose `instance` is the three.js `TextGroup`, or `undefined` until the
+engine is ready. `TextGroup` does not accept a `handle` attribute.
+
+## GlyphProvider
+
+Selects the handle or root for the components below it and gives font faces names. It renders its default slot and
+nothing else.
+
+```html
+<template>
+  <GlyphProvider handle="hud" :font-faces="{ Inter: '/fonts/inter.font.glb' }">
+    <Text font="Inter">Score</Text>
+  </GlyphProvider>
+</template>
+```
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `handle` | `ThreeHandle \| ThreeRoot \| string` | the canvas's default root | A handle selects its default root. A root selects that root. A string selects the named root of the built-in handle. |
+| `fontFaces` | `Record<string, GlyphProviderFontFace>` | none | Names for font faces, visible to `Text` components below the provider. |
+
+A `GlyphProviderFontFace` is one of:
+
+| Form | Meaning |
+| --- | --- |
+| a `string`, `URL` or `Blob` | A font source, declared by the provider with the default format. |
+| `{ src, format? }` | A font source and a format name or format object. Declared by the provider. |
+| a `FontFace` | An existing declaration from `glyph.fontFace`. The provider never disposes it. |
+
+Declarations the provider creates are disposed when the last provider using that `fontFaces` object unmounts.
+
+Both props are fixed for the life of the provider. Changing `handle`, or the contents of `fontFaces`, throws
+`Error`. Remount the provider to replace them. A disposed handle or root throws `Error`.
+
+### Without a provider
+
+A component with no provider above it uses a built-in handle named `@pmndrs/glyph/vue:default`, created from
+`ThreeConfig`. The first use calls `glyph.init()` if the application has not; until it resolves, components render
+nothing. Each `<TresCanvas>` gets its own root on that handle, disposed when the last component using it unmounts.
+
+## useFont
+
+Loads a font through the selected handle and holds it until the component's scope is disposed.
+
+```ts
+import { msdf } from '@pmndrs/glyph';
+import { useFont, type UseFontResult } from '@pmndrs/glyph/vue';
+
+// Inside setup() of a component below <TresCanvas>:
+function useFonts() {
+  const anyFormat = useFont('/fonts/inter.font.glb'); // the default format
+  const selected: UseFontResult<typeof msdf> = useFont('/fonts/inter.font.glb', { format: msdf });
+  return { anyFormat, selected };
+}
+```
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `input` | `FontFaceSource` (`string`, `URL`, `Blob` or a serialized font face) | The font source. |
+| `config.format` | a format (`msdf`, `slug`, `bitmap({ strikes })`) or a format name | Optional. The format to load. Omitted: the default format. |
+
+Returns a frozen `UseFontResult<Format>`:
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `font` | `Readonly<ShallowRef<Font<Format> \| undefined>>` | The loaded font, or `undefined` while loading, after a failure, and after the scope is disposed. |
+| `error` | `Readonly<ShallowRef<unknown>>` | The load failure, or `undefined`. |
+| `ready` | `Promise<Font<Format>>` | Resolves with the font; rejects with the failure. `await` it in an async `setup` to use `<Suspense>`. |
+
+`useFont` never throws for a failed load. A `ready` promise you do not await does not produce an unhandled
+rejection.
+
+Calls with the same source and format on the same handle share one load. The font is released a microtask after the
+last component using it is unmounted, so a component that remounts immediately does not reload it.
+
+Must be called in `setup` of a component inside `<TresCanvas>`.
+
+## preloadFont
+
+Starts loading a font on the built-in handle before any component requests it.
+
+```ts
+import { msdf } from '@pmndrs/glyph';
+import { preloadFont } from '@pmndrs/glyph/vue';
+
+await preloadFont('/fonts/inter.font.glb', { format: msdf });
+```
+
+Takes the same arguments as `useFont`. Returns `Promise<void>`, which resolves when the font has loaded and rejects
+with the failure. Calls with the same source and format return the same promise. After a rejection the entry is
+dropped, so a later call starts a new load.
+
+It calls `glyph.init()` if needed. It always uses the built-in handle, so it does not help components under a
+`GlyphProvider` with a `handle` of its own.
+
+## clearFont
+
+Releases a font that `preloadFont` is holding.
+
+```ts
+import { msdf } from '@pmndrs/glyph';
+import { clearFont } from '@pmndrs/glyph/vue';
+
+clearFont('/fonts/inter.font.glb', { format: msdf });
+```
+
+Takes the same arguments as `useFont`. Returns `void`. A font that a mounted component holds stays loaded until that
+component unmounts.
+
+## Format subpaths
+
+Each subpath wraps the three functions for one format.
+
+```ts
+import { clearBitmap, preloadBitmap, useBitmap } from '@pmndrs/glyph/vue/bitmap';
+import { clearMsdf, preloadMsdf, useMsdf } from '@pmndrs/glyph/vue/msdf';
+import { clearSlug, preloadSlug, useSlug } from '@pmndrs/glyph/vue/slug';
+
+await preloadMsdf('/fonts/inter.font.glb');
+await preloadSlug('/fonts/inter.font.glb');
+await preloadBitmap('/fonts/inter.font.glb', { strikes: [16, 32] });
+```
+
+| Subpath | Functions | Second argument |
+| --- | --- | --- |
+| `@pmndrs/glyph/vue/msdf` | `useMsdf`, `preloadMsdf`, `clearMsdf` | `options?: MsdfOptions` |
+| `@pmndrs/glyph/vue/slug` | `useSlug`, `preloadSlug`, `clearSlug` | `options?: SlugOptions` |
+| `@pmndrs/glyph/vue/bitmap` | `useBitmap`, `preloadBitmap`, `clearBitmap` | `options: BitmapFormatOptions`, required: `{ strikes, coverage? }` |
+
+`useMsdf(input, options?)` is `useFont(input, { format: msdf })`, or `useFont(input, { format: msdf(options) })` when
+options are given, and returns `UseFontResult<typeof msdf>`. The other two follow the same pattern. See
+[Formats](/reference/formats) for the option types.
+
+## See also
+
+- [Use Glyph with Vue and TresJS](/guides/renderers/vue)
+- [Text](/reference/three-text)
+- [TextGroup](/reference/three-text-group)
+- [React](/reference/react)
+- [Errors](/reference/errors)

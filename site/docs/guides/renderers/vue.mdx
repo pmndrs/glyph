@@ -1,0 +1,316 @@
+---
+title: Use Glyph with Vue and TresJS
+description: Draw Glyph text in a TresJS canvas with the Vue components, load fonts with composables, read the three.js object through a template ref, and handle errors.
+nav: 602
+sourcecode: packages/glyph/src/vue.ts
+---
+
+`@pmndrs/glyph/vue` is a Vue layer over the three.js integration. Its `Text` and `TextGroup` components create the same
+`Text` and `TextGroup` objects that `@pmndrs/glyph/three` exports, inside a [TresJS](https://tresjs.org) canvas. This
+guide takes you from an empty Vite project to a styled paragraph, then covers template refs, the `@layout` event,
+providers, preloading and errors.
+
+## Install
+
+```sh
+npm install @pmndrs/glyph three @tresjs/core vue
+```
+
+The Vue entry needs `vue` `>=3.5 <4`, `@tresjs/core` `>=5.8.3 <6` and `three` `>=0.185.0`. All three are optional
+peers of `@pmndrs/glyph`, so you install them yourself.
+
+TresJS renders tags such as `<TresPerspectiveCamera>` as custom elements. Pass its compiler options to the Vue plugin,
+or Vue tries to resolve those tags as components:
+
+```ts ignore
+// vite.config.ts
+import templateCompilerOptions from '@tresjs/core/template-compiler-options';
+import vue from '@vitejs/plugin-vue';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [vue(templateCompilerOptions)],
+});
+```
+
+## Create the canvas
+
+Glyph draws through three.js node materials, so give TresJS a `WebGPURenderer` from `three/webgpu`. That renderer
+falls back to WebGL2 by itself when WebGPU is not available.
+
+```html
+<!-- App.vue -->
+<script setup lang="ts">
+import { TresCanvas, type TresRendererSetupContext } from '@tresjs/core';
+import { WebGPURenderer } from 'three/webgpu';
+import { toValue } from 'vue';
+
+import Scene from './Scene.vue';
+
+function createRenderer(context: TresRendererSetupContext): WebGPURenderer {
+  return new WebGPURenderer({ antialias: true, canvas: toValue(context.canvas) });
+}
+</script>
+
+<template>
+  <TresCanvas :renderer="createRenderer" clear-color="#07090f" window-size>
+    <Scene />
+  </TresCanvas>
+</template>
+```
+
+Everything from `@pmndrs/glyph/vue` except `preloadFont` and `clearFont` must run in a component below
+`<TresCanvas>`. The components and `useFont` read the canvas they belong to, and each canvas gets its own Glyph root.
+
+You do not call `glyph.init()` yourself. The first component or composable that needs the engine starts it, and
+`Text` renders nothing until the engine and its fonts are ready.
+
+## Load a font and draw text
+
+A font file is a baked `.font.glb` (see [Bake fonts](/guides/fonts/bake-fonts)). `useMsdf`, `useSlug` and `useBitmap`
+load one format of it and keep it alive while the component is mounted.
+
+```html
+<!-- Scene.vue -->
+<script setup lang="ts">
+import { Text } from '@pmndrs/glyph/vue';
+import { useMsdf } from '@pmndrs/glyph/vue/msdf';
+
+import fontUrl from './inter-latin.font.glb?url';
+
+const { font } = useMsdf(fontUrl);
+</script>
+
+<template>
+  <TresPerspectiveCamera :position="[0, 0, 600]" :near="1" :far="2000" />
+  <Text
+    v-if="font !== undefined"
+    :font="font"
+    :position="[-200, 32, 0]"
+    :text-style="{ color: '#f4f7ff', fontSize: 64 }"
+    :constraints="{ width: { mode: 'exact', size: 400 } }"
+    :layout="{ align: 'center' }"
+  >
+    Hello world
+  </Text>
+</template>
+```
+
+`font` is a shallow ref that holds `undefined` until the file has loaded, so guard the component with `v-if`. The
+text content is the default slot. `fontSize`, `position` and the constraint width are in the units of your scene.
+
+You should now see "Hello world" centered in a 400-unit-wide box whose top-left corner is at `[-200, 32, 0]`.
+
+`Text` props that describe the paragraph:
+
+| Prop | Value |
+| --- | --- |
+| `font` | Required on the outer `Text`. A loaded font, a font stack, a `FontFace` or one of its format members, or the name of a font face. |
+| `text-style` | [TextStyle](/reference/text-style), or a list of styles merged in order. |
+| `layout` | [ParagraphLayout](/reference/paragraph-layout): wrapping, alignment, line limits. |
+| `constraints` | [Constraints](/reference/constraints): the box and the anchor. |
+| `flow` | [TextFlow](/reference/text-flow): regions and exclusions. |
+| `material`, `pixel-snapping`, `raster-pixel-ratio` | The same options the three.js `Text` takes. |
+
+> [!IMPORTANT]
+> The style prop is `text-style` (`textStyle`), not `style`. Vue reserves `style` and normalizes it before a
+> component sees it.
+
+Any other attribute, such as `position`, `rotation`, `name` or `visible`, is passed to the three.js object the way
+TresJS passes attributes to any other object.
+
+Props are reactive. A changed prop, or a changed field inside a reactive style object, updates the existing text
+without recreating it.
+
+## Style part of a paragraph
+
+A `Text` inside a `Text` is an inline run, not a second object. It styles the characters it wraps and inherits
+everything it does not set.
+
+```html
+<template>
+  <Text :font="font" :text-style="{ color: '#f4f7ff', fontSize: 48 }">
+    Hello <Text :text-style="{ color: '#ffd166' }">world</Text>
+  </Text>
+</template>
+```
+
+A nested `Text` accepts only `font`, `material` and `text-style`. A box property such as `layout`, `constraints` or
+`position` on a nested `Text` throws a `TypeError`.
+
+## Group texts
+
+`TextGroup` is a scene parent for texts that move together. It takes `batching`, `render-order`, `material` and
+`pixel-snapping`, and passes every other attribute to the three.js object.
+
+```html
+<template>
+  <TextGroup name="labels" :position="[0, 200, 0]">
+    <Text v-for="label in labels" :key="label.id" :font="font" :position="label.position">
+      {{ label.title }}
+    </Text>
+  </TextGroup>
+</template>
+```
+
+See [Group and batch text](/guides/scene/group-and-batch) for what `batching` changes.
+
+## Reach the three.js object
+
+A template ref on `Text` gives you the component instance. Its `instance` property is the three.js `Text`, or
+`undefined` until the fonts have loaded. Use it for measurement, glyph reads and the editing methods.
+
+```html
+<script setup lang="ts">
+import type { RasterFormatMetadata } from '@pmndrs/glyph';
+import { Text, type VueTextInstance } from '@pmndrs/glyph/vue';
+import { shallowRef } from 'vue';
+
+const label = shallowRef<VueTextInstance<RasterFormatMetadata> | null>(null);
+
+function logSize(): void {
+  const text = label.value?.instance;
+  if (text === undefined) return;
+  const { width, height, lineCount } = text.measure();
+  console.log(width, height, lineCount);
+}
+</script>
+
+<template>
+  <Text ref="label" :font="font">Measure me</Text>
+</template>
+```
+
+Keep the ref in a `shallowRef`. `useTemplateRef` returns a deep read-only proxy, and three.js objects hold private
+fields that do not survive proxying.
+
+A read such as `measure()` is always current: it prepares the text first if a prop changed. A `TextGroup` ref has the
+same shape, with the three.js `TextGroup` in `instance`.
+
+## React to layout
+
+`@layout` fires with the three.js `Text` and the value `measure()` returns. It fires after the text is first
+prepared and whenever that summary changes, before the frame that draws it.
+
+```html
+<script setup lang="ts">
+import type { ParagraphLayoutSummary } from '@pmndrs/glyph';
+import { ref } from 'vue';
+
+const panelHeight = ref(0);
+
+function onLayout(_text: unknown, layout: ParagraphLayoutSummary): void {
+  panelHeight.value = layout.height + 24;
+}
+</script>
+
+<template>
+  <Text :font="font" :constraints="{ width: { mode: 'at-most', size: 320 } }" @layout="onLayout">
+    {{ message }}
+  </Text>
+</template>
+```
+
+Use it to size or move something else to fit the text. A handler may read anything and may write transforms,
+visibility, color, opacity and material. Writing a layout input of any text from inside the handler throws
+[`GlyphLayoutPhaseError`](/reference/errors).
+
+## Choose a handle or name font faces
+
+Without a provider, every `<TresCanvas>` gets one root on a built-in handle. Wrap your scene in `GlyphProvider` to
+change that or to give font faces names.
+
+```html
+<script setup lang="ts">
+import { GlyphProvider, Text } from '@pmndrs/glyph/vue';
+
+const fontFaces = {
+  Inter: '/fonts/inter.font.glb',
+  Title: { src: '/fonts/title.font.glb', format: 'slug' },
+};
+</script>
+
+<template>
+  <GlyphProvider :font-faces="fontFaces">
+    <Text font="Inter">
+      Body text with a <Text font="Title">title run</Text>
+    </Text>
+  </GlyphProvider>
+</template>
+```
+
+With a name or a `FontFace` as `font`, `Text` loads the font itself and renders nothing until it is ready. All the
+fonts a paragraph needs start loading together.
+
+`GlyphProvider` props:
+
+| Prop | Value |
+| --- | --- |
+| `handle` | A handle from `glyph.handle(name, ThreeConfig)`, one of its roots, or a string that names a root on the built-in handle. Omitted: the canvas's default root. |
+| `font-faces` | A record from name to a URL, a `{ src, format }` object or an existing `FontFace`. |
+
+Both props are fixed for the life of the provider. Changing either throws; remount the provider (for example with a
+`key`) to replace them. `Text` and `TextGroup` do not take a `handle` prop.
+
+## Preload a font
+
+`preloadFont` starts a load before any component asks for it, and `clearFont` releases it. Each format subpath has the
+same pair with the format filled in.
+
+```ts
+import { clearMsdf, preloadMsdf } from '@pmndrs/glyph/vue/msdf';
+
+await preloadMsdf('/fonts/inter.font.glb');
+
+// Later, when no screen needs it any more:
+clearMsdf('/fonts/inter.font.glb');
+```
+
+A component that calls `useMsdf` with the same URL and options then finds the font already loading or loaded.
+`clearMsdf` does not affect a font a mounted component is using. Preloads always use the built-in handle.
+
+## Handle errors
+
+There is no `error` event on `Text`. Failures reach Vue's own error handling, and the component keeps what it was
+showing.
+
+```html
+<script setup lang="ts">
+import { GlyphFontError, GlyphInputError } from '@pmndrs/glyph';
+import { onErrorCaptured, ref } from 'vue';
+
+const failure = ref<string>();
+
+onErrorCaptured((error) => {
+  if (error instanceof GlyphInputError) failure.value = `Invalid ${error.path.join('.')}: ${error.message}`;
+  else if (error instanceof GlyphFontError) failure.value = `Font failed (${error.reason})`;
+  else return true; // not ours: let it continue to the next handler
+  return false;
+});
+</script>
+```
+
+| Failure | Where it goes |
+| --- | --- |
+| An invalid prop value | `onErrorCaptured` of an ancestor, then `app.config.errorHandler`, as a `GlyphInputError`. The text keeps its previous value. |
+| A font given to `Text` by name or as a `FontFace` fails to load | The same handlers, once, as a `GlyphFontError`. A re-render does not restart the load. |
+| A font loaded with `useFont` or a format composable fails | The composable's `error` ref is set and its `ready` promise rejects. Nothing is thrown unless you `await ready`. |
+| An exception thrown by your `@layout` handler | The same handlers, like any other Vue event handler. |
+| A failure found while rendering, such as a paragraph the engine refuses | Thrown from the frame's `renderer.render()`, once. Catch it with a global handler. |
+
+The last row is outside Vue: TresJS calls `renderer.render()` from its render loop. See
+[Handle errors](/guides/project/handle-errors) for the global handler.
+
+## Render on demand
+
+With `render-mode="on-demand"` on `<TresCanvas>`, the components request a frame whenever a prop changes the text.
+They also request one when you write to the three.js object through a ref, for example
+`label.value.instance.text = 'New'`.
+
+## See also
+
+- [Vue reference](/reference/vue)
+- [Use Glyph with three.js](/guides/renderers/three)
+- [Text reference](/reference/three-text)
+- [Handle errors](/guides/project/handle-errors)
+- [Load a font](/guides/fonts/load-a-font)

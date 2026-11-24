@@ -1,0 +1,251 @@
+---
+title: Handle errors
+description: Catch invalid input where you write it, catch failures found while rendering where you render, add React and Vue boundaries, and handle font load failures.
+nav: 650
+sourcecode: packages/glyph/src/glyph-error.ts
+---
+
+Glyph has no error callback and no per-text error state. A value it cannot accept throws from the call that wrote
+it. A failure that is only found later, during layout or drawing, is thrown from the call that renders the frame.
+This guide shows where to put each `try`/`catch`, boundary and handler.
+
+Every error Glyph raises on purpose extends `GlyphError` and has a stable `code`. Branch on the class or on `code`,
+never on the message. The [errors reference](/reference/errors) lists them all.
+
+## Find the right place to catch
+
+| What failed | Where it is thrown | What it is |
+| --- | --- | --- |
+| A value passed to `createText`, `set()`, a property setter or a component prop | That call | `GlyphInputError` |
+| An offset passed to `caret`, `move`, `boundary`, `rangeRects` or `replace` | That call | `TextOffsetError` |
+| A layout input written inside an `onLayout` callback | That setter | `GlyphLayoutPhaseError` |
+| A font that is missing, corrupt or lacks the requested format | The `load()` promise; in React, the nearest boundary | `GlyphFontError` |
+| A paragraph the engine refuses, a material that fails to build, an engine restart, a fixed capacity exceeded, an exception from your `onLayout` | The render call of your renderer (next section) | The underlying error, once |
+
+## Catch invalid input
+
+Wrap the write. A setter validates the whole value before it stores anything, so after a throw the text is exactly
+as it was.
+
+```ts
+import { GlyphInputError } from '@pmndrs/glyph';
+
+try {
+  text.style = { fontSize: -1 };
+} catch (error) {
+  if (error instanceof GlyphInputError) {
+    console.warn(error.path, error.message); // ['style'] 'Text style fontSize must be positive'
+  } else {
+    throw error;
+  }
+}
+```
+
+`path` names the property you wrote, outermost first, for example `['style']` or `['text', 'spans', 2, 'style']`. It
+is empty when two values are only invalid together. `cause` is the validator's own `TypeError` or `RangeError`.
+
+Two cases are easy to hit by accident:
+
+- A text longer than `maxTextUnits` (65,536 UTF-16 code units unless you raise it in `defineThreeConfig`) is invalid
+  input and throws at `['text']`.
+- A lone surrogate is not invalid. It is drawn as U+FFFD, the replacement character.
+
+> [!NOTE]
+> `Pixi3DText` validates in the same places, but throws the plain `TypeError` or `RangeError` instead of wrapping it
+> in `GlyphInputError`.
+
+## Catch invalid offsets
+
+The editing methods never snap or clip an offset. If you want snapping, catch the error and use the boundaries it
+carries.
+
+```ts
+import { TextOffsetError } from '@pmndrs/glyph';
+
+function caretRect(offset: number) {
+  try {
+    return text.caret({ offset, affinity: 'downstream' }).rect;
+  } catch (error) {
+    if (!(error instanceof TextOffsetError)) throw error;
+    // error.reason: 'not-integer' | 'out-of-range' | 'reversed' | 'inside-grapheme'
+    return text.caret({ offset: error.before ?? 0, affinity: 'downstream' }).rect;
+  }
+}
+```
+
+`before` and `after` are the nearest grapheme boundaries at or before, and at or after, the offset you gave.
+
+## Catch failures found while rendering
+
+Setters do not run the layout engine, so an engine refusal cannot surface where you assigned the value. It surfaces
+from the call that prepares and draws the frame. Which call that is depends on the renderer:
+
+| Renderer | Call that throws |
+| --- | --- |
+| three.js, React Three Fiber, Vue with TresJS | `renderer.render(scene, camera)` |
+| TypeGPU | `root.draw(pass, viewport)` (the handle is its own default root) |
+| PixiJS 3D | `glyph.shape()` |
+
+With three.js, wrap the render in your loop:
+
+```ts
+renderer.setAnimationLoop(() => {
+  try {
+    renderer.render(scene, camera);
+  } catch (error) {
+    reportError(error); // 'Glyph text "Hello, wor…" was not drawn: …'
+  }
+});
+```
+
+What you can rely on:
+
+- The frame is drawn before the throw. The failed text draws nothing; the other texts draw.
+- A failure is thrown once. While it stands, later frames do not throw it again. Changing the text's input makes
+  Glyph try again.
+- The message quotes the first 40 UTF-16 code units of the failed text, so a log line identifies it. The engine's
+  own error is `cause`.
+- Several failures found in one frame arrive as one `AggregateError` with the individual errors in `errors`.
+- A refused text's `commitState()` stays `{ status: 'pending' }`.
+
+An engine crash does not take the root down. The engine is replaced, every text is stated to the new instance, and
+the next frame tries again. Only an input that crashes the engine every time is refused, alone.
+
+The same pattern with TypeGPU and PixiJS 3D:
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import type { TypeGpuHandle } from '@pmndrs/glyph/typegpu';
+
+declare const typeGpu: TypeGpuHandle;
+declare const pass: GPURenderPassEncoder;
+declare const viewport: { width: number; height: number };
+
+// TypeGPU: thrown after the draw calls were recorded, so still end and submit the pass.
+try {
+  typeGpu.draw(pass, viewport);
+} catch (error) {
+  reportError(error);
+}
+
+// PixiJS 3D: there is no render call of Glyph's own, so the publication throws.
+try {
+  glyph.shape();
+} catch (error) {
+  reportError(error);
+}
+```
+
+With three.js you may also call `glyph.shape()` yourself. An explicit call throws what its roots reject, at the call.
+
+## Keep layout callbacks from throwing
+
+An `onLayout` callback may read anything and move other objects. It must not write a layout input of any text:
+
+```ts
+import { GlyphLayoutPhaseError } from '@pmndrs/glyph';
+
+text.onLayout = (self, layout) => {
+  try {
+    self.constraints = { width: { mode: 'exact', size: layout.width } };
+  } catch (error) {
+    console.assert(error instanceof GlyphLayoutPhaseError);
+  }
+};
+```
+
+The fix is to make the write outside the callback, for example in your update step before the next frame. If the
+callback itself throws, the other callbacks still run, the frame is published, and the exception is thrown from the
+render call, once, wrapped in an `Error` whose message quotes the text and whose `cause` is your exception.
+
+## Catch font load failures
+
+A font fails when you load it, not when you draw with it.
+
+```ts
+import { GlyphFontError } from '@pmndrs/glyph';
+
+try {
+  await Inter.load();
+} catch (error) {
+  if (error instanceof GlyphFontError) {
+    console.warn(error.reason, error.url); // for example 'BAKED_FONT_FETCH', 'https://…/inter.font.glb'
+  } else {
+    throw error;
+  }
+}
+```
+
+`reason` is a short machine-readable string such as `'BAKED_FONT_FETCH'`, `'RASTER_NOT_FOUND'` or
+`'FONT_FACE_FORMAT_UNAVAILABLE'`; `url` is set when the failure belongs to one request. A failed load is forgotten, so
+calling `load()` again is a new attempt.
+
+## Add boundaries in React
+
+In React an invalid prop throws while React commits. Without an error boundary inside the canvas, that unmounts the
+whole canvas. Wrap text in `GlyphErrorBoundary`, which can render inside `<Canvas>`:
+
+```tsx
+import type { GlyphFontError } from '@pmndrs/glyph';
+import { GlyphErrorBoundary, GlyphProvider, Text } from '@pmndrs/glyph/react';
+
+export function Labels({ title }: { title: string }) {
+  return (
+    <GlyphProvider errorFallback={(error: GlyphFontError, dismiss) => <group name={error.reason} onClick={dismiss} />}>
+      <GlyphErrorBoundary fallback={(error, reset) => <group onClick={reset} />} onError={reportError}>
+        <Text font={inter}>{title}</Text>
+      </GlyphErrorBoundary>
+    </GlyphProvider>
+  );
+}
+```
+
+- `GlyphErrorBoundary` catches every error from the subtree it wraps and renders `fallback` in its place. `fallback`
+  is canvas content or `null`. The function form receives the error and `reset`, which mounts the children again.
+  `onError` is called once per caught error.
+- `GlyphProvider`'s `errorFallback` handles only `GlyphFontError`, such as a font hook whose file failed to load, and
+  rethrows anything else. Its function form receives `dismiss`; call it after you have repaired the cause.
+- A failure found while rendering is thrown from React Three Fiber's render loop, outside React. No boundary sees
+  it. Use a global handler.
+
+## Handle errors in Vue
+
+In Vue an invalid prop, and a font that `Text` loads by name or from a `FontFace`, reach `onErrorCaptured` and
+`app.config.errorHandler`. The component keeps its previous value. A font loaded with `useFont` reports through the
+composable's `error` ref instead. See [Use Glyph with Vue and TresJS](/guides/renderers/vue) for the code.
+
+## Report what you do not catch
+
+A failure found while rendering that you do not catch is an ordinary uncaught exception from your render loop. It
+reaches `window.onerror` and any error reporter you have installed. To label Glyph's errors there, branch on `code`:
+
+```ts
+import { GlyphError } from '@pmndrs/glyph';
+
+function glyphCodes(error: unknown): string[] {
+  if (error instanceof AggregateError) return error.errors.flatMap(glyphCodes);
+  return error instanceof GlyphError ? [error.code] : [];
+}
+
+window.addEventListener('error', (event) => {
+  const codes = glyphCodes(event.error);
+  if (codes.length > 0) console.error('Glyph failed while rendering:', codes, event.error);
+});
+```
+
+GPU errors, such as a lost device or a shader that fails to compile, are not Glyph errors. Your renderer reports
+them.
+
+## Check your handling
+
+Assign an invalid value on purpose, for example `text.style = { fontSize: -1 }`, and confirm that your handler runs
+and that the text still shows its previous style. For the render path, throw from an `onLayout` callback once and
+confirm the error arrives at the `catch` around your render call, one time.
+
+## See also
+
+- [Errors reference](/reference/errors)
+- [When layout runs](/explanation/when-layout-runs)
+- [React to layout](/guides/inspect/react-to-layout)
+- [Troubleshooting](/guides/project/troubleshooting)
+- [Load a font](/guides/fonts/load-a-font)

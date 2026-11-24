@@ -1,0 +1,113 @@
+---
+title: Use three.js with TypeGPU shaders
+description: Switch the three.js integration to the experimental config whose glyph shaders are authored in TypeGPU, and know when that is worth doing.
+nav: 604
+sourcecode: packages/glyph/src/three/typegpu.ts
+---
+
+`@pmndrs/glyph/three/typegpu` is the three.js integration with a different shader source. It exports everything
+`@pmndrs/glyph/three` exports (`Text`, `TextGroup`, `defineTextMaterial`, `Glyphs` and the rest), and replaces two
+names: `ThreeConfig` and `defineThreeConfig`. A handle made from this entry draws bitmap, MSDF, Slug and decoration
+glyphs with the shader functions published at `@pmndrs/glyph/shaders/typegpu`, bridged into three.js nodes by
+`@typegpu/three`. A handle made from `@pmndrs/glyph/three` draws them with native TSL.
+
+Scene objects, layout, measurement, editing and materials behave the same in both. Only the code that runs on the GPU
+differs.
+
+> [!WARNING]
+> This entry is experimental. In the project's own browser checks the two shader sets do not produce identical
+> pixels for bitmap fonts; MSDF and Slug matched in those checks. Use `@pmndrs/glyph/three` unless you have one of
+> the reasons below.
+
+## When to use it
+
+- You render the same fonts in a direct TypeGPU renderer (`@pmndrs/glyph/typegpu`) and in three.js, and want both to
+  run the same shader functions.
+- You write custom shading against `@pmndrs/glyph/shaders/typegpu` and want three.js text to use that code path.
+- You are evaluating the TypeGPU shader set.
+
+Otherwise stay on `@pmndrs/glyph/three`: it adds no TypeGPU packages to your bundle.
+
+## Install the peers
+
+```sh
+npm install @pmndrs/glyph three typegpu @typegpu/three @typegpu/gl
+```
+
+The supported ranges are `typegpu` `>=0.12.5 <0.13`, `@typegpu/three` `>=0.12.1 <0.13` and `@typegpu/gl`
+`>=0.12.4 <0.13`. They are optional peers of `@pmndrs/glyph`, and only this entry and the other TypeGPU entries load
+them.
+
+The `typegpu` package reads `process.env.NODE_ENV` without checking that `process` exists, so this entry needs a
+bundler, or a `process` shim when you load it as unbundled browser modules. See
+[Use Glyph with TypeGPU](/guides/renderers/typegpu).
+
+## Change the import
+
+Setup is the three.js setup with one import path changed. Take the config from this entry, and import the scene
+classes from it too so the application has one source for them.
+
+```ts
+import { glyph, msdf } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three/typegpu';
+
+await glyph.init();
+const handle = glyph.handle('app', ThreeConfig);
+
+const Inter = glyph.fontFace('/fonts/inter-latin.font.glb', { format: msdf });
+await Inter.load();
+
+const label = handle.createText({ font: Inter, text: 'Hello', style: { fontSize: 0.5, color: '#ffffff' } });
+scene.add(label);
+renderer.render(scene, camera);
+```
+
+`defineThreeConfig(options)` takes the same options as the one in `@pmndrs/glyph/three`:
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { defineThreeConfig } from '@pmndrs/glyph/three/typegpu';
+
+const handle = glyph.handle('app', defineThreeConfig({ msdfAtlas: 'sdf', maxTextUnits: 200_000 }));
+```
+
+The shader set belongs to the handle. A handle from this entry and a handle from `@pmndrs/glyph/three` can exist in
+the same application, each drawing with its own shaders.
+
+## Use it from React or Vue
+
+The React and Vue components create their default handle from `@pmndrs/glyph/three`. To make them draw with the
+TypeGPU shaders, create the handle yourself and pass it to the provider:
+
+```tsx
+import { glyph } from '@pmndrs/glyph';
+import { GlyphProvider, Text } from '@pmndrs/glyph/react';
+import { ThreeConfig } from '@pmndrs/glyph/three/typegpu';
+
+await glyph.init();
+const handle = glyph.handle('app', ThreeConfig);
+
+export function Label() {
+  return (
+    <GlyphProvider handle={handle}>
+      <Text font={inter}>Hello</Text>
+    </GlyphProvider>
+  );
+}
+```
+
+`GlyphProvider` from `@pmndrs/glyph/vue` takes the same `handle` prop.
+
+## Check that it works
+
+Render one text in each of the three formats you ship and compare it with the same scene on `@pmndrs/glyph/three`.
+Check both WebGPU and the WebGL2 fallback if you support both. Custom materials made with `defineTextMaterial`
+receive the same context from either entry, so they need no change.
+
+## See also
+
+- [Use Glyph with three.js](/guides/renderers/three)
+- [Use Glyph with TypeGPU](/guides/renderers/typegpu)
+- [Three config reference](/reference/three-config)
+- [Shader functions](/reference/shaders)
+- [How renderers integrate](/explanation/renderer-integration)

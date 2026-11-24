@@ -1,0 +1,275 @@
+---
+title: Use Glyph with TypeGPU
+description: Draw Glyph text into your own WebGPU render pass with TypeGPU, update it, project and tint it on the GPU, and edit it.
+nav: 603
+sourcecode: packages/glyph/src/typegpu.ts
+---
+
+`@pmndrs/glyph/typegpu` draws text into a render pass that you own. There is no scene graph and no three.js: you
+create a TypeGPU root, give it to Glyph, create texts, and call `draw()` inside your pass. By default a text is flat
+2D, positioned in logical pixels from the top-left corner of the viewport, and you can replace the projection and the
+final color with GPU functions of your own.
+
+This entry needs a browser with WebGPU.
+
+## Install
+
+```sh
+npm install @pmndrs/glyph typegpu
+npm install --save-dev unplugin-typegpu
+```
+
+`typegpu` is an optional peer of `@pmndrs/glyph` (`>=0.12.5 <0.13`). `unplugin-typegpu` is TypeGPU's bundler plugin.
+You need it when you write `'use gpu'` functions, which the projection and color callbacks below are:
+
+```ts ignore
+// vite.config.ts
+import typegpu from 'unplugin-typegpu/vite';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [typegpu()],
+});
+```
+
+> [!IMPORTANT]
+> The `typegpu` package reads `process.env.NODE_ENV` without checking that `process` exists. A bundler such as Vite
+> replaces it. If you load `@pmndrs/glyph/typegpu` or `@pmndrs/glyph/three/typegpu` as unbundled browser modules,
+> define a `process` shim first (for example `globalThis.process = { env: { NODE_ENV: 'production' } }`), or the
+> import throws.
+
+## Draw a line of text
+
+The order is fixed: TypeGPU root, `glyph.init()`, a handle from `defineTypeGpuConfig`, a loaded font, a text,
+`glyph.shape()`, then `draw()` inside a pass.
+
+```ts ignore
+import { glyph, msdf } from '@pmndrs/glyph';
+import { defineTypeGpuConfig } from '@pmndrs/glyph/typegpu';
+import tgpu from 'typegpu';
+
+const canvas = document.querySelector('canvas')!;
+const root = await tgpu.init();
+const context = root.configureContext({ canvas, alphaMode: 'premultiplied' });
+
+await glyph.init();
+const handle = glyph.handle(
+  'app',
+  defineTypeGpuConfig({ root, format: navigator.gpu.getPreferredCanvasFormat() }),
+);
+
+const Inter = glyph.fontFace('/fonts/inter-latin.font.glb', { format: msdf });
+await Inter.load();
+
+const text = handle.createText({
+  font: Inter,
+  text: 'Hello, TypeGPU!',
+  position: [24, 64],
+  style: { fontSize: 64, color: '#a99aff' },
+});
+
+function frame(): void {
+  glyph.shape();
+
+  const encoder = root['~unstable'].createCommandEncoder();
+  const pass = encoder.beginRenderPass({
+    colorAttachments: [{ view: context, clearValue: [0.1, 0.12, 0.25, 1] }],
+  });
+  handle.draw(pass, { width: canvas.clientWidth, height: canvas.clientHeight });
+  pass.end();
+  encoder.submit();
+}
+
+frame();
+```
+
+You should see the line with its top-left corner 24 pixels from the left and 64 pixels from the top of the canvas.
+
+What each call does:
+
+- `defineTypeGpuConfig({ root, format })` binds Glyph to your TypeGPU root. `format` is the color format of the passes
+  you will draw into. Glyph never destroys your root or its device.
+- `glyph.handle(name, config)` returns a handle. The handle is also its own default root, so `handle.createText()` and
+  `handle.draw()` work directly. `handle('overlay')` returns a separate named root with its own texts and its own
+  `draw()`.
+- `glyph.shape()` lays out every text that changed and publishes the result to the GPU buffers. Call it once per
+  frame before you draw, or after a batch of changes.
+- `draw(pass, viewport)` records the draw calls for the root's texts into your pass. It accepts a TypeGPU pass or a raw
+  `GPURenderPassEncoder`. It never ends the pass and never submits; clearing, attachments and submission stay yours,
+  and other pipelines can record into the same pass before or after it.
+
+The `viewport` argument is the size of the pass in logical pixels. Coordinates run from `[0, 0]` at the top-left to
+`[width, height]`, with +Y down. The canvas backing store can be larger; set `rasterPixelRatio` on the text to
+`window.devicePixelRatio` so bitmap strikes and antialiasing match physical pixels.
+
+## Update text
+
+`text.update()` takes any subset of the creation options. It validates and records the values; the layout runs in
+the next `glyph.shape()`.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import type { TypeGpuText } from '@pmndrs/glyph/typegpu';
+
+declare const text: TypeGpuText;
+declare const canvas: HTMLCanvasElement;
+
+text.update({
+  text: 'A longer line that now wraps inside the canvas',
+  style: { fontSize: 32, color: '#ffffff' },
+  constraints: { width: { mode: 'at-most', size: canvas.clientWidth - 48 } },
+  rasterPixelRatio: window.devicePixelRatio,
+});
+glyph.shape();
+```
+
+`style`, `layout` and `constraints` replace the previous object as a whole. A `position`-only update moves the text
+without a new layout and without `glyph.shape()`; the next `draw()` uses it.
+
+```ts
+import type { TypeGpuText } from '@pmndrs/glyph/typegpu';
+
+declare const text: TypeGpuText;
+
+text.update({ position: [24, 200] });
+```
+
+Two limits of this renderer: `text` is a plain string (no styled spans), and `style.decoration` is rejected with a
+[`GlyphInputError`](/reference/errors).
+
+When you are done, call `text.dispose()` for a text and `handle.dispose()` for the handle and every text it still
+owns. Dispose them before you destroy your TypeGPU root.
+
+## Measure and react to layout
+
+`measure()`, `glyphs()` and `readGlyphs()` prepare the text first, so they are current right after `update()`
+without a `glyph.shape()`.
+
+```ts
+import type { TypeGpuText } from '@pmndrs/glyph/typegpu';
+
+declare const text: TypeGpuText;
+declare const background: TypeGpuText;
+
+const { width, height, lineCount } = text.measure();
+
+text.onLayout = (_text, layout) => {
+  // Runs inside glyph.shape() or glyph.prepare(), before anything is published.
+  background.update({ position: [24, 64 + layout.height + 8] });
+};
+```
+
+`onLayout` is called with the text and its measurement after the text is first prepared and whenever that
+measurement changes. It can also be passed to `createText`. Inside it you may read anything and write positions.
+Writing a layout input of any text (`text`, `font`, `style`, `layout`, `constraints`, `rasterPixelRatio`) throws
+[`GlyphLayoutPhaseError`](/reference/errors).
+
+## Project text on the GPU
+
+`transformPosition` replaces the default 2D projection. It is a `'use gpu'` function that receives each vertex in
+logical pixels (after `position` is added, +Y down) and the viewport size, and returns clip coordinates including
+`w`.
+
+```ts ignore
+import { glyph } from '@pmndrs/glyph';
+import { defineTypeGpuConfig } from '@pmndrs/glyph/typegpu';
+import tgpu, { d, std } from 'typegpu';
+
+const animation = tgpu.bindGroupLayout({ angle: { uniform: d.f32 } });
+const angle = root.createUniform(d.f32, 0);
+const animationGroup = root.createBindGroup(animation, { angle });
+
+const tilted = glyph.handle(
+  'tilted',
+  defineTypeGpuConfig({
+    root,
+    format: navigator.gpu.getPreferredCanvasFormat(),
+    transformPosition: (position, viewport) => {
+      'use gpu';
+      const x = (position.x * 2) / viewport.x - 1;
+      const y = 1 - (position.y * 2) / viewport.y;
+      const w = 1 + x * std.sin(animation.$.angle) * 0.3;
+      return d.vec4f(x * std.cos(animation.$.angle), y, w * 0.5, w);
+    },
+    transformColor: (color) => {
+      'use gpu';
+      const cool = color.rgb.mul(d.vec3f(0.6, 0.8, 1));
+      return d.vec4f(std.mix(color.rgb, cool, std.abs(std.sin(animation.$.angle))), color.a);
+    },
+  }),
+);
+
+// Each frame, between beginRenderPass() and pass.end(): write the uniform, then draw with the bind group the
+// callbacks read.
+angle.write(performance.now() / 1000);
+tilted.with(animationGroup).draw(pass, { width: canvas.clientWidth, height: canvas.clientHeight });
+```
+
+- `transformColor` receives the final straight (not premultiplied) RGBA after coverage, outline and shadow, and the
+  WebGPU fragment position as an optional second argument. Keep `color.a` to keep antialiased edges.
+- Both callbacks are fixed when the config is created and apply to every text of every root of that handle. Use a
+  second handle for a different projection.
+- Changing a uniform the callbacks read needs no `glyph.shape()`: write the uniform and draw.
+- `with(bindGroup)` returns a new draw view that supplies that bind group. Chain it for several layouts. The handle
+  and earlier views are unchanged, and a view can be reused across frames.
+
+To put text on a plane in a 3D scene, return your model-view-projection matrix applied to `d.vec4f(position, 1)`.
+Include the pixel-to-world scale and the Y flip in that matrix. For the pass's depth buffer to hide text behind
+geometry, set `depthStencil` on the config to match the pass's depth attachment, and `sampleCount: 4` when the pass is
+multisampled.
+
+## Catch failures
+
+Invalid values throw [`GlyphInputError`](/reference/errors) from `createText()` or `update()`, and the text keeps its
+previous state. A failure that is only found during layout, such as a paragraph the engine refuses or an exception
+from your `onLayout`, is thrown from the root's next `draw()`, after the draw calls were recorded:
+
+```ts
+import type { TypeGpuHandle } from '@pmndrs/glyph/typegpu';
+
+declare const handle: TypeGpuHandle;
+declare const pass: GPURenderPassEncoder;
+declare const canvas: HTMLCanvasElement;
+
+try {
+  handle.draw(pass, { width: canvas.clientWidth, height: canvas.clientHeight });
+} catch (error) {
+  console.error(error); // 'Glyph text "Hello, Typ…" was not drawn: …'
+} finally {
+  pass.end();
+}
+```
+
+Each failure is thrown once. The failed text draws nothing until its input changes; the other texts draw. See
+[Handle errors](/guides/project/handle-errors).
+
+## Edit text
+
+A `TypeGpuText` has the same editing methods as the three.js `Text`: `caret`, `hitTest`, `move`, `boundary`,
+`rangeRects` and `replace`. Offsets are UTF-16 code units of the text on grapheme boundaries. Coordinates are local
+to the text: +X right, +Y down, from the text's `position`.
+
+```ts
+import type { TypeGpuText } from '@pmndrs/glyph/typegpu';
+
+declare const text: TypeGpuText;
+declare const pointer: { x: number; y: number }; // logical pixels in the viewport
+declare const origin: readonly [number, number]; // the text's position
+
+// Click to place the caret, then type a character there.
+const position = text.hitTest({ x: pointer.x - origin[0], y: pointer.y - origin[1] });
+text.replace(position.offset, position.offset, 'x');
+const caret = text.caret({ offset: position.offset + 1, affinity: 'downstream' });
+// caret.rect is a zero-width box with the line's height: draw it yourself.
+```
+
+Glyph does not draw the caret or the selection. See [Caret and selection](/guides/editing/caret-and-selection) for
+the full model.
+
+## See also
+
+- [TypeGPU reference](/reference/typegpu)
+- [Use the three.js integration with TypeGPU shaders](/guides/renderers/three-typegpu)
+- [Editing reference](/reference/editing)
+- [Handle errors](/guides/project/handle-errors)
+- [Shader functions](/reference/shaders)

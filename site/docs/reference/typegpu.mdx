@@ -1,0 +1,374 @@
+---
+title: TypeGPU
+description: Reference for every export of @pmndrs/glyph/typegpu, the direct TypeGPU renderer, with the config options, the root and draw API, and every member of a text.
+nav: 732
+sourcecode: packages/glyph/src/typegpu.ts
+---
+
+`@pmndrs/glyph/typegpu` draws Glyph text into WebGPU render passes that the application owns, through
+[TypeGPU](https://docs.swmansion.com/TypeGPU/). It exports one function, `defineTypeGpuConfig`, and the types of the
+handle, root and text it produces. It does not import three.js. The shader functions it draws with are published
+separately at `@pmndrs/glyph/shaders/typegpu`; see [Shaders](/reference/shaders).
+
+Peer dependency: `typegpu` `>=0.12.5 <0.13`. Requires WebGPU.
+
+```ts
+import { glyph, msdf } from '@pmndrs/glyph';
+import { defineTypeGpuConfig, type TypeGpuConfigOptions } from '@pmndrs/glyph/typegpu';
+
+declare const tgpuRoot: TypeGpuConfigOptions['root']; // from `await tgpu.init()`
+declare const pass: GPURenderPassEncoder;
+
+await glyph.init();
+const handle = glyph.handle('app', defineTypeGpuConfig({ root: tgpuRoot, format: 'bgra8unorm' }));
+const Inter = glyph.fontFace('/fonts/inter.font.glb', { format: msdf });
+await Inter.load();
+
+const text = handle.createText({ font: Inter, text: 'Hello', position: [24, 64], style: { fontSize: 48 } });
+glyph.shape();
+handle.draw(pass, { width: 800, height: 600 });
+```
+
+## Exports
+
+| Name | Kind | Summary |
+| --- | --- | --- |
+| [`defineTypeGpuConfig`](#definetypegpuconfig) | function | Creates the config to pass to `glyph.handle`. |
+| [`TypeGpuConfigOptions`](#options) | type | Options of `defineTypeGpuConfig`. |
+| [`TypeGpuPositionTransform`](#typegpupositiontransform), [`TypeGpuColorTransform`](#typegpucolortransform) | types | The GPU callbacks. |
+| [`TypeGpuHandle`](#typegpuhandle), [`TypeGpuRoot`](#typegpuroot) | types | The handle and its roots. |
+| [`TypeGpuDraw`](#typegpudraw) | type | `with()` and `draw()`. |
+| [`TypeGpuText`](#typegputext) | type | A retained text. |
+| [`TypeGpuTextOptions`](#createtext), [`TypeGpuTextUpdate`](#update) | types | Arguments of `createText` and `update`. |
+| [`TypeGpuLayoutCallback`](#onlayout) | type | The `onLayout` callback. |
+| `TypeGpuFontSelection` | type | The fonts a text accepts: a `FontFace` or one of its format selections in bitmap, MSDF or Slug. |
+| `TypeGpuFontFormats` | type | `{ bitmap, msdf, slug }`: the formats this config registers. |
+| `TypeGpuGlyphConfig` | type | The return type of `defineTypeGpuConfig`. |
+| `BorrowedGlyphLayout` | type | The view passed to `readGlyphs`. See [Measurement](/reference/measurement). |
+
+## defineTypeGpuConfig
+
+Creates a renderer config bound to one TypeGPU root and one render target description.
+
+```ts
+import type { TypeGpuConfigOptions, TypeGpuGlyphConfig } from '@pmndrs/glyph/typegpu';
+
+declare function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyphConfig;
+```
+
+### Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `root` | `TgpuRoot` | required | Your TypeGPU root. Glyph creates its buffers, textures and pipelines on it. Disposing the Glyph handle leaves the root and its device alive. |
+| `format` | `GPUTextureFormat` | required | The color attachment format of the passes you will call `draw()` in. |
+| `sampleCount` | `1 \| 4` | `1` | The sample count of those passes. |
+| `depthStencil` | `GPUDepthStencilState` | none | Depth state for the text pipelines. When set, the pass must have a matching depth attachment. |
+| `transformPosition` | [`TypeGpuPositionTransform`](#typegpupositiontransform) | 2D pixel projection | A `'use gpu'` function replacing the default projection. Fixed for the config's lifetime. |
+| `transformColor` | [`TypeGpuColorTransform`](#typegpucolortransform) | none | A `'use gpu'` function transforming the final fragment color. Fixed for the config's lifetime. |
+| `defaultFontFormat` | `'bitmap' \| 'msdf' \| 'slug'` | `'msdf'` | The format used for a `FontFace` given without a format selection. |
+| `msdfAtlas` | `'msdf' \| 'sdf'` | `'msdf'` | What the GPU atlas keeps of an MSDF font. `'sdf'` keeps only the true distance: a quarter of the memory, with corners rounded where the multi-channel field keeps them sharp. In both cases only glyphs that have been drawn are uploaded. |
+
+Throws `TypeError` if `msdfAtlas` is neither `'msdf'` nor `'sdf'`.
+
+The default projection maps logical pixels, origin at the top-left of the viewport, +X right and +Y down, to clip
+space, using the viewport size passed to `draw()`.
+
+### TypeGpuPositionTransform
+
+```ts ignore
+import type { d } from 'typegpu';
+
+type TypeGpuPositionTransform = (position: d.v3f, viewport: d.v2f) => d.v4f;
+```
+
+A vertex-stage function. `position` is in logical pixels, top-left origin, +Y down, with the text's `position`
+already added; `viewport` is the size passed to `draw()`. It returns homogeneous clip coordinates, `w` included. It
+may read TypeGPU resources: uniforms it captures, or a `tgpu.bindGroupLayout` whose bind group you supply with
+[`with()`](#typegpudraw).
+
+Slug estimates its antialiasing footprint from nearby positions, and MSDF sizes the one-pixel margin of its trimmed
+quads from the corners of each glyph cell. Matrix projections are exact for both. A nonlinear deformation is
+approximated locally.
+
+### TypeGpuColorTransform
+
+```ts ignore
+import type { d } from 'typegpu';
+
+type TypeGpuColorTransform = (color: d.v4f, fragmentPosition: d.v4f) => d.v4f;
+```
+
+A fragment-stage function. `color` is straight (not premultiplied) RGBA after coverage, with fill, outline and shadow
+already combined. `fragmentPosition` is the WebGPU fragment position: x and y in physical pixels, depth in z, and the
+reciprocal of clip w. Return RGBA; keep `color.a` to keep the glyph's edges.
+
+For MSDF it runs only within a glyph's reach (its ink box, one screen pixel, and its outline and shadow), so it
+cannot paint where the glyph has no coverage.
+
+### Example
+
+```ts ignore
+import { defineTypeGpuConfig } from '@pmndrs/glyph/typegpu';
+import { d, type TgpuRoot } from 'typegpu';
+
+declare const root: TgpuRoot; // from `await tgpu.init()`
+
+const modelViewProjection = root.createUniform(d.mat4x4f);
+const tint = root.createUniform(d.vec3f, [1, 0.6, 1]);
+
+const config = defineTypeGpuConfig({
+  root,
+  format: navigator.gpu.getPreferredCanvasFormat(),
+  depthStencil: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less-equal' },
+  transformPosition: (position, viewport) => {
+    'use gpu';
+    return modelViewProjection.$.mul(d.vec4f(position.div(d.vec3f(viewport, 1)), 1));
+  },
+  transformColor: (color) => {
+    'use gpu';
+    return d.vec4f(color.rgb.mul(tint.$), color.a);
+  },
+});
+```
+
+## TypeGpuHandle
+
+The value `glyph.handle(name, config)` returns for a TypeGPU config.
+
+```ts
+import type { TypeGpuHandle, TypeGpuRoot } from '@pmndrs/glyph/typegpu';
+
+declare const handle: TypeGpuHandle;
+
+const overlay: TypeGpuRoot = handle('overlay');
+```
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `handle(name)` | `(name: string) => TypeGpuRoot` | Returns the root with that name, creating it on first use. The same name returns the same root. |
+| every member of [`TypeGpuRoot`](#typegpuroot) | | The handle is its own unnamed default root. |
+| `name` | `undefined` | |
+| `disposed` | `boolean` | |
+| `dispose()` | `() => void` | Disposes every root and text of the handle and its GPU resources. The TypeGPU root passed to the config stays usable. |
+
+## TypeGpuRoot
+
+A set of texts that are published and drawn together.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| [`createText(options)`](#createtext) | `(options: TypeGpuTextOptions) => TypeGpuText` | Creates a text owned by this root. |
+| [`draw(pass, viewport)`](#typegpudraw) | | Records the root's draws. |
+| [`with(bindGroup)`](#typegpudraw) | | Returns a draw view with a bind group. |
+| `name` | `string \| undefined` | The root's name; `undefined` for the handle's default root. |
+| `handle` | `TypeGpuHandle` | The owning handle. |
+| `disposed` | `boolean` | |
+| `dispose()` | `() => void` | Disposes the root and its texts. |
+
+### createText
+
+```ts
+import type { TypeGpuRoot, TypeGpuText, TypeGpuTextOptions } from '@pmndrs/glyph/typegpu';
+
+declare const root: TypeGpuRoot;
+declare const options: TypeGpuTextOptions;
+
+const text: TypeGpuText = root.createText(options);
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `font` | `TypeGpuFontSelection` | required | A loaded `FontFace` or one of its format selections (`Inter`, `Inter.slug`). |
+| `text` | `string` | required | The content. Plain text only: this renderer has no styled spans. |
+| `style` | [`TextStyle`](/reference/text-style) without `decoration` | `{}` | Shaping and presentation. `decoration` is not supported. |
+| `layout` | [`ParagraphLayout`](/reference/paragraph-layout) | `{}` | Wrapping, alignment and line limits. |
+| `constraints` | [`Constraints`](/reference/constraints) | `{}` | The box and anchor. |
+| `rasterPixelRatio` | `number` | none | Raster density, normally `window.devicePixelRatio`. |
+| `position` | `readonly [number, number]` | `[0, 0]` | Where the text's origin is, in logical pixels from the top-left of the viewport. Two finite numbers. |
+| `onLayout` | [`TypeGpuLayoutCallback`](#onlayout) | none | The layout callback. |
+
+Creating a text validates and records its state. It makes no layout engine call; the text is laid out by the next
+read or the next `glyph.shape()`.
+
+Throws [`GlyphInputError`](/reference/errors) for an invalid value, including a `style.decoration` (`path`
+`['style', 'decoration']`) and a bad `position` (`path` `['position']`). Throws `Error` if the root is disposed, and
+[`GlyphFontError`](/reference/errors) if the font selection is not loaded.
+
+With `constraints.anchor`, `createText` first places the text at `position` without the anchor. The anchored
+placement is written when `glyph.shape()` accepts the text.
+
+## TypeGpuDraw
+
+The drawing half of a root. `with()` returns another `TypeGpuDraw`.
+
+```ts
+import type { TypeGpuDraw, TypeGpuHandle } from '@pmndrs/glyph/typegpu';
+
+declare const handle: TypeGpuHandle;
+declare const pass: GPURenderPassEncoder;
+declare const cameraGroup: Parameters<TypeGpuDraw['with']>[0];
+
+const view: TypeGpuDraw = handle.with(cameraGroup);
+view.draw(pass, { width: 800, height: 600 });
+```
+
+### draw
+
+`draw(pass, viewport): void`
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `pass` | `TgpuRenderPass \| GPURenderPassEncoder` | An open render pass whose attachments match the config's `format`, `sampleCount` and `depthStencil`. |
+| `viewport` | `{ width: number; height: number }` | The size of the pass in logical pixels. The default projection maps `[0, width] × [0, height]` to the pass. |
+
+Records the draw calls for the text this root last published with `glyph.shape()`. It does not end the pass and does
+not submit. A root with no published text records nothing.
+
+After recording, it throws, once, what the root's texts failed with since its last draw: a paragraph the engine
+refused, or an exception from a layout callback. Several failures arrive as one `AggregateError`. A failed text
+records nothing until its input changes. See [Errors](/reference/errors).
+
+### with
+
+`with(bindGroup: TgpuBindGroup): TypeGpuDraw`
+
+Returns a new draw view that supplies `bindGroup` to the pipelines, for callbacks that read a
+`tgpu.bindGroupLayout`. Bind groups are matched by their layout: a later group for the same layout replaces the
+earlier one, and groups for different layouts accumulate. The handle, the root and earlier views are not changed. A
+view cannot create text. It stops working when its root is disposed. Glyph does not take ownership of the bind
+group.
+
+## TypeGpuText
+
+A retained text. Create one with `createText`.
+
+| Member | Summary |
+| --- | --- |
+| [`update(update)`](#update) | Changes any of the creation options. |
+| [`onLayout`](#onlayout) | The layout callback; assignable. |
+| [`measure()`](#measure-glyphs-and-readglyphs) | The paragraph's measurement. |
+| [`glyphs()`](#measure-glyphs-and-readglyphs) | An owned copy of the per-glyph layout. |
+| [`readGlyphs(read)`](#measure-glyphs-and-readglyphs) | A borrowed view of the per-glyph layout. |
+| [`caret`, `hitTest`, `move`, `boundary`, `rangeRects`, `replace`](#editing-methods) | Editing geometry and one exact edit. |
+| `disposed` | `boolean`. |
+| `dispose()` | Releases the text and its font lease. Idempotent. The text stops being drawn after the next `glyph.shape()`. |
+
+Every method except `dispose()` throws `Error` on a disposed text. There is no `error` property and no error
+callback.
+
+### update
+
+```ts
+import type { TypeGpuText, TypeGpuTextUpdate } from '@pmndrs/glyph/typegpu';
+
+declare const text: TypeGpuText;
+
+const update: TypeGpuTextUpdate = { text: 'Changed', style: { fontSize: 32 } };
+text.update(update);
+```
+
+`TypeGpuTextUpdate` is every option of `createText` except `onLayout`, all optional. A property that is present
+replaces the previous value as a whole; `style`, `layout` and `constraints` are not merged with the previous object.
+
+| What the update contains | Effect |
+| --- | --- |
+| only `position` | The text moves. No layout runs, and no `glyph.shape()` is needed; the next `draw()` uses it. A `position` key whose value is `undefined` moves the text to `[0, 0]`. |
+| `font`, `text`, `style`, `layout`, `constraints` or `rasterPixelRatio` | The value is validated and recorded, and the text is marked changed. The next read or `glyph.shape()` lays it out; the next `glyph.shape()` publishes it. |
+| only a different `constraints.anchor`, on a text that is already published | The text is placed at the new anchor at once. |
+
+Throws `GlyphInputError` for an invalid value; when the update wrote one property, `path` names it. The text keeps
+its previous state. Throws `GlyphLayoutPhaseError` when called with a layout input from inside a layout callback.
+
+### onLayout
+
+```ts
+import type { ParagraphLayoutSummary } from '@pmndrs/glyph';
+import type { TypeGpuLayoutCallback, TypeGpuText } from '@pmndrs/glyph/typegpu';
+
+declare const text: TypeGpuText;
+
+const callback: TypeGpuLayoutCallback = (self: TypeGpuText, layout: ParagraphLayoutSummary) => {
+  self.update({ position: [24, 600 - layout.height] });
+};
+text.onLayout = callback;
+```
+
+Called with the text and what `measure()` returns, after the text is first prepared and whenever that summary
+changes (its width, height, line count, glyph count or anchor offset). It runs inside `glyph.prepare()` or
+`glyph.shape()`, before anything is published.
+
+- It may read anything and write positions. Writing a layout input of any text throws `GlyphLayoutPhaseError`.
+- Every due callback runs and the frame is published even if one throws. The exception is thrown by the root's next
+  `draw()`.
+- Assigning a callback to a text that is already drawn makes the next `glyph.shape()` call it with the current
+  layout. Assigning `undefined` removes it.
+- Assigning anything other than a function or `undefined` throws `TypeError`.
+
+### measure, glyphs and readGlyphs
+
+| Method | Returns | Description |
+| --- | --- | --- |
+| `measure()` | `ParagraphLayoutSummary` | Width, height, lines, baselines and `anchorOffset`. |
+| `glyphs()` | `GlyphLayoutInspection` | An owned copy of every glyph and line. |
+| `readGlyphs(read)` | the callback's result | Calls `read` synchronously with a `BorrowedGlyphLayout`. The view is valid only until `read` returns. |
+
+Each prepares the text first if it changed, so the result is never stale. None publishes. To read many changed texts
+between frames, call `glyph.prepare()` once first. See [Measurement](/reference/measurement).
+
+### Editing methods
+
+```ts
+import type { TypeGpuText } from '@pmndrs/glyph/typegpu';
+
+declare const text: TypeGpuText;
+
+const position = text.hitTest({ x: 40, y: 12 });
+const caret = text.caret(position);
+const next = text.move(position, 'forward', 'word');
+const line = text.boundary(position, 'line');
+const rects = text.rangeRects(line.start, line.end);
+text.replace(line.start, line.end, 'A new line');
+```
+
+| Method | Returns |
+| --- | --- |
+| `caret(position: TextPosition)` | `TextCaret` |
+| `hitTest(point: { x: number; y: number })` | `TextPosition` |
+| `move(position, direction, unit, goalX?)` | `TextMovement` |
+| `boundary(position, unit)` | `TextRange` |
+| `rangeRects(start, end)` | `readonly LayoutBox[]` |
+| `replace(start, end, insert)` | `void` |
+
+They are the methods described in [Editing](/reference/editing), with the same types. Offsets are UTF-16 code units
+of the text on grapheme boundaries; an offset that is not throws [`TextOffsetError`](/reference/errors). Coordinates
+are local to the text: +X right, +Y down, anchor included, relative to the text's `position`.
+
+`replace` replaces the code units in `[start, end)` with `insert` and marks the text changed, like `update({ text })`.
+A non-string `insert` throws `GlyphInputError`.
+
+## Support compared with three.js
+
+| Feature | This renderer |
+| --- | --- |
+| Bitmap, MSDF (with outline and shadow) and Slug fonts | Supported |
+| Layout, constraints, anchors, measurement, editing | Supported |
+| Styled spans (`FormattedText`) | Not supported: `text` is a string |
+| Decoration lines | Not supported: `style.decoration` throws |
+| Text flow regions (`flow`) | Not an option of this renderer |
+| Groups, custom materials, `split()` | Not available; use `transformPosition` and `transformColor` |
+| WebGL2 | Not available; WebGPU only |
+
+## Bundling
+
+The `typegpu` package reads `process.env.NODE_ENV` without checking that `process` exists. Loading this entry as
+unbundled browser modules therefore needs a bundler that replaces that expression, or a `process` shim defined before
+the import. Glyph's own modules run without `process`.
+
+## See also
+
+- [Use Glyph with TypeGPU](/guides/renderers/typegpu)
+- [Shaders](/reference/shaders)
+- [Editing](/reference/editing)
+- [Measurement](/reference/measurement)
+- [Errors](/reference/errors)

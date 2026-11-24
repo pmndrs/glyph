@@ -1,0 +1,258 @@
+---
+title: Migrate from 0.1 to 0.2
+description: Every change an application must make to move from @pmndrs/glyph 0.1.0 to 0.2.0, in the order to make them, with the behavior that changes without a code change.
+nav: 655
+sourcecode: packages/glyph/MIGRATION-0.2.md
+---
+
+Version 0.2.0 is a breaking release with no compatibility aliases. This guide lists what to change in application
+code, in the order that gets a 0.1.0 project compiling and then behaving correctly. No entry point was removed, and
+one was added: `@pmndrs/glyph/pixi3d`.
+
+If you maintain a renderer integration against `@pmndrs/glyph/core` or the shader subpaths, do the steps here first,
+then read [Integrators](#integrators) at the end.
+
+## 1. Rename what was renamed
+
+These are the only renames. Fix them first; the compiler finds every call site.
+
+| 0.1.0 | 0.2.0 | Notes |
+| --- | --- | --- |
+| `text.withGlyphs(read)` | `text.readGlyphs(read)` | Same signature. three.js, TypeGPU and `/core`. |
+| `text.breakApart()` | `text.split()` | Same return type. |
+| `text.caretAt(x, y)` | `text.hitTest({ x, y })`, then `text.caret(position)` for the rectangle | See step 4. |
+| `text.selectionRects(start, end)` | `text.rangeRects(start, end)` | No longer swaps or clips the range. |
+| `GlyphCaret` (`offset`, `line`, `leading`, `rect`) | `TextPosition` (`offset`, `affinity`) and `TextCaret` (`rect`, `line`, `level`, `secondary`, `clipped`) | A position and its drawn caret are now two types. |
+
+```ts
+const firstGlyphId = text.readGlyphs((glyphs) => glyphs.glyphAt(0).glyphId);
+const [glyphs, decorations] = text.split();
+```
+
+The Glyph repository contains typed codemods for the first two renames. They run from a source checkout of the
+repository, preview by default, and write with `-- --write`:
+
+```sh
+mise exec -- pnpm scripts run glyph:read-glyphs:migrate
+mise exec -- pnpm scripts run glyph:split:migrate
+```
+
+They follow typed method references. Review `any` receivers, computed keys, destructuring and strings by hand.
+
+## 2. Remove what was removed
+
+| Removed | Do this instead |
+| --- | --- |
+| `Text.onError`, `TextGroup.onError`, the React `onError` prop, the Vue `error` event, `TextFrameError` | Delete the handlers. Catch the render call (step 3). |
+| `text.error`, `group.error`, and the `'failed'` status of `commitState()` | Nothing to read. The thrown message quotes the failed text; a refused text's state is `'pending'`. |
+| `DetachedGlyph.sourceIndex`, `ThreeGlyphMeasurement.sourceIndex` | Use the detached object's own indices (step 5). |
+| `Text.caretForOffset(offset)` (never released, present in pre-release builds) | `text.caret({ offset, affinity })`. |
+
+## 3. Move error handling
+
+Errors moved from callbacks and setters to two places: the call that wrote a bad value, and the call that renders.
+
+| 0.1.0 | 0.2.0 | Change |
+| --- | --- | --- |
+| Invalid input threw `TypeError` or `RangeError` from the setter. | It throws `GlyphInputError` (`code: 'invalid-input'`, a `path`, the old error as `cause`). The previous value stays. | Replace `instanceof TypeError` and `instanceof RangeError` checks around setters with `GlyphInputError`. |
+| An engine failure threw from the setter. | It is thrown from the render that finds it, once. The failed text draws nothing; the others draw. | Move the `try`/`catch` from the setter to the render call. |
+| A lone surrogate threw `RangeError`. | It is drawn as U+FFFD. `text.text` returns the string as assigned. | Remove the guard. |
+| A text had no length limit. | A text longer than `maxTextUnits` (default 65,536 UTF-16 code units) is invalid input. | Raise it with `defineThreeConfig({ maxTextUnits })` if you hold longer paragraphs. |
+| `glyphs.glyphAt(i)` returned `undefined` out of range. | It throws `RangeError`. | Check the index against `count` first. |
+| React: an invalid prop surfaced however the setter did. | It throws while React commits. Without a boundary inside the canvas, the canvas unmounts. | Wrap text in `GlyphErrorBoundary` inside the canvas. |
+| Vue: not defined. | An invalid prop and a failed font load reach `onErrorCaptured` and `app.config.errorHandler`. | Add a handler. |
+
+The render call is `renderer.render(scene, camera)` for three.js, React and Vue, `root.draw()` for TypeGPU, and
+`glyph.shape()` for PixiJS 3D:
+
+```ts
+try {
+  renderer.render(scene, camera);
+} catch (error) {
+  reportError(error); // 'Glyph text "Hello, wor…" was not drawn: …'; the engine's error is `cause`
+}
+```
+
+An engine crash no longer takes a root down: the engine is replaced and the next frame retries. See
+[Handle errors](/guides/project/handle-errors) for each renderer and for the React boundary.
+
+## 4. Replace caret and selection code
+
+The editing methods were redesigned, not only renamed. They exist on the three.js `Text`, on TypeGPU text and on
+`Pixi3DText`.
+
+```ts
+const position = text.hitTest({ x: 120, y: 18 }); // { offset, affinity }
+const caret = text.caret(position); // { rect, line, level, secondary, clipped }
+const next = text.move(position, 'right', 'grapheme'); // { position, goalX }
+const word = text.boundary(position, 'word'); // { start, end }
+const rects = text.rangeRects(word.start, word.end); // LayoutBox[]
+text.replace(word.start, word.end, 'replacement');
+```
+
+What behaves differently:
+
+- Nothing is snapped or clipped. `selectionRects` swapped a reversed range and clipped one that ran past the text.
+  Every editing method now throws `TextOffsetError` for an offset that is not a whole number, is out of range, ends a
+  reversed range, or is inside a grapheme. The error carries the nearest valid boundaries as `before` and `after`.
+- A position has a side. `affinity` is `'downstream'` (the caret belongs to the grapheme that starts at the offset)
+  or `'upstream'` (to the one that ends there). The two differ at a soft wrap and at a boundary between
+  left-to-right and right-to-left text.
+- Boundaries are graphemes, decided by the engine. A caret can stand inside a ligature. An emoji sequence, a flag and
+  a combining sequence are one unit. `Intl.Segmenter` is not consulted and may disagree.
+- The methods never return `undefined`. They prepare the text first if a setter left it changed.
+- Coordinates are local to the text: +X right, +Y down, anchor included. Offsets are UTF-16 code units of
+  `text.text`.
+
+`replace` is new. It edits exactly the range it names, and spans follow the edit: inserted text takes the style of
+the grapheme before it. See [Caret and selection](/guides/editing/caret-and-selection) and
+[Edit text](/guides/editing/edit-text).
+
+## 5. Fix code that indexes detached glyphs
+
+`split()` returns the same tuple `breakApart()` did, but every index on the detached `Glyphs` object is now dense
+over drawable glyphs. Spaces and other blank glyphs stay in `text.glyphs()` and are absent from the detached object,
+so `glyphs.count` can be smaller than `text.glyphs().glyphCount`. Do not reuse an index between the two.
+
+```ts
+const [glyphs, decorations] = text.split();
+
+for (let index = 0; index < glyphs.count; index += 1) {
+  const glyph = glyphs.glyphAt(index);
+  const matrix = glyphs.measurements[index]!.originalMatrix.clone();
+  matrix.elements[13]! += Math.sin(index * 0.5) * glyph.fontSize * 0.1;
+  glyphs.setMatrixAt(index, matrix);
+}
+
+glyphs.dispose();
+decorations?.dispose();
+```
+
+`glyphAt`, `outlineAt` and the matrix methods throw `RangeError` for an index that is not an integer in range.
+
+## 6. Remove workarounds for stale reads
+
+In 0.1.0 a setter laid the text out at once and a read returned the last committed state. In 0.2.0 a setter only
+validates, records and marks the text changed, and every read prepares the text first.
+
+| 0.1.0 | 0.2.0 | Change |
+| --- | --- | --- |
+| A read could be a frame old. | `measure`, `glyphs`, `readGlyphs`, `boundingBox`, the editing methods and `split` are always current. | Remove any `glyph.shape()` or `updateMatrixWorld()` you called only to make a read current. |
+| No batch read. | `glyph.prepare()` prepares every changed text in one engine call and publishes nothing. | Call it before reading many texts between frames. Without it each read costs one engine call per changed text. |
+| `commitState()` was `'pending'` between a setter and its frame. | `'pending'` also covers "not prepared yet" and "held for its layout callback". | Do not treat `'pending'` as "laid out but not drawn". |
+| `measure()` and `glyphs()` refreshed `boundingBox`. | The box is kept current only once `boundingBox` has been read, and it includes the anchor. | Read `text.boundingBox`, or call `computeBoundingBox()`, where you need the box. |
+| Code read `measure()` after a frame to size something else. | `text.onLayout` runs before the frame that draws the new layout. | Move that code into `onLayout`. |
+
+```ts
+text.onLayout = (self, layout) => {
+  // Runs after the text is first prepared and whenever the measurement changes, before the frame draws it.
+  group.position.y = -layout.height;
+};
+```
+
+Writing a layout input of any text inside `onLayout` throws `GlyphLayoutPhaseError`. The same callback is the
+`onLayout` prop in React, the `@layout` event in Vue and `onLayout` on TypeGPU text. See
+[When layout runs](/explanation/when-layout-runs).
+
+One side effect to check: a three.js root now keeps a second private object in the scene, named
+`@pmndrs/glyph-prepare`, as the scene's first child. Code that walks `scene.children` by index, or assumes the first
+child is its own, must skip it.
+
+## 7. Update custom materials
+
+`ThreeTextMaterial` gained two required fields, so an object literal such as `{ create }` no longer type-checks.
+Build the value with `defineTextMaterial`:
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+
+const wobble = defineTextMaterial(
+  (context) => {
+    const material = context.createDefaultMaterial();
+    material.positionNode = context.position.add(0.02);
+    return material;
+  },
+  { boundsPadding: 0.02 },
+);
+```
+
+Draws with a custom material are now frustum-culled like every other draw; 0.1.0 computed no bound for them. If your
+vertex stage moves vertices, declare how far with `boundsPadding` (in the units of `context.position`, `0` by
+default), or pass `frustumCulled: false`. Otherwise glyphs can disappear while still on screen.
+
+Every material context now also carries `position` (the final draw-local position) and `paragraphPosition` (the
+paragraph-local position before the anchor, +X right, +Y up). See [Custom materials](/guides/scene/custom-materials).
+
+## 8. Check behavior that changes without a code change
+
+Compare a few screens before and after. These differ with no edit on your side:
+
+- Frustum culling is on by default for every built-in draw. Set `frustumCulled = false` on a `Text`, an enclosing
+  `TextGroup` or a `Glyphs` to turn it off. See [Culling](/guides/scene/culling).
+- A top-level `TextGroup` now owns a batch boundary (`batching: 'auto'`). Use `batching: 'shared'` to keep 0.1-style
+  batching across groups, or `'group'` to force a nested boundary.
+- Lines can break differently after opening quotation marks (UAX #14 rule LB15a).
+- `boundingBox`, `measureGlyphs` and `split` include the anchor.
+- Empty and newline-only text have lines: `""`, `"\n"` and `"\n\n"` measure 1, 2 and 3 lines, where they had none. Code
+  that treated `lineCount === 0` as "empty" must test the string.
+- An ellipsis follows the paragraph direction: it sits at the end side of a right-to-left line.
+- Setting a `Text` to state equal to its current state is a no-op. Assign `font` or `material` explicitly when you
+  need resources staged again.
+- `measure()` computes `glyphCount`, `missingGlyphCount`, `inkBounds` and each line's `glyphStart`, `glyphCount` and
+  `inkBounds` the first time you read one of them. Reading them right after `measure()` can cost a second engine call
+  the first time. In a hot path such as a resize loop, read only the fields you use.
+- With `frameloop="demand"` in React and on-demand rendering in Vue, writing to the text through a ref
+  (`ref.current.text = …`) now requests a frame.
+- Fonts baked with outlines decode them in the font baker module, which is loaded on demand. The first outline font
+  fetches that module if nothing else has.
+
+## What is new
+
+None of these require a change. They are listed because they replace patterns that needed workarounds in 0.1.0.
+
+- `Constraints.anchor` and `measure().anchorOffset`: see [Anchor text](/guides/layout/anchor-text).
+- `fontMetrics` on measurements and lines, and glyph outlines through `outlineAt`: see
+  [Glyph outlines](/guides/inspect/glyph-outlines).
+- `root.onInvalidate` and `root.attach(scene)` on a three.js root: see [ThreeRoot](/reference/three-root).
+- `TextGroup.batching` and the `msdfAtlas: 'msdf' | 'sdf'` config option.
+- `GlyphErrorBoundary` in `@pmndrs/glyph/react`.
+- `@pmndrs/glyph/pixi3d`: see [Use Glyph with PixiJS 3D](/guides/renderers/pixi3d).
+
+## Verify the migration
+
+1. Type-check. No use of the removed names should remain.
+2. Run the application with the console open. An uncaught `'Glyph text "…" was not drawn'` error means a paragraph
+   was refused; it used to be reported through `onError`.
+3. Compare screens that use groups, anchors, custom materials and right-to-left text against 0.1.0.
+4. If you use `split()`, test a string that contains spaces and confirm your per-glyph transforms still line up.
+
+## Integrators
+
+These changes affect only code written against `@pmndrs/glyph/core`, `@pmndrs/glyph/shaders/tsl` or
+`@pmndrs/glyph/shaders/typegpu`.
+
+- An instance no longer carries its atlas rectangle or its Slug band tables. It carries a glyph index, and the shader
+  reads the per-glyph record from a `glyphs` table. The `msdfSchema` and `slugSchema` buffers and glyph records
+  changed accordingly.
+- The MSDF atlas is no longer one texture uploaded whole. The `pages` member of the atlas resource group is a token;
+  `msdfBakedPages(pages)` returns the baked pages, and the renderer uploads only the cells of glyphs it draws.
+  MSDF quads are trimmed to the ink.
+- Slug curve and reference textures were replaced: `TslSlugPageResources` now has `headerTexture`, `headerWidth`,
+  `bandCurveTexture` and `bandCurveWidth`; the TypeGPU slots are `slugBandCurveTexelSlot` and
+  `slugBandCurveWidthAccessor`.
+- `GlyphPlacements.caretAt`, `caretForOffset` and `selectionRects` are removed. Use `GlyphTextController.editing`.
+- `GlyphRootShapeHooks` gained `prepared()`, `layout()`, `unchanged()` and `invalidated()`. An integration that
+  resolved anchors or read measurements inside a setter does it in `prepared()` now.
+- `controller.update()` no longer enters the engine and no longer throws engine status errors. During layout
+  callbacks it throws `GlyphLayoutPhaseError` for a change to a layout input.
+
+The [core reference](/reference/core) and the [shader reference](/reference/shaders) list the current names, and
+[How renderers integrate](/explanation/renderer-integration) explains the hooks.
+
+## See also
+
+- [Handle errors](/guides/project/handle-errors)
+- [When layout runs](/explanation/when-layout-runs)
+- [Editing reference](/reference/editing)
+- [Errors reference](/reference/errors)
+- [Troubleshooting](/guides/project/troubleshooting)

@@ -1,0 +1,222 @@
+---
+title: Use Glyph with PixiJS 3D
+description: Add Glyph text to a PixiJS 3D scene as Container3D nodes on WebGPU or WebGL2, light or unlight it, extend its material with shader bits, and catch failures.
+nav: 605
+sourcecode: packages/glyph/src/pixi3d.ts
+---
+
+`@pmndrs/glyph/pixi3d` draws Glyph text through [PixiJS 3D](https://github.com/pixijs/3d) (`@pixi/3d`). A text is a
+`Pixi3DText`, which is a `Container3D`: you add it to a `View3D` scene, move it with the native `position`,
+`rotation` and `scale`, and PixiJS draws it. It works on both PixiJS backends, WebGPU and WebGL2, and with all three
+font formats.
+
+## Install
+
+```sh
+npm install @pmndrs/glyph pixi.js @pixi/3d
+```
+
+`@pixi/3d` (`>=0.1.0 <0.2`) and `pixi.js` (`>=8.23.0 <9`) are optional peers of `@pmndrs/glyph`. Only this entry
+imports them. The entry is a subpath of `@pmndrs/glyph`, not a separate package.
+
+## Draw text in a View3D
+
+The order is: PixiJS application and view, `glyph.init()`, a handle from `Pixi3DConfig`, a loaded font, a text added
+to the scene, then `glyph.shape()`.
+
+```ts ignore
+import { DirectionalLight, View3D } from '@pixi/3d';
+import { glyph, msdf } from '@pmndrs/glyph';
+import { Pixi3DConfig } from '@pmndrs/glyph/pixi3d';
+import { Application } from 'pixi.js';
+
+const app = new Application();
+await app.init({ resizeTo: window, backgroundColor: 0x0a0c12, antialias: true, preference: 'webgpu' });
+document.body.appendChild(app.canvas);
+
+const view = new View3D({
+  autoResize: true,
+  environment: { skyColor: 0xffffff, groundColor: 0x888888, intensity: 1 },
+});
+app.stage.addChild(view);
+view.camera.position.set(0, 0, 5);
+
+const sun = new DirectionalLight({ intensity: 2 });
+sun.rotation.set(-0.4, 0.3, 0);
+view.root.addChild(sun);
+
+await glyph.init();
+const handle = glyph.handle('app', Pixi3DConfig);
+
+const Inter = glyph.fontFace('/fonts/inter-latin.font.glb', { format: msdf });
+await Inter.load();
+
+const title = handle.createText({
+  font: Inter,
+  text: 'Hello, PixiJS 3D',
+  style: { fontSize: 0.5, color: '#ffffff' },
+});
+title.position.set(-1.8, 0.25, 0);
+view.root.addChild(title);
+
+glyph.shape();
+```
+
+You should see one line of text facing the camera. PixiJS chooses WebGL2 unless you pass `preference: 'webgpu'`;
+nothing else in this code changes between the two.
+
+What matters here:
+
+- `Pixi3DConfig` is a ready-made config. `definePixi3DConfig()` returns a fresh one and takes no options. A font
+  without a declared format loads as MSDF.
+- `handle.createText(options)` returns a `Pixi3DText`. The handle is also its own default root; `handle('hud')`
+  returns a separate named root.
+- A text's local space is PixiJS 3D's: +X right, +Y up, facing +Z. The paragraph starts at the node's origin and
+  grows to the right and downward (toward -Y). `fontSize` and constraint widths are in scene units.
+- `glyph.shape()` lays out every changed text and builds or updates its `Mesh3D` children. Nothing is drawn for a
+  text until the first `glyph.shape()` after it was created. Call it after you change text and before the frame that
+  should show the change.
+
+A simple way to satisfy the last point is to call it every tick. It does nothing when no text changed:
+
+```ts ignore
+app.ticker.add(() => {
+  glyph.shape();
+});
+```
+
+## Update, measure and remove
+
+Assign a property, or pass several to `update()`. Setters validate and record; the layout runs in the next
+`glyph.shape()`, or earlier if you read a measurement.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import type { Pixi3DText } from '@pmndrs/glyph/pixi3d';
+
+declare const title: Pixi3DText;
+
+title.text = 'A longer title that wraps';
+title.update({
+  style: { fontSize: 0.4, color: '#ffd166' },
+  constraints: { width: { mode: 'at-most', size: 3 }, anchor: { x: 'center', y: 'middle' } },
+});
+
+const { width, height, lineCount } = title.measure(); // current: the text is prepared for the read
+const box = title.computeBoundingBox(); // ink bounds in the node's local space, +Y up
+
+glyph.shape();
+```
+
+`text` accepts a plain string or formatted text with styled spans. `measure()` reports the paragraph in its own
+top-left, +Y down space; `computeBoundingBox()` converts the ink bounds to the node's +Y up local space, anchor
+included.
+
+Moving, rotating, scaling or hiding the node is plain PixiJS and needs no `glyph.shape()`.
+
+To remove a text, call `title.dispose()`. Destroying it or its parent with PixiJS, for example
+`parent.destroy({ children: true })`, disposes it too. `handle.dispose()` disposes every text the handle still owns.
+
+## Light the text, or do not
+
+By default each glyph mesh uses a lit `Material3D` (physically based, alpha-blended, double-sided, no fog) with the
+glyph color as its surface color. Lit text is only as bright as the scene's lights and environment make it, and its
+color shifts with them. Either light the scene as above, or give the text an unlit material so it shows the color you
+set.
+
+`Pixi3DTextMaterial` describes how to build the material. Its `create` function receives the shader bits Glyph
+needs and returns any `BaseMaterial3D`:
+
+```ts ignore
+import { FlatMaterial } from '@pixi/3d';
+import { Pixi3DTextMaterial } from '@pmndrs/glyph/pixi3d';
+
+const unlit = new Pixi3DTextMaterial({
+  shared: true,
+  nativeRecords: true,
+  create: ({ bits }) => new FlatMaterial({ alphaMode: 'blend', doubleSided: true, fog: false, extraBits: bits }),
+});
+
+const label = handle.createText({ font: Inter, text: 'Unlit label', material: unlit });
+view.root.addChild(label);
+```
+
+Rules for `create`:
+
+- Pass `bits` to the material's `extraBits`, unchanged and first. They hold the vertex and coverage code for the
+  font format in use.
+- Return a new material on every call. Glyph owns and destroys what you return.
+- `context.createDefaultMaterial()` returns the standard lit material if you only want to adjust it.
+
+A text's material is fixed when the text is created. `update({ material })` throws; create a new text to change it.
+
+## Add your own shader bit
+
+To add an effect without replacing the material, append PixiJS 3D shader bits with `extraBits` and feed them values
+with `data`. `update()` on the material changes those values on every text that uses it, without a new layout.
+
+```ts ignore
+import type { ShaderBit } from '@pixi/3d';
+import { Pixi3DTextMaterial } from '@pmndrs/glyph/pixi3d';
+
+const fadeBit: ShaderBit = {
+  name: 'labelFade',
+  bindings: { material: { uFade: 'f32' } },
+  gpu: { fragment: { material: '{ alpha = alpha * material.uFade; }' } },
+  gl: { fragment: { material: '{ alpha = alpha * material.uFade; }' } },
+};
+
+const fading = new Pixi3DTextMaterial({ extraBits: [fadeBit], data: { uFade: 1 } });
+const label = handle.createText({ font: Inter, text: 'Fading', material: fading });
+
+app.ticker.add(() => {
+  fading.update({ uFade: 0.5 + 0.5 * Math.sin(performance.now() / 500) });
+});
+```
+
+Your bits run after Glyph's, so `albedo` and `alpha` already hold the glyph's color and coverage. Every `data` field
+must be declared by one of the bits in `bindings.material`, with a numeric WGSL type (`f32`, a vector or a matrix);
+a name that no bit declares, or a value of the wrong length, throws a `TypeError`.
+
+The entry also exports the bits it uses itself (`glyphBitmapBit`, `glyphMsdfBit`, `createGlyphSlugBit`,
+`createGlyphSlugBits`) and the generated shader sources. You do not need them for the cases above: `create` receives
+the right ones in `bits`. See the [PixiJS 3D reference](/reference/pixi3d).
+
+## Catch failures
+
+This renderer has no render call of its own, so a failure found during layout or publication is thrown from
+`glyph.shape()`:
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+
+function frame(): void {
+  try {
+    glyph.shape();
+  } catch (error) {
+    console.error(error); // 'Glyph text "Hello, Pix…" was not drawn: …'
+  }
+}
+```
+
+Each failure is thrown once. A text the engine refuses draws nothing until its input changes. A text whose material
+could not be built keeps its last drawn state. Other texts are published normally.
+
+Invalid input throws from the setter, `update()` or `createText()`, and the text keeps its previous value. On this
+renderer those errors are plain `TypeError` and `RangeError`, not `GlyphInputError`. The editing methods throw
+[`TextOffsetError`](/reference/errors) as they do everywhere else.
+
+## Differences from the three.js renderer
+
+- There is no `TextGroup`. Draw order between overlapping texts is PixiJS 3D's own sorting.
+- MSDF keeps the whole baked atlas on the GPU and draws untrimmed glyph cells.
+- Bitmap quads are not snapped to the pixel grid.
+- There is no `onLayout` callback.
+
+## See also
+
+- [PixiJS 3D reference](/reference/pixi3d)
+- [Handle errors](/guides/project/handle-errors)
+- [Editing reference](/reference/editing)
+- [Load a font](/guides/fonts/load-a-font)
+- [How renderers integrate](/explanation/renderer-integration)

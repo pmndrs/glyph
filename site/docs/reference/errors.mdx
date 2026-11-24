@@ -1,0 +1,444 @@
+---
+title: Errors
+description: Reference for every error class and error code @pmndrs/glyph throws, with the fields each carries, what throws it, and an example.
+nav: 717
+sourcecode: packages/glyph/src/glyph-error.ts
+---
+
+Every error Glyph raises on purpose is an instance of `GlyphError` and has a `code` from a closed list. Subclasses add
+fields. This page lists the classes an application can import, the codes, and where each error is thrown. For where
+to put `try`/`catch`, see [Handle errors](/guides/project/handle-errors).
+
+## Summary
+
+| Class | `code` | Import from | Thrown by |
+| --- | --- | --- | --- |
+| [`GlyphError`](#glypherror) | any | `@pmndrs/glyph` | Base class. Also thrown directly for a text the engine refused. |
+| [`GlyphInputError`](#glyphinputerror) | `'invalid-input'` | `@pmndrs/glyph` | `createText`, `set`, `update`, property setters, component props |
+| [`GlyphLayoutPhaseError`](#glyphlayoutphaseerror) | `'layout-phase'` | `@pmndrs/glyph` | A layout-input setter called inside a layout callback |
+| [`TextOffsetError`](#textoffseterror) | `'invalid-offset'` | `@pmndrs/glyph`, `/three`, `/pixi3d` | `caret`, `move`, `boundary`, `rangeRects`, `replace` |
+| [`GlyphFontError`](#glyphfonterror) | `'resource-unavailable'` | `@pmndrs/glyph` | `FontFace.load()`, font selection, font hooks and composables |
+| [`GlyphEngineStatusError`](#glyphenginestatuserror) | `'engine-failed'` | `@pmndrs/glyph` | A layout engine call that returned a failure status |
+| [`FontBakeError`](#fontbakeerror) | `'bake-failed'` | `@pmndrs/glyph/bake` | The font baker; `bakeFontInWorker` |
+| [`NodeBakeError`](#nodebakeerror) | `'bake-failed'` | `@pmndrs/glyph/bake` | `bakeFont` and the project bake, for file-system problems |
+| [`BitmapBakeError`](#raster-bake-errors), [`MsdfBakeError`](#raster-bake-errors), [`SlugBakeError`](#raster-bake-errors) | `'bake-failed'` | `@pmndrs/glyph/bakers/bitmap`, `/bakers/msdf`, `/bakers/slug` | The raster bakers |
+| [`FontArtifactValidationError`](#fontartifactvalidationerror) | `'artifact-invalid'` | `@pmndrs/glyph/bake` | `validateFontArtifact` |
+
+Not every failure is a `GlyphError`. See [Other thrown values](#other-thrown-values).
+
+## GlyphError
+
+The base class of every Glyph error. It extends `Error` and adds `code`.
+
+```ts
+import { GlyphError, type GlyphErrorCode } from '@pmndrs/glyph';
+
+declare const error: GlyphError;
+const code: GlyphErrorCode = error.code;
+```
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `code` | `GlyphErrorCode` | The failure category. Stable; safe to branch on. |
+| `name` | `string` | `'GlyphError'`, or the subclass name. |
+| `message` | `string` | For people. Do not parse it. |
+| `cause` | `unknown` | The underlying error, when there is one. |
+
+Constructor: `new GlyphError(code, message, options?)`, where `options` is the standard `ErrorOptions`
+(`{ cause }`). Applications rarely construct one.
+
+A `GlyphError` that is not a subclass instance is thrown for a text the engine refused. Its `code` is
+`'engine-failed'`, its message is `Glyph text "<first 40 UTF-16 code units>" was not drawn: <reason>`, and its `cause`
+is the engine's own error. It is thrown from the render call, once:
+
+```ts
+import { GlyphError } from '@pmndrs/glyph';
+
+try {
+  renderer.render(scene, camera);
+} catch (error) {
+  if (error instanceof GlyphError && error.code === 'engine-failed') console.error(error.message, error.cause);
+  else throw error;
+}
+```
+
+## GlyphErrorCode
+
+```ts
+import type { GlyphErrorCode } from '@pmndrs/glyph';
+
+const code: GlyphErrorCode = 'invalid-input';
+```
+
+A string union. The list is closed: no other value is ever used.
+
+| Value | Meaning | Thrown as |
+| --- | --- | --- |
+| `'invalid-input'` | A value passed to a setter or constructor cannot be accepted. | `GlyphInputError` |
+| `'invalid-offset'` | A text offset is not a usable grapheme boundary. | `TextOffsetError` |
+| `'layout-phase'` | A layout input was written while layout callbacks run. | `GlyphLayoutPhaseError` |
+| `'resource-unavailable'` | A font or raster asset could not be fetched, found or used. | `GlyphFontError` |
+| `'engine-failed'` | The layout engine rejected a call, refused a text, or had to restart. | `GlyphEngineStatusError`, `GlyphError` |
+| `'bake-failed'` | Baking a font or a raster format failed. | `FontBakeError`, `NodeBakeError`, `BitmapBakeError`, `MsdfBakeError`, `SlugBakeError` |
+| `'artifact-invalid'` | A baked font file is malformed. | `FontArtifactValidationError` and internal validators |
+| `'format-unavailable'` | Text uses glyphs that a subset raster artifact does not contain. | An internal `GlyphError` subclass |
+| `'resource-missing'`, `'resource-limit'`, `'artifact-incompatible'`, `'integrity-failed'`, `'worker-failed'`, `'internal'` | Part of the type. No class in 0.2.0 throws them. | |
+
+Some internal subclasses are not exported, for example the validators of raster artifacts. They are still
+`GlyphError` instances, so `error instanceof GlyphError` and `error.code` work for them.
+
+## GlyphInputError
+
+Thrown when a value you wrote cannot be accepted. The text keeps its previous value, including the valid properties
+of the same update.
+
+```ts
+import { GlyphInputError } from '@pmndrs/glyph';
+
+try {
+  text.set({ style: { fontSize: -1 } });
+} catch (error) {
+  if (error instanceof GlyphInputError) {
+    error.code; // 'invalid-input'
+    error.path; // ['style']
+    error.cause; // RangeError: Text style fontSize must be positive
+  }
+}
+```
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `code` | `'invalid-input'` | |
+| `path` | `readonly (string \| number)[]` | The input that was invalid, from the property you wrote, outermost first: `['style']`, `['text']`, `['text', 'spans', 2, 'style']`. Empty when the properties are only invalid together. Frozen. |
+| `cause` | `unknown` | The validator's `TypeError` or `RangeError`. |
+
+Constructor: `new GlyphInputError(path, message, options?)`.
+
+Thrown by:
+
+- three.js: `createText()`, `Text.set()`, every `Text` property setter, and `Text.replace()` for an `insert` that is
+  not a string.
+- React: an invalid prop, while React commits. It reaches the nearest error boundary.
+- Vue: an invalid prop. It reaches `onErrorCaptured` and `app.config.errorHandler`.
+- TypeGPU: `createText()` and `TypeGpuText.update()`, including `style.decoration`, which that renderer does not
+  support.
+- A text longer than the config's `maxTextUnits` (default 65,536 UTF-16 code units), at `['text']`.
+- A setter that names a font that has been disposed, at `['font']`.
+
+Not thrown by `Pixi3DText`, which throws the plain `TypeError` or `RangeError` for invalid input. Root limits other
+than `maxTextUnits` also throw plain `RangeError`.
+
+## GlyphLayoutPhaseError
+
+Thrown by a setter that writes a layout input while layout callbacks run. A callback may read anything and may write
+transforms, visibility, color, opacity and material. A layout input written there could not be laid out before the
+frame it was meant for, so the write is refused.
+
+```ts
+import { GlyphLayoutPhaseError } from '@pmndrs/glyph';
+
+text.onLayout = (self) => {
+  try {
+    self.text = 'changed during layout';
+  } catch (error) {
+    if (error instanceof GlyphLayoutPhaseError) error.code; // 'layout-phase'
+  }
+};
+```
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `code` | `'layout-phase'` | |
+
+Constructor: `new GlyphLayoutPhaseError(message)`.
+
+Thrown by any setter of any text, not only the one whose callback is running, inside `onLayout` on a three.js or
+TypeGPU text, the React `onLayout` prop and the Vue `@layout` event. The value is not changed and the frame is
+published.
+
+## TextOffsetError
+
+Thrown by the editing methods when an offset cannot be used. Nothing is snapped or clipped: the error carries the
+offset as given and the nearest valid boundaries.
+
+```ts
+import { TextOffsetError } from '@pmndrs/glyph';
+
+try {
+  text.rangeRects(9, 3);
+} catch (error) {
+  if (error instanceof TextOffsetError) {
+    error.method; // 'rangeRects'
+    error.argument; // 'end'
+    error.reason; // 'reversed'
+  }
+}
+```
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `code` | `'invalid-offset'` | |
+| `method` | `'replace' \| 'caret' \| 'move' \| 'boundary' \| 'rangeRects'` | The method that was called. |
+| `argument` | `'start' \| 'end' \| 'offset'` | Which argument was invalid. |
+| `offset` | `number` | The offset as given. |
+| `reason` | `TextOffsetReason` | See below. |
+| `textLength` | `number` | Length of the text in UTF-16 code units. |
+| `before` | `number \| undefined` | The nearest grapheme boundary at or before the offset. |
+| `after` | `number \| undefined` | The nearest grapheme boundary at or after the offset. |
+
+| `reason` | Meaning |
+| --- | --- |
+| `'not-integer'` | The offset is not a whole number. |
+| `'out-of-range'` | The offset is below 0 or above the text length. |
+| `'reversed'` | `end` is before `start`. |
+| `'inside-grapheme'` | The offset splits a grapheme, for example between the two code units of a surrogate pair or inside an emoji sequence. |
+
+The types `TextOffsetMethod`, `TextOffsetArgument` and `TextOffsetReason` are exported from `@pmndrs/glyph`. The same
+class is re-exported from `@pmndrs/glyph/three` and `@pmndrs/glyph/pixi3d`.
+
+Thrown by `caret`, `move`, `boundary`, `rangeRects` and `replace` on a three.js `Text`, a `TypeGpuText` and a
+`Pixi3DText`. `hitTest` takes a point, not an offset, and does not throw it. See [Editing](/reference/editing).
+
+## GlyphFontError
+
+Thrown when a font cannot be loaded or selected.
+
+```ts
+import { GlyphFontError } from '@pmndrs/glyph';
+
+try {
+  await Inter.load();
+} catch (error) {
+  if (error instanceof GlyphFontError) {
+    error.code; // 'resource-unavailable'
+    error.reason; // for example 'BAKED_FONT_FETCH'
+    error.url; // the request that failed, when there is one
+  }
+}
+```
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `code` | `'resource-unavailable'` | |
+| `reason` | `string` | A short machine-readable reason in upper snake case. |
+| `url` | `string \| undefined` | The URL of the failed request, when the failure belongs to one. |
+| `cause` | `unknown` | The underlying error, for example the `fetch` rejection. |
+
+Constructor: `new GlyphFontError(reason, message, { url?, cause? })`.
+
+`reason` is typed `string`. The values you are most likely to see:
+
+| `reason` | Meaning |
+| --- | --- |
+| `'BAKED_FONT_FETCH'` | The request for the `.font.glb` failed or returned an HTTP error. |
+| `'BAKED_FONT_MISSING'` | A baked-only font asset was not found. |
+| `'BAKED_FONT_INVALID'`, `'INVALID_FONT_ASSET'` | The file is not a valid baked font. |
+| `'BAKED_FONT_INCOMPATIBLE'`, `'FONT_VERSION_INCOMPATIBLE'` | The file was baked by an incompatible version. |
+| `'FONT_SOURCE_FETCH'` | The request for a source font (for runtime baking) failed. |
+| `'FONT_RESOURCE_LIMIT'`, `'BAKED_FONT_RESOURCE_LIMIT'`, `'FONT_SOURCE_RESOURCE_LIMIT'`, `'RASTER_RESOURCE_LIMIT'` | A response is larger than the allowed size. |
+| `'RASTER_FETCH'` | The request for an external raster artifact failed. |
+| `'RASTER_NOT_FOUND'`, `'RASTER_SOURCE_UNAVAILABLE'` | The font has no baked data for the requested format and nothing can bake it at runtime. |
+| `'RASTER_INCOMPATIBLE'`, `'INVALID_RASTER_ASSET'` | The raster data does not match the requested format or is malformed. |
+| `'FONT_FACE_NOT_FOUND'` | A font was selected by a name that no font face declares. |
+| `'FONT_FACE_FORMAT_REQUIRED'` | The font face advertises no format; a runtime font source must declare the formats to bake. |
+| `'FONT_FACE_FORMAT_UNAVAILABLE'` | The font does not implement the declared format, or the format name is not an imported format. |
+| `'FONT_FACE_FORMAT_NOT_LOADED'` | A format selection was used before it was loaded. |
+| `'INVALID_FONT_INPUT'`, `'INVALID_FONT_URL'` | The source passed to `glyph.fontFace` is not usable. |
+| `'STALE_FONT_HANDLE'`, `'FONT_LIBRARY_DISPOSED'` | The font or its owner was disposed. |
+
+Thrown by:
+
+- `FontFace.load()` and a format selection's `load()`, as a rejected promise. A failed load is forgotten, so calling
+  `load()` again is a new attempt.
+- `createText()` and the `font` setter when a font name is not defined (`'FONT_FACE_NOT_FOUND'`).
+- React: font hooks and `Text` with a `FontFace`, as a throw during render. `GlyphProvider`'s `errorFallback`
+  handles it; see [React](/reference/react).
+- Vue: `Text` with a `FontFace` or a name, to Vue's error handling, once; `useFont().error` and the rejected
+  `ready` promise. See [Vue](/reference/vue).
+
+## GlyphEngineStatusError
+
+A layout engine call returned a failure status.
+
+```ts
+import { GlyphEngineStatusError, glyphEngineStatusErrorDetails } from '@pmndrs/glyph';
+
+function describe(error: unknown): string | undefined {
+  const engine = error instanceof Error && error.cause instanceof GlyphEngineStatusError ? error.cause : error;
+  if (!(engine instanceof GlyphEngineStatusError)) return undefined;
+  const details = glyphEngineStatusErrorDetails(engine);
+  return `${engine.statusCode} (status ${engine.status}), needs ${details.requiredResultCapacity} result bytes`;
+}
+```
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `code` | `'engine-failed'` | |
+| `statusCode` | `GlyphEngineStatusCode` | A stable name for the status. |
+| `status` | `number` | The raw status number, for diagnostics. |
+
+Constructor: `new GlyphEngineStatusError(operation, status)`. The message is
+`<operation> failed with glyph-engine status <status>`.
+
+`GlyphEngineStatusCode` is one of `'invalid-handle'`, `'invalid-font'`, `'invalid-extents'`, `'handle-conflict'`,
+`'font-missing'`, `'invalid-request'`, `'result-too-large'`, `'codec-conflict'`, `'codec-missing'`, `'root-conflict'`,
+`'root-missing'`, `'revision-conflict'`, `'font-stack-missing'`, `'font-in-use'`, `'style-range-invalid'`,
+`'style-splits-cluster'`, `'style-nesting-invalid'`, `'style-root-invalid'`, `'font-metrics-missing'`,
+`'registration-in-use'` or `'unknown'`.
+
+An application normally meets this error as the `cause` of the `GlyphError` thrown from a render call. Setters do
+not throw it.
+
+### glyphEngineStatusErrorDetails
+
+Returns the diagnostic details the engine attached to a status error.
+
+```ts
+import type { GlyphEngineStatusDetails, GlyphEngineStatusError } from '@pmndrs/glyph';
+
+declare function glyphEngineStatusErrorDetails(error: GlyphEngineStatusError): GlyphEngineStatusDetails;
+```
+
+| Field of the result | Type | Description |
+| --- | --- | --- |
+| `requiredRequestCapacity` | `number` | Request capacity the call would have needed, or `0`. |
+| `requiredResultCapacity` | `number` | Result capacity the call would have needed, or `0`. |
+| `fault` | `GlyphEngineFault` | `{ paragraphId, styleId }` of the request that was rejected; each is `0` when not known. These identities are for renderer integrations. |
+
+For an error with no attached details it returns zeros. It never throws.
+
+## FontBakeError
+
+The font baker rejected a font or a bake request.
+
+```ts
+import { FontBakeError } from '@pmndrs/glyph/bake';
+
+declare const error: unknown;
+
+if (error instanceof FontBakeError) {
+  error.code; // 'bake-failed'
+  error.reason; // the baker's own error code
+  error.path; // where in the request or the font, when known
+}
+```
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `code` | `'bake-failed'` | |
+| `reason` | `string` | The baker's error code. |
+| `path` | `string \| undefined` | The location of the problem, when the baker reports one. |
+
+Constructor: `new FontBakeError({ code, message, path? })`. The argument type is `SerializedBakeError`, the form in
+which a baker reports an error across a Worker boundary; its `code` becomes `reason`.
+
+Thrown by the font baker created with `createFontBaker`, by `bakeFont`, and by `bakeFontInWorker` from
+`@pmndrs/glyph/runtime-bake` when the Worker reports a failure. See [Bake](/reference/bake) and
+[Runtime bake](/reference/runtime-bake).
+
+## NodeBakeError
+
+A Node bake could not read its inputs or write its outputs.
+
+```ts
+import { bakeFont, NodeBakeError } from '@pmndrs/glyph/bake';
+
+try {
+  await bakeFont({
+    input: './fonts/Inter.ttf',
+    output: './public/fonts/inter.font.glb',
+    font: { fontFaceIndex: 0 },
+  });
+} catch (error) {
+  if (error instanceof NodeBakeError) console.error(error.reason, error.path);
+  else throw error;
+}
+```
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `code` | `'bake-failed'` | |
+| `reason` | `string` | `'OUTPUT_CONFLICT'`, `'OUTPUT_OVERLAPS_INPUT'`, `'OUTPUT_TARGET_TYPE'`, `'SOURCE_OUTSIDE_ASSET_ROOT'`, `'UNSAFE_ARTIFACT_ID'` or `'NON_FILE_URL'`. |
+| `path` | `string \| undefined` | The file path or URL the problem is about. |
+
+Constructor: `new NodeBakeError(reason, message, path?, options?)`.
+
+## Raster bake errors
+
+`BitmapBakeError`, `MsdfBakeError` and `SlugBakeError` have the same shape as `FontBakeError`. Each is thrown by the
+raster baker of its format.
+
+```ts
+import { BitmapBakeError } from '@pmndrs/glyph/bakers/bitmap';
+import { MsdfBakeError } from '@pmndrs/glyph/bakers/msdf';
+import { SlugBakeError } from '@pmndrs/glyph/bakers/slug';
+
+function isRasterBakeError(error: unknown): error is BitmapBakeError | MsdfBakeError | SlugBakeError {
+  return error instanceof BitmapBakeError || error instanceof MsdfBakeError || error instanceof SlugBakeError;
+}
+```
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `code` | `'bake-failed'` | |
+| `reason` | `string` | The baker's error code. |
+| `path` | `string \| undefined` | The location of the problem, when the baker reports one. |
+
+Constructor of each: `new BitmapBakeError({ code, message, path? })`. See [Bakers](/reference/bakers).
+
+## FontArtifactValidationError
+
+A baked font file failed validation.
+
+```ts
+import { FontArtifactValidationError, validateFontArtifact } from '@pmndrs/glyph/bake';
+
+declare const bytes: Uint8Array;
+
+try {
+  await validateFontArtifact(bytes);
+} catch (error) {
+  if (error instanceof FontArtifactValidationError) {
+    for (const issue of error.issues) console.error(issue.code, issue.path, issue.message);
+  }
+}
+```
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `code` | `'artifact-invalid'` | |
+| `issues` | `readonly FontArtifactValidationIssue[]` | Every problem found. Each has `code: string`, `message: string` and an optional `path: string`. |
+| `message` | `string` | One line per issue: `<code> <path>: <message>`. |
+
+Constructor: `new FontArtifactValidationError(issues)`.
+
+## Other thrown values
+
+| Value | When |
+| --- | --- |
+| `AggregateError` | Several failures were found in one frame. Its `errors` holds them. Message: `Glyph text failed while rendering`. |
+| `Error` with message `onLayout of Glyph text "…" threw: …` | Your layout callback threw. `cause` is your exception. Thrown from the render call, once. |
+| An internal `GlyphError` subclass named `GlyphEngineRestartError` (`code: 'engine-failed'`) | The engine crashed and was replaced. Thrown from the render call that found it, once. The next frame retries. |
+| `RangeError` | An index out of range in `glyphAt`, `outlineAt` and the matrix methods of `Glyphs`; a fixed buffer capacity exceeded (from the render call); root limits other than `maxTextUnits`. |
+| `TypeError`, `RangeError` | Invalid options to `defineTextMaterial`, `defineTypeGpuConfig` and `Pixi3DTextMaterial`; invalid input to `Pixi3DText`. |
+| `Error` | Use of a disposed text, root or handle; `glyph.handle()` before `glyph.init()` has resolved. |
+| The error your code threw | A custom material factory that throws rejects the frame's publication; the exception is thrown from the render call, once. |
+
+## Where render-time failures are thrown
+
+| Renderer | Call |
+| --- | --- |
+| three.js, React Three Fiber, Vue with TresJS | `renderer.render(scene, camera)`, after the frame was drawn |
+| TypeGPU | The root's `draw()`, after the draw calls were recorded |
+| PixiJS 3D | `glyph.shape()` |
+
+Each failure is thrown once. A failure that the next frame finds again is not thrown again. There is no error
+callback, no per-text error property and no `'failed'` commit status.
+
+## See also
+
+- [Handle errors](/guides/project/handle-errors)
+- [Editing](/reference/editing)
+- [FontFace](/reference/font-face)
+- [When layout runs](/explanation/when-layout-runs)
+- [Troubleshooting](/guides/project/troubleshooting)
