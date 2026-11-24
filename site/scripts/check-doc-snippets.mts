@@ -12,7 +12,8 @@ import { fileURLToPath } from 'node:url';
 
 const site = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const docs = join(site, 'docs');
-const staging = join(site, '.cache', 'doc-snippets');
+// One staging directory per run, so two checks at once do not delete each other's modules.
+const staging = join(site, '.cache', 'doc-snippets', String(process.pid));
 const ambient = join(site, 'scripts', 'snippet-ambient.d.ts');
 
 /**
@@ -53,7 +54,14 @@ function extract(file: string, source: string): Snippet[] {
   return snippets;
 }
 
-const files = await mdxFiles(docs);
+// Pass paths under site/docs (files or folders) to check only those; none checks everything.
+const only = process.argv
+  .slice(2)
+  .filter((argument) => argument !== '--')
+  .map((argument) => resolve(site, argument));
+const files = (await mdxFiles(docs)).filter(
+  (file) => only.length === 0 || only.some((path) => file === path || file.startsWith(`${path}/`)),
+);
 const snippets = (await Promise.all(files.map(async (file) => extract(file, await readFile(file, 'utf8'))))).flat();
 
 if (snippets.length === 0) {
@@ -79,7 +87,7 @@ await writeFile(
   tsconfig,
   `${JSON.stringify(
     {
-      extends: '../../tsconfig.json',
+      extends: '../../../tsconfig.json',
       compilerOptions: {
         noEmit: true,
         noUnusedLocals: false,
@@ -97,6 +105,7 @@ await writeFile(
 
 const result = spawnSync('tsc', ['-p', tsconfig], { cwd: site, encoding: 'utf8', shell: true });
 if (result.status === 0) {
+  await rm(staging, { force: true, recursive: true });
   console.info(`Typechecked ${snippets.length} documentation snippet(s) against @pmndrs/glyph.`);
   process.exit(0);
 }
@@ -113,4 +122,5 @@ for (const line of `${result.stdout ?? ''}${result.stderr ?? ''}`.trim().split('
   const row = snippet.line + Number(match!.groups!['row']);
   console.error(`${relative(site, snippet.file)}(${row},${match!.groups!['column']})${match!.groups!['rest']}`);
 }
+await rm(staging, { force: true, recursive: true });
 process.exit(1);
