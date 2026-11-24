@@ -14,6 +14,7 @@
     "build:website": "node ./scripts/docs-generator.mts build docs dist/docs --format website --libname \"@pmndrs/glyph\" --libname-short glyph --libname-dotsuffix-label docs --libname-dotsuffix-href https://docs.pmnd.rs --icon ♠️ --github https://github.com/pmndrs/glyph --discord https://discord.gg/poimandres --base-path /docs --home-redirect /getting-started/introduction --theme-primary \"#0a0c12\" --theme-scheme neutral --theme-contrast 0 && pnpm copy:docs-assets",
     "capture:thumbnails": "node ./scripts/capture-thumbnails.mts",
     "bake:chorus": "node ./scripts/bake-chorus.mts",
+    "bake:wordmark": "node ./scripts/bake-wordmark.mts",
     "check": "pnpm typecheck && pnpm check:examples && pnpm check:snippets && pnpm lint && pnpm format:check && pnpm test && pnpm build:docs-components && pnpm check:docs && pnpm build:landing",
     "check:examples": "tsc --noEmit -p tsconfig.examples.json && pnpm build:examples",
     "check:snippets": "node ./scripts/check-doc-snippets.mts",

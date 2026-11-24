@@ -9,8 +9,8 @@ import { WORDS } from '../landing/src/chorus-words.ts';
 const run = promisify(execFile);
 const here = dirname(fileURLToPath(import.meta.url));
 const site = resolve(here, '..');
-const fixtures = resolve(site, '../apps/benchmarks/fixtures/fonts');
-const noto = resolve(fixtures, 'noto-sans-v2026');
+// The source faces are checked in beside the landing page, so a rebake needs no network.
+const noto = resolve(site, 'landing/sources/noto-sans-v2026');
 
 /**
  * Everything the chorus needs, in one run: fetch the faces if they are missing,

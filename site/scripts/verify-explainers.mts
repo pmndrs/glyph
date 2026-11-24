@@ -21,7 +21,8 @@ import {
 } from './browser.mts';
 
 /**
- * Drives the built site in a GPU-enabled Chromium and checks what the explainer element promises:
+ * Drives the built site in a GPU-enabled Chromium. The landing page at `/` must draw and stay silent in the
+ * console. On the docs and the examples it checks what the explainer element promises:
  * one renderer and one device per page however many proxies it has, a poster until a scene's first
  * frame, frames streamed while a proxy holds a lease, the last frame held when it does not, scenes
  * resumed rather than remounted when a proxy returns, and input delivered to the proxy it was made on.
@@ -266,12 +267,52 @@ async function verifyPreview(context: BrowserContext): Promise<void> {
   await page.close();
 }
 
+/** The landing page is its own app at `/`: it must draw the mark, and log neither an error nor a warning. */
+async function verifyLanding(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  const problems = watch(page, 'landing', { warnings: true });
+  await page.goto(`${ORIGIN}/`, { waitUntil: 'load' });
+  // The mark and the chorus are lit type on a near-black ground, so a drawn frame has bright pixels.
+  const drawn = await page
+    .waitForFunction(
+      async () => {
+        const canvas = document.querySelector('canvas');
+        if (canvas === null || canvas.width < 2) return false;
+        const bitmap = await createImageBitmap(canvas, { resizeWidth: 64, resizeHeight: 40 });
+        const scratch = new OffscreenCanvas(64, 40).getContext('2d')!;
+        scratch.drawImage(bitmap, 0, 0);
+        const pixels = scratch.getImageData(0, 0, 64, 40).data;
+        let bright = 0;
+        for (let index = 0; index < pixels.length; index += 4)
+          if (pixels[index]! + pixels[index + 1]! + pixels[index + 2]! > 360) bright += 1;
+        return bright > 40;
+      },
+      undefined,
+      { timeout: 30_000 },
+    )
+    .then(
+      () => true,
+      () => false,
+    );
+  check(drawn, 'landing: the wordmark and the chorus are drawn');
+  await page.screenshot({ path: resolve(OUT, 'landing-1-drawn.png') });
+  check((await page.locator('a', { hasText: /get started/i }).count()) > 0, 'landing: the page links to the docs');
+  const favicon = await page.request.get(`${ORIGIN}/favicon.ico`);
+  check(favicon.ok(), 'landing: the favicon is served');
+  check(
+    problems.length === 0,
+    `landing: no console errors, warnings or failed requests${problems.map((p) => `\n       ${p}`).join('')}`,
+  );
+  await page.close();
+}
+
 await mkdir(OUT, { recursive: true });
 const stop = await serve(PORT);
 const browser = await launch();
 try {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
   await instrument(context);
+  await verifyLanding(context);
   await verifyDocsPage(context);
   await verifyGallery(context);
   await verifyPreview(context);

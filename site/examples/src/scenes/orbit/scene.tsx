@@ -34,7 +34,7 @@ import { ringInk, sphereMaterial } from './materials';
  */
 export default function Orbit() {
   const inter = useSlug(INTER);
-  const gl = useThree((state) => state.gl);
+  const gl = useThree((state) => state.renderer);
   const sphere = useMemo(() => sphereMaterial(), []);
   const body = useRef<Mesh>(null);
 

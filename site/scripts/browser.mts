@@ -63,10 +63,13 @@ export async function instrument(context: BrowserContext): Promise<void> {
   });
 }
 
-export function watch(page: Page, label: string): string[] {
+export function watch(page: Page, label: string, options: { readonly warnings?: boolean } = {}): string[] {
   const problems: string[] = [];
   page.on('console', (message) => {
     if (message.type() === 'error') problems.push(`${label}: console error: ${message.text()}`);
+    if (options.warnings === true && message.type() === 'warning') {
+      problems.push(`${label}: console warning: ${message.text()}`);
+    }
   });
   page.on('pageerror', (error) => problems.push(`${label}: uncaught: ${error.message}`));
   page.on('response', (response) => {

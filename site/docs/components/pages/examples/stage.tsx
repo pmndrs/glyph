@@ -37,7 +37,7 @@ export function ExampleStage({
 }
 
 function ToneMapping({ lit }: { readonly lit: boolean }) {
-  const renderer = useThree((state) => state.gl);
+  const renderer = useThree((state) => state.renderer);
   useLayoutEffect(() => {
     const previous = renderer.toneMapping;
     setToneMapping(renderer, lit ? AgXToneMapping : NoToneMapping);
