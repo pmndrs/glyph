@@ -37,6 +37,7 @@ pub fn hb_ot_layout_kern(
     scale: Scale,
     buffer: &mut hb_buffer_t,
 ) -> Option<()> {
+    buffer.scratch_flags |= HB_BUFFER_SCRATCH_FLAG_KERN_TABLE;
     let mut c = AatApplyContext::new(plan, face, scale, buffer);
 
     let (kern, subtable_caches) = c.face.aat_tables.kern.as_ref()?;
@@ -75,6 +76,9 @@ pub fn hb_ot_layout_kern(
 
         if !seen_cross_stream && is_cross_stream {
             seen_cross_stream = true;
+
+            // pmndrs/glyph fork (see GLYPH-FORK.md): the chain ties every glyph to the others.
+            c.buffer.unsafe_beyond_pairs(None, None);
 
             // Attach all glyphs into a chain.
             for pos in &mut c.buffer.pos {
@@ -130,7 +134,10 @@ fn machine_kern<F>(
 ) where
     F: Fn(u32, u32) -> i32,
 {
-    buffer.unsafe_to_concat(None, None);
+    // pmndrs/glyph fork (see GLYPH-FORK.md): the whole buffer is flagged as upstream flags it,
+    // and only a pair that is not a simple one marks its range beyond pairs.
+    buffer.unsafe_to_concat_pair(None, None);
+    buffer.scratch_flags |= HB_BUFFER_SCRATCH_FLAG_KERN_TABLE_FLAGGED;
     let mut ctx = hb_ot_apply_context_t::new(TableIndex::GPOS, face, scale, buffer);
     ctx.set_lookup_mask(kern_mask);
     ctx.lookup_props = u32::from(lookup_flags::IGNORE_MARKS);
@@ -155,6 +162,10 @@ fn machine_kern<F>(
         }
 
         let j = iter.index();
+        let simple_pair = !cross_stream && j == i + 1;
+        if !simple_pair {
+            iter.buffer.unsafe_beyond_pairs(Some(i), Some(j + 1));
+        }
 
         let info = &iter.buffer.info;
         let kern = get_kerning(info[i].glyph_id, info[j].glyph_id);
@@ -189,7 +200,11 @@ fn machine_kern<F>(
                 }
             }
 
-            iter.buffer.unsafe_to_break(Some(i), Some(j + 1));
+            if simple_pair {
+                iter.buffer.unsafe_to_break_pair(Some(i), Some(j + 1));
+            } else {
+                iter.buffer.unsafe_to_break(Some(i), Some(j + 1));
+            }
         }
 
         i = j;
@@ -307,6 +322,10 @@ fn apply_state_machine_kerning(
         stack: [0; 8],
         depth: 0,
     };
+
+    // pmndrs/glyph fork (see GLYPH-FORK.md): a state machine carries state across the buffer,
+    // and upstream does not flag it unsafe to concatenate.
+    c.buffer.unsafe_beyond_pairs(None, None);
 
     let mut state = START_OF_TEXT;
     c.buffer.idx = 0;

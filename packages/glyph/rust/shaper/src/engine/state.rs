@@ -4545,7 +4545,7 @@ mod tests {
                 x_offsets: vec![0; UNIT_COUNT],
                 y_offsets: vec![0; UNIT_COUNT],
                 glyph_flags: vec![0; UNIT_COUNT],
-                beyond_pairs: Vec::new(),
+                beyond_pairs: vec![false; UNIT_COUNT],
             };
             let before = crate::SPARSE_BOUNDARY_VISITS.with(core::cell::Cell::get);
             let mut windows = Vec::new();
