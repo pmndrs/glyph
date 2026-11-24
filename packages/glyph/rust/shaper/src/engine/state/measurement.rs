@@ -245,7 +245,6 @@ pub(super) fn append_paragraph_measurement(
         )?
     };
     let active_flow = state.flow_layout.active();
-    let active_line_count = active_flow.lines.len();
     let has_ellipsis = !active_flow.ellipsis_threads().is_empty();
     let cluster_count = state.clusters.active().starts.len();
     let constraint = state
@@ -267,7 +266,7 @@ pub(super) fn append_paragraph_measurement(
         });
     let needs_intrinsic = visible_consumed_clusters < cluster_count || has_ellipsis;
     let reuse_intrinsic = !state.has_pending_preparation()
-        && state.clipped_inspection.active().mode != IntrinsicInspection::None;
+        && *state.intrinsic_inspection.active() != IntrinsicInspection::None;
     if needs_intrinsic && !reuse_intrinsic {
         state.prepare_intrinsic_flow_layout(
             shaper.as_deref_mut().ok_or(EngineError::InvalidRequest)?,
@@ -277,34 +276,58 @@ pub(super) fn append_paragraph_measurement(
             limits.max_slots_per_band,
         )?;
     }
-    let max_lines_truncated = constraint.max_lines != 0
-        && active_line_count
-            >= usize::try_from(constraint.max_lines).map_err(|_| EngineError::ResultTooLarge)?;
-    let inspect_full_clipped_layout =
-        needs_intrinsic && constraint.overflow == OVERFLOW_CLIP && !max_lines_truncated;
-    // Positions that describe the current flow make the facts free, unless a clipped paragraph
-    // would first have to position its full layout.
+    // Positions that describe the current flow make the facts free.
     let include_glyph_facts = required_glyph_facts
-        || (glyph_facts == GlyphFactDemand::Available
-            && !state.positioning_owed()
-            && !inspect_full_clipped_layout);
-    // Glyph facts and the full clipped layout count positioned glyphs, so they position now.
-    if (inspect_full_clipped_layout || include_glyph_facts) && state.positioning_owed() {
+        || (glyph_facts == GlyphFactDemand::Available && !state.positioning_owed());
+    // Glyph facts count positioned glyphs, so they position now.
+    if include_glyph_facts && state.positioning_owed() {
         state.settle_positioning(shaper.as_deref().ok_or(EngineError::InvalidRequest)?)?;
     }
-    if !include_glyph_facts && !inspect_full_clipped_layout {
-        let flow_thread_id = constraint.flow_thread_id;
-        let geometry = state.geometry.active();
-        let intrinsic_extents = needs_intrinsic
-            .then(|| {
-                crate::engine::layout_query::flow_extents(
-                    flow_thread_id,
-                    &state.intrinsic_flow_layout_scratch,
-                    state.clusters.active(),
-                    thread_typography(geometry, flow_thread_id),
-                )
-            })
-            .transpose()?;
+    let flow_thread_id = constraint.flow_thread_id;
+    let geometry = state.geometry.active();
+    let intrinsic_extents = needs_intrinsic
+        .then(|| {
+            crate::engine::layout_query::flow_extents(
+                flow_thread_id,
+                &state.intrinsic_flow_layout_scratch,
+                state.clusters.active(),
+                thread_typography(geometry, flow_thread_id),
+            )
+        })
+        .transpose()?;
+    if include_glyph_facts {
+        let text = &state.text.active().units;
+        let clusters = state.clusters.active();
+        let positioned = state.positioned.active();
+        let boundary = state.visible_boundary_shape();
+        let (line_glyph_starts, line_glyph_counts) = positioned.semantic_line_glyph_spans();
+        let mut cursor = positioned.occurrence_cursor(0, clusters, boundary)?;
+        crate::engine::layout_query::append_measurement_from_occurrences(
+            records,
+            paragraph_id,
+            text.len(),
+            clusters.starts.len(),
+            geometry,
+            state.flow_layout.active(),
+            positioned.occurrence_count(),
+            || {
+                cursor
+                    .next_row()?
+                    .map(|row| row.semantic)
+                    .ok_or(EngineError::InvalidRequest)
+            },
+            positioned.placement_translations(),
+            positioned.line_ink(),
+            line_glyph_starts,
+            line_glyph_counts,
+            Some(positioned.semantic_line_inline_extents()),
+            clusters,
+            intrinsic_extents,
+            intrinsics,
+            include_layout_inspection || include_borrowed_layout,
+            include_layout_inspection,
+        )?;
+    } else {
         crate::engine::layout_query::append_measurement_from_flow(
             records,
             paragraph_id,
@@ -316,97 +339,14 @@ pub(super) fn append_paragraph_measurement(
             intrinsic_extents,
             intrinsics,
         )?;
-        if !reuse_intrinsic {
-            state.clipped_inspection.pending_mut().mode = if needs_intrinsic {
-                IntrinsicInspection::Flow
-            } else {
-                IntrinsicInspection::None
-            };
-            state.clipped_inspection.mark_prepared();
-        }
-        return Ok(());
     }
-    if inspect_full_clipped_layout && !reuse_intrinsic {
-        state
-            .prepare_intrinsic_positioned(shaper.as_deref().ok_or(EngineError::InvalidRequest)?)?;
-    }
-    let text = &state.text.active().units;
-    let clusters = state.clusters.active();
-    let geometry = state.geometry.active();
-    let active_flow = state.flow_layout.active();
-    let active_positioned = state.positioned.active();
-    let flow = if inspect_full_clipped_layout {
-        &state.intrinsic_flow_layout_scratch
-    } else {
-        active_flow
-    };
-    let positioned = if inspect_full_clipped_layout {
-        if reuse_intrinsic {
-            &state.clipped_inspection.active().positioned
-        } else {
-            &state.clipped_inspection.pending().positioned
-        }
-    } else {
-        active_positioned
-    };
-    let intrinsic_extents = if needs_intrinsic {
-        let flow_thread_id = geometry
-            .constraints
-            .first()
-            .ok_or(EngineError::InvalidRequest)?
-            .flow_thread_id;
-        Some(crate::engine::layout_query::flow_extents(
-            flow_thread_id,
-            &state.intrinsic_flow_layout_scratch,
-            clusters,
-            thread_typography(geometry, flow_thread_id),
-        )?)
-    } else {
-        None
-    };
-    let boundary = if inspect_full_clipped_layout {
-        &state.intrinsic_boundary_shape
-    } else if state.flow_layout.is_prepared() {
-        &state.pending_boundary_shape
-    } else {
-        &state.boundary_shape
-    };
-    let (line_glyph_starts, line_glyph_counts) = positioned.semantic_line_glyph_spans();
-    let mut cursor = positioned.occurrence_cursor(0, clusters, boundary)?;
-    crate::engine::layout_query::append_measurement_from_occurrences(
-        records,
-        paragraph_id,
-        text.len(),
-        clusters.starts.len(),
-        geometry,
-        flow,
-        positioned.occurrence_count(),
-        || {
-            cursor
-                .next_row()?
-                .map(|row| row.semantic)
-                .ok_or(EngineError::InvalidRequest)
-        },
-        positioned.placement_translations(),
-        positioned.line_ink(),
-        line_glyph_starts,
-        line_glyph_counts,
-        Some(positioned.semantic_line_inline_extents()),
-        clusters,
-        intrinsic_extents,
-        intrinsics,
-        include_layout_inspection || include_borrowed_layout,
-        include_layout_inspection,
-    )?;
     if !reuse_intrinsic {
-        state.clipped_inspection.pending_mut().mode = if inspect_full_clipped_layout {
-            IntrinsicInspection::Positioned
-        } else if needs_intrinsic {
+        *state.intrinsic_inspection.pending_mut() = if needs_intrinsic {
             IntrinsicInspection::Flow
         } else {
             IntrinsicInspection::None
         };
-        state.clipped_inspection.mark_prepared();
+        state.intrinsic_inspection.mark_prepared();
     }
     Ok(())
 }

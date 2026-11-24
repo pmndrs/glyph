@@ -181,8 +181,7 @@ impl TextEngine {
         if paragraph.state.positioning_owed() {
             return Err(EngineError::InvalidRequest);
         }
-        let positioned = paragraph.state.inspection_positioned();
-        Ok(positioned.occurrence_count())
+        Ok(paragraph.state.positioned.active().occurrence_count())
     }
 
     pub(crate) fn borrowed_paragraph_glyphs(
@@ -220,8 +219,8 @@ impl TextEngine {
         if paragraph.state.positioning_owed() {
             return Err(EngineError::InvalidRequest);
         }
-        let positioned = paragraph.state.inspection_positioned();
-        let boundary = paragraph.state.inspection_boundary_shape();
+        let positioned = paragraph.state.positioned.active();
+        let boundary = paragraph.state.visible_boundary_shape();
         let clusters = paragraph.state.clusters.active();
         start
             .checked_add(output.len())

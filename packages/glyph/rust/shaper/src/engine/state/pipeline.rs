@@ -186,13 +186,11 @@ impl ParagraphState {
         self.intrinsic_geometry_scratch.clear();
         self.intrinsic_flow_layout_scratch.clear();
         {
-            let (committed, pending) = self.clipped_inspection.pair_mut();
-            committed.mode = IntrinsicInspection::None;
-            committed.positioned.clear();
-            pending.mode = IntrinsicInspection::None;
-            pending.positioned.clear();
+            let (committed, pending) = self.intrinsic_inspection.pair_mut();
+            *committed = IntrinsicInspection::None;
+            *pending = IntrinsicInspection::None;
         }
-        self.clipped_inspection.discard_candidate();
+        self.intrinsic_inspection.discard_candidate();
         self.intrinsic_boundary_shape.clear();
         self.boundary_shape.clear();
         self.pending_boundary_shape.clear();
@@ -394,8 +392,8 @@ impl ParagraphState {
                     // unclipped layout a measurement derives, which is retired here because
                     // positioning, which otherwise retires it, does not run.
                     self.discard_positioned_candidate();
-                    self.clipped_inspection.pending_mut().mode = IntrinsicInspection::None;
-                    self.clipped_inspection.mark_prepared();
+                    *self.intrinsic_inspection.pending_mut() = IntrinsicInspection::None;
+                    self.intrinsic_inspection.mark_prepared();
                     return Ok(false);
                 }
             }
@@ -437,7 +435,7 @@ impl ParagraphState {
             self.positioned.pair_mut().0.clear();
             self.fallback_spans.clear();
         }
-        self.clipped_inspection.commit();
+        self.intrinsic_inspection.commit();
     }
 
     pub(super) fn initialize(&mut self) -> Result<(), EngineError> {
