@@ -5,6 +5,7 @@
 - [`@pmndrs/glyph-examples`](examples.md) — paired imperative Three.js and R3F examples over shared assets.
 
 - [`@pmndrs/glyph-typegpu-hello-world`](typegpu-hello-world.md) — editable text using the high-level TypeGPU integration.
+- [`@pmndrs/glyph-hero`](hero.md) — the landing-page hero: a live editorial spread reflowed, edited and broken apart in one shot.
 - [`@pmndrs/glyph-tres-playground`](tres-playground.md) — Vue adapter playground rendering every raster format inside a TresJS canvas.
 
 Repository validation requires exactly one concept per workspace package. Freshness is attested by contributors and verified after merge rather than stored in the concept; see [attested docs intent](../planning/decisions/attested-docs-intent.md).
