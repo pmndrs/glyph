@@ -13,7 +13,7 @@ stage cluster value 29 87b46917a6b756bc
 stage cluster identity 4 2d9345db429846a2
 stage cluster repr 11 0834c2da4fc0b5dd
 stage run_local repr 16 32b36411473f68bb
-stage flow value 35 0d62c3aff4b8f9a2
+stage flow value 35 4167b3f4d4d12978
 stage positioned identity 3 19b30b4ee3e134d4
 stage positioned value 13 6554f9e2b607d5da
 stage positioned repr 17 5d6b3ff512408f97
@@ -21,60 +21,60 @@ stage public value 13 2089f92c1f0b2847
 stage public identity 1 9bdbc53e8f2300f6
 stage view identity 4 91054d035049692b
 stage view value 40 ede91cabe77987ba
-stage wire wire 1 e5c9cdd458c005f8
+stage wire wire 1 d7b64a0ae6a96862
 stage gather identity 7 f32f7bf278a0bdfa
-stage gather value 36 6e2d3c458ce7ed6c
+stage gather value 36 9c04ff5dc8563832
 stage gpu identity 2 cf18e8fd424229d4
 stage gpu value 3 a207f9856a3478bc
-stage plan value 23 51bb847507532445
-stage plan identity 7 90bed45b856e43e7
+stage plan value 23 cf0937b9c22ced8e
+stage plan identity 7 b65a14036160df65
 step 01 insert in the first region
-class value 253 72e6bf3030531586
-class identity 29 669550fd1b131969
+class value 253 f4e84d4caa94be54
+class identity 29 f38c383f3d067b64
 class repr 44 61682d0f5f06258c
-class wire 1 187aea056e6944b8
+class wire 1 30a9d0dee56adef6
 step 02 delete in a later region
-class value 253 cff2163a9f9aa821
-class identity 29 5286191b9b86c823
+class value 253 3b33fec0d9c7e6b9
+class identity 29 48c660cab46020a5
 class repr 44 a4847e18cb6a24bb
-class wire 1 f4d9954b168ee53f
+class wire 1 7f9908076b3abc91
 step 03 narrower measure
-class value 253 c6136578571dcbeb
-class identity 29 5286191b9b86c823
+class value 253 289a5e5733d5101a
+class identity 29 48c660cab46020a5
 class repr 44 a4847e18cb6a24bb
 class wire 1 2794d9c38b52c7e6
 step 04 shorter regions
-class value 253 a9474c53b6c63b54
-class identity 29 5286191b9b86c823
+class value 253 b435dbab2d808e2f
+class identity 29 48c660cab46020a5
 class repr 44 a4847e18cb6a24bb
 class wire 1 3a1a72130c3cc8f1
 step 05 three columns, wider gap
-class value 253 f3530ed3ac5de5a8
-class identity 29 d75411378aba31de
+class value 253 2dfff6e958e40d3c
+class identity 29 d7a0a426a3a8f077
 class repr 44 530aa5f520b24194
-class wire 1 23f62e2d59713767
+class wire 1 6624341306a4137d
 step 06 one region
-class value 253 768998496d587d05
+class value 253 21131c38e37b22b6
 class identity 29 a755bb248bd146a4
 class repr 44 471486f0bbfaccc2
-class wire 1 07dcc91195961002
+class wire 1 f02c4dffed1627df
 step 07 the starting regions
-class value 253 cff2163a9f9aa821
-class identity 29 f60955af85623a59
+class value 253 3b33fec0d9c7e6b9
+class identity 29 37fa7cc7cd2fd5a8
 class repr 44 a4847e18cb6a24bb
-class wire 1 5b5d52a76a9ae3b6
+class wire 1 3092e0e49f0a5396
 step 08 insert Bidi (1 units) at 836 + flip case at 129 + direction 1
-class value 253 0713effaebfd814f
-class identity 29 91936b9b4c7d1566
+class value 253 378343118ce0fda7
+class identity 29 486a0d412a3f4a4f
 class repr 44 999841f14d0e772d
 class wire 1 e8c7fa9912a41d2c
 step 09 regions Single height 400
-class value 253 7e13bfb7ec1f9b21
+class value 253 f03e5fd90ca10bdb
 class identity 29 fbe9cc05d5828829
 class repr 44 f8c30bf39ba17a3d
-class wire 1 62a5b4ebdf9e599f
+class wire 1 50120f20046f9fb0
 step 10 metrics size 16 spacing 0 line 1 word 0
-class value 253 92158c596b2df862
+class value 253 5627413fa44f1169
 class identity 29 0049f220657038df
 class repr 44 1a3af122d9c2eaaa
-class wire 1 68b321d12705a071
+class wire 1 183fd742d6b52000

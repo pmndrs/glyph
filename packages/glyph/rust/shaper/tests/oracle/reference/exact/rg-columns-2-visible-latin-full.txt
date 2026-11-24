@@ -1,0 +1,80 @@
+# glyph layout oracle reference v1
+case rg-columns-2-visible-latin-full
+step cold
+stage owner value 1 c7f92b4235467a6a
+stage text value 1 597546093d6fca9a
+stage text identity 1 37dcc5cf4a270859
+stage unicode value 6 d6f362f80367beb6
+stage bidi value 8 ddbe36d7e028b482
+stage style value 26 62453dfa1d28857f
+stage shaping_run value 5 9b6e39fcf7d56f63
+stage shape value 14 72f08538dc05c0ae
+stage cluster value 29 ad0486c0c5e00710
+stage cluster identity 4 2cdf0da2d3e1e83e
+stage cluster repr 11 8df6de148caba80e
+stage run_local repr 16 3526bdbc4050a086
+stage flow value 35 0747cc3c8fd7aec5
+stage positioned identity 3 4f594c68d226e68d
+stage positioned value 13 e3702a9ce59058c4
+stage positioned repr 17 a0299898c83398a3
+stage public value 13 c895a312f12ab7f3
+stage public identity 1 f39259b72d6bbe33
+stage view identity 4 51150e14c13e8c30
+stage view value 40 228069b74f5555c5
+stage wire wire 1 24410c039503fb79
+stage gather identity 7 fa657bf6535237cc
+stage gather value 36 d685532c1751d3a4
+stage gpu identity 2 d006ed28d4853d20
+stage gpu value 3 c206bb00088aa805
+stage plan value 23 adb64175a6f0ee4c
+stage plan identity 7 b65a14036160df65
+step 01 insert in the first region
+class value 253 f85cdebf5800f9b8
+class identity 29 490c2605a6b81305
+class repr 44 e33fe5efb844b310
+class wire 1 41e85d7a7b6ddd23
+step 02 delete in a later region
+class value 253 da55211ed84790de
+class identity 29 b18f7e31a91c0fe8
+class repr 44 540041546103bafc
+class wire 1 d0e6b23c3d2e32d7
+step 03 narrower measure
+class value 253 d600b9f61d9ba7d6
+class identity 29 1c999afc9a683c57
+class repr 44 0fa0c7c0ed38c276
+class wire 1 34f47f89326a47b2
+step 04 shorter regions
+class value 253 b2b2654fab228fa9
+class identity 29 2cdff54966b1a13b
+class repr 44 6d0b5405835c432b
+class wire 1 11ea2085ba99261c
+step 05 three columns, wider gap
+class value 253 d5c654f586a19464
+class identity 29 931be44501b60346
+class repr 44 6d0c5fef9979a2b9
+class wire 1 dd1dcacd5c00f864
+step 06 one region
+class value 253 a770a2bfbb038823
+class identity 29 a04ba6b10e427756
+class repr 44 4f78f0ddcd590e06
+class wire 1 164dd501a7b002b0
+step 07 the starting regions
+class value 253 da55211ed84790de
+class identity 29 69ecc411b16360b2
+class repr 44 540041546103bafc
+class wire 1 7397576ceaaacaf0
+step 08 insert Space (218 units) at 995
+class value 253 c3e8522289f5ae50
+class identity 29 230a9f3660c48d4f
+class repr 44 2ab2dee5c18db3e0
+class wire 1 89303aa34d0f2393
+step 09 delete 7 at 50
+class value 253 c3bbed03a332733d
+class identity 29 5e5f1cd9243877ce
+class repr 44 125780ae4fa2819f
+class wire 1 a4e26f951ced3f23
+step 10 insert HardBreak (1 units) at 870
+class value 253 41c1a421d6f176b4
+class identity 29 ca7ac8c66e720a01
+class repr 44 927b6792d505ff51
+class wire 1 26bc8295122a2998

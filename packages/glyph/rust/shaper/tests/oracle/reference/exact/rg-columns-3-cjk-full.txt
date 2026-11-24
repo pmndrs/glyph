@@ -14,78 +14,78 @@ stage cluster identity 4 14836ddfcc2ba58f
 stage cluster repr 8 41bd7d43d0f1d7bb
 stage cluster cache 5 076b6c74a719fbb2
 stage run_local repr 16 b8286593bb4987da
-stage flow value 35 791a7e16a5ffc587
+stage flow value 35 d0b293259e91a0dc
 stage positioned identity 3 ee85fafeae029a04
 stage positioned value 13 b8ae006e9d54ba79
 stage positioned repr 17 49cab7c0508aa44d
-stage public value 13 1be2a471aec308a6
-stage public identity 1 66b95a5097109928
-stage view identity 4 33a35a8becc3fbf2
-stage view value 40 c3be12aa91b58433
-stage wire wire 1 dba25863b0736f75
+stage public value 13 f0653bf305b5f42e
+stage public identity 1 a3a7c2f753064c0a
+stage view identity 4 61b9658653f30019
+stage view value 40 6fe6b6809601b33b
+stage wire wire 1 7479e29b8d63dffd
 stage gather identity 7 4e9c88186b72d1f8
-stage gather value 36 1c90a0e53ca0c001
+stage gather value 36 1724bf7ad1630ccc
 stage gpu identity 2 b0c9e31b9320729a
 stage gpu value 3 7916b337ff426917
-stage plan value 23 15829cb9484b234c
-stage plan identity 7 b0213307e84bbf7e
+stage plan value 23 08fb8e1526e39863
+stage plan identity 7 b65a14036160df65
 step 01 insert in the first region
-class value 253 a014714303d19644
-class identity 29 6f1c2836b899fd87
+class value 253 f9c5dc0e082cc784
+class identity 29 50bf068315d4e2c5
 class repr 41 e6678d94aa8602dd
 class cache 5 787c25e5584a2c5f
-class wire 1 8a6915ba3c522cfd
+class wire 1 434212a6ecccd20f
 step 02 delete in a later region
-class value 253 dae44c2939e3d044
-class identity 29 30cf4e36b35defa5
+class value 253 3986e522c05ccec0
+class identity 29 e3e6a53a1cdf1e00
 class repr 41 deca997ac3471e37
 class cache 5 66b6c983a5cb9c3e
-class wire 1 b655fcb88c7a6323
+class wire 1 3b7f4f7cf768cfa8
 step 03 narrower measure
-class value 253 25f2568b22be8596
-class identity 29 d89900c7e0d651e5
+class value 253 9384e3bb968e7cfc
+class identity 29 b51d58e519bbb4af
 class repr 41 13062b25f7f64964
 class cache 5 25ed881d012485b5
-class wire 1 ff5bedfc36825697
+class wire 1 3b2dabc0cefa02b9
 step 04 shorter regions
-class value 253 abff8ef1891fc4d8
-class identity 29 05c0a588a8235b5e
+class value 253 063050d14d76dfe8
+class identity 29 481d168dbde1dab8
 class repr 41 35df1ab9b6f387c4
 class cache 5 25ed881d012485b5
-class wire 1 5547fd42a4ec40f8
+class wire 1 a5218857c12a8a30
 step 05 three columns, wider gap
-class value 253 a5fa71bd3458a1fb
-class identity 29 0b16f547b94e2e4f
+class value 253 5896d712028a6b7e
+class identity 29 cec9668e0150d345
 class repr 41 3dffc59a576c2584
 class cache 5 25ed881d012485b5
-class wire 1 de61337ff24e8893
+class wire 1 f37c8eaad3acca46
 step 06 one region
-class value 253 a48de72d57438d04
-class identity 29 32c953ecf682d318
+class value 253 33519a14add6ec17
+class identity 29 7fb8f1f3ee50311f
 class repr 41 82d4bf639d9ff4db
 class cache 5 25ed881d012485b5
-class wire 1 6f0bd8cabec2a334
+class wire 1 812c20b39df86596
 step 07 the starting regions
-class value 253 dae44c2939e3d044
-class identity 29 c2725380baf19235
+class value 253 3986e522c05ccec0
+class identity 29 d4642209570ead90
 class repr 41 deca997ac3471e37
 class cache 5 25ed881d012485b5
-class wire 1 3f531f2ed6b68e78
+class wire 1 80bb8487ecc6a275
 step 08 insert SpacedWord (5 units) at 247
-class value 253 02516d8137157fd2
-class identity 29 1e4093954eb3d691
+class value 253 20f350656a4884a2
+class identity 29 f5dd8af6246825e7
 class repr 41 bc061170aa1399c9
 class cache 5 e03f3211c9ecb69e
-class wire 1 3ff63cec27ae1976
+class wire 1 020ed3f454c26254
 step 09 delete 3 at 161 + regions Columns { count: 3, gap: 12.0 } height 200 + metrics size 16 spacing 0 line 1.2 word 0
-class value 253 0fc967e38b0d381a
-class identity 29 4deb9167a00f120f
+class value 253 ce266b5f9aaa8883
+class identity 29 5e26d139a911bed4
 class repr 41 e863ba4ebf80af3d
 class cache 5 8f7b66c608cb3f5b
-class wire 1 25a43f583089076f
+class wire 1 b059ff19ca115e0f
 step 10 width 567
-class value 288 6dbff2872efc636a
-class identity 31 f878947b0948032e
+class value 288 17b678bf07637cbe
+class identity 31 f0882eb5d69d499a
 class repr 61 63738396ce87b64d
 class cache 5 c5072d9487f7c713
-class wire 1 dcc424dcff3d4db7
+class wire 1 9dca321cc9286664
