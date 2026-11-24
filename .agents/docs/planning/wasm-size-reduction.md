@@ -1060,6 +1060,11 @@ KNOWN-DIVERGENCES unchanged, nothing re-frozen), `pnpm --filter @pmndrs/glyph te
 tests at the final tip. Kimun on `packages/glyph/rust` is C+ 76.3 before, 76.5 after the replacement and 76.3 at the
 final tip.
 
+The branch was then merged with the integration branch after its overflow change and the same gates re-run on the
+merge: 605 reference cases equal and 56,400 differential requests equal to cold on native and wasm, nothing listed,
+nothing re-frozen. The speed and size rows above were measured before that merge; the merged shaper is 1,329,880 raw
+and 526,742 gzip -9.
+
 ### Not now: estimates
 
 - **Data-driven syllabic interpreter (research step 7).** The Indic, Khmer, Myanmar and USE shapers plus vowel constraints
