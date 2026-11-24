@@ -12,10 +12,6 @@ import tgpu, {
 import type { CodecBufferId } from '../../index.js';
 import type { TypeGpuConfigOptions, TypeGpuPositionTransform, TypeGpuColorTransform } from '../config.js';
 
-/** One draw recorded per Text: Slug, whose Codec keeps a direct transform. */
-export interface Draw {
-  draw(pass: TgpuRenderPass | GPURenderPassEncoder, bindGroups: readonly TgpuBindGroup[]): void;
-}
 /** What a batched (indexed-transform) program binds: the lanes of one buffer set plus the session tables. */
 export interface BatchLanes {
   readonly buffers: ReadonlyMap<CodecBufferId, GPUBuffer>;
@@ -47,17 +43,8 @@ export interface BatchDrawBinding {
   ): void;
 }
 export interface TypeGpuResource {
-  /** Direct transform mode (Slug): one draw for one Text, positioned by its own uniform. */
-  prepare?(
-    buffers: ReadonlyMap<CodecBufferId, GPUBuffer>,
-    placementTable: GPUBuffer,
-    viewport: TgpuUniform<d.Vec2f>,
-    position: TgpuUniform<d.Vec2f>,
-    start: number,
-    count: number,
-  ): Draw;
-  /** Indexed transform mode (MSDF, bitmap): bindings that draws of many Texts share. */
-  bind?(lanes: BatchLanes): BatchDrawBinding;
+  /** Bindings that draws of many Texts share; every program reads its Text's offset from the transform table. */
+  bind(lanes: BatchLanes): BatchDrawBinding;
   dispose(): void;
 }
 export type PipelineOptions = TypeGpuConfigOptions;

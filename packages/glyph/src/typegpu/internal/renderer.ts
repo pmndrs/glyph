@@ -4,7 +4,7 @@ import { d } from 'typegpu';
 import type { CodecBufferId, CommandBufferView, GlyphRenderer, PreparedRendererCommit } from '../../index.js';
 import type { DisplayList } from '../../config/glyph.js';
 import type { Bindings, BufferBinding } from './bindings.js';
-import type { BatchDrawBinding, Draw, TypeGpuResource } from './pipeline.js';
+import type { BatchDrawBinding, TypeGpuResource } from './pipeline.js';
 import { TYPEGPU_PLACEMENT_SLOT_BUFFER_ID, TYPEGPU_TRANSFORM_INDEX_BUFFER_ID } from './codec.js';
 
 /**
@@ -66,22 +66,14 @@ interface Span {
   readonly buffers: readonly BufferBinding[];
   readonly start: number;
   readonly count: number;
-  /** Direct (Slug) spans only: indexed programs read their Text's offset from the transform table. */
-  readonly transform: TypeGpuTransform | undefined;
 }
-/** What a span draws through: shared bindings for an indexed program, or its own draw for a direct one. */
-type SpanTarget =
-  | { readonly kind: 'batch'; readonly binding: BatchDrawBinding }
-  | { readonly kind: 'direct'; readonly draw: Draw };
-type Range =
-  | {
-      readonly kind: 'batch';
-      readonly binding: BatchDrawBinding;
-      readonly variant: number;
-      readonly first: number;
-      count: number;
-    }
-  | { readonly kind: 'direct'; readonly draw: Draw };
+/** One instanced draw: a run of spans over the same bindings and program variant. */
+interface Range {
+  readonly binding: BatchDrawBinding;
+  readonly variant: number;
+  readonly first: number;
+  count: number;
+}
 interface BindingEntry {
   /** Everything the bindings captured: lane buffers in order, then the placement and transform tables. */
   readonly key: readonly GPUBuffer[];
@@ -101,18 +93,17 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
   #buffers = new Map<BufferBinding, RetainedBuffer>();
   #placementTable: RetainedBuffer | undefined;
   #spans: readonly Span[] = [];
-  #targets: readonly SpanTarget[] = [];
+  /** The shared bindings each span draws through. */
+  #targets: readonly BatchDrawBinding[] = [];
   /** Program variant of each span, read from committed lane bytes; undefined until read. */
   #variants: (number | undefined)[] = [];
   #ranges: readonly Range[] = [];
   #bindings = new Map<TypeGpuResource, readonly BindingEntry[]>();
   #table: TransformTable;
   #records = new Map<TypeGpuTransform, number>();
-  /** Revision of each transform the table (or its direct uniform) holds. */
+  /** Revision of each transform the table holds. */
   #uploaded = new WeakMap<TypeGpuTransform, number>();
   #changed = new Set<TypeGpuTransform>();
-  /** Direct (Slug) draws position by uniform, one per Text. */
-  #uniforms = new Map<TypeGpuTransform, TgpuUniform<d.Vec2f>>();
   #disposed = false;
   constructor(root: TgpuRoot) {
     this.#root = root;
@@ -135,14 +126,10 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
     }
     this.#viewport.write([width, height]);
     this.#uploadChangedTransforms();
-    for (const range of this.#ranges) {
-      if (range.kind === 'direct') range.draw.draw(pass, bindGroups);
-      else range.binding.draw(pass, bindGroups, range.variant, range.first, range.count);
-    }
+    for (const range of this.#ranges) range.binding.draw(pass, bindGroups, range.variant, range.first, range.count);
   }
   decode(frame: CommandBufferView<Bindings>): PreparedRendererCommit<void> {
     const staged: StagedBuffers = { buffers: new Map(this.#buffers), allocated: [], mutations: [], uploads: new Map() };
-    const createdUniforms: [TypeGpuTransform, TgpuUniform<d.Vec2f>][] = [];
     let table = this.#table;
     try {
       stageBuffers(this.#root, frame, staged);
@@ -172,7 +159,7 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
       const bindings = unchanged ? this.#bindings : new Map<TypeGpuResource, readonly BindingEntry[]>();
       const targets = unchanged
         ? this.#targets
-        : spans.map((span, index): SpanTarget => {
+        : spans.map((span): BatchDrawBinding => {
             if (placementTable === undefined)
               throw new Error('TypeGPU glyph draw is missing its session placement table');
             const named = new Map<CodecBufferId, RetainedBuffer>();
@@ -181,13 +168,7 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
                 named.set(binding.input.declaration.value.id, buffers.get(binding)!);
               }
             }
-            if (span.resource.bind !== undefined) {
-              return { kind: 'batch', binding: this.#binding(bindings, span, named, placementTable, table) };
-            }
-            return {
-              kind: 'direct',
-              draw: this.#directDraw(span, index, buffers, named, placementTable, createdUniforms),
-            };
+            return this.#binding(bindings, span, named, placementTable, table);
           });
       let active = true;
       return {
@@ -223,20 +204,17 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
             this.#writeTransforms(records, table !== previousTable ? undefined : this.#records);
             this.#records = records;
           }
-          this.#retireUniforms();
         },
         discard: () => {
           if (!active) return;
           active = false;
           for (const gpu of allocated) gpu.destroy();
           if (table !== this.#table) table.gpu.destroy();
-          this.#discardUniforms(createdUniforms);
         },
       };
     } catch (error) {
       for (const gpu of staged.allocated) gpu.destroy();
       if (table !== this.#table) table.gpu.destroy();
-      this.#discardUniforms(createdUniforms);
       throw error;
     }
   }
@@ -245,9 +223,7 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
     if (this.#disposed) return;
     this.#disposed = true;
     for (const value of this.#buffers.values()) value.gpu.destroy();
-    for (const uniform of this.#uniforms.values()) uniform.buffer.destroy();
     this.#buffers.clear();
-    this.#uniforms.clear();
     this.#bindings.clear();
     this.#records.clear();
     this.#changed.clear();
@@ -283,7 +259,7 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
       if (!current.includes(found)) bindings.set(span.resource, [...current, found]);
       return found.binding;
     }
-    const binding = span.resource.bind!({
+    const binding = span.resource.bind({
       buffers: new Map(Array.from(named, ([id, retained]) => [id, retained.gpu])),
       bytes: new Map(Array.from(named, ([id, retained]) => [id, retained.bytes])),
       placementTable: placementTable.gpu,
@@ -293,50 +269,6 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
     bindings.set(span.resource, [...current, { key, binding }]);
     return binding;
   }
-  /** A direct span's own draw, reused while its span, lanes and placement table are the ones it was built over. */
-  #directDraw(
-    span: Span,
-    index: number,
-    buffers: ReadonlyMap<BufferBinding, RetainedBuffer>,
-    named: ReadonlyMap<CodecBufferId, RetainedBuffer>,
-    placementTable: RetainedBuffer,
-    createdUniforms: [TypeGpuTransform, TgpuUniform<d.Vec2f>][],
-  ): Draw {
-    const previous = this.#spans[index];
-    const previousTarget = this.#targets[index];
-    if (
-      previous !== undefined &&
-      previousTarget?.kind === 'direct' &&
-      placementTable === this.#placementTable &&
-      span.resource === previous.resource &&
-      span.transform === previous.transform &&
-      span.start === previous.start &&
-      span.count === previous.count &&
-      span.buffers.length === previous.buffers.length &&
-      span.buffers.every(
-        (binding, bufferIndex) =>
-          binding === previous.buffers[bufferIndex] && buffers.get(binding) === this.#buffers.get(binding),
-      )
-    ) {
-      return previousTarget.draw;
-    }
-    const transform = span.transform;
-    if (transform === undefined) throw new Error('TypeGPU direct draw is missing its Text transform');
-    let uniform = this.#uniforms.get(transform);
-    if (uniform === undefined) {
-      uniform = this.#root.createUniform(d.vec2f, [transform.x, transform.y]);
-      createdUniforms.push([transform, uniform]);
-      this.#uniforms.set(transform, uniform);
-    }
-    return span.resource.prepare!(
-      new Map(Array.from(named, ([id, retained]) => [id, retained.gpu])),
-      placementTable.gpu,
-      this.#viewport,
-      uniform,
-      span.start,
-      span.count,
-    );
-  }
   /**
    * Paint-order draw ranges. Consecutive batched spans over the same bindings and program variant whose records are
    * contiguous become one instanced draw; a span's variant is re-read only when the lane that selects it was written.
@@ -345,27 +277,17 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
     const ranges: Range[] = [];
     let last: Range | undefined;
     for (const [index, span] of this.#spans.entries()) {
-      const target = this.#targets[index]!;
-      if (target.kind === 'direct') {
-        last = { kind: 'direct', draw: target.draw };
-        ranges.push(last);
-        continue;
-      }
+      const binding = this.#targets[index]!;
       let variant = this.#variants[index];
-      if (variant === undefined || target.binding.watchedLanes.some((lane) => written.has(lane))) {
-        variant = target.binding.variant(span.start, span.count);
+      if (variant === undefined || binding.watchedLanes.some((lane) => written.has(lane))) {
+        variant = binding.variant(span.start, span.count);
         this.#variants[index] = variant;
       }
-      if (
-        last?.kind === 'batch' &&
-        last.binding === target.binding &&
-        last.variant === variant &&
-        last.first + last.count === span.start
-      ) {
+      if (last?.binding === binding && last.variant === variant && last.first + last.count === span.start) {
         last.count += span.count;
         continue;
       }
-      last = { kind: 'batch', binding: target.binding, variant, first: span.start, count: span.count };
+      last = { binding, variant, first: span.start, count: span.count };
       ranges.push(last);
     }
     return ranges;
@@ -418,30 +340,12 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
     for (const transform of this.#changed) {
       value[0] = transform.x;
       value[1] = transform.y;
-      this.#uniforms.get(transform)?.write(d.vec2f(transform.x, transform.y));
       const record = this.#records.get(transform);
       if (record === undefined || this.#uploaded.get(transform) === transform.revision) continue;
       this.#root.device.queue.writeBuffer(this.#table.gpu, record * TRANSFORM_RECORD_BYTES, value);
       this.#uploaded.set(transform, transform.revision);
     }
     this.#changed.clear();
-  }
-  #discardUniforms(created: readonly [TypeGpuTransform, TgpuUniform<d.Vec2f>][]): void {
-    for (const [transform, uniform] of created) {
-      this.#uniforms.delete(transform);
-      uniform.buffer.destroy();
-    }
-  }
-  /** Releases the uniforms of Texts no direct span draws any more. */
-  #retireUniforms(): void {
-    if (this.#uniforms.size === 0) return;
-    const live = new Set<TypeGpuTransform>();
-    for (const span of this.#spans) if (span.transform !== undefined) live.add(span.transform);
-    for (const [transform, uniform] of this.#uniforms) {
-      if (live.has(transform)) continue;
-      uniform.buffer.destroy();
-      this.#uniforms.delete(transform);
-    }
   }
 }
 
@@ -457,7 +361,6 @@ function readSpans(children: DisplayList<Bindings>['children']): Span[] {
         buffers: Array.from(input.buffers),
         start: primitive.recordIndex,
         count: primitive.recordCount,
-        transform: child.transform,
       });
       continue;
     }
@@ -470,7 +373,6 @@ function readSpans(children: DisplayList<Bindings>['children']): Span[] {
         buffers,
         start: primitive.recordIndex,
         count: primitive.recordCount,
-        transform: undefined,
       });
     }
   }
