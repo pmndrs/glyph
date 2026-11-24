@@ -8,6 +8,7 @@ import { Pixi3DSchema, type Pixi3DRootBoundary } from './internal/bindings.js';
 import { pixi3dCodecDescriptor } from './internal/codec.js';
 import { Pixi3DRenderer } from './internal/renderer.js';
 import { resolveRasterResource } from './internal/resource.js';
+import { RenderFailures } from '../render-failures.js';
 import { Pixi3DText, type Pixi3DFontSelection, type Pixi3DTextOptions } from './text.js';
 
 export interface Pixi3DFontFormats {
@@ -45,9 +46,10 @@ export function definePixi3DConfig(): Pixi3DGlyphConfig {
       create(context) {
         if (context.fonts === undefined) throw new TypeError('Pixi3D config must declare raster fonts');
         const renderer = new Pixi3DRenderer();
+        const failures = new RenderFailures();
         const texts = new Set<{
           rejectPublication(error: unknown): void;
-          preparePublication(): void;
+          preparePublication(failures: RenderFailures): void;
           acceptPublication(): void;
           dispose(): void;
         }>();
@@ -73,16 +75,22 @@ export function definePixi3DConfig(): Pixi3DGlyphConfig {
           shape: {
             // Every dirty paragraph is prepared by now, so resolving anchors reads summaries without engine work.
             prepared: () => {
-              for (const text of texts) text.preparePublication();
+              for (const text of texts) text.preparePublication(failures);
             },
             unchanged: accept,
-            accepted: accept,
+            // `glyph.shape()` is this integration's render entry: after the root accepted, it throws a refusal once.
+            // An unchanged root defers it to its next accepted publication, as a throw there would reject the root.
+            accepted: () => {
+              accept();
+              failures.throwFound();
+            },
             // The engine throws the rejection from `glyph.shape()`; each text keeps it as its `error`.
             rejected: (error) => {
               for (const text of texts) text.rejectPublication(error);
             },
           },
           dispose: () => {
+            failures.clear();
             try {
               for (const text of texts) text.dispose();
             } finally {

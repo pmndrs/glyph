@@ -32,6 +32,7 @@ import { slug } from '../raster/slug.js';
 import { Box, Container3D, type Destroy3DOptions, Mesh3D } from '@pixi/3d';
 import { createGlyphPlacements } from '../glyph-placement.js';
 import { GlyphInputError } from '../glyph-error.js';
+import type { RenderFailures } from '../render-failures.js';
 import { replaceInText } from '../text-editing.js';
 
 import type { Pixi3DBindings, Pixi3DRootBoundary } from './internal/bindings.js';
@@ -81,6 +82,8 @@ export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelect
   #preparedAnchor: LayoutPoint = zeroAnchor;
   #acceptedAnchor: LayoutPoint = zeroAnchor;
   #publicationError: { readonly error: unknown } | undefined;
+  /** The refusal this text last deferred to its root's next accepted `glyph.shape()`. */
+  #deferredRefusal: unknown;
 
   constructor(
     fonts: GlyphHandleFonts,
@@ -108,19 +111,31 @@ export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelect
   }
 
   /**
-   * Most recent rejected publication for this text's root, which `glyph.shape()` threw; cleared after the root's
-   * next accepted publication. The last accepted native meshes remain live meanwhile.
+   * Why this text is not drawn as authored: the most recent rejected publication of its root, cleared by the root's
+   * next accepted publication (the last accepted meshes stay live meanwhile), or else the refusal of its last
+   * preparation, cleared when its input changes (it draws nothing meanwhile). `glyph.shape()` threw each once.
    */
   get error(): unknown {
-    return this.#publicationError?.error;
+    if (this.#publicationError !== undefined) return this.#publicationError.error;
+    return this.#disposed ? undefined : this.#controller.refusal;
   }
   /** @internal Record the root's rejected publication; `glyph.shape()` throws it. */
   rejectPublication(error: unknown): void {
     this.#publicationError = { error };
   }
-  /** @internal Stage placement before renderer preparation; omitted anchors do not issue a query. */
-  preparePublication(): void {
-    this.#preparedAnchor = this.#state.constraints?.anchor === undefined ? zeroAnchor : this.measure().anchorOffset;
+  /**
+   * @internal Stage placement before renderer preparation; omitted anchors do not issue a query. A refusal not yet
+   * deferred is handed to the root, which throws it once from its accepted publication.
+   */
+  preparePublication(failures: RenderFailures): void {
+    const refusal = this.#controller.refusal;
+    if (refusal !== this.#deferredRefusal) {
+      this.#deferredRefusal = refusal;
+      if (refusal !== undefined) failures.defer(refusal);
+    }
+    // A text the engine refused has no layout to anchor; it draws nothing until its input changes.
+    this.#preparedAnchor =
+      refusal !== undefined || this.#state.constraints?.anchor === undefined ? zeroAnchor : this.measure().anchorOffset;
   }
   /** @internal The renderer translates only its owned meshes using accepted placement. */
   get acceptedAnchor(): LayoutPoint {

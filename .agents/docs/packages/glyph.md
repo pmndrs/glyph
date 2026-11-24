@@ -2980,7 +2980,9 @@ derives from a fixed 16×9 light grid.
 
 Root hooks: `prepared()` resolves anchors after core prepared every dirty paragraph; `accepted` and `unchanged` accept
 placement and sync transforms; a rejected publication keeps the accepted meshes, is thrown once by `glyph.shape()` and
-kept as `text.error`, and is not retried until an edit. Text provides desired measurements, ink, glyph columns,
+kept as `text.error`, and is not retried until an edit. A refused paragraph draws nothing, is `text.error` until its
+input changes, and is thrown once by the root's next accepted `glyph.shape()` (an unchanged root defers it, since a
+throw from that hook would reject the root); it was silent before the render-time throw decision. Text provides desired measurements, ink, glyph columns,
 the editing queries (`caret`, `hitTest`, `move`, `boundary`, `rangeRects`, `replace`) and native bounds; `split()` returns independently disposable glyph and decoration snapshots.
 `Pixi3DTextMaterial` appends shader bits, updates material data without reshaping, and may supply a factory for another
 `BaseMaterial3D`.

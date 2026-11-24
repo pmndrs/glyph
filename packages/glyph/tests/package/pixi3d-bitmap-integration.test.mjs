@@ -1,3 +1,5 @@
+import { lastCallArguments, trapCallsWhen } from '../support/wasm-crossings.mjs';
+
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
@@ -549,4 +551,48 @@ test('split glyphs rotate and scale around their captured anchored pen in the so
           font.dispose();
         }
       });
+});
+
+test('a refused paragraph is thrown once by glyph.shape() while its siblings publish', async () => {
+  await glyph.init({ wasm: await readFile(shaperWasm) });
+  const handle = glyph.handle('pixi3d:refusal', definePixi3DConfig());
+  const font = glyph.fontFace(new Blob([await readFile(fontFixture)], { type: 'model/gltf-binary' }), {
+    format: bitmap({ strikes: [16] }),
+  });
+  await font.load();
+  const parent = new Container3D();
+  try {
+    const texts = ['a', 'b', 'c'].map((text) => handle.createText({ font, text }));
+    for (const text of texts) parent.addChild(text);
+    glyph.shape();
+    const culprit = texts[1];
+    culprit.measure();
+    const paragraph = lastCallArguments('engine_measure_paragraph')[3];
+    for (const text of texts) text.text = `${text.text} changed`;
+    let dirty = true;
+    trapCallsWhen(
+      (name, args) =>
+        dirty && (name === 'engine_prepare_batch' || (name === 'engine_measure_paragraph' && args[3] === paragraph)),
+    );
+    // The first frame's batch traps and restarts the engine; the next isolates and refuses the culprit.
+    assert.throws(() => glyph.shape(), /trapped and was restarted/u);
+    assert.throws(
+      () => glyph.shape(),
+      (error) => error === culprit.error,
+    );
+    assert.equal(texts[0].error, undefined);
+    assert.equal(texts[2].error, undefined);
+    assert.equal(texts[2].measure().glyphCount, 'c changed'.length, 'the siblings publish');
+    texts[0].position.x = 5;
+    assert.doesNotThrow(() => glyph.shape(), 'a standing refusal is thrown once');
+    dirty = false;
+    culprit.text = 'harmless';
+    assert.doesNotThrow(() => glyph.shape());
+    assert.equal(culprit.error, undefined, 'new input is a new chance');
+  } finally {
+    trapCallsWhen(undefined);
+    parent.destroy({ children: true });
+    font.dispose();
+    handle.dispose();
+  }
 });
