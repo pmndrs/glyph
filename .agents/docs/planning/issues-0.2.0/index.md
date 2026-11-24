@@ -13,7 +13,7 @@ against the `experiments/segment-indexed-layout` package and recorded with its r
 | [05](05-react-disposed-font-resource.md)        | React can hand a disposed font resource to a mounting component           | should-fix   | not reproduced; planned    |
 | [06](06-three-order-unread.md)                  | `order` on Three text properties is typed but never read                  | should-fix   | open                       |
 | [07](07-on-invalidate-material-groups.md)       | `root.onInvalidate` misses `root.material` and `TextGroup` changes        | should-fix   | open                       |
-| [08](08-drop-cap-layout-export.md)              | `DropCapLayout` is not exported from the root entry                       | should-fix   | open                       |
+| [08](08-drop-cap-layout-export.md)              | `DropCapLayout` is not exported from the root entry                       | should-fix   | fixed                      |
 | [09](09-coverage-at-rename-warnings.md)         | A second `shader.coverageAt` call floods renamed-declaration warnings     | should-fix   | open                       |
 | [10](10-bake-check-missing-output.md)           | `glyph bake --check` raw ENOENT; `--yes` unused                           | should-fix   | open                       |
 | [11](11-r3f-text-ref-first-effect.md)           | R3F `<Text ref>` is null in the consumer's first effect                   | should-fix   | open                       |

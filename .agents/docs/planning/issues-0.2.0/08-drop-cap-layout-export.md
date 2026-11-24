@@ -18,7 +18,7 @@ generated:
 # Issue 08: `DropCapLayout` is not exported from the root entry
 
 - **Severity:** should-fix (an application cannot name the type of a public field)
-- **Status:** open
+- **Status:** fixed — `DropCapLayout` is a root type export; the boundary test names it
 
 ## What happens
 

@@ -246,6 +246,7 @@ export type {
   TextAnchorY,
   AxisConstraint,
   ColorInput,
+  DropCapLayout,
   GlyphBufferCapacity,
   LinearRgbaInput,
   ParagraphBaseProperties,
