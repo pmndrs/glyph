@@ -1903,9 +1903,11 @@ are unchanged.
 
 [^msdfgen-cli]: msdfgen 1.13 `main.cpp`, scanline defaults and post-generation error-correction configuration.
 
-Direct TypeGPU text owns its position coordinates separately from semantic text state. Position-only updates write the
-uniform without staging a semantic publication; unchanged coordinates do not write it again. Mixed updates validate
-and stage semantic changes before moving the uniform, so rejected caller input preserves the accepted position.
+Direct TypeGPU text owns its position coordinates separately from semantic text state. Every TypeGPU program
+(Bitmap, MSDF, Slug) is indexed: it reads each Text's offset from the renderer's transform table, and `TypeGpuResource`
+has only `bind`. Position-only updates write that Text's 8-byte table record at the next draw without staging a
+semantic publication; unchanged coordinates do not write it again. Mixed updates validate and stage semantic changes
+before moving the record, so rejected caller input preserves the accepted position.
 
 Planner frames are prepared as validated records and written directly into the retained Wasm request arena, including
 paragraph queries. The single UTF-16 payload loop packs two code units into each little-endian 32-bit write,
