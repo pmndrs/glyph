@@ -17,6 +17,7 @@ import { ThreeConfig } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 import { loadFont } from '../../dist/loader.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
+import { assertCommitted } from '../support/three-render.mjs';
 
 const fixtures = new URL('../../../../benches/fixtures/rendering/', import.meta.url);
 const fontBytes = {
@@ -158,7 +159,7 @@ for (let seed = 1; seed <= seeds; seed += 1) {
       frame: () => {
         scene.updateMatrixWorld(true);
         for (const text of texts) {
-          assert.equal(text.error, undefined);
+          assertCommitted(text);
           assert.equal(text.commitState().status, 'committed');
         }
       },

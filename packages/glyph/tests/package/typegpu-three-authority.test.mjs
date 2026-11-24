@@ -161,7 +161,7 @@ test('stable and experimental handles retain independent shader selection in one
   experimental.dispose();
   stableText.text = 'Still stable';
   scene.updateMatrixWorld();
-  assert.equal(stableText.error, undefined);
+  assert.equal(stableText.commitState().status, 'committed');
   const remaining = [];
   scene.traverse((object) => {
     if (object.isMesh) remaining.push(object);
@@ -208,7 +208,7 @@ test('stable and experimental Three configs share the custom material override c
     scene.add(label);
     scene.updateMatrixWorld();
 
-    assert.equal(label.error, undefined);
+    assert.equal(label.commitState().status, 'committed');
     const draws = [];
     scene.traverse((object) => {
       if (object.isMesh) draws.push(object);

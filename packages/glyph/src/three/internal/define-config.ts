@@ -98,7 +98,7 @@ export function createThreeConfig(options: ThreeConfigOptions, shaders: ThreeSha
             invalidated: () => root.notifyInvalidated(),
             unchanged: () => root.acceptShape(),
             accepted: () => root.acceptShape(),
-            rejected: (error) => root.rejectShape(error),
+            rejected: () => root.rejectShape(),
           },
           dispose: () => root.disposeHost(),
         });

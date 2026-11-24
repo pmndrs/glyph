@@ -69,7 +69,8 @@ const borrowedCluster: number = text.readGlyphs((layout) => {
 });
 void borrowedCluster;
 handle.draw(pass, { width: 640, height: 320 });
-text.error satisfies unknown;
+// @ts-expect-error draw() throws a failure once, quoting the text; there is no failure to read.
+void text.error;
 // @ts-expect-error draw() throws what the frame found; there is no error callback.
 void text.onError;
 // @ts-expect-error Nor a construction option for one.

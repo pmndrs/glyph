@@ -35,7 +35,7 @@ import { decorationSchema, threeSystemBuffers } from '../../dist/three/codec.js'
 import { ThreeCommandBufferRenderer } from '../../dist/three/command-buffer-renderer.js';
 import { textShaperAbi } from '../../dist/text-shaper-abi.js';
 import { compileNodeMaterial } from '../support/node-material-shaders.mjs';
-import { renderScene } from '../support/three-render.mjs';
+import { assertCommitted, endRender, renderScene } from '../support/three-render.mjs';
 
 const fontUrl = new URL('../../../../benches/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const densityFontUrl = new URL('../../../../benches/fixtures/rendering/inter-bitmap-16-32.font.glb', import.meta.url);
@@ -762,8 +762,8 @@ test('Three sibling rank changes publish complete order transactions over prepar
       coldTexts.push(cold);
     }
     coldScene.updateMatrixWorld(true);
-    assert.equal(group.error, undefined, `${context} retained publication succeeds`);
-    assert.equal(coldGroup.error, undefined, `${context} cold publication succeeds`);
+    assertCommitted(group, `${context} retained publication succeeds`);
+    assertCommitted(coldGroup, `${context} cold publication succeeds`);
     assert.deepEqual(
       renderedParagraphXs(scene),
       entries.map(({ x }) => x),
@@ -879,7 +879,11 @@ test('Three sibling rank changes publish complete order transactions over prepar
     group.remove(first, second, third);
     group.add(third, first, second);
     scene.updateMatrixWorld(true);
-    assert.equal(group.error, rejection, 'reorder rejection preserves the raw renderer error');
+    assert.throws(
+      () => endRender(scene),
+      (error) => error === rejection,
+      'the render throws the raw renderer error',
+    );
     assert.deepEqual(renderedParagraphXs(scene), [10, 20, 30], 'rejection preserves the last accepted renderer order');
     assert.equal(first.measure().glyphCount, 15, 'rejection retains the setter-prepared semantic revision');
 
@@ -1731,7 +1735,7 @@ test('Rust ranks interleaved TextGroup scopes only within their stable root slot
     'content setters only mark their paragraphs dirty',
   );
   scene.updateMatrixWorld(true);
-  assert.equal(firstGroup.error, undefined);
+  assertCommitted(firstGroup);
   assert.deepEqual(
     instrumentedGlyph.latestParagraphOrderMutations(),
     [],
@@ -1791,7 +1795,7 @@ test('Rust ranks interleaved TextGroup scopes only within their stable root slot
   scene.updateMatrixWorld(true);
   firstGroup.add(firstA);
   scene.updateMatrixWorld(true);
-  assert.equal(firstGroup.error, undefined);
+  assertCommitted(firstGroup);
   assert.deepEqual(
     sequence(),
     [authored[2], authored[1], authored[0], authored[3]],
@@ -1801,8 +1805,8 @@ test('Rust ranks interleaved TextGroup scopes only within their stable root slot
   firstGroup.material = restagedMaterial;
   secondGroup.material = restagedMaterial;
   scene.updateMatrixWorld(true);
-  assert.equal(firstGroup.error, undefined, 'a shared restage accepts reattached planner insertion order');
-  assert.equal(secondGroup.error, undefined);
+  assertCommitted(firstGroup, 'a shared restage accepts reattached planner insertion order');
+  assertCommitted(secondGroup);
   assert.deepEqual(
     sequence(),
     [authored[2], authored[1], authored[0], authored[3]],
@@ -2910,8 +2914,6 @@ test('moving multiple exclusions matches cold LTR, RTL, and mixed-direction flow
     const cold = three.createText({ ...properties, flow: flowAt(true) });
     const rebuilt = cold.glyphs();
     try {
-      assert.equal(retained.error, undefined, `${fixture.name} retained flow must publish`);
-      assert.equal(cold.error, undefined, `${fixture.name} cold flow must publish`);
       assert.ok(incremental.lineCount > 2, `${fixture.name} must exercise multiple exclusion bands`);
       assert.ok(
         incremental.lineBaselines.some((baseline) => baseline >= 20 && baseline < 80),
@@ -2996,7 +2998,7 @@ test('same-source drop caps preserve source ownership and flow body lines beside
   });
 
   const measurement = label.measure();
-  assert.equal(label.error, undefined);
+  assertCommitted(label);
   assert.ok(measurement.lineCount > 0, 'the combined flow must compose at least one body line');
   const layout = label.glyphs();
   assert.equal(layout.glyphCount, source.length, 'the source glyph stream has no duplicated or omitted unit');
@@ -3086,7 +3088,7 @@ test('same-source drop caps compose through an explicit multi-line flow region',
   });
 
   const layout = label.glyphs();
-  assert.equal(label.error, undefined);
+  assertCommitted(label);
   assert.ok(layout.lineCount > 3);
   assert.equal(layout.glyphCount, source.length);
 
@@ -3732,7 +3734,7 @@ test('Three carries supported text effects into MSDF lanes and rejects them for 
     group.add(label);
     scene.add(group);
     scene.updateMatrixWorld(true);
-    assert.equal(label.error, undefined);
+    assertCommitted(label);
     const draw = rootDraws(scene)[0];
     assert.ok(draw, 'MSDF effect text must publish a draw');
     const effects = draw.geometry.getAttribute(glyphAttribute(msdfSchema.buffers.effectColor.id)).array;
@@ -3859,14 +3861,14 @@ test('Three balances resolved font-stack ownership across measurement, updates, 
 
     scene.add(label);
     scene.updateMatrixWorld(true);
-    assert.equal(label.error, undefined);
+    assertCommitted(label);
     assert.deepEqual([registrations, disposals], [2, 1], 'publication shares the current resolved state');
 
     label.text = 'الثالث';
     assert.ok(label.measure().glyphCount > 0);
     assert.deepEqual([registrations, disposals], [2, 1], 'a text-only edit retains the published font stack');
     scene.updateMatrixWorld(true);
-    assert.equal(label.error, undefined);
+    assertCommitted(label);
     assert.deepEqual([registrations, disposals], [2, 1], 'publishing a text-only fork keeps its shared font stack');
 
     label.font = first;
@@ -3877,7 +3879,7 @@ test('Three balances resolved font-stack ownership across measurement, updates, 
       'the prior font stack stays live until replacement publication',
     );
     scene.updateMatrixWorld(true);
-    assert.equal(label.error, undefined);
+    assertCommitted(label);
     assert.deepEqual([registrations, disposals], [3, 2], 'publication releases the previously committed state');
 
     label.dispose();
@@ -3902,10 +3904,10 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   const initiallyEmpty = three.createText({ font, text: '' });
   emptyScene.add(initiallyEmpty);
   emptyScene.updateMatrixWorld(true);
-  assert.equal(initiallyEmpty.error, undefined, 'an empty paragraph must publish without a no-op text mutation');
+  assertCommitted(initiallyEmpty, 'an empty paragraph must publish without a no-op text mutation');
   initiallyEmpty.text = 'A';
   emptyScene.updateMatrixWorld(true);
-  assert.equal(initiallyEmpty.error, undefined, 'an initially empty paragraph must accept its first text edit');
+  assertCommitted(initiallyEmpty, 'an initially empty paragraph must accept its first text edit');
   assert.equal(initiallyEmpty.measure().glyphCount, 1);
   initiallyEmpty.dispose();
 
@@ -3941,7 +3943,7 @@ test('Three Text and TextGroup late-bind, synchronize, reparent, and dispose thr
   assert.equal(label.bound, true);
   assert.equal(label.textGroup, group);
   assert.equal(group.textCount, 1);
-  assert.equal(group.error, undefined);
+  assertCommitted(group);
   const firstDraws = rootDraws(scene);
   assert.ok(firstDraws.length > 0);
   assert.equal(firstDraws[0].geometry.instanceCount, 10, 'the GPU plan omits the non-rendering space glyph');
@@ -4206,11 +4208,11 @@ test('pending copy survives a rejected publication followed by a sibling query',
   try {
     const before = first.measureGlyphs();
     scene.updateMatrixWorld(true);
-    assert.match(String(group.error), /copy retry material failure/u);
+    assert.throws(() => endRender(scene), /copy retry material failure/u);
     reject = false;
     second.measureGlyphs();
     [copy] = first.split();
-    assert.equal(first.commitState().status, 'failed');
+    assert.equal(first.commitState().status, 'pending');
     const snapshot = (measurements) =>
       measurements.map(({ key, shapedOrigin, drawnOrigin, originalMatrix }) => ({
         key,
@@ -4252,13 +4254,13 @@ test('cached Three presentation still rejects nonfinite child and draw order', a
 
         label.renderOrder = Number.POSITIVE_INFINITY;
         scene.updateMatrixWorld(true);
-        assert.match(String(label.error), /renderOrder must be finite/u);
+        assert.throws(() => endRender(scene), /renderOrder must be finite/u);
         assert.equal(rootDraws(scene)[0], acceptedDraw, 'invalid presentation preserves the accepted draw');
 
         label.renderOrder = 0;
         label.text = 'Recovered presentation';
         scene.updateMatrixWorld(true);
-        assert.equal(label.error, undefined, 'a valid authored update recovers the same retained label');
+        assertCommitted(label, 'a valid authored update recovers the same retained label');
         assert.equal(rootDraws(scene)[0], acceptedDraw);
       } finally {
         label.dispose();
@@ -4361,14 +4363,12 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   scene.add(group);
 
   assert.throws(() => renderScene(scene), /deliberate material realization failure/u, 'the render throws it');
-  assert.match(String(group.error), /deliberate material realization failure/u);
-  assert.equal(label.error, group.error, 'group-owned failures must remain visible from the child Text');
+  assert.equal(label.commitState().status, 'pending', 'the rejected publication drew nothing');
   assert.equal(instrumented.crossings, 1);
   const rejectedGeneration = instrumented.latestUpdateGeneration;
   assert.equal(rootDraws(scene).length, 0);
   assert.ok(label.measure().glyphCount > 0, 'measurement remains independent of material realization');
   assert.equal(instrumented.crossings, 1, 'measurement must not retry or consume renderer publication');
-  assert.match(String(group.error), /deliberate material realization failure/u);
   assert.ok(label.glyphs().glyphCount > 0, 'renderer-free positioned inspection survives renderer rejection');
   assert.ok(
     label.measureGlyphs().length > 0,
@@ -4384,14 +4384,12 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
   failMaterial = false;
   group.visible = false;
   assert.doesNotThrow(() => renderScene(scene), 'a rejection is thrown once');
-  assert.match(String(group.error), /deliberate material realization failure/u);
   assert.equal(instrumented.crossings, 1, 'an unchanged frame must not retry a renderer implementation failure');
   assert.equal(rootDraws(scene).length, 0);
 
   label.material = material;
   assert.doesNotThrow(() => renderScene(scene), 'a successful checkpoint must not repeat the old failure');
-  assert.equal(group.error, undefined);
-  assert.equal(label.error, undefined);
+  assertCommitted(group);
   assert.equal(instrumented.crossings, 2, 'explicit material invalidation must request a checkpoint from the engine');
   assert.equal(
     instrumented.latestAcknowledgedGeneration,
@@ -4407,8 +4405,7 @@ test('renderer rejection waits for explicit invalidation and then checkpoints wi
 
   label.text = 'New input after recovery';
   scene.updateMatrixWorld();
-  assert.equal(group.error, undefined);
-  assert.equal(label.error, undefined);
+  assertCommitted(group);
   assert.equal(instrumented.crossings, 3, 'new input after recovery must publish normally');
   assert.equal(rootDraws(scene).length, 1);
 
@@ -4443,7 +4440,7 @@ test('rejected draw replacement retains the accepted scope index and retry match
   failReplacement = true;
   label.material = replacementMaterial;
   scene.updateMatrixWorld(true);
-  assert.match(String(label.error), /deliberate replacement failure/u);
+  assert.throws(() => endRender(scene), /deliberate replacement failure/u);
   assert.equal(rootDraws(scene)[0], accepted, 'rejection must keep the accepted draw branch');
   assert.equal(
     accepted.geometry.getAttribute(glyphAttribute(bitmapSchema.buffers.origin.id)),
@@ -4468,7 +4465,7 @@ test('rejected draw replacement retains the accepted scope index and retry match
   failReplacement = false;
   label.material = replacementMaterial;
   scene.updateMatrixWorld(true);
-  assert.equal(label.error, undefined);
+  assertCommitted(label);
 
   const entry = {
     id: 0,
@@ -4535,7 +4532,11 @@ test('material preparation rejection preserves the last accepted Three branch an
     'the material factory failure must reject before host publication',
   );
   assert.equal(rootDraws(scene)[0], acceptedDraw, 'preparation failure must retain the accepted draw branch');
-  assert.deepEqual(label.commitState(), { status: 'failed', error: preparationError });
+  assert.deepEqual(
+    label.commitState(),
+    { status: 'committed', revision: 0 },
+    'the label input did not change; the accepted revision stays drawn',
+  );
 
   group.visible = false;
   scene.updateMatrixWorld(true);
@@ -4550,7 +4551,6 @@ test('material preparation rejection preserves the last accepted Three branch an
     { status: 'committed', revision: 0 },
     'retry keeps the accepted core revision paired with the newly accepted renderer branch',
   );
-  assert.equal(label.error, undefined);
 
   label.dispose();
   group.dispose();
@@ -4678,7 +4678,7 @@ test('TextGroup drops disposed descendants and reuses their committed transform 
       () => scene.updateMatrixWorld(),
       'a disposed child may remain attached until its host removes it',
     );
-    assert.equal(group.error, undefined);
+    assertCommitted(group);
     assert.equal(group.textCount, 1);
     transient.removeFromParent();
   }
@@ -5300,7 +5300,6 @@ test('throwing Three retirement callbacks preserve the accepted publication', as
         { status: 'committed', revision: 2 },
         'core and Three must accept the same publication before surfacing cleanup failure',
       );
-      assert.equal(label.error, disposalError, 'scene-owned error reporting retains the caller failure');
 
       const entry = {
         id: 0,
@@ -5331,7 +5330,6 @@ test('throwing Three retirement callbacks preserve the accepted publication', as
       scene.updateMatrixWorld(true);
       coldScene.updateMatrixWorld(true);
       assertMatchesCold('later transforms must match a cold full preparation');
-      assert.equal(label.error, disposalError, 'transform synchronization does not erase the attributed failure');
 
       group.visible = false;
       coldGroup.visible = false;
@@ -5345,7 +5343,7 @@ test('throwing Three retirement callbacks preserve the accepted publication', as
       coldGroup.renderOrder = 17;
       scene.updateMatrixWorld(true);
       coldScene.updateMatrixWorld(true);
-      assert.equal(label.error, undefined, 'a later accepted publication clears the attributed cleanup error');
+      assertCommitted(label, 'a later accepted publication keeps the label committed');
       assertMatchesCold('the recovered publication must match a cold full preparation');
 
       coldLabel.dispose();
@@ -5440,7 +5438,6 @@ test('irreversible Three callback windows preserve primary failure precedence', 
       assert.equal(callbackInvocations, 1, 'the selected irreversible callback window must run once');
       assert.ok(failingTransformUpdates > 0, 'callback traversal must enter the throwing updateWorldMatrix override');
       assert.deepEqual(label.commitState(), { status: 'committed', revision: 1 });
-      assert.ok(Object.is(label.error, primaryFailure), 'only the raw primary failure is attributed');
       assert.equal(rootDraws(scene).length, 1, 'the accepted candidate draw must remain published');
 
       const successfulUpdatesBeforeRecovery = successfulTransformUpdates;
@@ -5450,7 +5447,6 @@ test('irreversible Three callback windows preserve primary failure precedence', 
       scene.updateMatrixWorld(true);
       assert.ok(successfulTransformUpdates > successfulUpdatesBeforeRecovery);
       assert.deepEqual(label.commitState(), { status: 'committed', revision: 2 });
-      assert.equal(label.error, undefined);
 
       label.dispose();
       group.dispose();
@@ -5508,7 +5504,6 @@ test('a traversal failure deferred during successful retirement commit surfaces 
   assert.equal(callbackInvocations, 1);
   assert.ok(failingTransformUpdates > 0, 'the successful disposer must encounter the deferred transform failure');
   assert.deepEqual(label.commitState(), { status: 'committed', revision: 1 });
-  assert.equal(label.error, deferredFailure);
   assert.equal(rootDraws(scene).length, 1, 'the renderer commit itself must remain accepted');
 
   const successfulUpdatesBeforeRecovery = successfulTransformUpdates;
@@ -5518,7 +5513,6 @@ test('a traversal failure deferred during successful retirement commit surfaces 
   scene.updateMatrixWorld(true);
   assert.ok(successfulTransformUpdates > successfulUpdatesBeforeRecovery);
   assert.deepEqual(label.commitState(), { status: 'committed', revision: 2 });
-  assert.equal(label.error, undefined);
 
   label.dispose();
   group.dispose();
@@ -5597,12 +5591,11 @@ test('retirement callbacks reject reentrant Text and root disposal before lifecy
       label.material = rejectingMaterial;
       const rejectionThrow = captureThrown(() => glyph.shape());
       assert.deepEqual(rejectionThrow, { present: true, error: rejectionError });
-      assert.deepEqual(label.commitState(), { status: 'failed', error: rejectionError });
+      assert.deepEqual(label.commitState(), { status: 'pending' });
 
       label.material = replacementMaterial;
       glyph.shape();
       assert.deepEqual(label.commitState(), { status: 'committed', revision: 4 });
-      assert.equal(label.error, undefined);
 
       label.dispose();
       group.dispose();
@@ -5670,7 +5663,7 @@ test('one root cannot unregister another root during borrowed retirement', async
   font.dispose();
 });
 
-test('an accepted cleanup failure is attributed to every participant and its group', async (t) => {
+test('an accepted cleanup failure is thrown and leaves every participant committed', async (t) => {
   const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
   const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   const scene = new THREE.Scene();
@@ -5698,11 +5691,7 @@ test('an accepted cleanup failure is attributed to every participant and its gro
   assert.deepEqual(publicationThrow, { present: true, error: primaryError });
   assert.deepEqual(first.commitState(), { status: 'committed', revision: 2 });
   assert.deepEqual(second.commitState(), { status: 'committed', revision: 2 });
-  assert.equal(first.error, primaryError);
-  assert.equal(second.error, primaryError);
-  assert.equal(group.error, primaryError);
   scene.add(second);
-  assert.equal(group.error, primaryError, 'the original group retains attribution after a member leaves it');
 
   const rejectionError = new Error('ordinary renderer rejection after accepted cleanup failure');
   const rejectingMaterial = defineTextMaterial(() => {
@@ -5711,15 +5700,13 @@ test('an accepted cleanup failure is attributed to every participant and its gro
   first.material = rejectingMaterial;
   const rejectionThrow = captureThrown(() => glyph.shape());
   assert.deepEqual(rejectionThrow, { present: true, error: rejectionError });
-  assert.deepEqual(first.commitState(), { status: 'failed', error: rejectionError });
-  assert.deepEqual(second.commitState(), { status: 'failed', error: rejectionError });
+  assert.deepEqual(first.commitState(), { status: 'pending' });
+  assert.deepEqual(second.commitState(), { status: 'committed', revision: 2 }, 'its own input was drawn');
 
   first.material = replacementMaterial;
   glyph.shape();
   assert.deepEqual(first.commitState(), { status: 'committed', revision: 4 });
   assert.deepEqual(second.commitState(), { status: 'committed', revision: 2 });
-  assert.equal(first.error, undefined);
-  assert.equal(second.error, undefined);
 
   first.dispose();
   second.dispose();
@@ -5727,7 +5714,7 @@ test('an accepted cleanup failure is attributed to every participant and its gro
   font.dispose();
 });
 
-test('accepted cleanup preserves arbitrary thrown values through shape and attribution', async (t) => {
+test('accepted cleanup preserves arbitrary thrown values through shape', async (t) => {
   const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
   t.after(() => font.dispose());
 
@@ -5759,11 +5746,6 @@ test('accepted cleanup preserves arbitrary thrown values through shape and attri
       assert.equal(cleanupThrow.present, true);
       assert.ok(Object.is(cleanupThrow.error, thrownValue), 'glyph.shape() must throw the exact callback value');
       assert.deepEqual(label.commitState(), { status: 'committed', revision: 2 });
-      if (thrownValue === undefined) {
-        assert.equal(label.error, undefined, 'the public getter reserves undefined for its historical no-error shape');
-      } else {
-        assert.ok(Object.is(label.error, thrownValue));
-      }
 
       const rejectionError = new Error(`rejection after ${name}`);
       const rejectingMaterial = defineTextMaterial(() => {
@@ -5772,12 +5754,11 @@ test('accepted cleanup preserves arbitrary thrown values through shape and attri
       label.material = rejectingMaterial;
       const rejectionThrow = captureThrown(() => glyph.shape());
       assert.deepEqual(rejectionThrow, { present: true, error: rejectionError });
-      assert.deepEqual(label.commitState(), { status: 'failed', error: rejectionError });
+      assert.deepEqual(label.commitState(), { status: 'pending' });
 
       label.material = replacementMaterial;
       glyph.shape();
       assert.deepEqual(label.commitState(), { status: 'committed', revision: 4 });
-      assert.equal(label.error, undefined);
 
       label.dispose();
       group.dispose();
@@ -5930,16 +5911,13 @@ test('a captured later root defers callback traversal until its own retirement o
       assert.equal(laterCommitCallbackStarted, true, 'the later renderer commit must reach its public callback');
       assert.deepEqual(labels[0].commitState(), { status: 'committed', revision: 1 });
       assert.deepEqual(labels[1].commitState(), { status: 'committed', revision: 1 });
-      assert.ok(Object.is(labels[1].error, expectedLaterFailure));
-      assert.ok(Object.is(groups[1].error, expectedLaterFailure));
 
       transformMustFail = false;
       labels[1].text = `recovered ${laterOutcome.name}`;
       glyph.shape();
       scenes[1].updateMatrixWorld(true);
       assert.deepEqual(labels[1].commitState(), { status: 'committed', revision: 2 });
-      assert.equal(labels[1].error, undefined);
-      assert.equal(groups[1].error, undefined);
+      assertCommitted(groups[1]);
 
       for (const label of labels) label.dispose();
       for (const group of groups) group.dispose();
@@ -6085,127 +6063,6 @@ test('shape settlement rejects disposal of a detached unbound Text before local 
   font.dispose();
 });
 
-test('accepted group attribution follows the snapshotted owner until replacement or clear', async (t) => {
-  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
-  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
-  const scene = new THREE.Scene();
-  const group = three.createTextGroup();
-  const primaryError = new Error('sole-member accepted retirement failure');
-  const retiringMaterial = defineTextMaterial((context) => {
-    const material = context.createDefaultMaterial();
-    material.addEventListener('dispose', () => {
-      throw primaryError;
-    });
-    return material;
-  });
-  const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
-  const original = three.createText({ font, material: retiringMaterial, text: 'original' });
-  const fresh = three.createText({ font, material: replacementMaterial, text: 'fresh' });
-  group.add(original);
-  scene.add(group);
-  scene.updateMatrixWorld(true);
-
-  original.material = replacementMaterial;
-  original.text = 'original replacement grows retained storage';
-  const cleanupThrow = captureThrown(() => glyph.shape());
-  assert.deepEqual(cleanupThrow, { present: true, error: primaryError });
-  scene.add(original);
-  group.add(fresh);
-  fresh.measure();
-  assert.equal(group.error, primaryError);
-  assert.equal(fresh.error, primaryError);
-  assert.deepEqual(fresh.commitState(), { status: 'pending' }, 'a new member must inherit accepted attribution');
-
-  scene.add(fresh);
-  original.text = 'successful publication clears snapshotted ownership';
-  glyph.shape();
-  assert.equal(group.error, undefined, 'success clears the group retained by the error snapshot');
-  assert.equal(original.error, undefined);
-  assert.equal(fresh.error, undefined);
-  assert.deepEqual(original.commitState(), { status: 'committed', revision: 3 });
-  assert.deepEqual(fresh.commitState(), { status: 'committed', revision: 0 });
-
-  group.add(fresh);
-  const rejectionError = new Error('ordinary rejection after accepted group attribution');
-  fresh.material = defineTextMaterial(() => {
-    throw rejectionError;
-  });
-  const rejectionThrow = captureThrown(() => glyph.shape());
-  assert.deepEqual(rejectionThrow, { present: true, error: rejectionError });
-  assert.deepEqual(original.commitState(), { status: 'failed', error: rejectionError });
-  assert.deepEqual(fresh.commitState(), { status: 'failed', error: rejectionError });
-  assert.equal(group.error, rejectionError);
-
-  original.dispose();
-  fresh.dispose();
-  group.dispose();
-  font.dispose();
-});
-
-test('disposing an attributed TextGroup releases root-owned error state', async (t) => {
-  const three = await createThreeTestHandle(t, defineThreeConfig({ capacity: { size: 1, policy: 'grow' } }));
-  const font = await loadFont({ baked: dataUrl(await readFile(fontUrl)) }, bitmap({ strikes: [16] }));
-  const scene = new THREE.Scene();
-  const replacementMaterial = defineTextMaterial((context) => context.createDefaultMaterial());
-  const firstError = new Error('disposed group accepted retirement failure');
-  const firstRetiringMaterial = defineTextMaterial((context) => {
-    const material = context.createDefaultMaterial();
-    material.addEventListener('dispose', () => {
-      throw firstError;
-    });
-    return material;
-  });
-  const firstGroup = three.createTextGroup();
-  const first = three.createText({ font, material: firstRetiringMaterial, text: 'first' });
-  firstGroup.add(first);
-  scene.add(firstGroup);
-  scene.updateMatrixWorld(true);
-
-  first.material = replacementMaterial;
-  first.text = 'first replacement grows retained storage';
-  assert.deepEqual(
-    captureThrown(() => glyph.shape()),
-    { present: true, error: firstError },
-  );
-  assert.equal(firstGroup.error, firstError);
-
-  scene.remove(firstGroup);
-  firstGroup.dispose();
-  assert.equal(firstGroup.disposed, true);
-  assert.equal(firstGroup.error, undefined, 'disposal clears the terminal group state and releases root ownership');
-  scene.add(firstGroup);
-  first.measure();
-
-  const secondError = new Error('unrelated group preparation failure');
-  const rejectingMaterial = defineTextMaterial(() => {
-    throw secondError;
-  });
-  const secondGroup = three.createTextGroup();
-  const second = three.createText({ font, material: replacementMaterial, text: 'second' });
-  secondGroup.add(second);
-  scene.add(secondGroup);
-  scene.updateMatrixWorld(true);
-  assert.deepEqual(second.commitState(), { status: 'committed', revision: 0 });
-
-  second.material = rejectingMaterial;
-  assert.deepEqual(
-    captureThrown(() => glyph.shape()),
-    { present: true, error: secondError },
-  );
-  assert.equal(secondGroup.error, secondError);
-  assert.equal(firstGroup.error, undefined, 'a later attribution cannot mutate disposed group state');
-
-  second.material = replacementMaterial;
-  glyph.shape();
-  assert.equal(secondGroup.error, undefined);
-  assert.equal(firstGroup.error, undefined, 'a later clear cannot mutate disposed group state');
-
-  first.dispose();
-  second.dispose();
-  secondGroup.dispose();
-  font.dispose();
-});
-
 test('Three reflow patches only host placement while retaining raster geometry, draws, and materials', async (t) => {
   const three = await createThreeTestHandle(t);
   const fontDomain = createThreeFontDomain();
@@ -6275,7 +6132,7 @@ test('one Rust plan partitions a mixed Bitmap to Slug fallback stack', async (t)
   scene.updateMatrixWorld();
 
   const draws = rootDraws(scene);
-  assert.equal(label.error, undefined);
+  assertCommitted(label);
   assert.equal(draws.length, 2, 'Rust must partition fallback glyphs by renderer program and resource');
   assert.equal(
     draws.reduce((count, draw) => count + draw.geometry.instanceCount, 0),
@@ -6455,7 +6312,7 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
   );
   scene.updateMatrixWorld();
 
-  assert.equal(group.error, undefined);
+  assertCommitted(group);
   assert.deepEqual(
     engineCrossings(),
     { read: 0, batch: 1, publish: 1 },
@@ -6847,7 +6704,7 @@ test('one Three root realizes two public Text objects as one indexed Rust draw',
       );
     }
     scene.updateMatrixWorld(true);
-    assert.equal(group.error, undefined, 'publication adopts the omitted-geometry preparations');
+    assertCommitted(group, 'publication adopts the omitted-geometry preparations');
   } finally {
     coldColumns.dispose();
   }
@@ -6985,7 +6842,7 @@ test('sibling measurement terminates after expansion sparse replacement and shri
   scene.updateMatrixWorld(true);
   assert.equal(left.commitState().status, 'committed');
   assert.equal(right.commitState().status, 'committed');
-  assert.equal(group.error, undefined);
+  assertCommitted(group);
   assert.equal(rootDraws(scene).length, 1);
 
   group.dispose();
@@ -7528,13 +7385,13 @@ test('repeated public Text.set assignments match freshly published semantic glyp
       for (const [index, value] of fixture.values.slice(1).entries()) {
         warm.set({ text: value });
         scene.updateMatrixWorld(true);
-        assert.equal(warm.error, undefined, `${fixture.name} warm publication ${String(index)} must succeed`);
+        assertCommitted(warm, `${fixture.name} warm publication ${String(index)} must succeed`);
 
         const fresh = three.createText({ ...properties, text: value });
         scene.add(fresh);
         scene.updateMatrixWorld(true);
         try {
-          assert.equal(fresh.error, undefined, `${fixture.name} fresh publication ${String(index)} must succeed`);
+          assertCommitted(fresh, `${fixture.name} fresh publication ${String(index)} must succeed`);
           const scalarGlyphs = warm.readGlyphs((layout) =>
             Array.from({ length: layout.glyphCount }, (_unused, ordinal) => layout.glyphAt(ordinal)),
           );
@@ -7636,14 +7493,7 @@ test('renderer rejection preserves raw falsy values and Text.set output through 
       }
       assert.equal(caught, true, `case ${String(index)} must reject the top-level shape call`);
       assert.equal(Object.is(caughtValue, rejection), true, `case ${String(index)} preserves the thrown identity`);
-      assert.equal(Object.is(group.error, rejection), true, `case ${String(index)} preserves TextGroup.error`);
-      assert.equal(Object.is(warm.error, rejection), true, `case ${String(index)} preserves Text.error`);
-      assert.equal(warm.commitState().status, 'failed', `case ${String(index)} records rejection presence`);
-      assert.equal(
-        Object.is(warm.commitState().error, rejection),
-        true,
-        `case ${String(index)} retains an explicitly thrown undefined`,
-      );
+      assert.equal(warm.commitState().status, 'pending', `case ${String(index)} draws nothing of the rejection`);
       assertPublicSemanticLayoutEqual(warm, fresh, `raw rejection ${String(index)}`);
 
       rejectMaterial = false;
@@ -7651,7 +7501,6 @@ test('renderer rejection preserves raw falsy values and Text.set output through 
       glyph.shape();
       warmScene.updateMatrixWorld(true);
       freshScene.updateMatrixWorld(true);
-      assert.equal(group.error, undefined, `case ${String(index)} clears the accepted retry error`);
       assert.equal(warm.commitState().status, 'committed', `case ${String(index)} commits after retry`);
       assert.deepEqual(
         rendererSnapshot(warmScene, rootName),
@@ -7726,14 +7575,7 @@ test('two real roots aggregate distinct raw renderer rejections in participant o
     assert.equal(Object.is(caughtValue.errors[0], rejectionValues[0]), true, 'first participant retains undefined');
     assert.equal(Object.is(caughtValue.errors[1], rejectionValues[1]), true, 'second participant retains false');
     for (let index = 0; index < warmTexts.length; index += 1) {
-      const state = warmTexts[index].commitState();
-      assert.equal(state.status, 'failed', `root ${String(index)} records its renderer rejection`);
-      assert.equal(Object.is(state.error, rejectionValues[index]), true, `root ${String(index)} keeps raw identity`);
-      assert.equal(
-        Object.is(warmGroups[index].error, rejectionValues[index]),
-        true,
-        `root ${String(index)} attributes only its own group error`,
-      );
+      assert.equal(warmTexts[index].commitState().status, 'pending', `root ${String(index)} draws nothing of it`);
       assert.deepEqual(
         rendererSnapshot(warmScene, rootNames[index]),
         acceptedBefore[index],
@@ -7751,7 +7593,6 @@ test('two real roots aggregate distinct raw renderer rejections in participant o
     coldScene.updateMatrixWorld(true);
     for (let index = 0; index < warmTexts.length; index += 1) {
       assert.equal(warmTexts[index].commitState().status, 'committed', `root ${String(index)} accepts explicit retry`);
-      assert.equal(warmGroups[index].error, undefined, `root ${String(index)} clears its attributed error`);
       assert.deepEqual(
         rendererSnapshot(warmScene, rootNames[index]),
         rendererSnapshot(coldScene, rootNames[index]),
@@ -7842,7 +7683,7 @@ test('Text.measure answers attached first-frame state without traversing matrice
   assert.deepEqual(second.commitState(), { status: 'pending' });
 
   scene.updateMatrixWorld(true);
-  assert.equal(group.error, undefined);
+  assertCommitted(group);
   assert.equal(instrumentedGlyph.crossings, 1, 'the first traversal publishes exactly one full frame');
   assert.equal(
     instrumentedGlyph.latestUpdateFlags & textShaperAbi.engine.resultFlags.checkpoint,
@@ -9028,7 +8869,7 @@ test('Bitmap strike changes fully initialize a replacement indexed batch', async
   group.add(label);
   scene.add(group);
   scene.updateMatrixWorld();
-  assert.equal(group.error, undefined);
+  assertCommitted(group);
   const initialDraw = rootDraws(scene)[0];
   assert.ok(initialDraw);
   const initialStart = initialDraw.userData.pmndrsGlyphRunStart;
@@ -9037,7 +8878,7 @@ test('Bitmap strike changes fully initialize a replacement indexed batch', async
 
   label.style = { ...label.style, fontSize: 16 };
   scene.updateMatrixWorld();
-  assert.equal(group.error, undefined, 'crossing from the 16 ppem strike to 32 ppem must publish successfully');
+  assertCommitted(group, 'crossing from the 16 ppem strike to 32 ppem must publish successfully');
   const draw = rootDraws(scene)[0];
   assert.ok(draw);
   const start = draw.userData.pmndrsGlyphRunStart;
@@ -9055,7 +8896,7 @@ test('Bitmap strike changes fully initialize a replacement indexed batch', async
 
   label.constraints = { ...label.constraints, width: { mode: 'exact', size: 40 } };
   scene.updateMatrixWorld();
-  assert.equal(group.error, undefined, 'width-only reflow must retain the initialized transform stream');
+  assertCommitted(group, 'width-only reflow must retain the initialized transform stream');
 
   group.dispose();
   label.dispose();
@@ -9083,7 +8924,7 @@ test('multi-page Bitmap strikes remain one ordered texture-array draw', async (t
   group.add(label);
   scene.add(group);
   scene.updateMatrixWorld();
-  assert.equal(group.error, undefined);
+  assertCommitted(group);
   const draws = rootDraws(scene);
   assert.equal(draws.length, 1, 'atlas page changes must select texture-array layers without fragmenting draws');
   assert.ok(
@@ -9117,7 +8958,7 @@ test('large inspection queries grow the result arena to the reported requirement
   scene.add(group);
   scene.updateMatrixWorld(true);
 
-  assert.equal(group.error, undefined);
+  assertCommitted(group);
   const inspection = label.glyphs();
   assert.ok(inspection.glyphCount > 6_000);
   assert.equal(inspection.glyphIds.length, inspection.glyphCount);
@@ -9144,7 +8985,7 @@ test('Rust ellipsis reshapes only the narrowed unsafe line boundary', async (t) 
   });
   scene.add(label);
   scene.updateMatrixWorld();
-  assert.equal(label.error, undefined);
+  assertCommitted(label);
   const inspection = label.glyphs();
   assert.ok(inspection);
   assert.equal(inspection.lineTextEnds[0], 3, 'the fixed width must preserve the unsafe-boundary fixture');
@@ -9176,7 +9017,7 @@ test('one Three root atomically replaces child paragraphs without multiplying re
   group.remove(...first);
   group.add(...second);
   scene.updateMatrixWorld();
-  assert.equal(group.error, undefined);
+  assertCommitted(group);
   assert.deepEqual(
     instrumentedGlyph.latestParagraphMutations().map(({ opcode, order }) => ({ opcode, order })),
     [0, 1, 2].map((order) => ({ opcode: textShaperAbi.engine.paragraphMutationOpcodes.upsert, order })),
@@ -9190,7 +9031,7 @@ test('one Three root atomically replaces child paragraphs without multiplying re
   group.remove(...second);
   group.add(...third);
   scene.updateMatrixWorld();
-  assert.equal(group.error, undefined, 'a recycled Rust paragraph must not retain its previous semantic contents');
+  assertCommitted(group, 'a recycled Rust paragraph must not retain its previous semantic contents');
   assert.equal(rootDraws(scene).length, 1);
   assert.equal(rootDraws(scene)[0].geometry.instanceCount, 2);
 
@@ -9211,7 +9052,7 @@ test('one Three root grows aggregate glyph storage without reserving one aggrega
   scene.add(group);
   scene.updateMatrixWorld();
 
-  assert.equal(group.error, undefined);
+  assertCommitted(group);
   assert.equal(group.textCount, labels.length);
   assert.equal(rootDraws(scene).length, 1);
   assert.equal(instrumentedGlyph.latestSemanticRecordCount, 0, 'initial publication consumes setter summaries');
@@ -9234,7 +9075,7 @@ test('one Three root grows aggregate glyph storage without reserving one aggrega
       labels[index].text = `recycled-${String(cycle)}-${String(index)}`;
     }
     scene.updateMatrixWorld();
-    assert.equal(group.error, undefined, `recycling cycle ${String(cycle)} must remain publishable`);
+    assertCommitted(group, `recycling cycle ${String(cycle)} must remain publishable`);
     // The relabeled Texts' earlier summaries owe glyph facts; the publication answers them, once each.
     assert.ok(
       instrumentedGlyph.latestSemanticParagraphCount <= 48,
@@ -9275,7 +9116,7 @@ test('repeated layout under changing constraints stays on the paragraph preparat
   });
   scene.add(label);
   scene.updateMatrixWorld(true);
-  assert.equal(label.error, undefined);
+  assertCommitted(label);
   const committedGeneration = instrumentedGlyph.latestUpdateGeneration;
   instrumentedGlyph.reset();
 
@@ -9306,7 +9147,7 @@ test('repeated layout under changing constraints stays on the paragraph preparat
   );
 
   scene.updateMatrixWorld(true);
-  assert.equal(label.error, undefined);
+  assertCommitted(label);
   assert.equal(instrumentedGlyph.crossings, 1, 'one ordinary frame commits the final constraint');
   assert.deepEqual(
     [instrumentedGlyph.measureCrossings, instrumentedGlyph.prepareBatchCrossings],
@@ -9472,7 +9313,7 @@ test('a measurement publication preserves another paragraph’s inspected line s
   group.add(other);
   scene.updateMatrixWorld(true);
   try {
-    assert.equal(group.error, undefined);
+    assertCommitted(group);
     assertLineGlyphSpans(target.measure(), expected, 'after another paragraph publishes');
     assertLineGlyphSpans(target.glyphs(), expected, 'inspection retained after publication');
   } finally {
@@ -9524,7 +9365,7 @@ test('measured line spans survive edits, reflow, and publication without glyph i
   group.add(published, sibling);
   scene.add(group);
   scene.updateMatrixWorld(true);
-  assert.equal(group.error, undefined);
+  assertCommitted(group);
   assertLineGlyphSpans(published.measure(), coldSpans(first, wide), 'measurement after publication');
   assertLineGlyphSpans(
     sibling.measure(),
@@ -9596,7 +9437,7 @@ test('a publication that requests the measurement view reports line glyph spans'
   group.add(published, sibling);
   scene.add(group);
   scene.updateMatrixWorld(true);
-  assert.equal(group.error, undefined);
+  assertCommitted(group);
   assertLineGlyphSpans(published.measure(), coldSpans(first, wide), 'published measurement');
   assertLineGlyphSpans(sibling.measure(), coldSpans(siblingText, narrow), 'second paragraph of the publication');
   published.set({ text: edited });
@@ -9645,7 +9486,7 @@ test('a standard ligature that absorbs a grapheme publishes and keeps typing', a
   for (let length = 1; length <= typed.length; length += 1) {
     text.text = typed.slice(0, length);
     scene.updateMatrixWorld(true);
-    assert.equal(text.error, undefined, `typing "${typed.slice(0, length)}" must publish`);
+    assertCommitted(text, `typing "${typed.slice(0, length)}" must publish`);
   }
   const ligated = text.measure();
   assert.equal(ligated?.missingGlyphCount, 0, 'the ligature resolves to a real glyph');
@@ -9654,7 +9495,7 @@ test('a standard ligature that absorbs a grapheme publishes and keeps typing', a
   // glyphs, which is what makes the glyph-less trailing cluster reachable at all.
   text.style = { fontSize: 20, lineHeight: 1.25, features: [{ tag: 'liga', value: 0 }] };
   scene.updateMatrixWorld(true);
-  assert.equal(text.error, undefined);
+  assertCommitted(text);
   const unligated = text.measure();
   assert.ok(
     unligated !== undefined && ligated !== undefined && unligated.glyphCount > ligated.glyphCount,

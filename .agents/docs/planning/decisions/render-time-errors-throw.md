@@ -37,8 +37,16 @@ publication-time failures.
   that does not compile, a lost device), Glyph logs the same way, through Three, and does not throw: its draws are Three
   draws, so Three reports them, and Glyph adds no throw and no routing of its own. No Glyph code routed GPU or device
   errors to `onError`, so nothing was removed for this rule.
-- **Reads stay.** `Text.error`, `TextGroup.error`, `commitState()`, `TypeGpuText.error` and `Pixi3DText.error` name
-  which text failed, which the thrown value does not.
+- **No failure reads.** The thrown value names the text: a refusal is a `GlyphError` (`engine-failed`) whose message
+  quotes the first 40 UTF-16 units of the text and the cause (`Glyph text "Hello, wor…" was not drawn: prepare text
+failed with glyph-engine status 7 …`), with the engine's error as `cause`; a result-arena overflow names the text it
+  withholds; an `onLayout` exception is rethrown as `onLayout of Glyph text "…" threw: <message>` with the
+  application's exception as `cause`; a fixed capacity names its root. `commitState()` has no `failed` status: a
+  text that is not drawn as authored, a refused one included, is `pending`.
+- **Amended 2026-11-23 (Justin).** `Text.error`, `TextGroup.error`, the `failed` status of `commitState()`,
+  `TypeGpuText.error` and `Pixi3DText.error` are removed. Failures throw, and nobody walks every text to find which
+  one failed, so the per-text error state had no reader; the message carries what it named. This replaces the
+  earlier "Reads stay" line.
 
 Removed: `ThreeRoot.onError`, `Text.onError`, `TextGroup.onError`, the R3F `<Text onError>` and
 `<TextGroup onError>` props, the Vue `error` event (a FontFace load failure reaches `onErrorCaptured` and
@@ -71,6 +79,6 @@ never-thrown `TextFrameError`, `TextFrameRejection`, `TextFrameSubject` and the 
   render), the throw leaves the inner render cleanly but unwinds the outer one past its restore, the same as any
   `onAfterRender` exception would.
 - Failures found by a traversal outside any render (an application's own `scene.updateMatrixWorld()`) wait for the
-  next render of that Scene; a root that never renders never throws them, and its texts' `error` still names them.
+  next render of that Scene; a root that never renders never throws them.
 - A Scene conflict (one root in two Scenes) still throws from the traversal that meets it, as before; this
   decision does not change it.

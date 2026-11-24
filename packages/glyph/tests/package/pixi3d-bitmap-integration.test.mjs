@@ -290,8 +290,6 @@ test('a rejected renderer publication retains the last mesh and does not retry u
     text.constraints = { anchor: { x: 'right', y: 'bottom' } };
     text.text = 'TWO';
     assert.throws(() => glyph.shape(), /intentional material rejection/);
-    assert.match(text.error.message, /intentional material rejection/);
-    assert.equal(sibling.error, text.error, 'every text of the rejected root keeps its error');
     assert.equal(text.children[0], accepted);
     assert.deepEqual(
       [accepted.position.x, accepted.position.y],
@@ -310,8 +308,6 @@ test('a rejected renderer publication retains the last mesh and does not retry u
     assert.notEqual(text.children[0], accepted);
     const offset = text.measure().anchorOffset;
     assert.deepEqual([text.children[0].position.x, text.children[0].position.y], [offset.x, -offset.y]);
-    assert.equal(text.error, undefined);
-    assert.equal(sibling.error, undefined);
     handle.dispose();
     assert.equal(sibling.disposed, true, 'root disposal releases retained text membership');
     text.dispose();
@@ -576,19 +572,18 @@ test('a refused paragraph is thrown once by glyph.shape() while its siblings pub
     );
     // The first frame's batch traps and restarts the engine; the next isolates and refuses the culprit.
     assert.throws(() => glyph.shape(), /trapped and was restarted/u);
-    assert.throws(
-      () => glyph.shape(),
-      (error) => error === culprit.error,
-    );
-    assert.equal(texts[0].error, undefined);
-    assert.equal(texts[2].error, undefined);
+    assert.throws(() => glyph.shape(), {
+      name: 'GlyphError',
+      code: 'engine-failed',
+      message: /^Glyph text "b changed" was not drawn: .*trapped/u,
+    });
     assert.equal(texts[2].measure().glyphCount, 'c changed'.length, 'the siblings publish');
     texts[0].position.x = 5;
     assert.doesNotThrow(() => glyph.shape(), 'a standing refusal is thrown once');
     dirty = false;
     culprit.text = 'harmless';
     assert.doesNotThrow(() => glyph.shape());
-    assert.equal(culprit.error, undefined, 'new input is a new chance');
+    assert.equal(culprit.measure().glyphCount, 'harmless'.length, 'new input is a new chance');
   } finally {
     trapCallsWhen(undefined);
     parent.destroy({ children: true });

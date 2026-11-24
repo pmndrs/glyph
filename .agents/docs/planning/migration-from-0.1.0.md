@@ -54,7 +54,7 @@ names the Scene before the first traversal; React and Vue call it for you.
 | 0.1.0                                                                                         | Now                                                                                                                                      | What to change                                                                                        |
 | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Invalid input threw `TypeError` or `RangeError` from the setter.                              | It throws `GlyphInputError` (`code: 'invalid-input'`, `path: (string \| number)[]`, the old error as `cause`). The previous value stays. | Replace `instanceof TypeError`/`RangeError` checks on setters with `GlyphInputError` or `error.code`. |
-| An engine failure threw from the setter.                                                      | It is thrown from the render that finds it, once; `text.error` and `commitState().status === 'failed'` name the text. Its siblings draw. | Move `try`/`catch` from setters to around `renderer.render()` (see below).                            |
+| An engine failure threw from the setter.                                                      | It is thrown from the render that finds it, once; its message quotes the text. Its siblings draw.                                        | Move `try`/`catch` from setters to around `renderer.render()` (see below).                            |
 | `Text.onError`, `TextGroup.onError`, R3F `onError` prop, Vue `error` event, `TextFrameError`. | Removed. A failure found while rendering is thrown from that render (see below) as the underlying error.                                 | Delete the handlers; catch the render instead.                                                        |
 | A lone surrogate threw `RangeError: text offset N is an unpaired … surrogate`.                | Lone surrogates no longer throw; they render as the replacement character. `text.text` returns the string as assigned.                   | Remove the guard if you had one.                                                                      |
 | No per-text length limit.                                                                     | A text longer than `maxTextUnits` (default 65,536 UTF-16 units) is invalid input.                                                        | Raise it with `defineThreeConfig({ maxTextUnits })` if you hold longer paragraphs.                    |
@@ -63,7 +63,7 @@ names the Scene before the first traversal; React and Vue call it for you.
 | Vue: not defined.                                                                             | An invalid prop, and a FontFace that fails to load, reach Vue's error handling; the component keeps its previous value.                  | Use `onErrorCaptured` or `app.config.errorHandler`.                                                   |
 
 Engine traps no longer take a root down: the engine instance is replaced, every text restates itself, and the next
-frame retries. An input that always traps is refused alone, and that text's `error` names it.
+frame retries. An input that always traps is refused alone, and the thrown message quotes that text.
 
 **Catching a failure found while rendering.** There is no error callback. A paragraph the engine refused, a
 publication the renderer rejected, an engine restart, a fixed capacity exceeded and an exception from your own
@@ -76,9 +76,13 @@ render, or let it reach your global error handler (`window.onerror`, Sentry):
 try {
   renderer.render(scene, camera);
 } catch (error) {
-  report(error); // `text.error` and `commitState()` say which text failed
+  report(error); // e.g. 'Glyph text "Hello, wor…" was not drawn: …' (the engine's error is `cause`)
 }
 ```
+
+There is no per-text error read: `Text.error`, `TextGroup.error`, `TypeGpuText.error`, `Pixi3DText.error` and the
+`failed` status of `commitState()` are removed. The thrown message quotes the first 40 UTF-16 units of the failed
+text, so a console or error report alone finds it; a refused text's `commitState()` is `pending`.
 
 ## 3. Renamed and removed application names
 

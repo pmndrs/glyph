@@ -48,7 +48,6 @@ export function definePixi3DConfig(): Pixi3DGlyphConfig {
         const renderer = new Pixi3DRenderer();
         const failures = new RenderFailures();
         const texts = new Set<{
-          rejectPublication(error: unknown): void;
           preparePublication(failures: RenderFailures): void;
           acceptPublication(): void;
           dispose(): void;
@@ -83,10 +82,6 @@ export function definePixi3DConfig(): Pixi3DGlyphConfig {
             accepted: () => {
               accept();
               failures.throwFound();
-            },
-            // The engine throws the rejection from `glyph.shape()`; each text keeps it as its `error`.
-            rejected: (error) => {
-              for (const text of texts) text.rejectPublication(error);
             },
           },
           dispose: () => {

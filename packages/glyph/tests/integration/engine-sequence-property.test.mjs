@@ -8,6 +8,7 @@ import { bitmap, createFontStack } from '@pmndrs/glyph';
 import * as THREE from 'three/webgpu';
 
 import { createThreeTestHandle } from '../support/three-handle.mjs';
+import { assertCommitted } from '../support/three-render.mjs';
 
 const fixtures = new URL('../../../../benches/fixtures/rendering/', import.meta.url);
 
@@ -229,7 +230,7 @@ const LIFECYCLE_OPERATIONS = ['detach', 'reattach', 'recreate'];
 function checkSubject(subject, context) {
   if (!subject.attached || subject.node === undefined) return;
   const { node } = subject;
-  assert.equal(node.error, undefined, `${context}: paragraph reported ${String(node.error?.message)}`);
+  assertCommitted(node, `${context}: paragraph reported ${node.commitState().status}`);
 
   const measured = node.measure();
   assert.notEqual(measured, undefined, `${context}: committed layout metrics went missing`);
@@ -453,11 +454,7 @@ test('the authored shaping timeline types, wraps, and restyles without desynchro
         for (const node of nodes) node.measure();
         scene.updateMatrixWorld(true);
         for (const [index, node] of nodes.entries()) {
-          assert.equal(
-            node.error,
-            undefined,
-            `${shapingCase.id} tick ${tick} p${index}: ${String(node.error?.message)}`,
-          );
+          assertCommitted(node, `${shapingCase.id} tick ${tick} p${index}: ${node.commitState().status}`);
           const metrics = node.measure();
           assert.equal(
             metrics.missingGlyphCount,
