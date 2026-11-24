@@ -182,7 +182,6 @@ test('the packed package exposes every ESM subpath and no CommonJS entry', async
     '@pmndrs/glyph/three/internal/draw-realizer',
     '@pmndrs/glyph/three/typegpu/internal/bitmap-shader',
     '@pmndrs/glyph/three/decorations',
-    '@pmndrs/glyph/three/frame-error',
     '@pmndrs/glyph/three/glyph-measurement',
     '@pmndrs/glyph/three/glyphs',
     '@pmndrs/glyph/three/renderer-resources',

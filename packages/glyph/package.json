@@ -90,7 +90,6 @@
     "./three/decorations": null,
     "./three/detached-object": null,
     "./three/engine-plan-target": null,
-    "./three/frame-error": null,
     "./three/glyph-measurement": null,
     "./three/glyphs": null,
     "./three/font-loader": null,

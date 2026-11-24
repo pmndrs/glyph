@@ -170,7 +170,8 @@ test('integrations re-export root names only when their own signatures use them'
             'three/decorations.d.ts',
             'three/glyph-measurement.d.ts',
             'three/material.d.ts',
-            'three/frame-error.d.ts',
+            // `/three` declares its own material-aware `span`, which shadows the root one.
+            'three/span.d.ts',
           ].map(declaration),
         )
       ).join('\n'),
