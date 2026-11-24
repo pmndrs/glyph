@@ -47,6 +47,7 @@ import type {
 } from '../discovery.js';
 import { fontBakeDescriptor } from '../internal/core-bake-policy.js';
 import { bakeFontPipeline } from '../internal/font-bake-pipeline.js';
+import { preparationSelection } from '../internal/font-selection.js';
 import { NodeBakeError } from '../internal/node-bake-error.js';
 import { assertDistinctInputOutputs, publishFilesWithRollback } from '../internal/node-file-publication.js';
 import { resolveRasterBakePlan, type ResolvedRasterBakePlan } from '../internal/raster-bake-plan.js';
@@ -60,6 +61,12 @@ export interface NodeBakeOptions<Rasters extends readonly object[] = readonly []
   readonly output: string | URL;
   readonly font: Omit<FontBakeDescriptor, 'formatVersion'>;
   readonly unicodeRanges?: readonly UnicodeRange[];
+  /**
+   * OpenType layout feature tags to keep, such as `['smcp', 'tnum']`. The features shaping needs (hb-subset's default
+   * list: `ccmp`, `locl`, `liga`, `kern`, `mark`, `calt`, the complex-script features, ...) are always kept. Omitted
+   * keeps every feature, with or without `unicodeRanges`; glyphs reachable only through a dropped feature are not baked.
+   */
+  readonly layoutFeatures?: readonly string[];
   readonly rasters?: Rasters;
   readonly signal?: AbortSignal;
 }
@@ -189,6 +196,7 @@ async function bakeFontWithResolvedPlans<const Rasters extends readonly object[]
     fontFaceIndex: options.font.fontFaceIndex,
     ...(options.font.outlines === undefined ? {} : { outlines: options.font.outlines }),
     ...(options.unicodeRanges === undefined ? {} : { unicodeRanges: options.unicodeRanges }),
+    ...(options.layoutFeatures === undefined ? {} : { layoutFeatures: options.layoutFeatures }),
     rasters,
     validateArtifact: validateFontArtifact,
     ...(options.signal === undefined ? {} : { signal: options.signal }),
@@ -467,6 +475,7 @@ export async function fontIsUpToDate(request: {
   /** Whether the bake also keeps glyph outlines. Defaults to `false`. */
   readonly outlines?: boolean;
   readonly unicodeRanges?: readonly UnicodeRange[];
+  readonly layoutFeatures?: readonly string[];
   readonly rasters: readonly { readonly rasterKey: string; readonly kind: string; readonly version: number }[];
   /** A split bake writes companions beside the core, so the same rasters are a different result. */
   readonly split: boolean;
@@ -479,19 +488,13 @@ export async function fontIsUpToDate(request: {
   }
 
   const source = await readFile(request.input);
-  // Mirror the bake exactly: naming no ranges bakes the source as it is, and preparing with an
-  // empty selection is not the same request — the baker rejects it outright.
+  // Mirror the bake exactly: naming no ranges and no layout features bakes the source as it is. The
+  // prepared bytes carry the whole selection, so their fingerprint changes whenever it does.
   let baked: Uint8Array = source;
-  if (request.unicodeRanges !== undefined) {
+  const selection = preparationSelection(request.fontFaceIndex, request.unicodeRanges, request.layoutFeatures);
+  if (selection !== undefined) {
     const baker = await defaultFontBaker();
-    baked = baker.prepare({
-      source,
-      selection: {
-        formatVersion: 0,
-        fontFaceIndex: request.fontFaceIndex,
-        unicodeRanges: request.unicodeRanges,
-      },
-    }).bytes;
+    baked = baker.prepare({ source, selection }).bytes;
   }
   const sourceFingerprint = fingerprint128(baked, fingerprintDomain.source);
 
@@ -505,7 +508,7 @@ export async function fontIsUpToDate(request: {
     ?.PMNDRS_font;
   if (font === undefined) return { fresh: false, reason: 'the existing font is not a glyph font' };
   if (font.provenance?.sourceFingerprint !== sourceFingerprint) {
-    return { fresh: false, reason: 'the source font, face, or unicode ranges changed' };
+    return { fresh: false, reason: 'the source font, face, unicode ranges, or layout features changed' };
   }
   if (font.provenance?.bakerVersion !== FONT_BAKER_VERSION) {
     return { fresh: false, reason: 'a different core baker produced this font' };

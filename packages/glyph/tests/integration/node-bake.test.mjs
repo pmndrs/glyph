@@ -389,41 +389,46 @@ test('a Unicode subset of a CFF font keeps its outlines', async (t) => {
   assert.ok((await readFile(output)).byteLength > 0);
 });
 
-test('a Unicode subset keeps the discretionary features that style features enable', async (t) => {
-  const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-subset-features-cli-'));
+const sourceSerifPath = fileURLToPath(
+  new URL('../../../../benches/fixtures/fonts/source-serif-4.005/SourceSerif4-Regular.ttf', import.meta.url),
+);
+
+/** Bakes Source Serif 4 through the CLI and returns a shaper of glyph IDs for text and style features. */
+async function bakeSourceSerif(t, name, argv) {
+  const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-layout-features-cli-'));
   t.after(() => rm(root, { recursive: true, force: true }));
-  const input = fileURLToPath(
-    new URL('../../../../benches/fixtures/fonts/source-serif-4.005/SourceSerif4-Regular.ttf', import.meta.url),
-  );
-  const output = join(root, 'source-serif-ascii.font.glb');
+  const output = join(root, `${name}.font.glb`);
   const bake = captureIo();
   assert.equal(
     await runCli(
-      ['bake', '--input', input, '--output', output, '--unicodes', 'U+0020-007E', '--bitmap', '16'],
+      ['bake', '--input', sourceSerifPath, '--output', output, '--bitmap', '16', '--json', ...argv],
       bake.io,
     ),
     0,
     bake.stderr(),
   );
-
   await glyph.init();
   const font = await loadFont({ baked: { bytes: await readFile(output) } }, bitmap({ strikes: [16] }));
   const handle = glyph.handle(
-    'three:integration:subset-features',
+    `three:integration:layout-features:${name}`,
     defineThreeConfig({ capacity: { size: 256, policy: 'grow' } }),
   );
   t.after(() => {
     handle.dispose();
     font.dispose();
   });
-  const glyphIds = (text, features) => {
+  const glyphIds = (text, features = []) => {
     const paragraph = handle.createText({ font, text, style: { fontSize: 16, features } });
     const ids = Array.from(paragraph.glyphs().glyphIds);
     paragraph.dispose();
     return ids;
   };
+  return { output, report: JSON.parse(bake.stdout()), stderr: bake.stderr(), glyphIds };
+}
 
-  const letters = glyphIds('glyph', []);
+test('a Unicode subset keeps the discretionary features that style features enable', async (t) => {
+  const { glyphIds } = await bakeSourceSerif(t, 'ascii', ['--unicodes', 'U+0020-007E']);
+  const letters = glyphIds('glyph');
   const smallCaps = glyphIds('glyph', [{ tag: 'smcp' }]);
   assert.equal(smallCaps.length, letters.length);
   assert.ok(
@@ -431,10 +436,99 @@ test('a Unicode subset keeps the discretionary features that style features enab
     `smcp keeps no default lowercase glyph: ${smallCaps} vs ${letters}`,
   );
   // Source Serif's default figures are tabular lining, so `pnum`, `onum` and `zero` each select alternates.
-  const figures = glyphIds('1170', []);
+  const figures = glyphIds('1170');
   for (const tag of ['pnum', 'onum', 'zero']) {
     assert.notDeepEqual(glyphIds('1170', [{ tag }]), figures, `${tag} selects alternate figures`);
   }
+});
+
+test('--layout-features drops the features it does not name, with or without --unicodes', async (t) => {
+  for (const unicodes of [[], ['--unicodes', 'U+0020-007E']]) {
+    const { glyphIds, report } = await bakeSourceSerif(t, `onum-${unicodes.length}`, [
+      ...unicodes,
+      '--layout-features',
+      'onum',
+    ]);
+    assert.deepEqual(glyphIds('glyph', [{ tag: 'smcp' }]), glyphIds('glyph'), 'smcp was not kept');
+    assert.notDeepEqual(glyphIds('1170', [{ tag: 'onum' }]), glyphIds('1170'), 'onum was kept');
+    // Shaping's own features survive any list: `fi` still forms its default ligature.
+    assert.equal(glyphIds('fi').length, 1, 'liga was kept');
+    assert.equal(report.preparation.missingLayoutFeatures, undefined);
+  }
+});
+
+test('--layout-features * and omitting it bake the same font', async (t) => {
+  const every = await bakeSourceSerif(t, 'every', ['--unicodes', 'U+0020-007E', '--layout-features', '*']);
+  const omitted = await bakeSourceSerif(t, 'omitted', ['--unicodes', 'U+0020-007E']);
+  assert.ok((await readFile(every.output)).equals(await readFile(omitted.output)));
+});
+
+test('--layout-features names the tags the font does not have', async (t) => {
+  const { report, stderr, glyphIds } = await bakeSourceSerif(t, 'missing', [
+    '--unicodes',
+    'U+0020-007E',
+    '--layout-features',
+    'swsh,smcp,zzzz',
+  ]);
+  assert.deepEqual(report.preparation.missingLayoutFeatures, ['swsh', 'zzzz']);
+  assert.match(stderr, /does not have, ignored: swsh, zzzz/);
+  assert.notDeepEqual(glyphIds('glyph', [{ tag: 'smcp' }]), glyphIds('glyph'));
+});
+
+test('the up-to-date check and --check compare the layout feature selection', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-layout-features-check-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const output = join(root, 'serif.font.glb');
+  const argv = (features) => [
+    'bake',
+    '--input',
+    sourceSerifPath,
+    '--output',
+    output,
+    '--unicodes',
+    'U+0020-007E',
+    '--bitmap',
+    '16',
+    ...features,
+  ];
+  assert.equal(await runCli(argv(['--layout-features', 'onum']), captureIo().io), 0);
+  const fresh = captureIo();
+  assert.equal(await runCli(argv(['--layout-features', 'onum,onum']), fresh.io), 0);
+  assert.match(fresh.stdout(), /is up to date/);
+  assert.equal(await runCli(argv(['--layout-features', 'onum', '--check']), captureIo().io), 0);
+
+  const stale = captureIo();
+  assert.equal(await runCli(argv(['--layout-features', 'smcp', '--check']), stale.io), 1);
+  assert.match(stale.stderr(), /^STALE_OUTPUT:/);
+  const rebake = captureIo();
+  assert.equal(await runCli(argv([]), rebake.io), 0);
+  assert.doesNotMatch(rebake.stdout(), /is up to date/);
+});
+
+test('--layout-features rejects malformed tags and repetition', async () => {
+  for (const [value, message] of [
+    [['smcpx'], /--layout-features requires/],
+    [['smc'], /--layout-features requires/],
+    [[''], /--layout-features requires/],
+    [['smcp,'], /--layout-features requires/],
+    [['smcp', '--layout-features', 'tnum'], /may be provided only once/],
+  ]) {
+    const io = captureIo();
+    assert.equal(
+      await runCli(['bake', '--input', sourceSerifPath, '--layout-features', ...value, '--bitmap', '16'], io.io),
+      2,
+    );
+    assert.match(io.stderr(), message);
+  }
+  await assert.rejects(
+    bakeFont({
+      input: sourceSerifPath,
+      output: '/nonexistent/x.font.glb',
+      font: { fontFaceIndex: 0 },
+      layoutFeatures: ['smcp1'],
+    }),
+    { name: 'TypeError', message: /layoutFeatures\[0\] must be a four-character OpenType tag/ },
+  );
 });
 
 test('the CLI check reports a missing output or glyph map as stale without baking', async (t) => {

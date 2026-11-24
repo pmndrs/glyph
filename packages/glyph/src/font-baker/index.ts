@@ -26,6 +26,11 @@ export interface FontBakeSelection {
   readonly formatVersion: 0;
   readonly fontFaceIndex: number;
   readonly unicodeRanges: readonly UnicodeRange[];
+  /**
+   * OpenType layout feature tags to keep, in addition to the features shaping needs, which are always kept. Omitted
+   * keeps every feature.
+   */
+  readonly layoutFeatures?: readonly string[];
 }
 
 export interface FontPrepareRequest {
@@ -40,6 +45,8 @@ export interface PreparedFontReport {
   readonly fontFaceIndex: 0;
   readonly glyphCount: number;
   readonly fingerprint: Fingerprint;
+  /** Requested layout features the source font does not have; present only when some are missing. */
+  readonly missingLayoutFeatures?: readonly string[];
 }
 
 export interface PreparedFont {
@@ -450,7 +457,10 @@ function isPreparedFontReport(value: unknown): value is PreparedFontReport {
     value.preparedBytes > 0 &&
     value.fontFaceIndex === 0 &&
     isNonnegativeSafeInteger(value.glyphCount) &&
-    isFingerprint(value.fingerprint)
+    isFingerprint(value.fingerprint) &&
+    (value.missingLayoutFeatures === undefined ||
+      (Array.isArray(value.missingLayoutFeatures) &&
+        value.missingLayoutFeatures.every((tag) => typeof tag === 'string')))
   );
 }
 

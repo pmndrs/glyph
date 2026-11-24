@@ -4,7 +4,7 @@ import type { FontBakeCore, PreparedFontReport } from '../font-baker/index.js';
 import { composeFontBake, type ComposedFontBakeResult } from './compose-bake.js';
 import { soleCoreFontArtifact } from './core-bake-policy.js';
 import { readRuntimeFontArtifact } from './font-artifact-reader.js';
-import { normalizeUnicodeRanges } from './font-selection.js';
+import { preparationSelection } from './font-selection.js';
 import type { ResolvedRasterBakePlan } from './raster-bake-plan.js';
 
 export interface FontBakePipelineOptions {
@@ -13,6 +13,8 @@ export interface FontBakePipelineOptions {
   readonly fontFaceIndex: number;
   readonly outlines?: boolean;
   readonly unicodeRanges?: readonly { readonly start: number; readonly end: number }[];
+  /** Layout features to keep beyond the ones shaping needs; omitted keeps every feature. */
+  readonly layoutFeatures?: readonly string[];
   readonly rasters: readonly ResolvedRasterBakePlan[];
   readonly signal?: AbortSignal;
   readonly onProgress?: BakeProgressListener;
@@ -39,17 +41,9 @@ export async function bakeFontPipeline(options: FontBakePipelineOptions): Promis
   options.signal?.throwIfAborted();
 
   let phase = performance.now();
+  const selection = preparationSelection(options.fontFaceIndex, options.unicodeRanges, options.layoutFeatures);
   const preparation =
-    options.unicodeRanges === undefined
-      ? undefined
-      : options.fontBaker.prepare({
-          source: options.source,
-          selection: {
-            formatVersion: 0,
-            fontFaceIndex: options.fontFaceIndex,
-            unicodeRanges: normalizeUnicodeRanges(options.unicodeRanges),
-          },
-        });
+    selection === undefined ? undefined : options.fontBaker.prepare({ source: options.source, selection });
   const source = preparation?.bytes ?? options.source;
   const fontFaceIndex = preparation?.report.fontFaceIndex ?? options.fontFaceIndex;
   const core = options.fontBaker.bake({

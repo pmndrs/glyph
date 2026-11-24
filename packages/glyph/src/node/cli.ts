@@ -9,7 +9,7 @@ import { pathToFileURL } from 'node:url';
 
 import type { RasterBakePlan } from '../bake.js';
 import type { UnicodeRange } from '../font-baker/index.js';
-import { normalizeUnicodeRanges } from '../internal/font-selection.js';
+import { isOpenTypeTag, normalizeLayoutFeatures, normalizeUnicodeRanges } from '../internal/font-selection.js';
 import { assertDistinctInputOutputs, isMissing, publishFilesWithRollback } from '../internal/node-file-publication.js';
 import { resolveRasterBakePlan, type ResolvedRasterBakePlan } from '../internal/raster-bake-plan.js';
 import {
@@ -70,6 +70,10 @@ export async function runCli(
       else {
         io.stdout.write(`${parsed.direct.input} -> ${parsed.direct.output}\n`);
         io.stdout.write(`Baked 1 font in ${report.execution.timingsMs.total.toFixed(2)} ms.\n`);
+      }
+      const missing = report.preparation?.missingLayoutFeatures;
+      if (missing !== undefined) {
+        io.stderr.write(`--layout-features the font does not have, ignored: ${missing.join(', ')}\n`);
       }
       return 0;
     }
@@ -255,6 +259,7 @@ interface DirectBakeArguments {
   readonly slug: boolean;
   readonly slugOptions?: SlugOptions;
   readonly unicodeRanges?: readonly UnicodeRange[];
+  readonly layoutFeatures?: readonly string[];
   readonly check: boolean;
   readonly split: boolean;
   readonly force: boolean;
@@ -293,6 +298,8 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
   let slug = false;
   let slugOptions: SlugOptions | undefined;
   let unicodeRanges: readonly UnicodeRange[] | undefined;
+  let layoutFeaturesSet = false;
+  let layoutFeatures: readonly string[] | undefined;
   let check = false;
   let json = false;
   let help = false;
@@ -347,6 +354,10 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
     } else if (argument === '--unicodes') {
       if (unicodeRanges !== undefined) throw new TypeError('--unicodes may be provided only once');
       unicodeRanges = parseUnicodeSet(valueAfter(argv, ++index, argument));
+    } else if (argument === '--layout-features') {
+      if (layoutFeaturesSet) throw new TypeError('--layout-features may be provided only once');
+      layoutFeaturesSet = true;
+      layoutFeatures = parseLayoutFeatures(valueAfter(argv, ++index, argument));
     } else if (argument === '--check') {
       check = true;
     } else if (argument === '--split') {
@@ -366,6 +377,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
     msdf ||
     slug ||
     unicodeRanges !== undefined ||
+    layoutFeaturesSet ||
     check ||
     split ||
     force ||
@@ -398,6 +410,7 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
             slug,
             ...(slugOptions === undefined ? {} : { slugOptions }),
             ...(unicodeRanges === undefined ? {} : { unicodeRanges }),
+            ...(layoutFeatures === undefined ? {} : { layoutFeatures }),
             check,
             split,
             force,
@@ -442,6 +455,18 @@ function parseUnicodeSet(value: string): readonly UnicodeRange[] {
   return normalizeUnicodeRanges(ranges);
 }
 
+/** `*` keeps every feature, the same as omitting the option. */
+function parseLayoutFeatures(value: string): readonly string[] | undefined {
+  if (value === '*') return undefined;
+  const tags = value.split(',');
+  if (!tags.every(isOpenTypeTag)) {
+    throw new TypeError(
+      "--layout-features requires '*' or comma-separated four-character OpenType tags such as smcp,tnum",
+    );
+  }
+  return normalizeLayoutFeatures(tags);
+}
+
 async function bakeDirect(
   options: DirectBakeArguments,
   io: { readonly stdout: { write(text: string): unknown } },
@@ -461,6 +486,7 @@ async function bakeDirect(
       fontFaceIndex: options.fontFaceIndex,
       outlines: options.outlines,
       ...(options.unicodeRanges === undefined ? {} : { unicodeRanges: options.unicodeRanges }),
+      ...(options.layoutFeatures === undefined ? {} : { layoutFeatures: options.layoutFeatures }),
       rasters: resolved.map((plan) => ({
         rasterKey: plan.rasterKey,
         kind: plan.baker.kind,
@@ -487,6 +513,7 @@ async function bakeDirect(
       output,
       font: { fontFaceIndex: options.fontFaceIndex, outlines: options.outlines },
       ...(options.unicodeRanges === undefined ? {} : { unicodeRanges: options.unicodeRanges }),
+      ...(options.layoutFeatures === undefined ? {} : { layoutFeatures: options.layoutFeatures }),
       rasters: plans,
     });
     if (options.check) {
@@ -758,6 +785,12 @@ Direct font options:
   --unicodes <set>       Unicode set used to prepare a smaller source font
                         Example: U+0020-007E,U+00A0-00FF,U+4E00-9FFF
                         Selects code points, not raw glyph IDs
+  --layout-features <tags>
+                        OpenType features to keep, comma-separated (default: *, every feature)
+                        Example: smcp,tnum,ss01
+                        Features shaping needs (ccmp, locl, liga, kern, mark, calt, complex-script
+                        features, ...) are always kept; glyphs only a dropped feature reaches are
+                        not baked. Applies with or without --unicodes
   --outlines             Also keep every glyph's outline, read with outlineAt() on glyphs() or readGlyphs()
 
 Raster options:
@@ -789,6 +822,7 @@ Output options:
 Examples:
   glyph bake --input Inter-Regular.ttf --output inter.font.glb --bitmap 16,32 --msdf --slug
   glyph bake --input Inter-Regular.ttf --output inter-latin.font.glb --unicodes U+0020-007E --msdf
+  glyph bake --input Inter-Regular.ttf --output inter-latin.font.glb --unicodes U+0020-007E --layout-features tnum --msdf
   glyph bake --input fa-solid-900.ttf --output icons.font.glb --unicodes U+F000-F8FF --glyph-map icons.json --msdf
   glyph bake --input Inter-Regular.ttf --output inter-small.font.glb --msdf em-size=32
   glyph bake --project-root . --output-root public/generated
