@@ -1324,8 +1324,7 @@ class RenderPlannerImpl {
       throw new Error('render planner is already staged');
     }
     if (this.#unprepared.size === 0) return undefined;
-    // Orphaned glyph facts are re-derived by their own requests, before this one is collected.
-    for (const state of [...this.#unprepared]) this.#settleOrphanedFacts(state);
+    this.#settleUnpreparedOrphanedFacts();
     if (this.#isolateNextPreparation) {
       this.#prepareIsolated(measureAll);
       return undefined;
@@ -2352,6 +2351,11 @@ class RenderPlannerImpl {
       state.observedFacts = observed;
       releaseResolvedText(measured);
     }
+  }
+
+  /** Re-derives the orphaned glyph facts of every unprepared paragraph by their own requests, before a batch. */
+  #settleUnpreparedOrphanedFacts(): void {
+    for (const state of [...this.#unprepared]) this.#settleOrphanedFacts(state);
   }
 
   /** Re-derives orphaned glyph facts before the paragraph is prepared again or retired; a failure is kept for them. */
