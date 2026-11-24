@@ -17,12 +17,13 @@ generated:
 
 # Issue 02: a subset bake drops discretionary OpenType features
 
-- **Severity:** ship-blocker (every documented app bake uses `--unicodes`; `fontFeatures` silently does nothing on it)
-- **Status:** fix ready and tested, not committed — held for Justin's decision on shipped asset size (below)
+- **Severity:** ship-blocker (every documented app bake uses `--unicodes`; style `features` silently do nothing on it)
+- **Status:** fixed on `experiments/sil-subset`. Justin chose option 1 (2026-11-24: a subset limits characters, not
+  features) and asked for a `--layout-features` bake option to narrow it (below).
 
 ## What happens
 
-Text styled with `fontFeatures` such as `smcp`, `onum`, `tnum`, `zero` or `ss01` shapes with the default glyphs when the
+Text styled with `features` such as `smcp`, `onum`, `tnum`, `zero` or `ss01` shapes with the default glyphs when the
 font was baked with `--unicodes`. Without `--unicodes` the same text uses the alternates. Found by the docs site.
 
 ## Reproduction
@@ -50,44 +51,51 @@ are not.
 
 ## Chosen fix
 
-Option 1. `fontFeatures` accepts any tag, so the prepared font must keep every feature the source has; a subset is a
+Option 1. Style `features` accept any tag, so the prepared font must keep every feature the source has; a subset is a
 code-point selection, not a feature selection. The cost is the alternates of the selected code points, which is what a
-caller of `fontFeatures` needs.
+caller of style `features` needs.
 
-## Test that will prove it
+## Layout feature selection (Justin, 2026-11-24)
 
-- Rust (`source_font.rs` tests): subset Source Serif 4 to ASCII and assert the GSUB feature list still contains
-  `smcp`, `onum`, `tnum`, `zero` and `ss01`, and that the subset has more glyphs than the cmap-only closure.
-- The committed `--unicodes` app assets (`apps/r3f-hello-world/assets/*.font.glb`,
-  `apps/typegpu-hello-world/assets/inter-latin.font.glb`) are rebaked with their own `bake:*` scripts, explained by
-  this change; their `bake:check` scripts prove the rebake is deterministic.
+One option, `--layout-features <tags|*>` on the CLI and `layoutFeatures?: readonly string[]` on `bakeFont()`,
+`fontIsUpToDate()` and the core `FontBakeSelection`, named after hb-subset's `--layout-features` and mirroring
+`--unicodes`/`unicodeRanges`:
 
-## Measured cost, and why it is held
+- Omitted (or `*`) keeps every feature, with or without `--unicodes`: a full bake keeps the source as it is, and a
+  subset of every code point keeps exactly the source's GSUB/GPOS feature tags (Rust test).
+- A list keeps those tags plus `skera::DEFAULT_LAYOUT_FEATURES`, hb-subset's default list (`rvrn ccmp liga locl mark
+mkmk rlig frac numr dnom calt clig curs kern rclt`, vertical, direction, East Asian spacing and every complex-script
+  shaper's features). That set is always kept, so no list can break script shaping; an empty list equals
+  `hb-subset` with default features. Glyphs only a dropped feature reaches are not baked and the records are pruned.
+  Without `--unicodes`, a list prepares every code point.
+- Tags are validated at the boundary (TypeScript and the Wasm selection): four printable ASCII characters,
+  space-padded at the end only, at most 1,024, sorted and deduplicated. Malformed tags throw `TypeError` (CLI exit 2);
+  tags the source lacks are ignored and listed in `PreparedFontReport.missingLayoutFeatures` and on stderr.
+- The selection changes the prepared bytes, and the source fingerprint is taken over them, so the up-to-date check and
+  `--check` compare it without a new artifact field; two selections that prepare identical bytes are the same font.
+- The runtime (browser worker) bake in `loadFont` does not take the option yet.
 
-The fix (`IntSet::<Tag>::empty()` inverted in place of `DEFAULT_LAYOUT_FEATURES`) was implemented and tested in this
-lane: the subset's GSUB feature set then equals `hb-subset --unicodes=20-7e --layout-features='*'` (HarfBuzz 14.2.0)
-exactly for Source Serif 4 and Inter, and the glyph counts match (330 and 484). Every glyph in the prepared font gets a
-raster, so the cost lands in the shipped asset:
+## Tests
 
-| ASCII subset (`U+0020-007E`)                                   | default features (today) | discretionary numerals/case/small caps | every feature      |
-| -------------------------------------------------------------- | ------------------------ | -------------------------------------- | ------------------ |
-| Inter glyphs                                                   | 178                      | 313                                    | 484                |
-| Source Serif 4 glyphs                                          | 167                      | 330                                    | 330                |
-| `apps/*/assets/inter-latin.font.glb` (bitmap 32 + MSDF + Slug) | 2,355,620 B              | not baked                              | 8,743,692 B (3.7×) |
+- Rust (`source_font.rs`): an ASCII subset's GSUB features and glyph counts equal `hb-subset --unicodes=20-7e
+--layout-features='*'` (HarfBuzz 14.4.0) for Source Serif 4 (330 glyphs, includes `smcp onum tnum zero`) and Inter
+  (484); a subset of every code point keeps the source's features; `--layout-features+=tnum,onum` and default-only
+  selections equal hb-subset's (185, 167 and 178 glyphs); missing tags are reported; malformed tags are rejected.
+- Node (`node-bake.test.mjs`): on a `--unicodes` bake `smcp`, `pnum`, `onum` and `zero` change the shaped glyphs (the
+  `smcp` assertion failed against the previous baker); `--layout-features onum` makes `smcp` a no-op while `onum` and
+  the default `liga` still apply, with and without `--unicodes`; `*` equals omitting it; the up-to-date check and
+  `--check` see a changed selection; CLI and `bakeFont` reject malformed tags.
 
-The middle column is hb-subset with `--layout-features+=smcp,c2sc,onum,lnum,pnum,tnum,zero,case,sups,subs,ordn,sinf,
-dnom,numr`. A 3.7× larger hello-world asset is a product decision, so the change and the rebake of the three committed
-`--unicodes` assets are not committed. The decision for Justin:
+## Measured cost
 
-1. **Every feature** (correct for any `fontFeatures` tag; largest).
-2. **Default plus the discretionary numeric/case/small-caps list** (covers the findings' `smcp`, `onum`, `tnum`,
-   `zero`; still drops `ssXX`/`cvXX`/`salt`, which would then need documenting).
-3. **Keep today's default and document** that a subset bake keeps only default-on features, and that discretionary
-   features need a bake without `--unicodes`.
+| Committed `--unicodes` asset (Bitmap 32 + MSDF + Slug)    | before      | after                      |
+| --------------------------------------------------------- | ----------- | -------------------------- |
+| `apps/r3f-hello-world/assets/inter-latin.font.glb`        | 2,355,620 B | 8,743,692 B                |
+| `apps/typegpu-hello-world/assets/inter-latin.font.glb`    | 2,355,620 B | 8,743,692 B                |
+| `apps/r3f-hello-world/assets/font-awesome-world.font.glb` | 184,508 B   | 184,508 B (byte-identical) |
 
-Recommendation: option 1, because a silent no-op `fontFeatures` is the worse failure and apps that want small assets
-can narrow `--unicodes`; adding a CLI option to choose features would be a new public surface. The Rust test for the
-chosen option is ready (reference feature sets and glyph counts above).
+Each was rebaked with its own `bake:*` script and its `bake:check` passes. `font-baker.wasm`: 1,162,251 B at
+`sil-green-67`, 1,161,848 B with the fix alone, 1,170,666 B with the option (+8,415 B, +0.7%).
 
 ## Risk
 

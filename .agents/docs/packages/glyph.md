@@ -500,7 +500,14 @@ publishes only to temporary storage and compares the complete GLB byte-for-byte 
 output (or glyph map) is reported as `STALE_OUTPUT` (`STALE_GLYPH_MAP`) before any bake. The CLI never prompts, and
 0.1.0's no-op `--yes` is gone. Skera 0.5.1 has no CFF/CFF2 subsetter, so a CFF-flavoured source is subset with retained
 glyph IDs and keeps its source `CFF `/`CFF2` table, which stays valid for every retained glyph; the subset carries every
-charstring, and only the rasters shrink to the selection. It calls the
+charstring, and only the rasters shrink to the selection. A subset keeps every OpenType layout feature (the
+`hb-subset --layout-features='*'` result) and the alternates the selection reaches, so style `features` work on it as on
+a full bake. `--layout-features <tags>` (`layoutFeatures` on `bakeFont()`, `fontIsUpToDate()` and `FontBakeSelection`)
+narrows that, with or without `--unicodes`, to the named tags plus `skera::DEFAULT_LAYOUT_FEATURES` (hb-subset's
+default list, which carries what script shaping needs and cannot be dropped); a list without `--unicodes` prepares every
+code point. Tags the font lacks are reported in `preparation.missingLayoutFeatures`. The prepared bytes carry the
+selection, so the source fingerprint, the up-to-date check and `--check` compare it without a separate artifact field.
+The Rust tests compare feature sets and glyph counts with HarfBuzz 14.4.0's `hb-subset`. It calls the
 same `bakeFont` host as programmatic consumers rather than maintaining an example-only composition path.
 
 Project discovery uses Oxc Parser 0.150.0 for JS/JSX/TS/TSX syntax, Oxc Walker 1.1.1 for lexical scopes, and Oxc Resolver 11.24.2 for

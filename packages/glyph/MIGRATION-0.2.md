@@ -122,6 +122,23 @@ Three `Text` properties, R3F and Vue `Text` props no longer accept `order`: it w
 paints in scene order with `renderOrder`. `glyph bake` no longer accepts `--yes`: the CLI never prompts. Delete both.
 `glyph bake --check` against a missing output now fails with `STALE_OUTPUT` instead of a Node `ENOENT` stack.
 
+## Rebake `--unicodes` fonts, and narrow their features if they grew too much
+
+A `glyph bake --unicodes` subset now keeps every OpenType layout feature, as a bake without `--unicodes` always did.
+In 0.1.0 it kept only the default-on features, so style `features` such as `smcp`, `onum`, `tnum`, `zero`, `ss01` or
+`cv01` silently did nothing on a subset font. The alternates the selected code points reach are now baked too, so subset
+fonts grow: the ASCII Inter asset with Bitmap 32, MSDF and Slug went from 2,355,620 to 8,743,692 bytes. Rebake, and if
+you use only a few features, keep just those:
+
+```sh
+glyph bake --input Inter-Regular.ttf --output inter-latin.font.glb --unicodes U+0020-007E --layout-features tnum,zero --msdf
+```
+
+`--layout-features` (`layoutFeatures` in `bakeFont()`) takes four-character OpenType tags; `*` or leaving it out keeps
+every feature. The features shaping needs (`ccmp`, `locl`, `liga`, `kern`, `mark`, `mkmk`, `calt`, the complex-script
+features and the rest of hb-subset's default list) are always kept, so no list can break a script's shaping. It applies
+to bakes with and without `--unicodes`. Tags the font does not have are ignored and listed in the bake report.
+
 ## Read glyph facts after `measure()` deliberately
 
 `measure()` returns the same `ParagraphLayoutSummary` fields as before. A read that only needs the paragraph's box,
