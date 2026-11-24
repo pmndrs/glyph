@@ -4,6 +4,7 @@ import { createGunzip } from 'node:zlib';
 
 import { describe, expect, it } from 'vitest';
 import { MSDF_EM_SIZE, MSDF_PIXEL_RANGE } from '@pmndrs/glyph/core';
+import { createFontBaker, FontBakeError, fontBakerWasmUrl } from '@pmndrs/glyph/bake';
 import bitmapManifest from '../../fixtures/rendering/showcase-raster-fixtures-v0.json' with { type: 'json' };
 import bitmapDensityManifest from '../../fixtures/rendering/showcase-bitmap-density-fixtures-v0.json' with { type: 'json' };
 import mtsdfManifest from '../../fixtures/rendering/showcase-mtsdf-fixtures-v0.json' with { type: 'json' };
@@ -132,15 +133,53 @@ async function expectCompleteFont(
   identity: FixtureIdentity,
   fixtureId: FixtureId,
 ): Promise<void> {
-  const sourceManifest = JSON.parse(
-    await readFile(new URL(`${identity.directory}manifest.json`, fixtureRoot), 'utf8'),
-  ) as { readonly source: { readonly fontFingerprint: string } };
+  const sourceFingerprint = await preparedSourceFingerprint(identity.directory);
   const font = objectProperty(objectProperty(document, 'extensions', fixtureId), 'PMNDRS_font', fixtureId);
   const metrics = objectProperty(font, 'metrics', fixtureId);
   const provenance = objectProperty(font, 'provenance', fixtureId);
   expect(integerProperty(metrics, 'glyphCount', fixtureId)).toBe(identity.glyphCount);
-  expect(stringProperty(provenance, 'sourceFingerprint', fixtureId)).toBe(sourceManifest.source.fontFingerprint);
+  expect(stringProperty(provenance, 'sourceFingerprint', fixtureId)).toBe(sourceFingerprint);
   expect(integerProperty(provenance, 'fontFaceIndex', fixtureId)).toBe(0);
+}
+
+const preparedFingerprints = new Map<string, Promise<string>>();
+
+/**
+ * The source identity a full bake of the authenticated font stamps: every bake prepares its source (every code point,
+ * the common layout features), and a face the subsetter cannot prepare is baked as it is.
+ */
+function preparedSourceFingerprint(directory: string): Promise<string> {
+  let fingerprint = preparedFingerprints.get(directory);
+  if (fingerprint === undefined) {
+    fingerprint = (async () => {
+      const manifest = JSON.parse(await readFile(new URL(`${directory}manifest.json`, fixtureRoot), 'utf8')) as {
+        readonly source: { readonly fontFile: string; readonly fontFingerprint: string };
+        readonly face?: { readonly fontIndex?: number };
+      };
+      const [source, wasm] = await Promise.all([
+        readFile(new URL(`${directory}${manifest.source.fontFile}`, fixtureRoot)),
+        readFile(new URL(fontBakerWasmUrl)),
+      ]);
+      const baker = await createFontBaker(wasm);
+      try {
+        return baker.prepare({
+          source,
+          selection: {
+            formatVersion: 0,
+            fontFaceIndex: manifest.face?.fontIndex ?? 0,
+            unicodeRanges: [{ start: 0, end: 0x10ffff }],
+          },
+        }).report.fingerprint;
+      } catch (error) {
+        if (error instanceof FontBakeError && error.reason === 'SUBSETTING_FAILED') {
+          return manifest.source.fontFingerprint;
+        }
+        throw error;
+      }
+    })();
+    preparedFingerprints.set(directory, fingerprint);
+  }
+  return fingerprint;
 }
 
 async function authenticateGzipGlb(

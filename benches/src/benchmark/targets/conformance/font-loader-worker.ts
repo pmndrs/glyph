@@ -24,7 +24,7 @@ export function createFontLoaderWorkerConformanceTarget(): BenchmarkTarget {
       if (!response.ok) throw new Error(`Unable to load canonical font fixture (${response.status})`);
       const source = new Uint8Array(await response.arrayBuffer());
       const artifact = await bakeFontInWorker({ source, sourceUrl: canonicalFontUrl });
-      if ((await sha256(artifact)) !== canonicalFontManifest.bake.expectedCore.artifactSha256) {
+      if ((await sha256(artifact)) !== canonicalFontManifest.bake.expectedPreparedCore.artifactSha256) {
         throw new Error('Browser Worker bytes differ from the canonical Node artifact');
       }
       workerParityReady = true;
@@ -46,8 +46,8 @@ export function createFontLoaderWorkerConformanceTarget(): BenchmarkTarget {
           throw new Error('Worker fallback loaded an unexpected glyph count');
         }
         return {
-          bytes: canonicalFontManifest.bake.expectedCore.artifactBytes,
-          hash: canonicalFontManifest.bake.expectedCore.shapingFingerprint,
+          bytes: canonicalFontManifest.bake.expectedPreparedCore.artifactBytes,
+          hash: canonicalFontManifest.bake.expectedPreparedCore.shapingFingerprint,
         };
       } finally {
         font.dispose();

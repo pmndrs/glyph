@@ -14,7 +14,7 @@ export async function measureWorkerQueue(): Promise<WorkerQueueEvidence> {
   const response = await fetch(canonicalFontUrl);
   if (!response.ok) throw new Error(`Unable to load canonical font fixture (${response.status})`);
   const source = new Uint8Array(await response.arrayBuffer());
-  const expectedHash = canonicalFontManifest.bake.expectedCore.artifactSha256;
+  const expectedHash = canonicalFontManifest.bake.expectedPreparedCore.artifactSha256;
 
   async function bake(): Promise<void> {
     const artifact = await bakeFontInWorker({ source, sourceUrl: canonicalFontUrl });

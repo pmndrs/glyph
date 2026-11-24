@@ -17,13 +17,17 @@
 }
 */
 
-// Re-pin each manifest's artifact length, fingerprint, and SHA-256 from a real bake.
+// Re-pin each manifest's artifact length, fingerprint, and SHA-256 from a real bake: `expectedCore` is the core baker
+// run on the source as it is, and `expectedPreparedCore` is what every package bake (Node, CLI, runtime Worker)
+// produces, since each prepares its source first.
 
 import { createHash } from 'node:crypto';
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 import { createFontBaker } from '@pmndrs/glyph/bake';
+
+import { prepareBakeSource } from '../dist/internal/bake-source.js';
 
 const fontsDirectory = new URL('../../../benches/fixtures/fonts/', import.meta.url);
 const check = process.argv.includes('--check');
@@ -53,13 +57,38 @@ for (const entry of (await readdir(fontsDirectory, { withFileTypes: true })).fil
     artifactFingerprint: artifact.fingerprint,
     artifactSha256: createHash('sha256').update(artifact.bytes).digest('hex'),
   };
-  const stale = Object.entries(produced).filter(([key, value]) => manifest.bake.expectedCore[key] !== value);
+  const faceIndex = manifest.face?.fontIndex ?? 0;
+  const prepared = prepareBakeSource(baker, source, faceIndex, undefined, undefined);
+  const preparedBake = baker.bake({
+    source: prepared.bytes,
+    descriptor: {
+      formatVersion: 0,
+      fontFaceIndex: prepared.preparation?.fontFaceIndex ?? faceIndex,
+      ...(prepared.preparation?.droppedLayoutFeatures === undefined
+        ? {}
+        : { droppedLayoutFeatures: prepared.preparation.droppedLayoutFeatures }),
+    },
+  });
+  const preparedArtifact = preparedBake.artifacts[0];
+  const preparedProduced = {
+    artifactBytes: preparedArtifact.bytes.byteLength,
+    artifactFingerprint: preparedArtifact.fingerprint,
+    artifactSha256: createHash('sha256').update(preparedArtifact.bytes).digest('hex'),
+    shapingFingerprint: preparedArtifact.id.replace(/^font-/u, ''),
+  };
+  const stale = [
+    ...Object.entries(produced).filter(([key, value]) => manifest.bake.expectedCore[key] !== value),
+    ...Object.entries(preparedProduced)
+      .filter(([key, value]) => manifest.bake.expectedPreparedCore?.[key] !== value)
+      .map(([key, value]) => [`prepared.${key}`, value]),
+  ];
   if (stale.length === 0) continue;
   if (check) {
     drift.push(`${entry.name}: ${stale.map(([key, value]) => `${key} -> ${value}`).join(', ')}`);
     continue;
   }
   Object.assign(manifest.bake.expectedCore, produced);
+  manifest.bake.expectedPreparedCore = preparedProduced;
   const path = fileURLToPath(new URL('manifest.json', directory));
   await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
   process.stdout.write(`re-pinned ${entry.name}: ${stale.map(([key]) => key).join(', ')}\n`);

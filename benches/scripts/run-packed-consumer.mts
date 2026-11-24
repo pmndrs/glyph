@@ -413,8 +413,9 @@ try {
   }
 
   const manifest = JSON.parse(await readFile(join(appDirectory, 'fixtures/fonts/inter-v4.1/manifest.json'), 'utf8'));
-  const expectedHash = manifest.bake.expectedCore.artifactSha256;
-  const expectedBytes = manifest.bake.expectedCore.artifactBytes;
+  // The packed Worker bake prepares its source like every package bake.
+  const expectedHash = manifest.bake.expectedPreparedCore.artifactSha256;
+  const expectedBytes = manifest.bake.expectedPreparedCore.artifactBytes;
   receipt.golden = {
     sha256: expectedHash,
     bytes: expectedBytes,

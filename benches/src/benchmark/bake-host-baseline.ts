@@ -21,7 +21,8 @@ export async function measureWorkerBakeHost(): Promise<WorkerBakeHostSample> {
   const warmArtifact = await warmPromise;
   const warmFinished = performance.now();
   const [coldHash, warmHash] = await Promise.all([sha256(coldArtifact), sha256(warmArtifact)]);
-  const expected = canonicalFontManifest.bake.expectedCore;
+  // Every package bake prepares its source, so the Worker produces the prepared core identity.
+  const expected = canonicalFontManifest.bake.expectedPreparedCore;
   if (
     coldHash !== expected.artifactSha256 ||
     warmHash !== expected.artifactSha256 ||
