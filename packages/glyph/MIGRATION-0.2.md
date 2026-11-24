@@ -132,7 +132,7 @@ the block end is outside.
 So a default paragraph with a fixed height now shows one more line, spilling over the box's edge, whenever its text
 does not fit. Use `overflow: 'clip'` to keep 0.1.0's drawing. If you read `measure().lines` or `glyphs()` of a
 `'clip'` paragraph to find the text past the box, measure it with an unconstrained `height` instead; no mode lays out
-lines wholly outside the box. `measure().overflowed` and `contentHeight` are unchanged. Integrations that read
+lines wholly outside the box. `measure().overflowed` and `contentHeight` are unchanged. With an `at-most` height, the measured `height` follows the lines laid out: it can grow under `'visible'` (the straddling line, capped at the limit) and shrink under `'clip'` (no longer capped by lines past the box). Integrations that read
 `primitive.clip` or a draw's `clip` now always see `undefined`: no overflow mode draws outside its box, so nothing needs
 a clip boundary.
 

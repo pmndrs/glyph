@@ -56,6 +56,8 @@ No overflow mode marks a clip boundary: composed lines carry clip id zero, so dr
   a clip boundary"): no overflow mode forms a clip boundary.
 - Default output changes: a fixed-height `'visible'` paragraph whose text does not fit gains its straddling line.
   `'clip'` draws what it drew before; its layout reads lose the lines past the box.
+- With an `at-most` height the measured `height` follows the laid-out lines: it can grow under `'visible'` (capped at
+  the limit) and shrink under `'clip'` (the uikit at-most fixture under clip moves from 90 to 76.27).
 - The full clipped layout inspection (`IntrinsicInspection::Positioned`, its positioned arena and the
   `intrinsic_positioning_preparations` counter) is removed; layout reads always read the drawn layout.
 - Open: the clip identity plumbing integrators can see now always carries zero and is left for an API decision:
