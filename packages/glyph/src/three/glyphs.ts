@@ -8,7 +8,12 @@ import { createGlyphPlacements, type GlyphPlacement } from '../glyph-placement.j
 import { ThreeCommandBufferRenderer, type ThreeRendererHost } from './command-buffer-renderer.js';
 import type { ThreeGlyphGeometrySource, ThreeGlyphMeasurement } from './glyph-measurement.js';
 import { measureGlyphPlacements } from './glyph-measurement.js';
-import { cullingScopeChanged, cullingTreeChanged, registerCullingScope } from './internal/culling-scope.js';
+import {
+  cullingScopeChanged,
+  cullingTreeChanged,
+  optsOutOfCulling,
+  registerCullingScope,
+} from './internal/culling-scope.js';
 import { markStorageAttributeUpdated } from './internal/host-buffer.js';
 import type { ThreePublicationBoundary } from './internal/publication-boundary.js';
 import type { ThreeRendererResources } from './internal/renderer-resources.js';
@@ -116,7 +121,8 @@ export class Glyphs extends THREE.Object3D {
   readonly #composed = new THREE.Matrix4();
   readonly #inversePivot = new THREE.Matrix4();
   #observedFrustumCulled = true;
-  #observedParent: THREE.Object3D | null = null;
+  /** Whether this object, or a scope enclosing it, opted out when the last traversal looked. */
+  #observedOptOut = false;
   #disposed = false;
 
   static {
@@ -326,7 +332,11 @@ export class Glyphs extends THREE.Object3D {
     return this.#layout.outlineAt(this.#sourceIndices[index]!);
   }
 
-  /** Reports a changed `frustumCulled` or parent, which decides whether its draws honour an enclosing opt-out. */
+  /**
+   * Reports a changed `frustumCulled`, or a changed opt-out of the scopes enclosing it, which decides whether its draws
+   * are culled. Unlike a `Text`, no root listens to its ancestors, so a move of any ancestor into or out of an
+   * opted-out `TextGroup` is found by walking its ancestor chain, which happens only once some scope has opted out.
+   */
   override updateMatrixWorld(force?: boolean): void {
     super.updateMatrixWorld(force);
     if (this.#disposed) return;
@@ -334,8 +344,9 @@ export class Glyphs extends THREE.Object3D {
       this.#observedFrustumCulled = this.frustumCulled;
       cullingScopeChanged(this.frustumCulled);
     }
-    if (this.parent !== this.#observedParent) {
-      this.#observedParent = this.parent;
+    const optedOut = optsOutOfCulling(this);
+    if (optedOut !== this.#observedOptOut) {
+      this.#observedOptOut = optedOut;
       cullingTreeChanged();
     }
   }
