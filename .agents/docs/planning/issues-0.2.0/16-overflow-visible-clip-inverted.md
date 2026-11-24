@@ -15,7 +15,7 @@ generated:
 # Issue 16: `overflow: 'visible'` drops lines past the box while `'clip'` lays them all out
 
 - **Severity:** should-fix (decide before 0.2.0 whether to keep the names; behaviour change is engine work)
-- **Status:** closed, no change (Justin, 2026-11-24): moving to CSS semantics changes too much; today's `visible` and `clip` stand, described in the TSDoc
+- **Status:** approved (Justin, 2026-11-24): swap the two. `clip` stops at the box and drops lines that do not fit; `visible` lays out and draws every line. Breaking; changelog and migration note; lane `experiments/sil-overflow`
 
 ## What happens
 

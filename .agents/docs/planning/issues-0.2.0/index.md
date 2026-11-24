@@ -6,7 +6,7 @@ against the `experiments/segment-indexed-layout` package and recorded with its r
 
 | id                                              | title                                                                     | severity     | status                                           |
 | ----------------------------------------------- | ------------------------------------------------------------------------- | ------------ | ------------------------------------------------ |
-| [01](01-overflow-clip-pixels.md)                | `overflow: 'clip'` does not clip pixels in Three                          | should-fix   | closed, no change                                |
+| [01](01-overflow-clip-pixels.md)                | `overflow: 'clip'` does not clip pixels in Three                          | should-fix   | approved: swap `visible` and `clip`; in progress |
 | [02](02-subset-drops-discretionary-features.md) | A subset bake drops discretionary OpenType features                       | ship-blocker | fix ready; held on asset-size decision           |
 | [03](03-cff-unicode-subset.md)                  | `glyph bake --unicodes` loses the outlines of every CFF font              | ship-blocker | fixed                                            |
 | [04](04-pixi3d-input-errors.md)                 | `Pixi3DText` throws `TypeError`/`RangeError` instead of `GlyphInputError` | should-fix   | fixed                                            |
@@ -21,5 +21,5 @@ against the `experiments/segment-indexed-layout` package and recorded with its r
 | [13](13-per-glyph-material-identity.md)         | No per-glyph identity or per-instance input in materials                  | later        | approved: `glyphIndex` + glyph origin; not built |
 | [14](14-split-cost-and-resync.md)               | `split()` cost and no re-sync after an edit                               | later        | decided: no re-sync API; cost work open          |
 | [15](15-font-from-font-face.md)                 | No public `Font` from a `FontFace` outside the hooks                      | later        | planned (design)                                 |
-| [16](16-overflow-visible-clip-inverted.md)      | `overflow: 'visible'` drops lines while `'clip'` lays them all out        | should-fix   | closed, no change                                |
+| [16](16-overflow-visible-clip-inverted.md)      | `overflow: 'visible'` drops lines while `'clip'` lays them all out        | should-fix   | approved: swap `visible` and `clip`; in progress |
 | [17](17-three-group-input-errors.md)            | Three `TextGroup` options and `Text.onLayout` throw raw errors            | later        | planned                                          |

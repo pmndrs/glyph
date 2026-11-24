@@ -21,7 +21,7 @@ generated:
 # Issue 01: `overflow: 'clip'` does not clip pixels in Three
 
 - **Severity:** should-fix (the interim TSDoc note is in 0.2.0; the pixel clip is not)
-- **Status:** closed, no change (Justin, 2026-11-24): pixel clipping is not built for 0.2.0; `overflow` keeps today's behaviour, described in its TSDoc
+- **Status:** reopened (Justin, 2026-11-24): no pixel mask. `clip` must not lay out or draw lines that do not fit the box; fixed by the swap in issue 16
 
 ## What happens
 
