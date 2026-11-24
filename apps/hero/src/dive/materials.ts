@@ -30,7 +30,7 @@ export function createOutlineMaterial(): MeshBasicNodeMaterial {
   const curve = float(1)
     .sub(across.pow(2))
     .mul(float(1).sub(smoothstep(uDrawn.sub(0.02), uDrawn, stroke.x)));
-  const handle = float(1).sub(across).mul(uPoints).mul(0.35);
+  const handle = float(1).sub(across).mul(uPoints).mul(0.55);
   const on = float(1)
     .sub(smoothstep(0.7, 0.95, round))
     .mul(uPoints);
@@ -47,7 +47,7 @@ export function createOutlineMaterial(): MeshBasicNodeMaterial {
     .mul(isCurve.add(isHandle))
     .add(vec3(0.62, 0.8, 1).mul(isOn.add(isOff)))
     .mul(light)
-    .mul(3.2);
+    .mul(1.25);
   material.toneMapped = false;
 
   return material;

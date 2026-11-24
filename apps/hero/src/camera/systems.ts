@@ -14,9 +14,8 @@ import { CameraView, Rig, Shot } from './traits';
 
 /**
  * Place the shots that follow something, advance the dive, and let Klipp blend the live shot. The stone's shot
- * rides with the stone and the edit shot stands over the caret; the dive pushes in on the drop cap until it fills
- * the frame, widens its lens as it closes the last distance so the page falls away round the letter, and goes
- * through the counter. A narrow canvas stands every shot further back so the spread still fits across it.
+ * rides with the stone and the edit shot stands over the caret; the dive closes on the drop cap while its lens
+ * opens, until the letter fills the frame, and goes through the counter. A narrow canvas stands every shot further back so the spread still fits across it.
  */
 export function directCamera(world: World): void {
   const rig = world.get(Rig);
@@ -82,16 +81,15 @@ export function directCamera(world: World): void {
       : shot.dive + Math.sign(shot.diveTarget - shot.dive) * step;
   const capX = pageToWorldX(cap.x);
   const capY = pageToWorldY(cap.y);
-  // Push in until the letter is as tall as the frame, on a long lens.
-  const approach = easing.cubicInOut(clamp(dive / 0.5, 0, 1));
-  // Then the lens opens while the camera closes in to hold the letter's size: the page falls away behind it.
-  const vertigo = easing.sineInOut(clamp((dive - 0.5) / 0.3, 0, 1));
-  // Then through.
-  const through = easing.cubicIn(clamp((dive - 0.8) / 0.2, 0, 1));
-  const fov = lerp(SHOTS.dive.fov, 74, vertigo);
-  const frame = cap.size * 1.18 * Math.max(1, 1.2 / aspect);
-  const hold = frame / (2 * Math.tan((fov * Math.PI) / 360));
-  const distance = lerp(lerp(SHOTS.dive.position[2] * back, hold, approach), -0.4, through);
+  // A dolly zoom in: the camera closes on the letter while its lens opens, so the letter grows to fill the frame
+  // and the page stretches away round it.
+  const approach = easing.cubicInOut(clamp(dive / 0.64, 0, 1));
+  // Then through the counter, the lens still opening, faster and faster.
+  const through = easing.cubicIn(clamp((dive - 0.64) / 0.36, 0, 1));
+  const fov = lerp(lerp(SHOTS.dive.fov, 60, approach), 84, through);
+  const frame = cap.size * 1.22 * Math.max(1, 1.2 / aspect);
+  const hold = frame / (2 * Math.tan((60 * Math.PI) / 360));
+  const distance = lerp(lerp(SHOTS.dive.position[2] * back, hold, approach), -0.5, through);
   const tilt = (1 - approach) * (1 - approach);
   vec3.set(cameras.dive.stand.position, capX, capY + SHOTS.dive.position[1] * tilt, distance);
   vec3.set(cameras.dive.subject.position, capX, capY, Math.min(0, distance - 1));

@@ -25,6 +25,6 @@ export function syncDiveView(world: World): void {
     0.04,
   );
   view.group.scale.setScalar(letters.fontSize[0]!);
-  view.uniforms.uDrawn.value = Math.min(1, Math.max(0, (dive - 0.12) / 0.4));
-  view.uniforms.uPoints.value = Math.min(1, Math.max(0, (dive - 0.42) / 0.2));
+  view.uniforms.uDrawn.value = Math.min(1, Math.max(0, (dive - 0.18) / 0.34));
+  view.uniforms.uPoints.value = Math.min(1, Math.max(0, (dive - 0.46) / 0.16));
 }

@@ -148,7 +148,7 @@ function Post({ tier }: { readonly tier: Tier }) {
     // Filmic shoulder, per channel: paper white stays put and what is brighter rolls off instead of clipping.
     const rolled = seen.div(seen.mul(0.22).add(1)).mul(1.22);
     const luma = rolled.dot(vec3(0.2126, 0.7152, 0.0722));
-    const toned = rolled.mul(vec3(1.03, 1, 0.965)).add(vec3(0.004, 0.006, 0.012).mul(float(1).sub(luma)));
+    const toned = rolled.mul(vec3(1.03, 1, 0.965)).add(vec3(0.0012, 0.0016, 0.003).mul(float(1).sub(luma)));
     const corner = frame.sub(0.5).length();
     const vignette = float(1).sub(smoothstep(0.42, 0.95, corner).mul(0.55));
     // Grain rides its own clock, which holds still for a visitor who asked for less motion.

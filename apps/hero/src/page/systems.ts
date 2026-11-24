@@ -53,9 +53,9 @@ export function springSpread(world: World): void {
       widthSpring.velocity = widthVelocity;
       spring.update(widthSpring, spread.widthTarget, 0.7, 0.62, delta);
       const settledColumns =
-        Math.abs(columnSpring.value - spread.columnsTarget) < 2e-4 && Math.abs(columnSpring.velocity) < 2e-3;
+        Math.abs(columnSpring.value - spread.columnsTarget) < 1.5e-3 && Math.abs(columnSpring.velocity) < 1e-2;
       const settledWidth =
-        Math.abs(widthSpring.value - spread.widthTarget) < 2e-4 && Math.abs(widthSpring.velocity) < 2e-3;
+        Math.abs(widthSpring.value - spread.widthTarget) < 4e-3 && Math.abs(widthSpring.velocity) < 2e-2;
       const nextColumns = settledColumns ? spread.columnsTarget : columnSpring.value;
       const nextWidth = settledWidth ? spread.widthTarget : widthSpring.value;
 

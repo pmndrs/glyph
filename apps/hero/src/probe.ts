@@ -80,6 +80,9 @@ export function installProbe(): void {
           // The engine's text against the script's own account of it: they agree or identity is lost.
           textAgrees: view === undefined || script.stale || view.text.text === currentText(script),
           textLength: view?.text.text.length ?? 0,
+          // Whether the essay runs past its last column, and how far down the page its last line sits.
+          overflowed: view?.text.measure().overflowed ?? false,
+          lastBaseline: view?.text.measure().lastBaseline ?? 0,
           drawCalls: renderer.info.render.drawCalls,
           passes: renderer.info.render.calls,
         };

@@ -67,6 +67,24 @@ const PARAGRAPHS = [
     'small puzzle, because the caret has one position in the text and may have two on the screen, one for each ' +
     'direction of travel. The answer comes back from the same engine that set the line, so it cannot disagree with ' +
     'what is drawn. Type a character and only what has to move is moved. The rest of the page does not notice.',
+  'Watch the spaces while it happens. Justified type is a negotiation carried out in the gaps between words: every ' +
+    'line has to reach both margins, and the only slack is the white. Stretch it too far and the gaps line up down ' +
+    'the column into the pale channels that printers call rivers; squeeze it and the words run together into a ' +
+    'grey bar. A careful hand would weigh each line against its neighbours, and move a word up or down to spare the ' +
+    'worst of them. The engine weighs them too, and it does so again whenever the measure changes by the width of ' +
+    'a hair, which is why the text does not jump from one arrangement to the next but seems to breathe.',
+  'There is an arithmetic underneath. A frame is a little under seventeen thousandths of a second, and most of it ' +
+    'is already spoken for. Whatever the page wants to decide has to be decided in a millisecond or two: which ' +
+    'glyphs, in which order, broken where, spaced how. That budget is the reason so much of the work is kept. ' +
+    'Shaping is remembered from one frame to the next, so that a gutter moving does not ask the font the same ' +
+    'questions twice, and a change in one place disturbs only what follows from it. A line that still fits is left ' +
+    'alone. A column the stone has not reached is not set again. The page is fast in the way a good workshop is ' +
+    'fast: by never doing the same job twice.',
+  'And it stays text the whole time. This matters more than it sounds. A picture of a paragraph can be admired, ' +
+    'but it cannot be searched, or translated, or read out to someone who cannot see it, or copied into a letter. ' +
+    'Every glyph on this page still answers to a character in a string, and the string is still the truth. When a ' +
+    'letter is flung across the spread it has left the line but not the language: the sentence it came from knows ' +
+    'what is missing and where, and will have it back.',
   'It is tempting to call all this an effect, and to file it with the lens flares. But the effects are the least of ' +
     'it. What changes when the page becomes fast enough to be live is who gets to make the decisions. The compositor ' +
     'made them once, for everybody. A live page makes them again for each reader: for this width, this language, this ' +
@@ -146,7 +164,7 @@ export const PAGE = { width: 40, height: 26 } as const;
 
 /** Where the body's flow sits on the page, and the type it is set in. */
 export const BODY_BOX = { left: 2.2, top: 8.1, right: 29.6, bottom: 24.4 } as const;
-export const BODY_TYPE = { fontSize: 0.305, lineHeight: 1.42 } as const;
+export const BODY_TYPE = { fontSize: 0.262, lineHeight: 1.42 } as const;
 export const GUTTER = 0.86;
 
 /** The sidebar's column. */

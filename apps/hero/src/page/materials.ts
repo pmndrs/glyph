@@ -18,7 +18,7 @@ import { cameraUniforms } from '../camera/materials';
 import { CARET_COLOR, caretLight, paragraphRipple, worldRipple } from '../editor/materials';
 import { stoneLight, stoneRedshift } from '../stone/materials';
 import { retained } from '../utils';
-import { BODY_BOX, PAGE } from './content';
+import { BODY_BOX, HEADLINE_AT, PAGE } from './content';
 
 /** Gutters the page may show at once. */
 const RULES = 5;
@@ -45,7 +45,7 @@ export function pageLight(world: Node<'vec2'>): Node<'vec3'> {
   const caret = vec3(...CARET_COLOR)
     .mul(caretLight(world))
     .mul(2.6);
-  const dive = float(1).sub(smoothstep(0.35, 0.8, cameraUniforms.uDive).mul(0.94));
+  const dive = float(1).sub(smoothstep(0.2, 0.6, cameraUniforms.uDive).mul(0.93));
 
   return room.add(caret).add(stoneLight(world)).mul(dive);
 }
@@ -141,9 +141,20 @@ export function createPaperMaterial(): MeshBasicNodeMaterial {
   const edge = float(1)
     .sub(smoothstep(0.008, 0.022, world.x.sub(uBodyRight).sub(0.45).abs()))
     .mul(0.45);
+  // Hairlines under the masthead, a baseline's pitch apart: something on the page for the glass to bend.
+  const mastTop = PAGE.height / 2 - HEADLINE_AT.y - 0.1;
+  const pitch = HEADLINE_AT.fontSize / 9;
+  const across = float(mastTop).sub(world.y).div(pitch);
+  const hair = float(1)
+    .sub(smoothstep(0.012, 0.03, across.fract().sub(0.5).abs().mul(pitch)))
+    .mul(smoothstep(0, 0.5, across).mul(smoothstep(9.6, 9.1, across)))
+    .mul(smoothstep(0, 0.4, float(PAGE.width / 2 - 1.9).sub(world.x.abs())));
   const light = pageLight(world);
   const paper = stock.mul(mix(float(0.3), float(1), sheet)).mul(light.mul(0.95).add(vec3(0.003)));
-  const rules = vec3(0.92, 0.88, 0.8).mul(rule.max(edge)).mul(inBody).mul(uInk).mul(light).mul(0.22);
+  const rules = vec3(0.92, 0.88, 0.8)
+    .mul(rule.max(edge).mul(inBody).mul(uInk).add(hair.mul(0.3)))
+    .mul(light)
+    .mul(0.22);
   material.colorNode = paper.add(rules.mul(sheet));
   material.toneMapped = false;
 

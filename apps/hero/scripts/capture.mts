@@ -26,6 +26,8 @@ const { values } = parseArgs({
     /** Keep one frame in this many as a still, besides the video. */
     stills: { type: 'string', default: '90' },
     seconds: { type: 'string' },
+    /** Save frames only from this playback second on. */
+    from: { type: 'string', default: '0' },
     still: { type: 'boolean', default: false },
     /** Let the display's clock run the hero and only measure: no frames are saved. */
     realtime: { type: 'boolean', default: false },
@@ -262,7 +264,7 @@ try {
 
       if (result.state.textAgrees !== true) failures.push(`text and script disagree at ${at.toFixed(2)} s`);
 
-      if (!values['no-video'] || frame % stills === 0) {
+      if (at >= Number(values.from) && (!values['no-video'] || frame % stills === 0)) {
         await canvas.screenshot({
           path: join(out, 'frames', `${String(frame).padStart(5, '0')}.jpg`),
           type: 'jpeg',

@@ -8,6 +8,7 @@ import {
   dFdy,
   dot,
   float,
+  mix,
   modelWorldMatrix,
   mx_noise_float,
   normalize,
@@ -39,8 +40,7 @@ const BEVEL = 0.03;
 
 /**
  * A typed letter. A character is drawn from the moment it arrives, and for its first second the ink is still wet:
- * the outline is read through a noise that wanders, so the letter lands as a blot and draws itself in to its true
- * edge. The outline is also read a little to each side, which gives the slope of its edge: `bevel` points out of
+ * it has bled past its outline, with a waver in its edge, and draws back to the true letter as it dries. The outline is also read a little to each side, which gives the slope of its edge: `bevel` points out of
  * the letter across its edge, in the em's own axes, and is nothing in the letter's interior. `rim` is the edge that
  * faces the caret, which the caret lights.
  */
@@ -63,16 +63,19 @@ function typedInk(context: SlugContext) {
   const wet = age.max(0).mul(-2.4).exp();
   const here = context.shader.renderCoordinate;
   const grain = here.mul(5.5);
-  const reach = wet.mul(0.085);
+  const reach = wet.mul(0.03);
   const em = here.add(
     vec2(mx_noise_float(vec3(grain.x, grain.y, 2)).mul(reach), mx_noise_float(vec3(grain.x, grain.y, 9)).mul(reach)),
   );
   const typed = age.greaterThanEqual(0).select(float(1), float(0));
-  const coverage = context.shader.coverageAt(em).mul(typed);
+  const dry = context.shader.coverageAt(em);
   const right = context.shader.coverageAt(em.add(vec2(BEVEL, 0)));
   const left = context.shader.coverageAt(em.sub(vec2(BEVEL, 0)));
   const up = context.shader.coverageAt(em.add(vec2(0, BEVEL)));
   const down = context.shader.coverageAt(em.sub(vec2(0, BEVEL)));
+  // Wet ink has spread a bevel's width past the outline, and draws back to it as it dries.
+  const spread = dry.max(right.max(left)).max(up.max(down));
+  const coverage = mix(dry, spread, wet).mul(typed);
   const bevel = vec2(left.sub(right), down.sub(up));
   const world = modelWorldMatrix.mul(vec4(context.position, 1)).xy;
   // Ink with no ink a little toward the caret: this fragment is on the edge that faces it.

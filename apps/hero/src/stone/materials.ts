@@ -75,7 +75,7 @@ export function createStoneMaterials() {
     blending: AdditiveBlending,
   });
   light.colorNode = mix(color('#ff9a52'), color('#a9b4ff'), point.y.mul(2).add(0.5).clamp())
-    .mul(disk.mul(1.5).add(halo))
+    .mul(disk.mul(0.95).add(halo))
     .mul(glow)
     .add(color('#fff1d6').mul(photonRing).mul(glow).mul(2.2));
   light.opacityNode = smoothstep(HORIZON_ON_PLANE, HORIZON_ON_PLANE + 0.04, radius)
