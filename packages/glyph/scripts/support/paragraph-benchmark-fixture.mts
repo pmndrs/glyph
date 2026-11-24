@@ -77,6 +77,13 @@ export function createBenchmarkParagraph(
   return { group, paragraph, root, scene };
 }
 
+/** Ends a headless frame as renderer.render() does, so Glyph throws what the frame found. */
+export function endFrame(scene: THREE.Scene): void {
+  const hooks = scene as unknown as { onBeforeRender(): void; onAfterRender(): void };
+  hooks.onBeforeRender();
+  hooks.onAfterRender();
+}
+
 export function disposeBenchmarkParagraph(created: ReturnType<typeof createBenchmarkParagraph>): void {
   created.group.dispose();
   created.paragraph.dispose();

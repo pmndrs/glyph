@@ -38,8 +38,6 @@ async function waitForFormat(format: string): Promise<{ readonly draws: number; 
       `labels=${String(labels instanceof TextGroup)} labelCount=${String(labels instanceof TextGroup ? labels.textCount : 0)} ` +
       `labelCommits=${String(labelCommits)} draws=${String(counts.draws)} records=${String(counts.records)} ` +
       `partitions=${counts.partitions.join(',')}`;
-    if (hello?.error !== undefined) throw hello.error;
-    if (labels instanceof TextGroup && labels.error !== undefined) throw labels.error;
     if (
       playground.format() === format &&
       hello?.name === `font-${format}` &&

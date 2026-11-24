@@ -31,7 +31,7 @@ import type { TypeGpuTransform } from './internal/renderer.js';
 import { reuseOrCreateTextPropertySnapshot, reuseOrCreateTextStyleSnapshot } from '../config/text-property.js';
 import { GlyphInputError, glyphInputError, PostCommitError, validatingInput } from '../glyph-error.js';
 import { sameConstraintSizes } from '../text-anchor.js';
-import type { RenderFailures } from '../render-failures.js';
+import { layoutCallbackFailure, type RenderFailures } from '../render-failures.js';
 
 export type TypeGpuFontSelection = FontFaceSelection<
   | typeof bitmap
@@ -110,11 +110,6 @@ function ownedSemanticState<Selection extends TypeGpuFontSelection>(
 /** Retained text. Create with a configured TypeGPU handle's createText(). */
 export interface TypeGpuText<Selection extends TypeGpuFontSelection = TypeGpuFontSelection> {
   readonly disposed: boolean;
-  /**
-   * The error that keeps this text from being drawn, or `undefined`: the engine refused its last preparation.
-   * The root's next `draw()` throws it once; it clears when the text's input changes. Siblings are unaffected.
-   */
-  readonly error: unknown;
   /**
    * Called with this text and what `measure()` returns, after the text is first prepared and whenever that
    * summary changes, inside `glyph.prepare()` or `glyph.shape()` and before anything is published. It may read
@@ -273,9 +268,6 @@ export function createText<Selection extends TypeGpuFontSelection>(
     get disposed() {
       return disposed;
     },
-    get error() {
-      return disposed ? undefined : controller.refusal;
-    },
     get onLayout() {
       return onLayout;
     },
@@ -362,7 +354,7 @@ export function createText<Selection extends TypeGpuFontSelection>(
       try {
         onLayout(text, layout);
       } catch (error) {
-        failures.defer(error);
+        failures.defer(layoutCallbackFailure(state.text, error));
       }
     },
     prepare() {

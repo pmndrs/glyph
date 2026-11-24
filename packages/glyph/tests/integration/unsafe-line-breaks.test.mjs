@@ -8,6 +8,7 @@ import { defineThreeConfig } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import { loadFont } from '../../dist/loader.js';
+import { assertCommitted } from '../support/three-render.mjs';
 
 const fredokaUrl = new URL(
   '../../../../benches/fixtures/rendering/fredoka-issue-216-bitmap-16.font.glb',
@@ -324,11 +325,11 @@ test('an equal-length edit inside an unsafe boundary island draws the edited gly
   // Materialize and publish the corrected boundary glyphs for the original text.
   warm.glyphs();
   scene.updateMatrixWorld(true);
-  assert.equal(group.error, undefined);
+  assertCommitted(group);
 
   warm.text = after;
   scene.updateMatrixWorld(true);
-  assert.equal(group.error, undefined);
+  assertCommitted(group);
   const edited = warm.glyphs();
 
   const cold = coldRoot.createText({ ...properties, text: after });

@@ -3,6 +3,7 @@ import { textShaperAbi as abi } from '../../dist/text-shaper-abi.js';
 import {
   createBenchmarkParagraph,
   disposeBenchmarkParagraph,
+  endFrame,
   loadParagraphBenchmarkFixture,
   paragraphTextForGlyphs,
 } from './paragraph-benchmark-fixture.mts';
@@ -55,7 +56,7 @@ function captureWorkload(
       const created = createBenchmarkParagraph(fixture, text, 600);
       createdParagraphs.push(created);
       created.group.updateMatrixWorld(true);
-      if (created.group.error !== undefined) throw created.group.error;
+      endFrame(created.scene);
       const layout = created.paragraph.glyphs();
       if (layout === undefined) throw new Error('paragraph benchmark fixture did not publish a layout');
       captures.push({ layout, text });

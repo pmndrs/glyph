@@ -509,7 +509,7 @@ test('a rejected Three publication preserves the accepted anchor transform', asy
     material: rejected,
   });
   scene.updateMatrixWorld(true);
-  assert.equal(text.commitState().status, 'failed');
+  assert.equal(text.commitState().status, 'pending', 'the rejected input is not drawn');
   for (const { draw, matrix } of before)
     assert.ok(draw.matrix.equals(matrix), 'failed candidate retains accepted anchor placement');
   rejectMaterial = false;
@@ -562,7 +562,14 @@ test('inherited material rejection preserves accepted anchors in same-frame and 
           });
           if (sequence === 'already-rejected') {
             scene.updateMatrixWorld(true);
-            assert.equal(text.commitState().status, 'failed');
+            assert.throws(
+              () => {
+                scene.onBeforeRender();
+                scene.onAfterRender();
+              },
+              /intentional inherited material rejection/u,
+              'the render throws the rejected material',
+            );
             assert.ok(materialAttempts > 0);
           }
           if (sequence === 'query-staged') {
@@ -571,7 +578,7 @@ test('inherited material rejection preserves accepted anchors in same-frame and 
           }
           text.constraints = { anchor: { x: 'right', y: 'bottom' } };
           scene.updateMatrixWorld(true);
-          assert.equal(text.commitState().status, 'failed');
+          assert.equal(text.commitState().status, 'pending', 'the rejected input is not drawn');
           assert.ok(materialAttempts > 0, 'candidate actually reached the rejecting material factory');
           for (const { draw, matrix, transforms } of before) {
             assert.ok(draw.matrix.equals(matrix), 'rejected inherited material retains the accepted draw matrix');
@@ -637,7 +644,7 @@ test('inherited draw-order changes stay with a rejected material candidate', asy
       group.renderOrder = 3;
       text.constraints = { anchor: { x: 'right', y: 'bottom' } };
       scene.updateMatrixWorld(true);
-      assert.equal(text.commitState().status, 'failed');
+      assert.equal(text.commitState().status, 'pending', 'the rejected input is not drawn');
       assert.equal(draws(scene)[0].renderOrder, 1, 'draw order stays with the accepted material');
       assertDrawTranslation(draws(scene)[0], transformMode, accepted.x, -accepted.y, 'draw-order rejected anchor');
       rejectMaterial = false;

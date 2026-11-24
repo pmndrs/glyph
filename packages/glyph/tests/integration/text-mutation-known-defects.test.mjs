@@ -6,6 +6,7 @@ import { span, txt, bitmap } from '@pmndrs/glyph';
 import { createFontCache, edit, lanes, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
 import { findLineBreaks } from '../support/unicode-line-breaks.mjs';
 import { findGraphemeBoundaries } from '../support/graphemes.mjs';
+import { assertCommitted } from '../support/three-render.mjs';
 
 const bitmap16 = bitmap({ strikes: [16] });
 const fonts = createFontCache({
@@ -89,7 +90,7 @@ test('2. Rust resolves authored spans after a text change joins a grapheme', { t
       [[0, 1]],
       'formatted text preserves the authored UTF-16 range before Rust preparation',
     );
-    assert.equal(node.error, undefined, `the paragraph stopped publishing: ${String(node.error?.message)}`);
+    assertCommitted(node, `the paragraph stopped publishing: ${node.commitState().status}`);
     const wholeCluster = mount(font, [authored(txt`${large`á`}bc`, latin)]);
     try {
       assert.deepEqual(node.measure(), wholeCluster.nodes[0].measure(), 'the fused cluster keeps its base style');
@@ -116,7 +117,7 @@ test('3. a break opportunity inside a grapheme cluster is ignored, not rejected'
 
   const mounted = mount(font, [authored(text, latin)]);
   try {
-    assert.equal(mounted.nodes[0].error, undefined, `the paragraph was rejected: ${String(mounted.nodes[0].error)}`);
+    assertCommitted(mounted.nodes[0], `the paragraph was rejected: ${mounted.nodes[0].commitState().status}`);
     assert.equal(mounted.nodes[0].measure().glyphCount, 4);
   } finally {
     unmount(mounted);
@@ -137,7 +138,7 @@ test('3b. the same mark after a base the two standards agree on is accepted', { 
     assert.deepEqual(interior, [], `${JSON.stringify(base)}: this control needs the standards to agree`);
     const mounted = mount(font, [authored(text, latin)]);
     try {
-      assert.equal(mounted.nodes[0].error, undefined, `${JSON.stringify(base)}: ${String(mounted.nodes[0].error)}`);
+      assertCommitted(mounted.nodes[0], `${JSON.stringify(base)}: ${mounted.nodes[0].commitState().status}`);
     } finally {
       unmount(mounted);
     }

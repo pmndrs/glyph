@@ -767,8 +767,15 @@ test('publication capacity failure or repair preserves prepared sibling identiti
           assert.ok(publicationCapacity > 4_096, 'publication must grow the result arena');
           assert.equal(sibling.commitState().status, 'committed');
         } else {
-          assert.equal(sibling.commitState().status, 'failed');
-          assert.equal(sibling.commitState().error.statusCode, 'result-too-large');
+          assert.equal(sibling.commitState().status, 'pending', 'the withheld sibling draws nothing');
+          assert.throws(
+            () => {
+              scene.onBeforeRender();
+              scene.onAfterRender();
+            },
+            (error) => error.message.startsWith('Glyph text "') && error.cause.statusCode === 'result-too-large',
+            'the render names the text that does not fit',
+          );
         }
         sibling.text = 'B';
         scene.updateMatrixWorld(true);
@@ -826,7 +833,7 @@ test('queries carry pending sibling lifecycle after renderer rejection without p
         assert.equal(node.measureGlyphs()?.length, 5);
         pending = node.split();
         assert.equal(pending[0].count, 5);
-        assert.equal(node.commitState().status, 'failed', 'queries cannot acknowledge the rejected source');
+        assert.equal(node.commitState().status, 'pending', 'queries cannot acknowledge the rejected source');
         assert.notEqual(extra.commitState().status, 'committed', 'the unrelated sibling remains unpublished');
         extra.dispose();
         scene.updateMatrixWorld(true);
@@ -1046,9 +1053,17 @@ test('warm sibling placements recover after the frame batch prepares but its res
     try {
       b.set({ text: 'BB' });
       assert.equal(batches, 0, 'the setter does not prepare');
-      assert.doesNotThrow(() => scene.updateMatrixWorld(true), 'a traversal reports through commit state');
+      assert.doesNotThrow(() => scene.updateMatrixWorld(true), 'a traversal defers its failure to the render');
       assert.equal(batches, 1, 'the real batch preparation completed before its result was rejected');
-      assert.deepEqual(b.commitState(), { status: 'failed', error: preparationFailure });
+      assert.deepEqual(b.commitState(), { status: 'pending' });
+      assert.throws(
+        () => {
+          scene.onBeforeRender();
+          scene.onAfterRender();
+        },
+        (error) => error === preparationFailure,
+        'the render throws the failure',
+      );
       assert.equal(b.text, 'BB', 'the failed frame keeps the authored value the setter accepted');
       assert.deepEqual(rendererBytes(scene), acceptedRendererBytes, 'failed preparation cannot change renderer bytes');
 

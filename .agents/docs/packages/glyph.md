@@ -1164,7 +1164,7 @@ Three preparation remains the rejection boundary: a material factory or other re
 accepted renderer branch and core revision live. Once commit starts retiring the old host branch, publication is
 irreversible. A caller-owned `dispose` or final matrix-update callback that throws after that point is therefore reported
 only after Three and the retained planner accept the same candidate. The public shaping call still throws that callback
-error and the affected Text/TextGroup records it, while `commitState()` reports the newly accepted revision; later
+error, while `commitState()` reports the newly accepted revision; later
 visibility, transforms, and render order continue from that publication rather than from a rejected-core split state.
 The commit installs the candidate resource, transform, draw, and batch-scope authority before invoking any host add,
 remove, geometry-disposal, or resource-disposal callback; it retains the previous draw array only as the local retirement
@@ -1176,24 +1176,21 @@ borrowed publication callback rejects before changing lifecycle flags, root memb
 preflights at the root-membership boundary even when it is detached and has no publication entry. The same gate remains
 closed until every shape participant captured for settlement has consumed its outcome, so application code that runs
 during settlement (a matrix override reached by an accepted hook's transform synchronization) cannot dispose a later root
-or handle and suppress its accepted-publication failure. Error attribution snapshots the publication's Text and live-group
-ownership and carries the accepted/rejected classification to both; it calls no application code. The root retains only that error-path group ownership: replacement
-updates it, successful publication clears current Text state plus the retained group set directly without copying
-participants or rediscovering ancestry, and group disposal releases the group from the same set and clears its terminal
-error state after lifecycle preflight. One bounded root publication-cycle flag extends that ownership from preparation, before any captured
+or handle and suppress its accepted-publication failure. One bounded root publication-cycle flag extends that ownership from preparation, before any captured
 root can consume renderer commands, through accepted or rejected settlement. A traversal failure raised while that cycle
 is active is retained in one explicit-value wrapper. The renderer's existing retirement wrapper remains the primary when
 present; otherwise the deferred traversal failure enters the same accepted hook and public throw instead of being lost.
 This root ownership covers cross-root callbacks both before a later root commits and after it commits but before its hook,
 and clears on every adapter skip, rejection, acceptance, throw settlement, or disposal exit. Nested traversal and ordinary
-Text edits remain allowed throughout, and the successful hot path allocates no participant or ancestry snapshot. Disposed
-groups cannot be reacquired by later attribution. Arbitrary callback throws, including
-`undefined`, `null`, and `0`, retain their identity through attribution and the public shaping throw. The
+Text edits remain allowed throughout, and the successful hot path allocates no participant or ancestry snapshot. Arbitrary callback throws, including
+`undefined`, `null`, and `0`, retain their identity through the public shaping throw. The
 accepted hook also preserves that retirement value if a callback changes hierarchy and the following initial
 transform synchronization throws: synchronization errors surface when no earlier publication failure exists, and failed
-initial synchronization remains pending for a later publication retry. The historical `Text.error`/`TextGroup.error`
-getters still return `undefined` for both no error and a thrown `undefined`; internal presence state keeps `commitState()`
-and later replacement/clearing deterministic without expanding that public API. Final renderer teardown after a throwing
+initial synchronization remains pending for a later publication retry. There is no per-text error state
+([decision](../planning/decisions/render-time-errors-throw.md), amended 2026-11-23): a failure is only thrown, and
+`commitState()` has no `failed` status. A refusal is thrown as a `GlyphError` whose message quotes the first 40
+UTF-16 units of the text and the cause (`render-failures.ts`); the planner creates it once per refusal, so the
+once-per-failure throw keys on its identity, and a refused text reads `pending`. Final renderer teardown after a throwing
 Three disposal listener remains an inherited total-cleanup limitation owned by a separate follow-up; this publication
 correction does not broaden into it.
 
@@ -2981,9 +2978,8 @@ and PixiJS 3D's `gl.header` reaches both stages, so MSDF and Slug put their deri
 derives from a fixed 16×9 light grid.
 
 Root hooks: `prepared()` resolves anchors after core prepared every dirty paragraph; `accepted` and `unchanged` accept
-placement and sync transforms; a rejected publication keeps the accepted meshes, is thrown once by `glyph.shape()` and
-kept as `text.error`, and is not retried until an edit. A refused paragraph draws nothing, is `text.error` until its
-input changes, and is thrown once by the root's next accepted `glyph.shape()` (an unchanged root defers it, since a
+placement and sync transforms; a rejected publication keeps the accepted meshes, is thrown once by `glyph.shape()`
+and is not retried until an edit. A refused paragraph draws nothing until its input changes, and is thrown once by the root's next accepted `glyph.shape()` (an unchanged root defers it, since a
 throw from that hook would reject the root); it was silent before the render-time throw decision. Text provides desired measurements, ink, glyph columns,
 the editing queries (`caret`, `hitTest`, `move`, `boundary`, `rangeRects`, `replace`) and native bounds; `split()` returns independently disposable glyph and decoration snapshots.
 `Pixi3DTextMaterial` appends shader bits, updates material data without reshaping, and may supply a factory for another

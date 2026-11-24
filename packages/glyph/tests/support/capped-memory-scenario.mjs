@@ -8,6 +8,7 @@ import { bitmap, glyph } from '@pmndrs/glyph';
 import { defineThreeConfig } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 import { loadFont } from '../../dist/loader.js';
+import { renderScene } from './three-render.mjs';
 
 const maxPages = Number(process.argv[2]);
 const recover = process.argv[3];
@@ -33,14 +34,14 @@ const victim = handle.createText({
 });
 const sibling = handle.createText({ font, style: { fontSize: 6 }, text: 'innocent sibling label' });
 scene.add(victim, sibling);
-const frame = () => scene.updateMatrixWorld(true);
+const frame = () => renderScene(scene);
 frame();
 const siblingBefore = sibling.measure().width;
 const attempt = (operation) => {
   try {
     return { value: operation() };
   } catch (error) {
-    return { threw: `${error?.constructor?.name}: ${String(error?.message).slice(0, 120)}` };
+    return { threw: `${String(error?.name)}: ${String(error?.message).slice(0, 200)}` };
   }
 };
 
@@ -54,14 +55,9 @@ for (let step = 0; step < 14 && failure === undefined; step += 1) {
   if (set.threw !== undefined) failure = { where: 'setter', units: text.length, error: set.threw };
   else {
     const framed = attempt(frame);
-    if (framed.threw !== undefined) failure = { where: 'frame threw', units: text.length, error: framed.threw };
-    else if (victim.error !== undefined) {
-      failure = {
-        where: 'frame',
-        units: text.length,
-        error: String(victim.error?.message ?? victim.error).slice(0, 120),
-      };
-    } else text += text;
+    // The render throws what the frame found, once, naming the text that failed.
+    if (framed.threw !== undefined) failure = { where: 'frame', units: text.length, error: framed.threw };
+    else text += text;
   }
 }
 
@@ -70,8 +66,7 @@ const report = {
   failure,
   pagesAtFailure: shaperMemoryPages(),
   victimKeptItsValue: victim.text.length === (failure?.units ?? victim.text.length),
-  siblingErrorAtFailure:
-    sibling.error === undefined ? undefined : String(sibling.error?.message ?? sibling.error).slice(0, 80),
+  siblingAtFailure: sibling.commitState().status,
 };
 // The sibling must be untouched by whatever happened to the victim.
 report.siblingRead = attempt(() => sibling.measure().width === siblingBefore);
@@ -80,10 +75,7 @@ report.siblingSet = attempt(() => {
   frame();
   return sibling.commitState().status;
 });
-report.victimWhileSiblingPublishes = attempt(() => ({
-  status: victim.commitState().status,
-  reportsItsError: victim.error !== undefined,
-}));
+report.victimWhileSiblingPublishes = attempt(() => victim.commitState().status);
 if (recover === 'shrink') {
   report.recovery = attempt(() => {
     victim.text = 'small again';
@@ -91,7 +83,6 @@ if (recover === 'shrink') {
     frame();
     return {
       victim: victim.commitState().status,
-      error: victim.error === undefined ? undefined : String(victim.error?.message ?? victim.error).slice(0, 80),
       glyphs: victim.measure().glyphCount,
       sibling: sibling.commitState().status,
     };
@@ -107,6 +98,6 @@ if (recover === 'shrink') {
     return { sibling: sibling.commitState().status, glyphs: sibling.measure().glyphCount };
   });
 }
-report.siblingAfter = attempt(() => ({ status: sibling.commitState().status, error: sibling.error === undefined }));
+report.siblingAfter = attempt(() => sibling.commitState().status);
 report.instances = shaperInstanceCount();
 process.stdout.write(`${JSON.stringify(report)}\n`);

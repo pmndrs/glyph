@@ -252,7 +252,12 @@ test('Three: a root reports invalidation, and a callback installed late hears th
   label.text = 'changed again';
   assert.doesNotThrow(frame, 'a callback exception never escapes the scene traversal');
   assert.equal(label.commitState().status, 'committed');
-  assert.throws(render, (error) => error === failure, 'the render after it throws the callback exception');
+  assert.throws(
+    render,
+    (error) =>
+      error.cause === failure && error.message === 'onLayout of Glyph text "changed again" threw: callback failed',
+    'the render after it throws the callback exception, naming the text',
+  );
   assert.doesNotThrow(render, 'once');
 });
 
@@ -272,7 +277,7 @@ test('Three: a failure found by a nested render is thrown when the outermost ren
   assert.doesNotThrow(() => scene.onAfterRender(), 'a nested render does not throw');
   assert.throws(
     () => scene.onAfterRender(),
-    (error) => error === failure,
+    (error) => error.cause === failure,
     'the outermost render does',
   );
 });
@@ -352,7 +357,7 @@ test('Vue: layout is an event, observed only when listened to, and an invalid pr
   }
 });
 
-test('TypeGPU: a refused text exposes its error, draw throws it once, and it recovers with new input', async (t) => {
+test('TypeGPU: draw throws a refused text once, naming it, and it recovers with new input', async (t) => {
   const host = recordingHost();
   const handle = glyph.handle(`typegpu:frame-layout-phase:${String(nextHandle++)}`, host.config);
   const face = glyph.fontFace(new Blob([msdfFontBytes]), { format: msdf });
@@ -402,14 +407,11 @@ test('TypeGPU: a refused text exposes its error, draw throws it once, and it rec
     }
     draw();
   }
-  assert.ok(culprit.error !== undefined, 'the refused text says why it is not drawn');
-  assert.deepEqual(
-    thrown,
-    [{ error: culprit.error, recorded: 3 }],
-    'the draw records the three siblings, then throws the refusal once',
-  );
-  assert.equal(texts[0].error, undefined);
-  assert.equal(texts[2].error, undefined);
+  assert.equal(thrown.length, 1, 'the draw throws the refusal once');
+  assert.equal(thrown[0].recorded, 3, 'after it records the three siblings');
+  assert.match(thrown[0].error.message, /^Glyph text "changed 1" was not drawn: .*trapped/u);
+  assert.equal(thrown[0].error.code, 'engine-failed');
+  assert.equal(texts[0].measure().glyphCount, 'changed 0'.length);
   assert.deepEqual(laidOut, ['sibling'], 'a refused text has no layout to hand over; its sibling does');
   assert.equal(texts[2].measure().glyphCount, 'changed 2'.length);
 
@@ -417,7 +419,7 @@ test('TypeGPU: a refused text exposes its error, draw throws it once, and it rec
   culprit.update({ text: 'harmless' });
   glyph.shape();
   draw();
-  assert.equal(culprit.error, undefined);
+  assert.equal(culprit.measure().glyphCount, 'harmless'.length, 'new input is a new chance');
   assert.equal(thrown.length, 1);
   assert.deepEqual(laidOut, ['sibling', 'culprit']);
 });

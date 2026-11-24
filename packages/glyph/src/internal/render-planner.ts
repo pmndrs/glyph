@@ -3,6 +3,7 @@ import { textShaperAbi } from '../generated/text-shaper-abi.js';
 import { GlyphError, GlyphLayoutPhaseError } from '../glyph-error.js';
 import { GlyphEngineStatusError, glyphEngineStatusErrorDetails } from '../engine-error.js';
 import { GlyphEngineRestartError } from './text-shaper-module.js';
+import { textRefusal } from '../render-failures.js';
 import {
   copyGlyphLayoutInspection,
   type BorrowedGlyphLayout,
@@ -1498,14 +1499,14 @@ class RenderPlannerImpl {
         } catch (error) {
           if (state.refusal !== undefined) continue;
           if (!(error instanceof GlyphEngineRestartError) || !error.restarted) throw error;
-          trapping.set(state, error);
+          trapping.set(state, textRefusal(state.desired.text, error));
           trapped = true;
           break;
         }
       }
       // The restart a trap caused marked every text unseen again, the earlier culprits included.
-      for (const [state, error] of trapping) {
-        state.refusal = error;
+      for (const [state, refusal] of trapping) {
+        state.refusal = refusal;
         this.#unprepared.delete(state);
       }
       if (!trapped) break;
@@ -1553,25 +1554,29 @@ class RenderPlannerImpl {
       // leaves this now-adopted engine state intact.
       this.#engineNeedsRebuild =
         this.#transport.invalidateUnadoptedMutation() || this.#transport.failureInvalidatedRoot;
-      if (this.#engineNeedsRebuild) this.#withholdAfterCapacityFailure(error);
+      const failure = this.#engineNeedsRebuild ? this.#withholdAfterCapacityFailure(error) : error;
       this.#retryNextFrame();
-      throw error;
+      throw failure;
     }
   }
 
   /**
    * A publication the result arena cannot hold fails for the whole root, and the engine discards the root. The
    * largest paragraph is what does not fit, so it is withheld: the rebuild restates every other paragraph and
-   * the next frame publishes them. The withheld one reports this error and draws nothing until its input changes.
+   * the next frame publishes them. The withheld one draws nothing until its input changes. Returns what the frame
+   * throws: the failure, quoting the withheld text when there is one, which is also the error its reads throw.
    */
-  #withholdAfterCapacityFailure(error: unknown): void {
-    if (!(error instanceof GlyphEngineStatusError) || error.statusCode !== 'result-too-large') return;
+  #withholdAfterCapacityFailure(error: unknown): unknown {
+    if (!(error instanceof GlyphEngineStatusError) || error.statusCode !== 'result-too-large') return error;
     let largest: RetainedTextState | undefined;
     for (const state of this.#texts) {
       if (state.removed || state.disposed || this.#withheld.has(state)) continue;
       if (largest === undefined || state.desired.text.length > largest.desired.text.length) largest = state;
     }
-    if (largest !== undefined) this.#withheld.set(largest, error);
+    if (largest === undefined) return error;
+    const refusal = textRefusal(largest.desired.text, error);
+    this.#withheld.set(largest, refusal);
+    return refusal;
   }
 
   consume(): PlanAcceptance {
@@ -1790,7 +1795,7 @@ class RenderPlannerImpl {
   #markRefused(state: RetainedTextState, error: unknown): void {
     const prepared = state.preparedDesired;
     state.preparedDesired = undefined;
-    state.refusal = error;
+    state.refusal = textRefusal(state.desired.text, error);
     state.created = true;
     state.prepared = false;
     state.geometryDirty = true;
@@ -2290,7 +2295,7 @@ class RenderPlannerImpl {
         this.#prepareAlone(state, true, glyphFacts);
       } catch (again) {
         if (again instanceof GlyphEngineRestartError && again.restarted) {
-          state.refusal = again;
+          state.refusal = textRefusal(state.desired.text, again);
           this.#unprepared.delete(state);
         }
         throw again;

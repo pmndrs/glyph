@@ -575,8 +575,8 @@ bounds, so the oracle changed renderer without changing what counts as correct. 
 The three live technique scenes moved to target-v1 next. `techniques/{bitmap,mtsdf,slug}/persistent-scene.ts` now build a
 standalone `Text` — an implicit batch of one, deliberately left off `TextGroup` so the single-paragraph adapter path stays
 exercised and their `drawCount` stays directly comparable with merged v0 — from the `LoadedFont` that
-`workloads/font-assets` already produced, commit it by parenting and forcing `updateMatrixWorld`, and read `error` plus
-explicit `measure()` or `glyphs()` results instead of awaiting readiness. Flat merged-v0 properties become `style`,
+`workloads/font-assets` already produced, commit it by parenting and forcing `updateMatrixWorld`, end the frame as a render
+does (`endFrame`, which throws what it found), and read explicit `measure()` or `glyphs()` results instead of awaiting readiness. Flat merged-v0 properties become `style`,
 `layout`, and `constraints`; the paragraph measure uses an exact width constraint and the live colour is `#ffffff`, which
 resolves through the same transfer function as the numeric constant it replaces. Desired-state validation is atomic at
 `Text.set()`: a rejected update leaves current desired state untouched, while renderer failures surface without restoring
@@ -649,8 +649,8 @@ and after the move — Text ladder 35 for Bitmap and 19 for MTSDF and Slug, Off-
 count is not comparable between runs because it auto-pans from mount, so its visible window differs by sample instant.
 
 Publication replaced readiness. Target-v1 has no per-`Text` promise: parenting a workload under its batch root and
-calling `updateMatrixWorld` shapes, lays out, and packs it synchronously, after which `layout` is readable and `error` is
-meaningful. A rebuild therefore stages its root off-scene, publishes once, positions from the committed layouts, and only
+calling `updateMatrixWorld` shapes, lays out, and packs it synchronously, after which `layout` is readable and ending the
+frame (`endFrame`) throws any failure. A rebuild therefore stages its root off-scene, publishes once, positions from the committed layouts, and only
 then swaps the live scene. The retained font-fixture swap collapsed from an asynchronous two-phase rollback to
 `set({ font })` plus one publication, because the replacement `LoadedFont` is already resolved when the swap begins.
 

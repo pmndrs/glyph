@@ -144,7 +144,7 @@ export function animateParagraphStressScene(
       });
       const stageMs = performance.now() - stageStarted;
       const publishStarted = performance.now();
-      publishWorkloadTexts(scene, entries);
+      publishWorkloadTexts(scene);
       const publishMs = performance.now() - publishStarted;
       const layoutStarted = performance.now();
       layout = layoutParagraphStressEntries(entries, viewportWidth, viewportHeight);

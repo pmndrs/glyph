@@ -135,7 +135,7 @@ function mountParagraph(text: string | PaintInput, width: number, fontFace: type
   textGroup.add(paragraph);
   const scene = attachToScene(textGroup);
   scene.updateMatrixWorld(true);
-  if (textGroup.error !== undefined) throw textGroup.error;
+  endFrame(scene);
   if (paragraph.commitState().status !== 'committed' || inspectDraws(scene).glyphs === 0) {
     throw new Error('paragraph fixture did not publish rendered glyphs');
   }
@@ -151,6 +151,13 @@ export function createParagraphWithPaint(text: PaintInput, width = 600, fontFace
   return mountParagraph(text, width, fontFace);
 }
 
+/** Ends a headless frame as renderer.render() does, so Glyph throws what the frame found. */
+export function endFrame(scene: ThreeTypes.Scene): void {
+  const hooks = scene as unknown as { onBeforeRender(): void; onAfterRender(): void };
+  hooks.onBeforeRender();
+  hooks.onAfterRender();
+}
+
 /** Parents a text group to a scene, so a scene traversal publishes its texts. */
 export function attachToScene(textGroup: ThreeTypes.Object3D) {
   if (textGroup.parent instanceof THREE.Scene) return textGroup.parent;
@@ -164,7 +171,7 @@ export function createPublishedParagraph(text = paragraphText) {
   const created = createParagraph(text);
   const scene = attachToScene(created.textGroup);
   scene.updateMatrixWorld(true);
-  if (created.textGroup.error !== undefined) throw created.textGroup.error;
+  endFrame(scene);
   return { ...created, scene };
 }
 
@@ -192,7 +199,7 @@ export function createLabels(count = 100) {
   textGroup.add(...labels);
   scene.add(textGroup);
   scene.updateMatrixWorld(true);
-  if (textGroup.error !== undefined) throw textGroup.error;
+  endFrame(scene);
   return { labels, root, scene, textGroup };
 }
 
@@ -216,7 +223,7 @@ export function createLabelsHolding(texts: readonly string[], options: LabelSetO
   scene.add(textGroup);
   if (options.frame !== false) {
     scene.updateMatrixWorld(true);
-    if (textGroup.error !== undefined) throw textGroup.error;
+    endFrame(scene);
   }
   return { labels, root, scene, textGroup };
 }
@@ -274,8 +281,10 @@ export function createMultiOwnerPublication(count: number, balanced: boolean, en
       selected = selected === 0 ? 1 : 0;
       for (const [index, label] of edited.entries()) label.text = texts[selected]![index]!;
       if (engineOnly) glyph.shape();
-      else created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      else {
+        created.scene.updateMatrixWorld(true);
+        endFrame(created.scene);
+      }
       return created.textGroup.textCount;
     },
   };
@@ -305,7 +314,7 @@ export function createTextBatch(count: number) {
   textGroup.add(...texts);
   const scene = attachToScene(textGroup);
   scene.updateMatrixWorld(true);
-  if (textGroup.error !== undefined) throw textGroup.error;
+  endFrame(scene);
   if (texts.some((text) => text.commitState().status !== 'committed') || inspectDraws(scene).glyphs === 0) {
     throw new Error('text batch fixture did not publish rendered glyphs');
   }
@@ -335,8 +344,7 @@ export function createGroupedLabels(count: number) {
   const scene = new THREE.Scene();
   scene.add(group);
   scene.updateMatrixWorld(true);
-  if (group.error !== undefined) throw group.error;
-  if (nestedGroup.error !== undefined) throw nestedGroup.error;
+  endFrame(scene);
   if (group.textCount !== count || nestedGroup.textCount !== count) {
     throw new Error('nested TextGroups did not retain every benchmark Text descendant');
   }

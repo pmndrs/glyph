@@ -8,6 +8,7 @@ import { setImmediate } from 'node:timers/promises';
 
 import { classifyCpuProfileStage } from '../../src/benchmark/cpu-profile-stage.mts';
 import {
+  endFrame,
   createLabels,
   createMultiOwnerPublication,
   createParagraph,
@@ -187,7 +188,6 @@ const updateOne = () => {
   const glyphCount = target.measure().glyphCount;
   if (boundary === 'publication') {
     glyph.shape();
-    if (created.textGroup.error !== undefined) throw created.textGroup.error;
   }
   return glyphCount;
 };
@@ -197,7 +197,6 @@ const updateInterleaved = () => {
     const label = created.labels[index]!;
     label.text = alternate ? `ticker ${String(index).padStart(3, '0')}` : `quote! ${String(index).padStart(3, '0')}`;
     glyph.shape();
-    if (created.textGroup.error !== undefined) throw created.textGroup.error;
     if (label.measureGlyphs() === undefined) throw new Error('interleaved read did not observe committed glyphs');
   }
 };
@@ -233,8 +232,8 @@ const updateBulk = () => {
     if (bulkPublicationPath === 'scene') {
       created.scene.updateMatrixWorld(true);
       if (phaseObserver !== undefined) afterPublication = performance.now();
+      endFrame(created.scene);
     } else glyph.shape();
-    if (created.textGroup.error !== undefined) throw created.textGroup.error;
   }
   if (phaseObserver !== undefined) {
     assert(beforeSetters !== undefined && afterSetters !== undefined && afterPublication !== undefined);
@@ -249,7 +248,7 @@ const updateWidth = () => {
   const glyphCount = target.measure().glyphCount;
   if (boundary === 'publication') {
     created.scene.updateMatrixWorld(true);
-    if (created.textGroup.error !== undefined) throw created.textGroup.error;
+    endFrame(created.scene);
   }
   return glyphCount;
 };
@@ -259,7 +258,7 @@ const updateFontSize = () => {
   target.style = { fontSize: 12 + fontSizeIteration / 256 };
   if (boundary === 'setter') return;
   created.scene.updateMatrixWorld(true);
-  if (created.textGroup.error !== undefined) throw created.textGroup.error;
+  endFrame(created.scene);
   return created.textGroup.textCount;
 };
 const update =
@@ -334,7 +333,7 @@ if (widthText !== undefined) {
     assert(cold.paragraph.measure().glyphCount > 0, 'cold width reflow must contain glyphs');
     if (boundary === 'publication') {
       cold.scene.updateMatrixWorld(true);
-      if (cold.textGroup.error !== undefined) throw cold.textGroup.error;
+      endFrame(cold.scene);
     }
     // Demand the same optional ink metadata in both controls before comparing complete measurements.
     target.glyphs();
@@ -353,7 +352,7 @@ if (fontSizeText !== undefined) {
   try {
     cold.paragraph.style = { fontSize: finalFontSize };
     cold.scene.updateMatrixWorld(true);
-    if (cold.textGroup.error !== undefined) throw cold.textGroup.error;
+    endFrame(cold.scene);
     assert.equal(cold.textGroup.textCount, 1);
     // Demand optional ink metadata on both sides before comparing the complete layout and placements.
     const actualGlyphs = target.glyphs();
@@ -411,7 +410,6 @@ if (multiOwner !== undefined) {
     try {
       cold.labels[0]!.text = label.text;
       glyph.shape();
-      if (cold.textGroup.error !== undefined) throw cold.textGroup.error;
       deepStrictEqual(label.measure(), cold.labels[0]!.measure());
     } finally {
       disposeLabels(cold);
@@ -423,7 +421,6 @@ if (phaseObserver !== undefined) {
   assert.equal(created.labels.length, 1024);
   deepStrictEqual(initialDrawTopology, { draws: 1, glyphs: 9216 });
   deepStrictEqual(finalDrawTopology, { draws: 1, glyphs: 9216 });
-  assert.equal(created.textGroup.error, undefined);
 }
 created.dispose();
 const directory = resolve(output);

@@ -1,7 +1,7 @@
 // Labs selects bench files by the tag text they contain; the three-span rows here carry @prepare-spans.
 import { assert, group } from '@pmndrs/labs';
 
-import { createLabelsHolding, disposeLabels, inspectDraws, replaceLabels } from './fixture.ts';
+import { createLabelsHolding, disposeLabels, endFrame, inspectDraws, replaceLabels } from './fixture.ts';
 import {
   assertSpanLayout,
   finishSpan,
@@ -18,7 +18,7 @@ function labelTexts(prefix: string, count: number): readonly string[] {
 
 function publish(mounted: ReturnType<typeof createLabelsHolding>): void {
   mounted.scene.updateMatrixWorld(true);
-  if (mounted.textGroup.error !== undefined) throw mounted.textGroup.error;
+  endFrame(mounted.scene);
 }
 
 /** An independent published mount of `texts`: each label's layout, and the glyph instances the scene draws. */

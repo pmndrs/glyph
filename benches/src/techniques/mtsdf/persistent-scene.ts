@@ -44,6 +44,7 @@ import {
 } from '../shared/glyph-origin-presentation';
 import { mtsdfDataConfiguration, type MtsdfRasterConfiguration } from './metadata';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../three-root';
+import { endFrame } from '../../three-frame';
 
 export interface MtsdfTextLiveStats {
   readonly technique: 'mtsdf';
@@ -211,7 +212,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
 
   /** Commits one validated generation; `Text.set()` leaves desired state unchanged when it rejects. */
   const commitState = (resources: MtsdfPersistentActivation, next: MtsdfTextState): void => {
-    applyState(resources.line, next);
+    applyState(resources.line, resources.scene, next);
     resources.state = next;
   };
 
@@ -327,7 +328,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
         // `Text` reconciles while it is parented, so attaching and forcing one world update is what commits the layout.
         scene.add(activeLine);
         activeLine.updateMatrixWorld(true);
-        if (activeLine.error !== undefined) throw activeLine.error;
+        endFrame(scene);
         const readyAt = performance.now();
         context.signal.throwIfAborted();
         const textReadyMs = performance.now() - textStartedAt;
@@ -523,7 +524,7 @@ export function createMtsdfTextPersistentScene(options: MtsdfTextPersistentScene
   };
 }
 
-function applyState(line: Text<typeof mtsdf>, next: MtsdfTextState): void {
+function applyState(line: Text<typeof mtsdf>, scene: THREE.Scene, next: MtsdfTextState): void {
   line.set({
     font: next.font,
     text: next.identity.text,
@@ -535,7 +536,7 @@ function applyState(line: Text<typeof mtsdf>, next: MtsdfTextState): void {
   line.visible = next.identity.text.length > 0;
   glyph.shape();
   line.updateMatrixWorld(true);
-  if (line.error !== undefined) throw line.error;
+  endFrame(scene);
 }
 
 function mtsdfConstraints(width: number): Constraints {

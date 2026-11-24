@@ -146,7 +146,7 @@ export function animateDynamicLayoutEntries(
       entry.lastWidth = nextWidths[index]!;
       setDynamicLayoutWidth(entry, nextWidths[index]!);
     }
-    publishWorkloadTexts(scene, entries);
+    publishWorkloadTexts(scene);
     layoutDynamicLayoutEntries(entries, viewportWidth, viewportHeight);
     onReflow(performance.now() - reflowStarted);
   } catch (error) {

@@ -172,10 +172,9 @@ async function createResources(backend: RendererBackend, dpr: number): Promise<S
   }
 }
 
-/** `Text` reports synchronization state explicitly, so read it after each commit. */
+/** `Text` reports synchronization state explicitly, so read it after each commit; a refused text stays pending. */
 function assertCommitted(line: Text<typeof slug>): void {
   const state = line.commitState();
-  if (state.status === 'failed') throw state.error;
   if (state.status !== 'committed') throw new Error(`Slug product Text is ${state.status}, not committed`);
 }
 

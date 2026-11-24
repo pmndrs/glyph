@@ -1,4 +1,5 @@
 import {
+  endFrame,
   borrowedChecksum,
   createLabels,
   disposeLabels,
@@ -43,7 +44,7 @@ export function createTrailingSpanPublicationWorkload(count = 1_000) {
   };
   const commit = () => {
     created.scene.updateMatrixWorld(true);
-    if (created.textGroup.error !== undefined) throw created.textGroup.error;
+    endFrame(created.scene);
     return created.textGroup.textCount;
   };
   const update = () => {

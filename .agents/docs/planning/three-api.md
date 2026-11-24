@@ -404,9 +404,9 @@ it.
 | ------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | A value a setter, `set()` or `createText()` cannot accept     | `GlyphInputError` thrown by that call; the previous value stays                     |
 | A layout input written inside a layout callback               | `GlyphLayoutPhaseError` thrown by that setter                                       |
-| A paragraph the engine refuses (memory, an input that traps)  | Thrown from the render, once; that text's `error`; siblings draw as usual           |
-| A publication the renderer rejects, a fixed capacity exceeded | Thrown from the render, once; `text.error`/`group.error` of the texts involved      |
-| An engine trap during a frame                                 | Thrown from the render, once; the affected texts' `error`; the next frame retries   |
+| A paragraph the engine refuses (memory, an input that traps)  | Thrown from the render, once, quoting the text; siblings draw                       |
+| A publication the renderer rejects, a fixed capacity exceeded | Thrown from the render, once                                                        |
+| An engine trap during a frame                                 | Thrown from the render, once; the next frame retries                                |
 | An exception thrown by a layout callback                      | Thrown from the render, once, after the other callbacks ran and the frame published |
 
 There is no error callback ([decision](decisions/render-time-errors-throw.md)). A failure found while rendering is

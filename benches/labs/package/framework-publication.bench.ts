@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 
 import { assert, bench, group } from '@pmndrs/labs';
 
-import { borrowedChecksum, createLabels, disposeLabels, inspectDraws, span, txt } from './fixture.ts';
+import { borrowedChecksum, createLabels, disposeLabels, endFrame, inspectDraws, span, txt } from './fixture.ts';
 
 const packageRoot = process.env.GLYPH_LABS_PACKAGE_ROOT;
 if (packageRoot === undefined) throw new Error('Installed Glyph package root is required');
@@ -106,7 +106,7 @@ group('framework normalization publication @publication', () => {
         created.labels[index]!.set(next[index]!);
       }
       created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      endFrame(created.scene);
       return created.textGroup.textCount;
     };
     update();
@@ -139,7 +139,7 @@ group('framework normalization publication @publication', () => {
         });
       }
       created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      endFrame(created.scene);
       return created.textGroup.textCount;
     };
     update();

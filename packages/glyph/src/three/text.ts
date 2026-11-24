@@ -73,7 +73,7 @@ import {
   validatingInput,
 } from '../glyph-error.js';
 import { changesLayoutStyle, LAYOUT_PHASE_WRITE_MESSAGE } from '../text-mutation.js';
-import { RenderFailures } from '../render-failures.js';
+import { layoutCallbackFailure, RenderFailures } from '../render-failures.js';
 
 /** Package-private construction capability used by the Three handle and R3F adapter. */
 export const threeTextConstructionToken: unique symbol = Symbol('pmndrs.glyph.three.construct');
@@ -131,12 +131,14 @@ export interface TextGroupOptions {
  */
 export type TextGroupBatching = 'auto' | 'shared' | 'group';
 
-/** Observable publication state of one Three text instance. */
+/**
+ * Observable publication state of one Three text instance. A text whose current input is not drawn is `pending`,
+ * including one the engine refused: it draws nothing until its input changes, and the render threw the refusal.
+ */
 export type TextCommitState =
   | Readonly<{ status: 'unbound' }>
   | Readonly<{ status: 'pending' }>
-  | Readonly<{ status: 'committed'; revision: number }>
-  | Readonly<{ status: 'failed'; error: unknown }>;
+  | Readonly<{ status: 'committed'; revision: number }>;
 
 interface DesiredTextState<Format extends RasterFormatMetadata> {
   readonly font: FontSelection<Format>;
@@ -161,13 +163,8 @@ interface GlyphOrigins {
   readonly incomplete: readonly number[];
 }
 
-type AttributedErrorState =
-  | Readonly<{ present: false }>
-  | Readonly<{ present: true; error: unknown; publicationAccepted: boolean }>;
-
 type PublicationFailure = Readonly<{ error: unknown }>;
 
-const noAttributedError: AttributedErrorState = Object.freeze({ present: false });
 const unstagedUpdate = Object.freeze({ staged: false, failure: undefined });
 const stagedUpdate = Object.freeze({ staged: true, failure: undefined });
 
@@ -181,8 +178,6 @@ interface TextReconciler {
   publishMeasurement(text: Text<RasterFormatMetadata>, measurement: ParagraphLayoutSummary): void;
   bind(text: Text<RasterFormatMetadata>, binding: ThreeRootPublication, group: TextGroup | undefined): void;
   unbindFrom(text: Text<RasterFormatMetadata>, binding: ThreeRootPublication): void;
-  setError(text: Text<RasterFormatMetadata>, error: unknown, publicationAccepted: boolean): void;
-  clearError(text: Text<RasterFormatMetadata>): void;
   transformFlushed(text: THREE.Object3D): void;
   transformSynchronized(text: Text<RasterFormatMetadata>): void;
 }
@@ -197,14 +192,6 @@ interface TrackedNode {
   visible: boolean;
   ancestor: boolean;
 }
-
-interface TextGroupErrorReconciler {
-  state(group: TextGroup): AttributedErrorState;
-  setError(group: TextGroup, error: unknown, publicationAccepted: boolean): void;
-  clearError(group: TextGroup): void;
-}
-
-let textGroupErrors!: TextGroupErrorReconciler;
 
 /**
  * Glyph-owned matrix updates in progress. Three caches a parent's child count before visiting its children, so while
@@ -424,15 +411,13 @@ export class ThreeRootHost {
    */
   #traversalPublishing = false;
   readonly #renderObjectWorld = new Float64Array(16);
-  readonly #attributedErrorTexts = new Set<Text<RasterFormatMetadata>>();
-  /** Texts whose preparation the engine refused, with the error already reported for each. */
+  /** Texts whose preparation the engine refused, with the refusal already deferred for each. */
   readonly #refusedTexts = new Map<Text<RasterFormatMetadata>, unknown>();
   readonly #onTreeChange = (): void => {
     this.#membersDirty = true;
     this.#reconcileDirty = true;
     cullingTreeChanged();
   };
-  readonly #attributedErrorGroups = new Set<TextGroup>();
   #capacity: GlyphBufferCapacity;
   #material: ThreeTextMaterial | undefined;
   #disposed = false;
@@ -559,8 +544,6 @@ export class ThreeRootHost {
       this.#binding?.dispose();
       this.#binding = undefined;
     } finally {
-      this.#clearAttributedErrorGroups();
-      this.#attributedErrorTexts.clear();
       threeRootHosts.delete(this);
       this.#renderObject.removeEventListener('removed', this.#onTreeChange);
       this.#untrackAll();
@@ -657,7 +640,7 @@ export class ThreeRootHost {
     if (!this.#disposed) this.preflightLifecycleMutation();
     if (text instanceof Text) {
       this.#binding?.removeText(text);
-      this.#attributedErrorTexts.delete(text);
+      this.#refusedTexts.delete(text);
     }
     this.#texts.delete(text);
     this.#onTreeChange();
@@ -683,11 +666,10 @@ export class ThreeRootHost {
     this.#services.assertMutationAllowed();
   }
 
-  /** @internal Release one retiring group from presentation and attributed-error ownership. */
-  retireGroup(group: TextGroup): void {
+  /** @internal Release one retiring group from presentation. */
+  retireGroup(): void {
     this.preflightLifecycleMutation();
     this.invalidateMaterial();
-    this.#attributedErrorGroups.delete(group);
   }
 
   /** @internal Measure one root member through the root-owned planner. */
@@ -848,7 +830,7 @@ export class ThreeRootHost {
       this.#capacityReported = true;
       this.#deferRenderFailure(
         new RangeError(
-          `Three root capacity is fixed at ${String(exceeded.size)} text units and ${String(exceeded.required)} are needed; nothing new is drawn until it fits`,
+          `Three root ${this.name === undefined ? '(unnamed)' : JSON.stringify(this.name)} capacity is fixed at ${String(exceeded.size)} text units and ${String(exceeded.required)} are needed; nothing new is drawn until it fits`,
         ),
       );
     }
@@ -864,8 +846,8 @@ export class ThreeRootHost {
   }
 
   /**
-   * Attributes each refused preparation to its own text, once: the text is `failed`, draws nothing, its siblings
-   * publish as usual, and the refusal is thrown from the end of the render. A refusal ends when the text's input
+   * Defers each refused preparation once: the text draws nothing, its siblings publish as usual, and the refusal,
+   * whose message quotes the text, is thrown from the end of the render. A refusal ends when the text's input
    * changes; refused again after that, it is a new failure.
    */
   #reportRefusals(refusals: ReadonlyMap<Text<RasterFormatMetadata>, unknown>): void {
@@ -875,7 +857,6 @@ export class ThreeRootHost {
     for (const [text, refusal] of refusals) {
       if (Object.is(this.#refusedTexts.get(text), refusal)) continue;
       this.#refusedTexts.set(text, refusal);
-      this.#attributeError(refusal, [text]);
       this.#deferRenderFailure(refusal);
     }
   }
@@ -894,7 +875,7 @@ export class ThreeRootHost {
       try {
         text.onLayout?.(text, layout);
       } catch (error) {
-        this.#deferRenderFailure(error);
+        this.#deferRenderFailure(layoutCallbackFailure(text.text, error));
       }
     }
   }
@@ -921,23 +902,15 @@ export class ThreeRootHost {
   acceptShape(): void {
     try {
       this.#binding?.acceptShape();
-      const texts = this.#renderMembers();
-      const publicationFailure = this.#renderer.takePublicationFailure() ?? this.#deferredTraversalFailure;
       // The failure is thrown from this settlement, so the engine call that published reports it.
-      if (publicationFailure === undefined) this.#clearErrors();
-      else this.#attributeError(publicationFailure.error, texts, true);
-      // An accepted publication clears what it resolved, never a refusal that still stands.
-      for (const [text, refusal] of this.#refusedTexts) {
-        reconciler.setError(text, refusal, false);
-        this.#attributedErrorTexts.add(text);
-      }
+      const publicationFailure = this.#renderer.takePublicationFailure() ?? this.#deferredTraversalFailure;
       if (this.#needsInitialTransformSync) {
         try {
-          this.#syncTransforms(false, texts);
+          this.#syncTransforms(false);
           this.#needsInitialTransformSync = false;
         } catch (error) {
           if (publicationFailure === undefined) throw error;
-          // Initial synchronization cannot replace the accepted publication failure already attributed above.
+          // Initial synchronization cannot replace the accepted publication failure thrown below.
         }
       }
       if (publicationFailure !== undefined) throw publicationFailure.error;
@@ -946,12 +919,11 @@ export class ThreeRootHost {
     }
   }
 
-  /** @internal Preserve the last accepted draw state and attribute this root's rejected shape; the engine throws it. */
-  rejectShape(error: unknown): void {
+  /** @internal Preserve the last accepted draw state after this root's rejected shape; the engine throws it. */
+  rejectShape(): void {
     try {
       this.#renderer.takePublicationFailure();
       this.#binding?.rejectShape();
-      this.#attributeError(error, this.#renderMembers());
     } finally {
       this.#finishPublicationCycle();
     }
@@ -1041,7 +1013,7 @@ export class ThreeRootHost {
           else this.#reconcileDirty = this.#membersDirty;
         }
       } catch (error) {
-        this.#traversalFailed(error, texts);
+        this.#traversalFailed(error);
         return;
       }
     }
@@ -1050,7 +1022,7 @@ export class ThreeRootHost {
       try {
         this.#flushTransforms(worldMatricesCurrent, texts);
       } catch (error) {
-        this.#traversalFailed(error, texts);
+        this.#traversalFailed(error);
       }
       return;
     }
@@ -1058,7 +1030,7 @@ export class ThreeRootHost {
     try {
       publishGlyphFrame();
     } catch (error) {
-      // Every participating root has settled and attributed its failure; the render that published throws it.
+      // Every participating root has settled its failure; the render that published throws it.
       this.#deferRenderFailure(error);
     } finally {
       this.#traversalPublishing = false;
@@ -1067,17 +1039,16 @@ export class ThreeRootHost {
       this.#resynchronizeAfterLayout();
       this.#flushTransforms(worldMatricesCurrent, texts);
     } catch (error) {
-      this.#traversalFailed(error, texts);
+      this.#traversalFailed(error);
     }
   }
 
   /** A traversal failure inside a publication cycle is that publication's; outside one, the render throws it. */
-  #traversalFailed(error: unknown, texts: readonly Text<RasterFormatMetadata>[]): void {
+  #traversalFailed(error: unknown): void {
     if (this.#publicationCycleActive) {
       this.#deferredTraversalFailure ??= { error };
       return;
     }
-    this.#attributeError(error, texts);
     this.#deferRenderFailure(error);
   }
 
@@ -1088,43 +1059,6 @@ export class ThreeRootHost {
   #finishPublicationCycle(): void {
     this.#publicationCycleActive = false;
     this.#deferredTraversalFailure = undefined;
-  }
-
-  /** Records the failure as the `error` each participating text and its groups read until a publication clears it. */
-  #attributeError(error: unknown, texts: readonly Text<RasterFormatMetadata>[], publicationAccepted = false): void {
-    const groups = new Set<TextGroup>();
-    for (const text of texts) {
-      for (let parent = text.parent; parent !== null; parent = parent.parent) {
-        if (parent instanceof TextGroup && !parent.disposed) groups.add(parent);
-      }
-    }
-    for (const group of this.#attributedErrorGroups) {
-      if (!groups.has(group)) textGroupErrors.clearError(group);
-    }
-    for (const text of texts) {
-      this.#attributedErrorTexts.add(text);
-      reconciler.setError(text, error, publicationAccepted);
-    }
-    this.#attributedErrorGroups.clear();
-    for (const group of groups) {
-      textGroupErrors.setError(group, error, publicationAccepted);
-      this.#attributedErrorGroups.add(group);
-    }
-  }
-
-  /** Clears the errors of current render members; a Text outside the Scene keeps its error until it returns. */
-  #clearErrors(): void {
-    for (const text of this.#attributedErrorTexts) {
-      if (this.#tracked.get(text)?.scene === undefined) continue;
-      reconciler.clearError(text);
-      this.#attributedErrorTexts.delete(text);
-    }
-    this.#clearAttributedErrorGroups();
-  }
-
-  #clearAttributedErrorGroups(): void {
-    for (const group of this.#attributedErrorGroups) textGroupErrors.clearError(group);
-    this.#attributedErrorGroups.clear();
   }
 
   #rootBinding(): ThreeRootPublication {
@@ -1292,7 +1226,7 @@ export class ThreeRootHost {
     try {
       prepareGlyphFrame();
     } catch (error) {
-      // Every participating root has attributed its failure; it stays dirty and is prepared again by the next frame.
+      // Every participating root has settled its failure; it stays dirty and is prepared again by the next frame.
       this.#deferRenderFailure(error);
     }
   }
@@ -1411,10 +1345,6 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
       },
       bind: (text, binding, group) => text.#bind(binding, group),
       unbindFrom: (text, binding) => text.#unbindFrom(binding),
-      setError: (text, error, publicationAccepted) => {
-        text.#errorState = { present: true, error, publicationAccepted };
-      },
-      clearError: (text) => text.#clearError(),
       transformFlushed: (text) => {
         if (#transformQueued in text) text.#transformQueued = false;
       },
@@ -1436,7 +1366,6 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   #committedRevision = -1;
   #boundingBoxState: 'unrequested' | 'dirty' | 'current' = 'unrequested';
   #disposed = false;
-  #errorState: AttributedErrorState = noAttributedError;
   /** World matrix, own visibility, parent and render order as of the last traversal that reported them. */
   readonly #observedWorld = new Float64Array(16);
   #observedVisible = true;
@@ -1504,10 +1433,6 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
   }
   get disposed(): boolean {
     return this.#disposed;
-  }
-  get error(): unknown {
-    const state = this.#effectiveErrorState();
-    return state.present ? state.error : undefined;
   }
   get gpuBytes(): number {
     return this.#binding?.gpuBytes ?? 0;
@@ -1653,9 +1578,12 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
 
   commitState(): TextCommitState {
     if (this.#disposed || this.parent === null) return { status: 'unbound' };
-    const error = this.#effectiveErrorState();
-    if (error.present && !error.publicationAccepted) return { status: 'failed', error: error.error };
-    if (this.#binding === undefined || this.#committedRevision !== this.#desiredRevision) {
+    const binding = this.#binding;
+    if (
+      binding === undefined ||
+      this.#committedRevision !== this.#desiredRevision ||
+      binding.refused(this.#root.member(this))
+    ) {
       return { status: 'pending' };
     }
     return { status: 'committed', revision: this.#committedRevision };
@@ -1872,15 +1800,6 @@ export class Text<Format extends RasterFormatMetadata> extends THREE.Object3D {
     binding?.removeText(this.#root.member(this));
   }
 
-  #effectiveErrorState(): AttributedErrorState {
-    if (this.#errorState.present) return this.#errorState;
-    return this.#textGroup === undefined ? noAttributedError : textGroupErrors.state(this.#textGroup);
-  }
-
-  #clearError(): void {
-    this.#errorState = noAttributedError;
-  }
-
   #assertActive(): void {
     if (this.#disposed) throw new Error('Text has been disposed');
   }
@@ -1905,22 +1824,12 @@ const textGroupRoots = new WeakMap<TextGroup, ThreeRootHost>();
 const textPresentations = new WeakMap<Text<RasterFormatMetadata>, TextPresentation>();
 
 export class TextGroup extends THREE.Object3D {
-  static {
-    textGroupErrors = {
-      state: (group) => group.#errorState,
-      setError: (group, error, publicationAccepted) => {
-        group.#errorState = { present: true, error, publicationAccepted };
-      },
-      clearError: (group) => group.#clearError(),
-    };
-  }
   readonly #pixelSnapping: boolean | undefined;
   readonly #root: ThreeRootHost;
   #batching: TextGroupBatching;
   #material: ThreeTextMaterial | undefined;
   readonly #texts: Text<RasterFormatMetadata>[] = [];
   #disposed = false;
-  #errorState: AttributedErrorState = noAttributedError;
   #observedFrustumCulled = true;
 
   /** Ordinary applications construct TextGroup through `handle.createTextGroup()`. */
@@ -1976,9 +1885,6 @@ export class TextGroup extends THREE.Object3D {
   get disposed(): boolean {
     return this.#disposed;
   }
-  get error(): unknown {
-    return this.#errorState.present ? this.#errorState.error : undefined;
-  }
   get gpuBytes(): number {
     return this.#root.gpuBytes;
   }
@@ -2022,15 +1928,10 @@ export class TextGroup extends THREE.Object3D {
 
   dispose(): void {
     if (this.#disposed) return;
-    if (!this.#root.disposed) this.#root.retireGroup(this);
-    this.#clearError();
+    if (!this.#root.disposed) this.#root.retireGroup();
     this.#disposed = true;
     textGroupObservations.delete(this);
     textGroupRoots.delete(this);
-  }
-
-  #clearError(): void {
-    this.#errorState = noAttributedError;
   }
 
   #assertActive(): void {
@@ -2525,6 +2426,11 @@ class ThreeRootPublication {
       due.push([text, layout]);
     }
     return due;
+  }
+
+  /** Whether the engine refused this text's last preparation, so it draws nothing until its input changes. */
+  refused(text: Text<RasterFormatMetadata>): boolean {
+    return this.#entries.get(text)?.handle.refusal !== undefined;
   }
 
   /** The error that refused each retained text's last preparation, for the texts that have one. */

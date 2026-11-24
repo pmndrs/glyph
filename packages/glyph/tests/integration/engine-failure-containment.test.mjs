@@ -58,22 +58,26 @@ for (const recovery of ['shrink', 'dispose']) {
         const report = JSON.parse(stdout.trim().split('\n').at(-1));
         assert.ok(report.failure !== undefined, 'the paragraph grew until the engine refused it');
         assert.equal(report.failure.where, 'frame', 'a setter never fails for a layout reason');
+        assert.match(
+          report.failure.error,
+          /^GlyphError: Glyph text "The quick brown fox jumps over the lazy …" was not drawn: /u,
+          'the render names the text it could not draw',
+        );
         assert.equal(report.victimKeptItsValue, true);
         assert.deepEqual(report.siblingRead, { value: true }, 'the sibling still measures what it measured');
         assert.equal(report.recovery.threw, undefined, `recovery threw: ${String(report.recovery.threw)}`);
         assert.equal(report.recovery.value.sibling, 'committed');
         if (recovery === 'shrink') {
           assert.equal(report.recovery.value.victim, 'committed');
-          assert.equal(report.recovery.value.error, undefined);
           assert.equal(report.recovery.value.glyphs, 'small again'.length);
         }
-        assert.deepEqual(report.siblingAfter, { value: { status: 'committed', error: true } });
+        assert.deepEqual(report.siblingAfter, { value: 'committed' });
         // A paragraph refused at its own preparation never reaches its sibling. A publication that no
         // longer fits, the 300-page case, fails that one frame for the root; the paragraph that does not
-        // fit is then withheld, so the sibling publishes from the next frame on while the victim stays failed.
-        if (/prepare text failed/.test(report.failure.error)) assert.equal(report.siblingErrorAtFailure, undefined);
+        // fit is then withheld, so the sibling publishes from the next frame on while the victim draws nothing.
+        assert.equal(report.siblingAtFailure, 'committed');
         assert.deepEqual(report.siblingSet, { value: 'committed' });
-        assert.deepEqual(report.victimWhileSiblingPublishes, { value: { status: 'failed', reportsItsError: true } });
+        assert.deepEqual(report.victimWhileSiblingPublishes, { value: 'pending' });
       },
     );
   }
@@ -122,7 +126,7 @@ for (const call of ['engine_prepare_batch', 'engine_update_batch']) {
     trapNextCall(new RegExp(call, 'u'));
     assert.doesNotThrow(frame, 'a trap never escapes scene traversal');
     assert.equal(shaperInstanceCount(), instances + 1);
-    assert.equal(texts[3].commitState().status, 'failed');
+    assert.equal(texts[3].commitState().status, 'pending', 'the trapped frame drew none of its new input');
     assert.throws(render, /trapped and was restarted/u, 'the render that follows throws the trap');
     assert.doesNotThrow(render, 'and throws it once');
     // No setter and no read in between: the next frame restates every text on the new instance.
@@ -130,7 +134,6 @@ for (const call of ['engine_prepare_batch', 'engine_update_batch']) {
     const cold = await createScene(t);
     for (const [index, text] of texts.entries()) {
       assert.equal(text.commitState().status, 'committed', `label ${String(index)}`);
-      assert.equal(text.error, undefined);
     }
     assert.deepEqual(layoutOf(texts[7]), layoutOf(cold.add({ text: 'value 7' })));
     texts[0].text = 'still editable';
@@ -139,7 +142,7 @@ for (const call of ['engine_prepare_batch', 'engine_update_batch']) {
 }
 
 test('a paragraph whose input always traps is refused alone', { timeout }, async (t) => {
-  const { add, frame } = await createScene(t);
+  const { add, frame, render } = await createScene(t);
   const texts = Array.from({ length: 6 }, (_, index) => add({ text: `label ${String(index)}` }));
   frame();
   const culprit = texts[2];
@@ -159,18 +162,26 @@ test('a paragraph whose input always traps is refused alone', { timeout }, async
   for (const [index, text] of texts.entries()) {
     if (text === culprit) continue;
     assert.equal(text.commitState().status, 'committed', `label ${String(index)} is unaffected`);
-    assert.equal(text.error, undefined);
     assert.equal(text.measure().glyphCount, `value ${String(index)}`.replaceAll(' ', '').length + 1);
   }
-  assert.equal(culprit.commitState().status, 'failed');
-  assert.match(String(culprit.error.message), /trapped/u);
+  assert.equal(culprit.commitState().status, 'pending', 'the culprit draws nothing');
+  let thrown;
+  try {
+    render();
+  } catch (error) {
+    thrown = error;
+  }
+  const messages = (thrown?.errors ?? [thrown]).map((error) => String(error?.message));
+  assert.ok(
+    messages.some((message) => /^Glyph text "value 2" was not drawn: .*trapped/u.test(message)),
+    `the render names the culprit: ${JSON.stringify(messages)}`,
+  );
   assert.equal(culprit.text, 'value 2', 'the culprit keeps the value it was given');
   // New input is a new chance.
   culpritDirty = false;
   culprit.text = 'harmless';
   frame();
   assert.equal(culprit.commitState().status, 'committed');
-  assert.equal(culprit.error, undefined);
   const cold = await createScene(t);
   assert.deepEqual(layoutOf(culprit), layoutOf(cold.add({ text: 'harmless' })));
 });
@@ -186,7 +197,6 @@ test('a font disposed between a setter and the frame cannot fail the preparation
   text.set({ font: transient, text: 'set with a font that is then disposed' });
   transient.dispose();
   assert.doesNotThrow(frame);
-  assert.equal(text.error, undefined);
   assert.equal(text.commitState().status, 'committed');
   assert.equal(text.measure().glyphCount, 'set with a font that is then disposed'.length);
 });
@@ -201,7 +211,6 @@ test('where an instance cannot be made synchronously the engine restarts asynchr
   const instances = shaperInstanceCount();
   trapNextCall(/engine_measure_paragraph/);
   assert.throws(() => text.measure(), /trapped and is restarting/u);
-  assert.equal(text.error, undefined, "a restart is not this text's failure");
   assert.throws(() => text.measure(), /restarting/u, 'reads fail until the new instance lands');
   assert.doesNotThrow(() => {
     text.text = 'setters never enter the engine';

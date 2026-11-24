@@ -12,6 +12,7 @@ import * as THREE from 'three/webgpu';
 
 import { createThreeTestHandle } from '../support/three-handle.mjs';
 import { compileNodeMaterialBackends } from '../support/node-material-shaders.mjs';
+import { assertCommitted } from '../support/three-render.mjs';
 
 const fontUrl = new URL('../../../../benches/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
 const msdfFontUrl = new URL('../../../../benches/fixtures/rendering/inter-mtsdf.font.glb.gz', import.meta.url);
@@ -39,7 +40,7 @@ test('Slug material positions stay vertex-computed when a composed fragment read
   scene.add(label);
   scene.updateMatrixWorld();
 
-  assert.equal(label.error, undefined);
+  assertCommitted(label);
   assert.equal(contexts.length, 1);
   const draw = rootDraws(scene)[0];
   assert.ok(draw, 'a real Slug draw must reach material realization');
@@ -84,7 +85,7 @@ for (const shaders of ['stable', 'typegpu']) {
         });
         scene.add(label);
         scene.updateMatrixWorld();
-        assert.equal(label.error, undefined);
+        assertCommitted(label);
         assert.deepEqual(realized.sort(), ['decoration', format]);
         const draws = rootDraws(scene);
         assert.equal(draws.length, 2);
@@ -120,7 +121,7 @@ test('TypeGPU-backed default Bitmap and decoration positions compile for both Th
         });
         scene.add(label);
         scene.updateMatrixWorld();
-        assert.equal(label.error, undefined);
+        assertCommitted(label);
         const draws = rootDraws(scene);
         assert.equal(draws.length, 2);
         const vertices = draws.map((draw) => {
@@ -158,7 +159,7 @@ test('an undefined custom material result falls back to one retained default mat
   scene.add(label);
   scene.updateMatrixWorld();
 
-  assert.equal(label.error, undefined);
+  assertCommitted(label);
   const draw = rootDraws(scene)[0];
   assert.ok(draw?.material?.isNodeMaterial);
   assert.equal(attempts, 1);
@@ -185,7 +186,7 @@ test('a custom Three material composes over the Bitmap shader in the Rust comman
   scene.add(label);
   scene.updateMatrixWorld();
 
-  assert.equal(label.error, undefined);
+  assertCommitted(label);
   const draws = rootDraws(scene);
   assert.equal(draws.length, 1, 'the Rust publication must produce one real custom-material draw');
   assert.equal(built.length, 1, 'the material factory must run once for one retained realization');
@@ -234,7 +235,7 @@ test('the same custom material factory may override a separate decoration realiz
   scene.add(label);
   scene.updateMatrixWorld();
 
-  assert.equal(label.error, undefined);
+  assertCommitted(label);
   assert.deepEqual(realizations.sort(), ['decoration', 'pmndrs.bitmap']);
   const draws = rootDraws(scene);
   assert.equal(draws.length, 2, 'decoration and glyph programs retain separate material realizations');

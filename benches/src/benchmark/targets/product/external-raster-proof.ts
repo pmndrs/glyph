@@ -23,6 +23,7 @@ import {
   type RendererBackend,
 } from '../../../renderer/webgpu-renderer';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
+import { endFrame } from '../../../three-frame';
 
 const WIDTH = 384;
 const HEIGHT = 128;
@@ -157,7 +158,7 @@ async function createResources(
     scene.add(cover, textGroup);
     // `Text` reconciles while parented, so attaching and forcing one world update is what commits the first revision.
     textGroup.updateMatrixWorld(true);
-    if (textGroup.error !== undefined) throw textGroup.error;
+    endFrame(scene);
     const retainedMesh = exactlyOne(rootDraws(scene, backend), 'external raster draw mesh');
     if (!(retainedMesh instanceof THREE.Mesh) || !(retainedMesh.geometry instanceof THREE.BufferGeometry)) {
       throw new TypeError('external raster did not publish a Three.js mesh');
@@ -168,7 +169,7 @@ async function createResources(
 
     text.set({ text: UPDATED_TEXT });
     textGroup.updateMatrixWorld(true);
-    if (textGroup.error !== undefined) throw textGroup.error;
+    endFrame(scene);
     if (rootDraws(scene, backend)[0] !== retainedMesh || retainedMesh.geometry !== retainedGeometry) {
       throw new Error('warm external raster update replaced its retained Three.js objects');
     }

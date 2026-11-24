@@ -15,6 +15,7 @@ import {
 import type { BenchmarkTarget } from '../../contracts';
 import { hashParagraphLayout, paragraphLayoutBytes } from '../../paragraph-layout-digest';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
+import { endFrame } from '../../../three-frame';
 
 type BitmapFormat = typeof bitmap;
 
@@ -128,10 +129,10 @@ export function createAdvancedShapingConformanceTarget(): BenchmarkTarget {
               scene.updateMatrixWorld(true);
               // Headless runs read this across a page boundary that cannot transfer a cause, so the frame that failed
               // and the underlying reason both belong in the message.
-              if (text.error !== undefined) {
-                throw new Error(`${definition.id}:${frame.tick} failed to publish: ${String(text.error)}`, {
-                  cause: text.error,
-                });
+              try {
+                endFrame(scene);
+              } catch (error) {
+                throw new Error(`${definition.id}:${frame.tick} failed to publish: ${String(error)}`, { cause: error });
               }
               const layout = text.glyphs();
               if (layout === undefined) throw new Error(`${definition.id}:${frame.tick} has no layout`);

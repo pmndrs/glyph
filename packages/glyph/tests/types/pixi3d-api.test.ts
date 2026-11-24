@@ -30,7 +30,8 @@ void new Pixi3DTextMaterial({ extraBits: [bits.setup, bits.coverage] });
 
 // The minimal edit: UTF-16 offsets of the source text, refused with the error Three throws.
 text.replace(0, 5, 'Howdy') satisfies void;
-text.error satisfies unknown;
+// @ts-expect-error glyph.shape() throws a failure once, quoting the text; there is no failure to read.
+void text.error;
 // @ts-expect-error glyph.shape() throws a rejected publication; there is no error callback.
 void text.onError;
 // @ts-expect-error The inserted text is a string.

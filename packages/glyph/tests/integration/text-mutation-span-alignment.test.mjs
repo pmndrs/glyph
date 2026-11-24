@@ -7,7 +7,7 @@ import { glyph, span, txt, bitmap } from '@pmndrs/glyph';
 import { Text as R3fText } from '@pmndrs/glyph/react';
 import { assertMatchesFreshBuild, createFontCache, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
 import { PlanTransport } from '../../dist/internal/handle-state.js';
-import { renderScene } from '../support/three-render.mjs';
+import { assertCommitted, renderScene } from '../support/three-render.mjs';
 
 globalThis.self ??= globalThis;
 globalThis.requestAnimationFrame ??= () => 0;
@@ -66,7 +66,7 @@ test('Rust resolves authored template ranges after fragments join into graphemes
   try {
     mounted.scene.updateMatrixWorld(true);
     assert.equal(mounted.nodes[0].text, literal.text);
-    assert.equal(mounted.nodes[0].error, undefined);
+    assertCommitted(mounted.nodes[0]);
     assert.equal(mounted.nodes[0].measure().glyphCount, 2);
   } finally {
     unmount(mounted);
@@ -88,7 +88,7 @@ test('nested structural spans preserve authored ranges until Rust resolves them'
   const mounted = mount(font, [{ properties: { constraints, layout, style, text: literal } }]);
   try {
     mounted.scene.updateMatrixWorld(true);
-    assert.equal(mounted.nodes[0].error, undefined);
+    assertCommitted(mounted.nodes[0]);
     assert.equal(mounted.nodes[0].measure().glyphCount, 3);
   } finally {
     unmount(mounted);
@@ -810,7 +810,7 @@ test(
         (error) => error === injected,
         'the render throws it',
       );
-      assert.equal(mounted.nodes[0].error, injected, 'and attributes it to the Text');
+      assert.equal(mounted.nodes[0].commitState().status, 'pending', 'and the Text was not drawn');
       assert.deepEqual(rendererBytes(mounted), rendererBefore, 'failed publication preserves the in-flight frame');
       assert.equal(mounted.nodes[0].text, 'BBB', 'publication failure does not reject accepted authored state');
       PlanTransport.prototype.consumeStagedUpdate = original;
@@ -944,7 +944,7 @@ test('raw span updates do not run JavaScript grapheme segmentation', { timeout }
       node.set({ text: edited });
       assert.ok(node.measure().glyphCount > 0);
       mounted.scene.updateMatrixWorld(true);
-      assert.equal(node.error, undefined);
+      assertCommitted(node);
       assert.equal(node.text, `b${ACUTE}fi`, 'Rust re-resolves retained authored ranges after a text edit');
       assert.equal(segmenters, 0, 'no setter, read or frame constructed a JavaScript segmenter');
       assertMatchesFreshBuild(
@@ -1023,7 +1023,7 @@ test('seeded retained formatted batches match a cold full publication after spar
       current = formatted();
       mounted.nodes[0].set({ text: current });
       mounted.scene.updateMatrixWorld(true);
-      assert.equal(mounted.nodes[0].error, undefined, `step ${index} publishes`);
+      assertCommitted(mounted.nodes[0], `step ${index} publishes`);
       assertMatchesFreshBuild(
         font,
         mounted,
@@ -1058,7 +1058,6 @@ test('nested React Text crossing a joining boundary mounts and publishes', { tim
     const node = nodes.at(-1);
     assert.ok(node !== undefined);
     assert.equal(node.text, `a${ACUTE}bc`);
-    assert.equal(node.error, undefined);
   } finally {
     await renderer.unmount();
   }

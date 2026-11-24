@@ -248,7 +248,6 @@ try {
     }
     assert(didThrow && Object.is(caught, rejection), 'public shape preserves raw renderer rejection identity');
     assert.equal(decoded.at(-1)!.checkpoint, false, 'the rejected warm publication was retained');
-    assert.equal(warmGroup.error, rejection);
     assert.deepEqual(hostSnapshot(warmScene), accepted, 'rejected target leaves accepted host bytes unchanged');
     assert.deepEqual(warm[0]!.measure(), preparedMeasure, 'prepared measurement survives target rejection');
     assert.equal(

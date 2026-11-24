@@ -1,6 +1,12 @@
 import { assert, bench, group } from '@pmndrs/labs';
 
-import { createParagraph, disposeParagraph, paragraphTextForGlyphs, createPublishedParagraph } from './fixture.ts';
+import {
+  createParagraph,
+  createPublishedParagraph,
+  disposeParagraph,
+  endFrame,
+  paragraphTextForGlyphs,
+} from './fixture.ts';
 
 const text = paragraphTextForGlyphs(22_000);
 
@@ -33,7 +39,7 @@ group('public paragraph layout at 22k glyphs @layout @exhaustive', () => {
       created.paragraph.constraints = { width: { mode: 'exact', size: 420 + iteration / 64 } };
       const glyphCount = created.paragraph.measure().glyphCount;
       created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      endFrame(created.scene);
       return glyphCount + created.textGroup.textCount;
     };
     assert(result > 1, 'measurement and publication must contain text');
@@ -69,7 +75,7 @@ group('public paragraph layout at 22k glyphs @layout @exhaustive', () => {
       created.paragraph.constraints = { width: { mode: 'exact', size: 420 + iteration / 64 } };
       const glyphCount = created.paragraph.glyphs().glyphCount;
       created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      endFrame(created.scene);
       return glyphCount + created.textGroup.textCount;
     };
     assert(result > 1, 'inspection and publication must contain text');
@@ -84,7 +90,7 @@ group('public paragraph layout at 22k glyphs @layout @exhaustive', () => {
       iteration += 1;
       created.paragraph.style = { fontSize: 12 + iteration / 256 };
       created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      endFrame(created.scene);
       return created.textGroup.textCount;
     };
     assert.equal(textCount, 1);
@@ -99,7 +105,7 @@ group('public paragraph layout at 22k glyphs @layout @exhaustive', () => {
       iteration += 1;
       created.paragraph.constraints = { width: { mode: 'exact', size: 420 + iteration / 64 } };
       created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      endFrame(created.scene);
       return created.textGroup.textCount;
     };
     assert.equal(textCount, 1);
@@ -114,7 +120,7 @@ group('public paragraph layout at 22k glyphs @layout @exhaustive', () => {
       const leading = String.fromCharCode(65 + (iteration++ % 26));
       created.paragraph.text = `${leading}${text.slice(1)}`;
       created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      endFrame(created.scene);
       return created.textGroup.textCount;
     };
     assert.equal(textCount, 1);

@@ -3,6 +3,7 @@ import { deepStrictEqual } from 'node:assert';
 import { assert, bench, group } from '@pmndrs/labs';
 
 import {
+  endFrame,
   attachToScene,
   createParagraph,
   createParagraphWithPaint,
@@ -132,7 +133,7 @@ function registerAssignments(
       if (expected !== undefined) {
         assert.equal(glyphCount, expected[selected]!.measuredGlyphs);
         created.scene.updateMatrixWorld(true);
-        if (created.textGroup.error !== undefined) throw created.textGroup.error;
+        endFrame(created.scene);
         deepStrictEqual(
           visiblePaintState(created.paragraph, created.scene),
           expected[selected],
@@ -153,7 +154,7 @@ function registerAssignments(
         selected = 1 - selected;
         created.paragraph.set({ text: desired[selected]! });
         scene.updateMatrixWorld(true);
-        if (created.textGroup.error !== undefined) throw created.textGroup.error;
+        endFrame(scene);
         return created.paragraph.commitState().status;
       };
       publish();
@@ -162,7 +163,7 @@ function registerAssignments(
         desired.map((text) => {
           created.paragraph.set({ text });
           scene.updateMatrixWorld(true);
-          if (created.textGroup.error !== undefined) throw created.textGroup.error;
+          endFrame(scene);
           return renderedChecksum(created.paragraph);
         });
       const initialDraws = inspectDraws(scene);
@@ -220,7 +221,7 @@ group('paint-only style partition assignments @style', () => {
         created.paragraph.set({ text: paintPartitions[selected]! });
         if (publish) {
           created.scene.updateMatrixWorld(true);
-          if (created.textGroup.error !== undefined) throw created.textGroup.error;
+          endFrame(created.scene);
         }
         return created.paragraph.measure().glyphCount;
       };
@@ -232,7 +233,7 @@ group('paint-only style partition assignments @style', () => {
         created.paragraph.set({ text: paintPartitions[index]! });
         assert.equal(created.paragraph.measure().glyphCount, expected[index]!.measuredGlyphs);
         created.scene.updateMatrixWorld(true);
-        if (created.textGroup.error !== undefined) throw created.textGroup.error;
+        endFrame(created.scene);
         deepStrictEqual(
           visiblePaintState(created.paragraph, created.scene),
           expected[index],

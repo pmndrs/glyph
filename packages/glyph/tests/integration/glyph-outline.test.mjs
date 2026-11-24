@@ -12,6 +12,7 @@ import { defineTextMaterial, ThreeConfig } from '@pmndrs/glyph/three';
 import * as THREE from 'three/webgpu';
 
 import { loadFont } from '../../dist/loader.js';
+import { assertCommitted } from '../support/three-render.mjs';
 
 let root;
 let engineMemory;
@@ -423,7 +424,7 @@ test('owned outlines are data: they read inside a render plan, after it, and aft
   group.add(label);
   scene.add(group);
   scene.updateMatrixWorld();
-  assert.equal(group.error, undefined);
+  assertCommitted(group);
   assert.deepEqual(duringPlan, expected, 'a read inside a material callback makes no engine call');
   assert.deepEqual(layout.outlineAt(0), expected, 'the copy reads after a render pass releases unused fonts');
   assert.throws(() => probe.set({ constraints: { width: { mode: 'exact', size: NaN } } }), {

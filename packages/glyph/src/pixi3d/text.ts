@@ -81,7 +81,6 @@ export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelect
   #disposed = false;
   #preparedAnchor: LayoutPoint = zeroAnchor;
   #acceptedAnchor: LayoutPoint = zeroAnchor;
-  #publicationError: { readonly error: unknown } | undefined;
   /** The refusal this text last deferred to its root's next accepted `glyph.shape()`. */
   #deferredRefusal: unknown;
 
@@ -111,19 +110,6 @@ export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelect
   }
 
   /**
-   * Why this text is not drawn as authored: the most recent rejected publication of its root, cleared by the root's
-   * next accepted publication (the last accepted meshes stay live meanwhile), or else the refusal of its last
-   * preparation, cleared when its input changes (it draws nothing meanwhile). `glyph.shape()` threw each once.
-   */
-  get error(): unknown {
-    if (this.#publicationError !== undefined) return this.#publicationError.error;
-    return this.#disposed ? undefined : this.#controller.refusal;
-  }
-  /** @internal Record the root's rejected publication; `glyph.shape()` throws it. */
-  rejectPublication(error: unknown): void {
-    this.#publicationError = { error };
-  }
-  /**
    * @internal Stage placement before renderer preparation; omitted anchors do not issue a query. A refusal not yet
    * deferred is handed to the root, which throws it once from its accepted publication.
    */
@@ -141,10 +127,9 @@ export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelect
   get acceptedAnchor(): LayoutPoint {
     return this.#acceptedAnchor;
   }
-  /** @internal Root acceptance clears the previous publication error without rebuilding meshes. */
+  /** @internal Root acceptance moves the owned meshes to the prepared anchor without rebuilding them. */
   acceptPublication(): void {
     this.#acceptedAnchor = this.#preparedAnchor;
-    this.#publicationError = undefined;
   }
 
   get material(): Pixi3DTextMaterial | undefined {
@@ -399,7 +384,6 @@ export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelect
     this.#controller.dispose();
     this.#disposed = true;
     this.releaseMembership?.();
-    this.#publicationError = undefined;
     this.#font.dispose();
   }
 

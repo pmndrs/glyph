@@ -30,7 +30,6 @@ for (let frame = 0; frame < 600; frame += 1) {
   if (commit.status !== 'committed') {
     throw new Error(`imperative Three Text did not commit: ${JSON.stringify(commit)}`);
   }
-  if (state.text.error !== undefined) throw state.text.error;
   if (draws !== 1 || records !== 10) {
     throw new Error(
       `imperative Three rendered ${String(records)} records in ${String(draws)} draws; expected 10 visible glyphs in one draw`,

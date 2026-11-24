@@ -286,7 +286,7 @@ export function animateEditorialEntries(
     }
     const stageMs = performance.now() - reflowStarted;
     const publishStarted = performance.now();
-    publishWorkloadTexts(scene, entries);
+    publishWorkloadTexts(scene);
     const publishMs = performance.now() - publishStarted;
     const layoutStarted = performance.now();
     layoutEditorialEntries(entries, viewportWidth, viewportHeight);

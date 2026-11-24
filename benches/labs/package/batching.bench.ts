@@ -4,6 +4,7 @@ import { deepStrictEqual } from 'node:assert';
 import { assert, bench, group } from '@pmndrs/labs';
 
 import {
+  endFrame,
   createLabels,
   createMultiOwnerPublication,
   multiOwnerTexts,
@@ -55,8 +56,10 @@ function editSizedTextPublication(
       alternate = !alternate;
       target.text = texts[alternate ? 0 : 1];
       if (engineOnly) glyph.shape();
-      else created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      else {
+        created.scene.updateMatrixWorld(true);
+        endFrame(created.scene);
+      }
       return created.textGroup.textCount;
     };
 
@@ -104,13 +107,17 @@ function editSizedColorPublication(
       assert(JSON.stringify(cold[0]!.paint) !== JSON.stringify(cold[1]!.paint), 'the two colours must paint apart');
       deepStrictEqual(inspectGlyphPaint(created.scene), { blueDominant: 0, redDominant: 0 });
       const changed = [target];
-      const frame = engineOnly ? () => glyph.shape() : () => created.scene.updateMatrixWorld(true);
+      const frame = engineOnly
+        ? () => glyph.shape()
+        : () => {
+            created.scene.updateMatrixWorld(true);
+            endFrame(created.scene);
+          };
       let alternate = false;
       const publish = () => {
         alternate = !alternate;
         target.style = { color: labelColors[alternate ? 0 : 1], fontSize: 16 };
         finishSpan(span, changed, frame);
-        if (created.textGroup.error !== undefined) throw created.textGroup.error;
         return created.textGroup.textCount;
       };
 
@@ -122,7 +129,7 @@ function editSizedColorPublication(
       assertSpanLayout(span, changed, [expected.layout]);
       // Paint reaches the draw only through a scene traversal, whichever span was timed.
       created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      endFrame(created.scene);
       deepStrictEqual(inspectGlyphPaint(created.scene), expected.paint, 'the last colour set must be the one drawn');
       disposeLabels(created);
     },
@@ -168,8 +175,7 @@ group('batched text operations @batch @publication', () => {
             ? () => {
                 rewrite();
                 created.scene.updateMatrixWorld(true);
-                if (created.group.error !== undefined) throw created.group.error;
-                if (created.nestedGroup.error !== undefined) throw created.nestedGroup.error;
+                endFrame(created.scene);
                 const draws = inspectDraws(created.scene);
                 return draws.draws * 1_000_000 + draws.glyphs;
               }
@@ -194,7 +200,7 @@ group('edit-sized root publication @publication @edit-sized @edit', () => {
       const created = createLabels(count);
       const textCount = yield () => {
         created.scene.updateMatrixWorld(true);
-        if (created.textGroup.error !== undefined) throw created.textGroup.error;
+        endFrame(created.scene);
         return created.textGroup.textCount;
       };
       assert.equal(textCount, count);
@@ -300,7 +306,6 @@ group('edit-sized root publication @publication @edit-sized @edit', () => {
                   glyphCount += glyphs.length;
                 }
               }
-              if (created.textGroup.error !== undefined) throw created.textGroup.error;
               return glyphCount;
             };
             const editWithoutPublication = () => {
@@ -358,8 +363,10 @@ group('multiple-owner publication @multi-owner @edit-sized @edit @publication', 
               try {
                 cold.labels[0]!.text = text;
                 if (engineOnly) glyph.shape();
-                else cold.scene.updateMatrixWorld(true);
-                if (cold.textGroup.error !== undefined) throw cold.textGroup.error;
+                else {
+                  cold.scene.updateMatrixWorld(true);
+                  endFrame(cold.scene);
+                }
                 return cold.labels[0]!.measure();
               } finally {
                 disposeLabels(cold);

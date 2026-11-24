@@ -2,6 +2,7 @@
 import { assert, bench, group } from '@pmndrs/labs';
 
 import {
+  endFrame,
   borrowedGlyphChecksum,
   createLabels,
   createTextBatch,
@@ -28,7 +29,7 @@ group('1,000-label stress @stress', () => {
       visible = !visible;
       created.textGroup.visible = visible;
       created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      endFrame(created.scene);
       return created.textGroup.textCount;
     };
     update();
@@ -48,7 +49,7 @@ group('1,000-label stress @stress', () => {
     const created = createLabels(1_000);
     for (const [index, label] of created.labels.entries()) label.renderOrder = index;
     created.scene.updateMatrixWorld(true);
-    if (created.textGroup.error !== undefined) throw created.textGroup.error;
+    endFrame(created.scene);
     let reversed = false;
     const textCount = yield () => {
       reversed = !reversed;
@@ -56,7 +57,7 @@ group('1,000-label stress @stress', () => {
         label.renderOrder = reversed ? created.labels.length - index : index;
       }
       created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      endFrame(created.scene);
       return created.textGroup.textCount;
     };
     assert.equal(textCount, created.labels.length);
@@ -67,7 +68,7 @@ group('1,000-label stress @stress', () => {
     const created = createLabels(1_000);
     for (const [index, label] of created.labels.entries()) label.renderOrder = index;
     created.scene.updateMatrixWorld(true);
-    if (created.textGroup.error !== undefined) throw created.textGroup.error;
+    endFrame(created.scene);
     let reversed = false;
     const textCount = yield () => {
       reversed = !reversed;
@@ -77,7 +78,7 @@ group('1,000-label stress @stress', () => {
       created.scene.updateMatrixWorld(true);
       created.labels[0]!.text = reversed ? 'edited alpha' : 'edited bravo';
       created.scene.updateMatrixWorld(true);
-      if (created.textGroup.error !== undefined) throw created.textGroup.error;
+      endFrame(created.scene);
       return created.textGroup.textCount;
     };
     assert.equal(textCount, created.labels.length);
@@ -136,7 +137,10 @@ group('1,000-label stress @stress', () => {
         coldLabelLayouts(Array.from({ length: 1_024 }, (_, index) => `${prefix} ${String(index).padStart(4, '0')}`)),
       );
       const created = createTextBatch(1_024);
-      const frame = () => created.scene.updateMatrixWorld(true);
+      const frame = () => {
+        created.scene.updateMatrixWorld(true);
+        endFrame(created.scene);
+      };
       let alternate = false;
       const textCount = yield () => {
         alternate = !alternate;
@@ -145,7 +149,6 @@ group('1,000-label stress @stress', () => {
           text.text = `${prefix} ${String(index).padStart(4, '0')}`;
         }
         finishSpan(span, created.texts, frame);
-        if (created.textGroup.error !== undefined) throw created.textGroup.error;
         return created.textGroup.textCount;
       };
       assert.equal(textCount, created.texts.length);

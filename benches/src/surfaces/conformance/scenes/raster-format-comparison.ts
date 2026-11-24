@@ -18,6 +18,7 @@ import {
 import { loadSlugFontAsset } from '../../../workloads/font-assets/slug';
 import type { RendererBackend } from '../../../renderer/webgpu-renderer';
 import { createBenchmarkThreeRoot, disposeBenchmarkThreeRoot } from '../../../three-root';
+import { endFrame } from '../../../three-frame';
 
 const BACKGROUND = 0x070709;
 const BASE_PHYSICAL_PPEM = 64;
@@ -364,8 +365,8 @@ async function createComparisonResources(
     // `Text` reconciles while parented, so attaching and forcing one world update is what commits both layouts.
     mtsdfLine.updateMatrixWorld(true);
     slugLine.updateMatrixWorld(true);
-    if (mtsdfLine.error !== undefined) throw mtsdfLine.error;
-    if (slugLine.error !== undefined) throw slugLine.error;
+    endFrame(mtsdfScene);
+    endFrame(slugScene);
     context.signal.throwIfAborted();
     const camera = comparisonCamera(context.viewport.width / PANEL_COUNT, context.viewport.height);
     const targetSize = physicalPanelSize(context.viewport);
@@ -452,7 +453,15 @@ async function compileComparison(resources: ComparisonResources): Promise<void> 
 function publishComparisonLines(resources: ComparisonResources): unknown {
   resources.mtsdfLine.updateMatrixWorld(true);
   resources.slugLine.updateMatrixWorld(true);
-  return resources.mtsdfLine.error ?? resources.slugLine.error;
+  let failure: unknown;
+  for (const scene of [resources.mtsdfScene, resources.slugScene]) {
+    try {
+      endFrame(scene);
+    } catch (error) {
+      failure ??= error;
+    }
+  }
+  return failure;
 }
 
 function publishComparisonView(resources: ComparisonResources, view: ComparisonLineView): unknown {

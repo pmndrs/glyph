@@ -7,6 +7,7 @@ import { defineThreeConfig } from '@pmndrs/glyph/three';
 
 import { createFontCache, mount, timeout, unmount } from '../support/text-mutation-lanes.mjs';
 import { createThreeTestHandle } from '../support/three-handle.mjs';
+import { assertCommitted } from '../support/three-render.mjs';
 
 const bitmap16 = bitmap({ strikes: [16] });
 const fonts = createFontCache({ inter: { file: 'inter-bitmap-16.font.glb', raster: bitmap16 } });
@@ -69,7 +70,7 @@ test('structural spans derive valid nested and disjoint ranges without an offset
   try {
     assert.equal(mounted.nodes[0].text, 'abc def');
     assert.doesNotThrow(() => mounted.scene.updateMatrixWorld(true));
-    assert.equal(mounted.nodes[0].error, undefined);
+    assertCommitted(mounted.nodes[0]);
   } finally {
     unmount(mounted);
   }
@@ -272,7 +273,7 @@ test(
     const mounted = mount(font, [authored(document)]);
     try {
       assert.doesNotThrow(() => mounted.scene.updateMatrixWorld(true));
-      assert.equal(mounted.nodes[0].error, undefined);
+      assertCommitted(mounted.nodes[0]);
       assert.equal(mounted.nodes[0].text, 'body face tail');
     } finally {
       unmount(mounted);
@@ -299,7 +300,7 @@ test('invalid authored properties reject atomically while unknown properties are
     assert.equal(node.style.fontSize, latin.fontSize, 'a rejected property update leaves desired state unchanged');
     node.set({ style: { ...latin, futureProperty: 1 } });
     mounted.scene.updateMatrixWorld(true);
-    assert.equal(node.error, undefined, 'unknown style properties are ignored by the runtime boundary');
+    assertCommitted(node, 'unknown style properties are ignored by the runtime boundary');
   } finally {
     unmount(mounted);
   }
@@ -433,8 +434,7 @@ test('a fixed root budget keeps the last complete revision and self-heals', { ti
     assert.doesNotThrow(() => scene.updateMatrixWorld(true));
     assert.equal(node.measure().glyphCount, 26, 'measurement describes desired local state');
     assert.equal(settledDraw.geometry.instanceCount, 3, 'the last complete draw stays visible');
-    assert.deepEqual(node.commitState(), { status: 'pending' });
-    assert.equal(node.error, undefined, 'honouring a fixed budget is not an error');
+    assert.deepEqual(node.commitState(), { status: 'pending' }, 'honouring a fixed budget draws the last revision');
 
     const recovered = txt`${span({ color: '#2f7fff' })`a`}b`;
     node.set({ text: recovered });

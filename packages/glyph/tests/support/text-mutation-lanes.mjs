@@ -11,6 +11,7 @@ import * as THREE from 'three/webgpu';
 
 // The identity lane is named by the codec contract that packs it, not by a literal here.
 import { PLACEMENT_SLOT_BUFFER_ID, STABLE_GLYPH_BUFFER_ID, TRANSFORM_BUFFER_ID } from '../../dist/three/codec.js';
+import { assertCommitted } from './three-render.mjs';
 
 export const IDENTITY_LANE = `_pmndrsGlyph_${STABLE_GLYPH_BUFFER_ID}`;
 export const PLACEMENT_SLOT_LANE = `_pmndrsGlyph_${PLACEMENT_SLOT_BUFFER_ID}`;
@@ -170,7 +171,7 @@ export function assertMatchesFreshBuild(font, mounted, paragraphs, context) {
     for (const [index, entry] of got.paragraphs.entries()) {
       const expected = want.paragraphs[index];
       const where = `${context}: paragraph ${index}`;
-      assert.equal(mounted.nodes[index]?.error, undefined, `${where}: renderer publication failed`);
+      assertCommitted(mounted.nodes[index], `${where}: renderer publication failed`);
       assert.equal(entry.glyphCount, expected.glyphCount, `${where} glyph count`);
       assert.equal(entry.lineCount, expected.lineCount, `${where} line count`);
       assert.deepEqual(entry.glyphIds, expected.glyphIds, `${where} glyph ids`);
@@ -283,7 +284,7 @@ function identityPositions(scene, draw, where) {
 /** Assert a paragraph actually shaped what it was handed, so a green run is not a green blank. */
 export function assertShaped(mounted, context, { minimumGlyphs = 1 } = {}) {
   for (const [index, node] of mounted.nodes.entries()) {
-    assert.equal(node.error, undefined, `${context}: paragraph ${index} reported ${String(node.error?.message)}`);
+    assertCommitted(node, `${context}: paragraph ${index} reported ${node.commitState().status}`);
     const measured = node.measure();
     assert.notEqual(measured, undefined, `${context}: paragraph ${index} lost its committed layout metrics`);
     assert.equal(measured.missingGlyphCount, 0, `${context}: paragraph ${index} produced .notdef glyphs`);

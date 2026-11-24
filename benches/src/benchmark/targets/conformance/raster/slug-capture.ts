@@ -968,10 +968,8 @@ function pixelHasInk(bytes: Uint8Array, pixelIndex: number): boolean {
   return bytes[offset] !== 0 || bytes[offset + 1] !== 0 || bytes[offset + 2] !== 0;
 }
 
-/** Every layout read doubles as the commit check, because `Text` reports a failed synchronize through `error`. */
+/** The Slug conformance Text's layout; a failed publication throws from the render that found it. */
 function committedLayout(line: Text<typeof slug>): GlyphLayout {
-  const error = line.error;
-  if (error !== undefined) throw error;
   const layout = line.glyphs();
   if (layout === undefined) throw new Error('Slug conformance Text lost its committed layout');
   return layout;

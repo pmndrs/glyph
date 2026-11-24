@@ -38,8 +38,7 @@ function mount(t, config = ThreeConfig) {
 }
 
 const inputError = (path) => ({ name: 'GlyphInputError', code: 'invalid-input', path });
-const committed = (...texts) =>
-  texts.every((text) => text.commitState().status === 'committed' && text.error === undefined);
+const committed = (...texts) => texts.every((text) => text.commitState().status === 'committed');
 
 const inventory = [
   {
@@ -120,7 +119,11 @@ const inventory = [
       other.onLayout = () => {
         otherCalls += 1;
       };
-      assert.throws(frame, (error) => error === failure, 'the render throws the exception after drawing');
+      assert.throws(
+        frame,
+        { message: 'onLayout of Glyph text "label" threw: callback failed', cause: failure },
+        'the render throws the exception after drawing, naming the text',
+      );
       assert.equal(otherCalls, 1, 'the other callback still ran');
       assert.ok(committed(label, other), 'the frame publishes; a callback exception is not a text error');
       assert.doesNotThrow(frame, 'the same summary is not handed over again');
@@ -150,7 +153,7 @@ const inventory = [
       label.text = 'changed';
       trapNextCall(/engine_prepare_batch/);
       assert.throws(frame, /trapped and was restarted/u);
-      assert.equal(label.commitState().status, 'failed');
+      assert.equal(label.commitState().status, 'pending', 'the trapped frame drew none of its new input');
       assert.doesNotThrow(frame, 'the restart is thrown once');
       assert.ok(committed(label, other), 'the next frame restates every text; no setter was needed');
     },
@@ -172,9 +175,13 @@ const inventory = [
       );
       // The first frame's batch traps and restarts the engine; the next one isolates and refuses the culprit.
       assert.throws(frame, /trapped and was restarted/u);
-      assert.throws(frame, (error) => error === culprit.error);
+      assert.throws(frame, {
+        name: 'GlyphError',
+        code: 'engine-failed',
+        message: /^Glyph text "b changed" was not drawn: .*trapped/u,
+      });
       assert.ok(committed(texts[0], texts[2]), 'siblings publish');
-      assert.equal(culprit.commitState().status, 'failed');
+      assert.equal(culprit.commitState().status, 'pending', 'the refused text draws nothing');
       assert.equal(culprit.text, 'b changed', 'the refused text keeps its value');
       assert.doesNotThrow(frame, 'a standing refusal is thrown once');
       dirty = false;

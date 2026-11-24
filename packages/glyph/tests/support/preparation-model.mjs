@@ -180,7 +180,11 @@ export function preparationModel(name, mount) {
       });
       await assert.rejects(
         async () => host.frame(),
-        (error) => error === failure,
+        // Vue hands a listener's exception to its own error handling, so it arrives as thrown; elsewhere Glyph
+        // rethrows it from the render, quoting the text it was called for.
+        (error) =>
+          error === failure ||
+          (error.cause === failure && error.message === 'onLayout of Glyph text "first" threw: layout callback failed'),
       );
       assert.equal(secondCalls, 1, 'the other callback still ran');
       if (first.committed !== undefined) {
