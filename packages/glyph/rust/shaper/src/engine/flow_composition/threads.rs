@@ -25,6 +25,43 @@ pub(super) fn wrapping_for_flow_thread(
         .ok_or(EngineError::InvalidRequest)
 }
 
+/// How far down region `region_index` (whose own foot is `region_block_end`) a line box of
+/// `constraint`'s thread may reach. A band is only ever started above the foot, so this decides
+/// the one line that starts inside the region and ends past it (`block_start < foot <
+/// block_start + height`, line-height box, not ink). `clip` and `ellipsis` drop it in every
+/// region; `visible` keeps it in the thread's last region only, where it spills over the edge.
+/// In an earlier region it moves to the next one, as in every mode.
+pub(super) fn composition_block_end(
+    constraint: &FlowConstraint,
+    region_index: usize,
+    region_block_end: f32,
+) -> f64 {
+    let last_region = usize::try_from(constraint.region_start)
+        .ok()
+        .and_then(|start| start.checked_add(usize::from(constraint.region_count)))
+        .and_then(|end| end.checked_sub(1));
+    if constraint.overflow == OVERFLOW_VISIBLE && last_region == Some(region_index) {
+        f64::from(region_block_end.max(UNBOUNDED_BLOCK_END))
+    } else {
+        f64::from(region_block_end)
+    }
+}
+
+/// [`composition_block_end`] for the thread `flow_thread_id`.
+pub(super) fn composition_block_end_for_flow_thread(
+    geometry: &FlowGeometryArena,
+    flow_thread_id: u32,
+    region_index: usize,
+    region_block_end: f32,
+) -> Result<f64, EngineError> {
+    geometry
+        .constraints
+        .iter()
+        .find(|constraint| constraint.flow_thread_id == flow_thread_id)
+        .map(|constraint| composition_block_end(constraint, region_index, region_block_end))
+        .ok_or(EngineError::InvalidRequest)
+}
+
 pub(super) fn flexible_for_flow_thread(
     geometry: &FlowGeometryArena,
     flow_thread_id: u32,

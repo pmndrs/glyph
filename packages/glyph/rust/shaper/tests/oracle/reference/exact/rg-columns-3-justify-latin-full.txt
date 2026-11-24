@@ -14,80 +14,80 @@ stage cluster identity 4 94ae5c76759329be
 stage cluster repr 11 1bbd179a4eed863c
 stage cluster cache 5 b5a9568dc6740ca9
 stage run_local repr 16 73e3364507c03565
-stage flow value 35 9763e8a4f7993b6a
+stage flow value 35 c876726d813e43da
 stage boundary value 28 582eb485513bd5da
 stage boundary identity 1 97cda39131246a3d
 stage positioned identity 4 c5eb659dababa2b1
 stage positioned value 20 9aacc6d929ae1ef6
 stage positioned repr 37 da3eebaebde3aff5
-stage public value 13 09024bc14a3a8c6d
-stage public identity 1 c9ac5a78d5483cdb
-stage view identity 4 7049b04ecee23d36
-stage view value 40 13af191cf929fc11
-stage wire wire 1 c3768d33d1cf80ec
+stage public value 13 ba310331054d853a
+stage public identity 1 2469504c5fb928f2
+stage view identity 4 ba783b8b2b171ed7
+stage view value 40 ef3870c7875d3be0
+stage wire wire 1 11198766fa4c10fe
 stage gather identity 7 0158e53cf4f97f7c
-stage gather value 36 4698263444f5b3fc
+stage gather value 36 5dfbfba42140c9bd
 stage gpu identity 2 29d6f6c13061d4ac
 stage gpu value 3 01d11886d227d325
-stage plan value 23 d9b74b8849c586a3
-stage plan identity 7 351b54e32927a68e
+stage plan value 23 5dfe49da12fb4d7f
+stage plan identity 7 b65a14036160df65
 step 01 insert in the first region
-class value 288 1813cb48f5f0742b
-class identity 31 99bf270b8c0b1549
+class value 288 d5dd2c10aa0ee8d7
+class identity 31 03810ce1a700a62b
 class repr 64 09e49a6dbc1bb8e8
 class cache 5 b7541a0ed2382b8b
-class wire 1 5eba4c6d18106788
+class wire 1 49ebbce7c39f0f6c
 step 02 delete in a later region
-class value 288 2e1c028cf841680f
-class identity 31 7a2be17103189b1a
+class value 288 f3cea0f13619430b
+class identity 31 24a4df37cc24e78b
 class repr 64 e934fde2c6b20674
 class cache 5 9705c860f7a03f40
-class wire 1 de9f624f9a133eb3
+class wire 1 27b568cd2e19a57c
 step 03 narrower measure
-class value 288 481d2f0f28969d63
-class identity 31 69144f192f945617
+class value 288 b1353b1c70163b5f
+class identity 31 6f67d8611ea30e8f
 class repr 64 78452b15443932af
 class cache 5 52cd87d4aef771a3
-class wire 1 50e02510f8a1fc94
+class wire 1 afba284e2d45362b
 step 04 shorter regions
-class value 288 ddc2f8e54e609e22
-class identity 31 4bcccaf151f9f2e4
+class value 288 584f91696e198246
+class identity 31 eb774a910ec952f8
 class repr 64 cf414c2af969c17c
 class cache 5 52cd87d4aef771a3
-class wire 1 23ff8144ba89234a
+class wire 1 4d1adca2e15a3a50
 step 05 three columns, wider gap
-class value 288 824ae2e916476bd6
-class identity 31 0031b7711d9232a3
+class value 288 0ebd61c8e4e92405
+class identity 31 efa91c705f62d4e8
 class repr 64 053c1a62847840f6
 class cache 5 8ffda01a42e2ed80
-class wire 1 02128fc445418760
+class wire 1 e72f7637c58d5444
 step 06 one region
-class value 288 2cdfc15a4f1a70ef
-class identity 31 8310b617a74924bb
+class value 288 7a7275b30781236d
+class identity 31 fb788a278d529e1a
 class repr 64 1ac85ba5b8b7ec06
 class cache 5 d7e96085f1fdf37b
-class wire 1 ddbbbd04d5c86334
+class wire 1 76d669f4cc530d2b
 step 07 the starting regions
-class value 288 2e1c028cf841680f
-class identity 31 b634ca0ad9c0b1cc
+class value 288 f3cea0f13619430b
+class identity 31 bc7a5fa1674d5c8f
 class repr 64 e934fde2c6b20674
 class cache 5 d7e96085f1fdf37b
-class wire 1 b71d5b68049fc968
+class wire 1 b52c8859d6936b41
 step 08 flip case at 708
-class value 288 c5f72811832f4cdd
-class identity 31 29ab01744f62e9d0
+class value 288 d1de6068c12a3ef2
+class identity 31 2d3e5da718d85850
 class repr 64 63ccc33c191fc370
 class cache 5 89009bcb432ae8c5
-class wire 1 9162de2647909080
+class wire 1 79023652fb1dbfaf
 step 09 delete 4 at 235
-class value 288 18270d1d64789a8d
-class identity 31 abaa807544fad9ca
+class value 288 9258ca52b4297d35
+class identity 31 59c8109f4aa47f39
 class repr 64 285f8ca6614c0a23
 class cache 5 7e75e932580f297d
-class wire 1 9ae14feb0aa47993
+class wire 1 4dc79a6017cc2860
 step 10 width 567
-class value 288 6e169f0a56dad416
-class identity 31 eb50d04241910473
+class value 288 1529db0065d09198
+class identity 31 ccfd0ce1f6917aa7
 class repr 64 2b2e60ccd53fa701
 class cache 5 192a40255fd548e6
-class wire 1 f193ca94df9b087f
+class wire 1 3e3e552c738ca333

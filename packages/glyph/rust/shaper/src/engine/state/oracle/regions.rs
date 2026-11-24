@@ -8,7 +8,9 @@
 
 use alloc::{format, string::String, vec, vec::Vec};
 
-use crate::engine::frame::{ALIGN_JUSTIFY, ALIGN_START, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS};
+use crate::engine::frame::{
+    ALIGN_JUSTIFY, ALIGN_START, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE,
+};
 
 use super::{
     corpus::{self, Script},
@@ -177,6 +179,32 @@ fn fixtures() -> Vec<Fixture> {
                 regions: STAGGERED,
                 height: 400.0,
                 align: ALIGN_JUSTIFY,
+                ..base
+            },
+            false,
+        ),
+        // The default overflow: the last region keeps the one line that straddles its foot.
+        fixture(
+            "columns-2-visible-latin",
+            latin,
+            Script::Latin,
+            900,
+            Layout {
+                regions: columns(2, 24.0),
+                overflow: OVERFLOW_VISIBLE,
+                ..base
+            },
+            true,
+        ),
+        fixture(
+            "boxes-visible-latin",
+            latin,
+            Script::Latin,
+            900,
+            Layout {
+                regions: STAGGERED,
+                height: 400.0,
+                overflow: OVERFLOW_VISIBLE,
                 ..base
             },
             false,

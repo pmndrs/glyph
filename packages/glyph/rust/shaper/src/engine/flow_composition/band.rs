@@ -39,7 +39,6 @@ impl FlowLayoutArena {
         flow_thread_id: u32,
         region_id: u32,
         transform_index: u32,
-        clip_id: u32,
         clusters: &ClusterArena,
         bidi: &BidiAnalysis,
         styles: &[StyleSegment],
@@ -201,7 +200,9 @@ impl FlowLayoutArena {
                     flow_thread_id,
                     region_id,
                     transform_index,
-                    clip_id,
+                    // No overflow mode draws outside its box, so no line marks a clip
+                    // boundary; the field survives because primitives still publish it.
+                    clip_id: 0,
                     fragment_count: u16::try_from(fragment_count)
                         .map_err(|_| EngineError::ResultTooLarge)?,
                     align,

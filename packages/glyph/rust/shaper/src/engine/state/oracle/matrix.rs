@@ -16,7 +16,7 @@ use crate::{
     bidi::{DIRECTION_LTR, DIRECTION_RTL},
     engine::frame::{
         ALIGN_CENTER, ALIGN_END, ALIGN_JUSTIFY, ALIGN_START, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS,
-        WRAP_CHARACTER, WRAP_NONE,
+        OVERFLOW_VISIBLE, WRAP_CHARACTER, WRAP_NONE,
     },
 };
 
@@ -434,6 +434,17 @@ fn feature_paragraphs(cases: &mut Vec<Case>) {
         &[&["inter"]],
         Script::Latin,
         clipped,
+        true,
+    );
+    let mut spilled = latin.clone();
+    spilled.layout.height = 200.0;
+    spilled.layout.overflow = OVERFLOW_VISIBLE;
+    push(
+        "visible-height-latin",
+        Tier::Full,
+        &[&["inter"]],
+        Script::Latin,
+        spilled,
         true,
     );
     let mut limited = latin.clone();

@@ -13,7 +13,7 @@ use super::{
     frame::{
         ALIGN_JUSTIFY, ALIGN_START, AXIS_AT_MOST, AXIS_EXACT, DROP_CAP_ALIGN_BASELINE,
         DROP_CAP_ALIGN_TEXT_TOP, DROP_CAP_SIDE_INLINE_START, EXCLUSION_WRAP_INLINE_END,
-        EXCLUSION_WRAP_INLINE_START, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS, WRAP_WORD,
+        EXCLUSION_WRAP_INLINE_START, OVERFLOW_ELLIPSIS, OVERFLOW_VISIBLE, WRAP_WORD,
         WRITING_HORIZONTAL_TB,
     },
     layout_units::scaled_from_layout_units,
@@ -44,6 +44,10 @@ pub(crate) use extents::inline_line_extents;
 use extents::*;
 pub(crate) use threads::constraint_word_space_shrink;
 use threads::*;
+
+/// The block end of an unbounded height (the intrinsic layout, an unconstrained box), and how
+/// far a `visible` thread's straddling last line may reach. Finite, so a walk always ends.
+pub(crate) const UNBOUNDED_BLOCK_END: f32 = 16_777_216.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct FlowLine {
@@ -1709,71 +1713,130 @@ mod tests {
         );
     }
 
-    #[test]
-    fn only_clip_overflow_assigns_a_clip_id_to_lines() {
+    /// Six one-cluster lines, 10 high, into regions 25 high: lines at 0 and 10 fit whole, the
+    /// line at 20 straddles the foot, and the lines at 30 and later lie wholly outside.
+    fn overflow_layout(overflow: u8, region_count: u16, block_end: f32) -> FlowLayoutArena {
         let clusters = quantized(ClusterArena {
-            starts: vec![0, 1, 2],
-            ends: vec![1, 2, 3],
-            advances: vec![2.0; 3],
-            flags: vec![CLUSTER_SAFE_BEFORE; 3],
-            style_indexes: vec![0; 3],
-            source_runs: vec![0; 3],
-            font_handles: vec![1; 3],
-            index_at: vec![0, 1, 2, 3],
+            starts: vec![0, 1, 2, 3, 4, 5],
+            ends: vec![1, 2, 3, 4, 5, 6],
+            advances: vec![3.0; 6],
+            flags: vec![CLUSTER_SAFE_BEFORE; 6],
+            style_indexes: vec![0; 6],
+            source_runs: vec![0; 6],
+            font_handles: vec![1; 6],
+            index_at: vec![0, 1, 2, 3, 4, 5, 6],
             ..ClusterArena::default()
         });
         let styles = [StyleSegment {
             text_start: 0,
-            text_end: 3,
+            text_end: 6,
             style: ResolvedStyle::test_typography(10.0, 0.0, 0.0),
         }];
-        let metrics = |_| {
-            Some(FontMetrics {
-                units_per_em: 1_000,
-                ascender: 800,
-                cap_height: 700,
-                x_height: 500,
-                height_fallbacks: 0,
-                descender: -200,
-                line_gap: 0,
-                underline_position: -100,
-                underline_thickness: 50,
-                strikeout_position: 300,
-                strikeout_size: 50,
-            })
-        };
-
-        for (overflow, expected_clip_id) in [
-            (OVERFLOW_VISIBLE, 0),
-            (OVERFLOW_ELLIPSIS, 0),
-            (OVERFLOW_CLIP, 7),
-        ] {
-            let mut flow = constraint();
-            flow.overflow = overflow;
-            let mut flow_region = region();
-            flow_region.exclusion_count = 0;
-            let geometry = FlowGeometryArena {
-                constraints: vec![flow],
-                regions: vec![RetainedRegion {
-                    record: flow_region,
+        let mut flow = constraint();
+        flow.overflow = overflow;
+        flow.region_count = region_count;
+        let regions = (0..region_count)
+            .map(|index| {
+                let mut record = region();
+                record.id = u32::from(index) + 1;
+                record.inline_end = 4.0;
+                record.clip_inline_end = 4.0;
+                record.block_end = block_end;
+                record.clip_block_end = block_end;
+                record.exclusion_count = 0;
+                RetainedRegion {
+                    record,
                     vertex_start: 0,
-                }],
-                ..FlowGeometryArena::default()
-            };
-            let mut layout = FlowLayoutArena::default();
-            layout
-                .build(
-                    &geometry,
-                    &clusters,
-                    &styles,
-                    &mut InlineSlotArena::default(),
-                    8,
-                    1,
-                    metrics,
-                    |_| Some(1),
-                )
-                .unwrap();
-            assert_eq!(layout.lines[0].clip_id, expected_clip_id);
+                }
+            })
+            .collect();
+        let geometry = FlowGeometryArena {
+            constraints: vec![flow],
+            regions,
+            ..FlowGeometryArena::default()
+        };
+        let mut layout = FlowLayoutArena::default();
+        layout
+            .build(
+                &geometry,
+                &clusters,
+                &styles,
+                &mut InlineSlotArena::default(),
+                16,
+                1,
+                |_| {
+                    Some(FontMetrics {
+                        units_per_em: 1_000,
+                        ascender: 800,
+                        cap_height: 700,
+                        x_height: 500,
+                        height_fallbacks: 0,
+                        descender: -200,
+                        line_gap: 0,
+                        underline_position: -100,
+                        underline_thickness: 50,
+                        strikeout_position: 300,
+                        strikeout_size: 50,
+                    })
+                },
+                |_| Some(1),
+            )
+            .unwrap();
+        layout
+    }
+
+    fn line_places(layout: &FlowLayoutArena) -> Vec<(u32, f64)> {
+        layout
+            .lines
+            .iter()
+            .map(|line| (line.region_id, line.block_start))
+            .collect()
+    }
+
+    #[test]
+    fn visible_keeps_the_straddling_line_and_clip_drops_it() {
+        let fitting = [(1, 0.0), (1, 10.0)];
+        let straddling = [(1, 0.0), (1, 10.0), (1, 20.0)];
+        assert_eq!(
+            line_places(&overflow_layout(OVERFLOW_VISIBLE, 1, 25.0)),
+            straddling
+        );
+        assert_eq!(
+            line_places(&overflow_layout(OVERFLOW_CLIP, 1, 25.0)),
+            fitting
+        );
+        assert_eq!(
+            line_places(&overflow_layout(OVERFLOW_ELLIPSIS, 1, 25.0)),
+            fitting
+        );
+        // A line box ending exactly at the foot fits; one starting exactly there is outside.
+        for overflow in [OVERFLOW_VISIBLE, OVERFLOW_CLIP] {
+            assert_eq!(
+                line_places(&overflow_layout(overflow, 1, 20.0)),
+                fitting,
+                "overflow {overflow}"
+            );
+        }
+    }
+
+    #[test]
+    fn only_the_last_region_keeps_a_straddling_line() {
+        // An earlier column's straddling line moves to the next column in every mode.
+        assert_eq!(
+            line_places(&overflow_layout(OVERFLOW_VISIBLE, 2, 25.0)),
+            [(1, 0.0), (1, 10.0), (2, 0.0), (2, 10.0), (2, 20.0)]
+        );
+        assert_eq!(
+            line_places(&overflow_layout(OVERFLOW_CLIP, 2, 25.0)),
+            [(1, 0.0), (1, 10.0), (2, 0.0), (2, 10.0)]
+        );
+    }
+
+    #[test]
+    fn no_overflow_mode_assigns_a_clip_id_to_lines() {
+        for overflow in [OVERFLOW_VISIBLE, OVERFLOW_CLIP, OVERFLOW_ELLIPSIS] {
+            let layout = overflow_layout(overflow, 2, 25.0);
+            assert!(layout.lines.iter().all(|line| line.clip_id == 0));
         }
     }
 

@@ -42,13 +42,24 @@ test('a terminal hard break measures without trapping the engine', async (t) => 
 
 test('a clipped paragraph inspects the same lead glyphs as the unclipped paragraph', async (t) => {
   const create = await session(t, 'clipped-lead', 'cross-space-bitmap-16.font.glb');
-  const open = create({ text: crossSpaceText, layout: { wrap: 'word' }, constraints: width(200) }).glyphs();
-  const clipped = create({
-    text: crossSpaceText,
-    layout: { wrap: 'word', overflow: 'clip' },
-    constraints: { ...width(200), height: { mode: 'exact', size: 28 } },
-  }).glyphs();
-  assert.deepEqual(Array.from(clipped.glyphIds), Array.from(open.glyphIds));
+  const open = Array.from(
+    create({ text: crossSpaceText, layout: { wrap: 'word' }, constraints: width(200) }).glyphs().glyphIds,
+  );
+  // 28 is shorter than one line: `clip` lays out no line, `visible` the straddling first one.
+  for (const [overflow, height] of [
+    ['clip', 70],
+    ['visible', 28],
+  ]) {
+    const bounded = Array.from(
+      create({
+        text: crossSpaceText,
+        layout: { wrap: 'word', overflow },
+        constraints: { ...width(200), height: { mode: 'exact', size: height } },
+      }).glyphs().glyphIds,
+    );
+    assert.ok(bounded.length > 0 && bounded.length < open.length, `${overflow} keeps some lines`);
+    assert.deepEqual(bounded, open.slice(0, bounded.length), `${overflow} lead glyphs`);
+  }
 });
 
 test('retained clipped inspection matches cold layouts across clipping, ellipsis and text changes', async (t) => {
