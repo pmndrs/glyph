@@ -56,8 +56,8 @@ impl ParagraphState {
             font_stacks,
             font_bindings,
         )?;
-        // Each pass shapes every span with its current font, then hands each missing cluster
-        // to the next font of its stack; a pass that hands nothing on is the shape.
+        // Each pass shapes every span with its current font, then hands each grapheme cluster
+        // with a missing glyph to the next font of its stack; a pass that hands nothing on is the shape.
         for _ in 0..max_stack_depth.max(1) {
             shape_fallback_spans(
                 shaper,
@@ -69,6 +69,7 @@ impl ParagraphState {
             )?;
             collect_cluster_records(
                 self.shape.pending_mut(),
+                self.unicode.active().grapheme_boundaries(),
                 &mut self.fallback_cluster_scratch,
                 &mut self.sort_pair_scratch,
             )?;

@@ -65,7 +65,8 @@ const READ_BACK_VIEWS: u32 = MEASURE_VIEWS | SEMANTIC_VIEW_GLYPH_FACTS;
 const SEMANTIC_F32_FIELD_COUNT: u8 = SEMANTIC_F32_SHADOW_OFFSET_Y_EM + 1;
 const SEMANTIC_U32_FIELD_COUNT: u8 = SEMANTIC_U32_PLACEMENT_SLOT + 1;
 const FIRST_FONT_HANDLE: u32 = 1;
-const FIRST_BINDING_HANDLE: u32 = 41;
+/// The binding handle of the first font a session registers; the n-th font registered has this plus n.
+pub const FIRST_BINDING_HANDLE: u32 = 41;
 const INITIAL_TRANSPORT_BYTES: u32 = 1 << 16;
 
 /// How a step that prepares before publishing splits its preparation across requests.

@@ -301,8 +301,19 @@ pub(super) fn allocate_glyph_id(next_glyph_id: &mut u32) -> Result<u32, EngineEr
     Ok(stable_id)
 }
 
+/// One record per grapheme cluster that has glyphs, in logical order: missing when any of its
+/// glyphs is.
+///
+/// Font fallback decides per grapheme cluster, the unit the cluster build gives one font.
+/// HarfRust merges a mark into its base's cluster but not every other Extend or Prepend code
+/// point: a ZWNJ after a lam, or the digit after U+0600, is a cluster of its own. A font that
+/// lacks a default-ignorable hides it rather than reporting it missing, so judged alone the ZWNJ
+/// would stay in a font its base left. A record inside a grapheme therefore joins the record
+/// of the grapheme's start. `grapheme_boundaries` are the paragraph's, ascending; the records
+/// ascend in text with their source runs, so one cursor walks them.
 pub(super) fn collect_cluster_records(
     shape: &ShapeArena,
+    grapheme_boundaries: &[u32],
     records: &mut Vec<ClusterRecord>,
     sort_pairs: &mut Vec<(u64, u32)>,
 ) -> Result<(), EngineError> {
@@ -336,11 +347,19 @@ pub(super) fn collect_cluster_records(
     sort::sort_pairs(sort_pairs);
     sort::apply_pair_order(records, sort_pairs);
     let mut write_index = 0usize;
+    let mut boundary = 0usize;
     for read_index in 0..records.len() {
         let record = records[read_index];
+        while grapheme_boundaries
+            .get(boundary)
+            .is_some_and(|&start| start < record.cluster)
+        {
+            boundary += 1;
+        }
+        let starts_grapheme = grapheme_boundaries.get(boundary) == Some(&record.cluster);
         if write_index > 0
             && records[write_index - 1].source_run == record.source_run
-            && records[write_index - 1].cluster == record.cluster
+            && (records[write_index - 1].cluster == record.cluster || !starts_grapheme)
         {
             records[write_index - 1].missing |= record.missing;
         } else {
