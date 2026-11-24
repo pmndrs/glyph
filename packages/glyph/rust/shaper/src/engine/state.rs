@@ -3024,10 +3024,7 @@ mod tests {
         let rejected = engine
             .measure_paragraph_with_shaper(&mut shaper, candidate, 1)
             .unwrap();
-        assert_ne!(
-            settled_layout_count(&mut engine, &shaper),
-            accepted_count
-        );
+        assert_ne!(settled_layout_count(&mut engine, &shaper), accepted_count);
         engine.invalidate_after_measure_failure(rejected).unwrap();
         assert_eq!(
             engine.borrowed_paragraph_layout(4, 1),
