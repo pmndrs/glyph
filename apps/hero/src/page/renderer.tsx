@@ -201,6 +201,7 @@ export function PageRenderer({ fonts }: { readonly fonts: Fonts }) {
         layout={{
           align: 'justify',
           wrap: 'word',
+          overflow: 'clip',
           dropCap: { lines: CAP_LINES, marginInline: 0.1 },
           justify: { minWordSpaceRatio: 0.78, maxWordSpaceRatio: 1.7 },
         }}

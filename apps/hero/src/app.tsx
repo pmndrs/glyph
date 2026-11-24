@@ -5,9 +5,20 @@ import { Canvas, useRenderPipeline, useThree } from '@react-three/fiber/webgpu';
 import { WorldProvider, useTrait } from 'koota/react';
 import { Suspense, useEffect } from 'react';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
-import { dof } from 'three/addons/tsl/display/DepthOfFieldNode.js';
-import { convertToTexture, float, mx_noise_float, pass, screenCoordinate, smoothstep, uv, vec3, vec4 } from 'three/tsl';
-import { NoToneMapping, type Node } from 'three/webgpu';
+import {
+  convertToTexture,
+  float,
+  mx_noise_float,
+  pass,
+  screenCoordinate,
+  screenSize,
+  smoothstep,
+  uv,
+  vec2,
+  vec3,
+  vec4,
+} from 'three/tsl';
+import { NoToneMapping, type Node, type TextureNode } from 'three/webgpu';
 import { cameraUniforms } from './camera/materials';
 import { CameraRig } from './camera/renderer';
 import { OutlineRenderer } from './dive/renderer';
@@ -128,18 +139,9 @@ function Post({ tier }: { readonly tier: Tier }) {
     const budget = TIERS[tier];
     const scenePass = pass(scene, camera, { samples: query.has('nomsaa') ? 0 : budget.samples });
     const beauty = scenePass.getTextureNode('output');
-    const { uFocus, uAperture, uDive } = cameraUniforms;
-    // @types/three 0.185.4 types the depth-of-field node without the node operators it has.
-    const focused: Node<'vec4'> =
-      budget.depthOfField && !query.has('nodof')
-        ? (dof(
-            beauty,
-            scenePass.getViewZNode(),
-            uFocus,
-            uFocus.mul(0.5).div(uAperture.add(0.25)),
-            uAperture.mul(1.5),
-          ) as unknown as Node<'vec4'>)
-        : beauty;
+    const { uDive } = cameraUniforms;
+    const focused =
+      budget.depthOfField && !query.has('nodof') ? depthOfField(beauty, scenePass.getViewZNode()) : beauty;
     const glow = bloom(focused, 0.62, 0.55, 1.02);
     glow.setResolutionScale(budget.bloomScale);
     const lit = convertToTexture(query.has('nobloom') ? focused : focused.add(glow));
@@ -159,6 +161,31 @@ function Post({ tier }: { readonly tier: Tier }) {
   });
 
   return null;
+}
+
+/** Taps of the depth-of-field gather: a golden-angle spiral over the unit disc. */
+const FOCUS_TAPS = Array.from({ length: 10 }, (_, index) => {
+  const radius = Math.sqrt((index + 0.5) / 10);
+  const angle = index * 2.399_963;
+
+  return [Math.cos(angle) * radius, Math.sin(angle) * radius] as const;
+});
+
+/**
+ * Depth of field in one gather. A fragment's circle of confusion grows with its distance from the plane the lens
+ * is focused on, over a range that narrows as the aperture opens, and the frame is averaged over that circle. The
+ * library's depth-of-field node draws a truer bokeh in several passes and cost more than the rest of the frame.
+ */
+function depthOfField(beauty: TextureNode, viewZ: Node<'float'>): Node<'vec4'> {
+  const { uFocus, uAperture } = cameraUniforms;
+  const range = uFocus.mul(0.5).div(uAperture.add(0.25));
+  const blur = viewZ.negate().sub(uFocus).abs().div(range).clamp().mul(uAperture).mul(7);
+  const reach = blur.div(screenSize);
+  let gathered: Node<'vec4'> = beauty.sample(uv());
+
+  for (const [x, y] of FOCUS_TAPS) gathered = gathered.add(beauty.sample(uv().add(vec2(x, y).mul(reach))));
+
+  return gathered.div(FOCUS_TAPS.length + 1);
 }
 
 /** A dark studio for the glass: a broad soft key overhead and two edge strips, dim enough to leave the field black. */

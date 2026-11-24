@@ -26,6 +26,8 @@ const { values } = parseArgs({
     /** Keep one frame in this many as a still, besides the video. */
     stills: { type: 'string', default: '90' },
     seconds: { type: 'string' },
+    /** Extra query flags for the page, such as `nodof&nobloom`, to weigh a pass by leaving it out. */
+    query: { type: 'string', default: '' },
     /** Save frames only from this playback second on. */
     from: { type: 'string', default: '0' },
     still: { type: 'boolean', default: false },
@@ -168,7 +170,7 @@ try {
     }
   });
   page.on('pageerror', (error) => failures.push(`pageerror: ${error.message}`));
-  await page.goto(`http://127.0.0.1:5312/?probe&dpr=1&tier=${values.tier}`);
+  await page.goto(`http://127.0.0.1:5312/?probe&dpr=1&tier=${values.tier}&${values.query}`);
   await page.waitForFunction(
     () => document.documentElement.dataset.heroState === 'ready' && 'heroProbe' in window,
     undefined,

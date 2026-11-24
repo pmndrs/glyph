@@ -164,7 +164,7 @@ export const PAGE = { width: 40, height: 26 } as const;
 
 /** Where the body's flow sits on the page, and the type it is set in. */
 export const BODY_BOX = { left: 2.2, top: 8.1, right: 29.6, bottom: 24.4 } as const;
-export const BODY_TYPE = { fontSize: 0.262, lineHeight: 1.42 } as const;
+export const BODY_TYPE = { fontSize: 0.244, lineHeight: 1.42 } as const;
 export const GUTTER = 0.86;
 
 /** The sidebar's column. */
