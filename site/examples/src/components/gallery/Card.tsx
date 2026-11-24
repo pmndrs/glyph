@@ -17,17 +17,12 @@ export function Card({ slug, entry }: { readonly slug: ExampleSlug; readonly ent
   return (
     <article className="card">
       <div ref={stage} className="card-stage" style={{ aspectRatio: entry.aspect ?? '16 / 9' }}>
-        <img
-          className="card-poster"
-          src={`${import.meta.env.BASE_URL}thumbnails/${slug}.webp`}
-          alt=""
-          aria-hidden="true"
-        />
         {/* A custom element cannot be a <button>; the proxy handles Enter, Space, focus, and touch itself. */}
         <glyph-proxy
           fit="cover"
           fade="220"
           root="gallery"
+          poster={`${import.meta.env.BASE_URL}thumbnails/${slug}.webp`}
           data-scene={slug}
           role="button"
           tabIndex={0}

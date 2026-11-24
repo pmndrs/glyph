@@ -26,7 +26,7 @@ examples/
     materials.ts, config.ts      when a scene owns materials or shared constants
 
 ../docs/components/
-  explainer/                     the element: root (pool, leases, presenter), proxy (poster, sentinel), controls
+  explainer/                     the element: root (pool, leases, presenter), proxy (poster, live, held frame), controls
   pages/examples/                the catalog as an explainer page; stage.tsx is what every scene stands on
   load-explainers.ts             the docs bundle entry, built to docs/assets/explainer.{js,css}
 ```
@@ -48,22 +48,9 @@ mise exec -- pnpm --filter @pmndrs/glyph-site build:examples    # → dist/examp
 mise exec -- pnpm --filter @pmndrs/glyph-site build:docs-components  # → docs/assets/explainer.{js,css}, for the pages
 mise exec -- pnpm --filter @pmndrs/glyph-site check:examples    # typecheck + both builds
 mise exec -- pnpm --filter @pmndrs/glyph-site test              # the explainer's unit tests
-GLYPH_SOURCE=/path/to/checkout/packages/glyph mise exec -- pnpm --filter @pmndrs/glyph-site check:snippets
-                                                                # every ts/tsx block in the docs typechecks against that checkout
-```
-
-The docs pages are scaffolds: their code blocks are the canonical API (`glyph.fontFace(url)`, `await face.load()`,
-`face.slug`, `bitmap({ strikes })`) and are typechecked by `check:snippets`; the scenes here are written against
-what the checkout accepts today and are ported after the API merges. See "Page format" in
-`docs/planning/docs-site-outline.md`.
-
-The scenes are written against the API on the redesign branch. Until it merges, verify them against that checkout:
-
-```sh
-# types: a scratch tsconfig with `paths` into the other checkout (see the outline's Verification section)
-node node_modules/typescript/bin/tsc --noEmit -p .examples-codex.tsconfig.json
-# bundle: alias every subpath to its declared `source` entry in that package's exports map
-GLYPH_SOURCE=/path/to/checkout/packages/glyph pnpm build:examples
+mise exec -- pnpm --filter @pmndrs/glyph-site verify:browser    # the built site in Chromium: one device, poster, live, held, input
+mise exec -- pnpm --filter @pmndrs/glyph-site capture:thumbnails [slug…]  # retake gallery posters from the built site
+mise exec -- pnpm --filter @pmndrs/glyph-site check:snippets    # every ts/tsx block in the docs typechecks against the package
 ```
 
 ## Adding one

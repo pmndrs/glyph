@@ -109,4 +109,57 @@ describe('GlyphRenderPool', () => {
     expect(pool.nextRetirementDelay(140, 100, [0])).toBe(0);
     expect(pool.nextRetirementDelay(70, 100, [0, 1])).toBeUndefined();
   });
+
+  it('hands a returning key the slot that is still warm for it', () => {
+    const pool = new GlyphRenderPool<string>(3);
+    const [first, second] = pool.reconcile(
+      [
+        { key: 'first', priority: 1 },
+        { key: 'second', priority: 0.5 },
+      ],
+      0,
+    );
+    pool.reconcile([{ key: 'second', priority: 1 }], 10);
+
+    expect(pool.slots.find((slot) => slot.index === first?.index)?.warm).toBe('first');
+
+    const returned = pool.reconcile(
+      [
+        { key: 'third', priority: 1 },
+        { key: 'first', priority: 0.5 },
+      ],
+      20,
+    );
+
+    expect(returned.find((slot) => slot?.key === 'first')?.index).toBe(first?.index);
+    expect(returned.find((slot) => slot?.key === 'third')?.index).not.toBe(second?.index);
+    expect(pool.slots).toHaveLength(3);
+  });
+
+  it('recycles the least recently used free slot once the pool is at its cap', () => {
+    const pool = new GlyphRenderPool<string>(2);
+    const [older, newer] = pool.reconcile(
+      [
+        { key: 'older', priority: 1 },
+        { key: 'newer', priority: 0.5 },
+      ],
+      0,
+    );
+    pool.reconcile([{ key: 'newer', priority: 1 }], 10);
+    pool.reconcile([], 20);
+
+    const [third] = pool.reconcile([{ key: 'third', priority: 1 }], 30);
+
+    expect(third?.index).toBe(older?.index);
+    expect(pool.slots.find((slot) => slot.index === newer?.index)?.warm).toBe('newer');
+  });
+
+  it('forgets a key so no slot stays warm for a removed target', () => {
+    const pool = new GlyphRenderPool<string>(2);
+    pool.reconcile([{ key: 'first', priority: 1 }], 0);
+    pool.reconcile([], 10);
+    pool.forget('first');
+
+    expect(pool.slots.every((slot) => slot.warm === undefined)).toBe(true);
+  });
 });

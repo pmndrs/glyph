@@ -26,25 +26,6 @@ glyph-proxy[width] {
   width: attr(width type(<length-percentage>), 100%);
 }
 
-glyph-proxy canvas {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  display: block;
-  max-width: none;
-  box-sizing: border-box;
-  transform: translate(-50%, -50%);
-}
-
-glyph-proxy[fit='cover'] canvas {
-  top: 0;
-  left: 0;
-  width: 100% !important;
-  height: 100% !important;
-  transform: none;
-  object-fit: cover;
-}
-
 glyph-proxy:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: 2px;

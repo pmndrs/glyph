@@ -25,6 +25,7 @@ export function Preview({ slug, entry }: { readonly slug: ExampleSlug; readonly 
         fit="cover"
         className="preview"
         root="preview"
+        poster={`${import.meta.env.BASE_URL}thumbnails/${slug}.webp`}
         data-scene={slug}
         tabIndex={0}
         aria-label={entry.title}

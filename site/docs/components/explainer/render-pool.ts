@@ -6,12 +6,17 @@ export type GlyphPoolRequest<Key> = {
 export type GlyphPoolSlot<Key> = {
   index: number;
   key: Key | undefined;
+  /** The key this free slot last served. Its scene is still mounted, so the same key resumes without a remount. */
+  warm: Key | undefined;
   lastUsed: number;
 };
 
 /**
  * Bounded LRU allocation for virtual render targets. The controller owns the actual renderer roots;
  * this class only decides which visible keys get a slot and which slots can be recycled.
+ *
+ * A released slot stays warm for the key it served. A returning key takes its own warm slot back, the pool grows
+ * before it evicts another key's warm scene, and at the cap the least recently used free slot is recycled.
  */
 export class GlyphRenderPool<Key> {
   #max: number;
@@ -31,34 +36,57 @@ export class GlyphRenderPool<Key> {
     const selectedKeys = new Set(selected.map((request) => request.key));
 
     for (const slot of this.#slots) {
-      if (slot.key !== undefined && !selectedKeys.has(slot.key)) {
-        slot.key = undefined;
-        slot.lastUsed = now;
-      }
+      if (slot.key !== undefined && !selectedKeys.has(slot.key)) this.#free(slot, now);
+    }
+
+    // Leases and warm slots are claimed first, so a newcomer cannot take the slot a returning key would resume.
+    const assigned = new Map<Key, GlyphPoolSlot<Key>>();
+    for (const { key } of selected) {
+      const slot =
+        this.#slots.find((candidate) => candidate.key === key) ??
+        this.#slots.find((candidate) => candidate.key === undefined && candidate.warm === key);
+      if (slot === undefined) continue;
+      slot.key = key;
+      slot.warm = undefined;
+      slot.lastUsed = now;
+      assigned.set(key, slot);
     }
 
     return selected.map(({ key }) => {
-      let slot = this.#slots.find((candidate) => candidate.key === key);
-      if (!slot) {
-        slot = this.#slots.find((candidate) => candidate.key === undefined);
-        if (!slot && this.#slots.length < this.#max) {
-          slot = { index: this.#nextIndex++, key: undefined, lastUsed: now };
-          this.#slots.push(slot);
+      const held = assigned.get(key);
+      if (held !== undefined) return held;
+      let slot: GlyphPoolSlot<Key> | undefined;
+      if (this.#slots.length < this.#max) {
+        slot = { index: this.#nextIndex++, key: undefined, warm: undefined, lastUsed: now };
+        this.#slots.push(slot);
+      } else {
+        for (const candidate of this.#slots) {
+          if (candidate.key !== undefined) continue;
+          if (slot === undefined || candidate.lastUsed < slot.lastUsed) slot = candidate;
         }
-        if (!slot) return undefined;
-        slot.key = key;
       }
+      if (slot === undefined) return undefined;
+      slot.key = key;
+      slot.warm = undefined;
       slot.lastUsed = now;
       return slot;
     });
   }
 
+  #free(slot: GlyphPoolSlot<Key>, now: number) {
+    slot.warm = slot.key;
+    slot.key = undefined;
+    slot.lastUsed = now;
+  }
+
   release(key: Key, now: number) {
     const slot = this.#slots.find((candidate) => candidate.key === key);
-    if (slot) {
-      slot.key = undefined;
-      slot.lastUsed = now;
-    }
+    if (slot) this.#free(slot, now);
+  }
+
+  /** Forget a key entirely, so no free slot stays warm for a target that no longer exists. */
+  forget(key: Key) {
+    for (const slot of this.#slots) if (slot.warm === key) slot.warm = undefined;
   }
 
   retireIdle(now: number, ttl: number, protectedIndices: readonly number[] = []) {
