@@ -50,6 +50,8 @@ const fixtures = [
     fontFixture: 'source-serif-4',
     input: resolve('fixtures/fonts/source-serif-4.005/SourceSerif4-Regular.ttf'),
     output: 'source-serif-4-mtsdf.font.glb.gz',
+    // The rich-text workload sets its emphasis span in small capitals.
+    layoutFeatures: ['smcp'],
   },
   {
     fontFixture: 'dancing-script',
@@ -83,6 +85,7 @@ try {
       input: fixture.input,
       output: bakedOutput,
       font: { fontFaceIndex: 0 },
+      ...('layoutFeatures' in fixture ? { layoutFeatures: fixture.layoutFeatures } : {}),
       rasters: [
         {
           baker: msdfBaker,

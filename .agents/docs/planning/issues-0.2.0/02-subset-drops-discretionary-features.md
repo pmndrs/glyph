@@ -109,10 +109,12 @@ Final rule ([decision](../decisions/bake-layout-feature-selection.md)):
 | `apps/r3f-hello-world/assets/font-awesome-world.font.glb`  | 184,508 B      | 184,508 B                 | 184,508 B          |
 
 The final Inter asset is 288 bytes larger than before the issue: the `layoutFeatures` record. Each was rebaked with its
-own `bake:*` script and its `bake:check` passes. The full-bake benchmark fixtures shrink where their fonts carry
-discretionary alternates (Source Serif 4 -28%, Amiri -10%, DotGothic16 -7%, Inter -1.5%; all 32 files 150.5 MB to
-139.6 MB) and are unchanged where they do not (the CJK and Devanagari showcase subsets, Font Awesome). The Noto Sans
-CJK conformance font, a full bake Skera cannot prepare, is byte-identical (kept as it is).
+own `bake:*` script and its `bake:check` passes. The full-bake benchmark fixtures shrink where their fonts carry discretionary alternates (Amiri -10%, DotGothic16 -7%,
+Inter -1.5%; Source Serif 4, which the rich-text workload sets in small capitals, is baked with
+`--layout-features smcp` and shrinks 7-9%) and are unchanged where they do not (the CJK and Devanagari showcase
+subsets, Font Awesome). The Noto Sans CJK conformance font, a full bake Skera cannot prepare, is byte-identical (kept as
+it is). The benchmark rich-text scene threw the new `GlyphInputError` for `smcp` until its fixture asked for it, which
+is the refusal working as designed.
 
 ## Risk
 
