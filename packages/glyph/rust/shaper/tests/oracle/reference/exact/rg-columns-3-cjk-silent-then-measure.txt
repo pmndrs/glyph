@@ -14,60 +14,60 @@ stage cluster identity 4 14836ddfcc2ba58f
 stage cluster repr 8 41bd7d43d0f1d7bb
 stage cluster cache 5 076b6c74a719fbb2
 stage run_local repr 16 b8286593bb4987da
-stage flow value 35 791a7e16a5ffc587
+stage flow value 35 d0b293259e91a0dc
 stage positioned identity 3 ee85fafeae029a04
 stage positioned value 13 b8ae006e9d54ba79
 stage positioned repr 17 49cab7c0508aa44d
-stage public value 13 1be2a471aec308a6
-stage public identity 1 66b95a5097109928
-stage view identity 4 33a35a8becc3fbf2
-stage view value 40 c3be12aa91b58433
-stage wire wire 1 dba25863b0736f75
+stage public value 13 f0653bf305b5f42e
+stage public identity 1 a3a7c2f753064c0a
+stage view identity 4 61b9658653f30019
+stage view value 40 6fe6b6809601b33b
+stage wire wire 1 7479e29b8d63dffd
 stage gather identity 7 4e9c88186b72d1f8
-stage gather value 36 1c90a0e53ca0c001
+stage gather value 36 1724bf7ad1630ccc
 stage gpu identity 2 b0c9e31b9320729a
 stage gpu value 3 7916b337ff426917
-stage plan value 23 15829cb9484b234c
-stage plan identity 7 b0213307e84bbf7e
+stage plan value 23 08fb8e1526e39863
+stage plan identity 7 b65a14036160df65
 step 01 insert in the first region
-class value 233 9dd8fb124b8fca6c
-class identity 27 0b0b59ceaa103f34
+class value 233 922bd5ad0a3e87dc
+class identity 27 f216f9d1ec4ec98f
 class repr 41 e6678d94aa8602dd
 class cache 5 787c25e5584a2c5f
-class wire 1 0370bcaa66b6c8f4
+class wire 1 27139b62650acb7a
 step 02 delete in a later region
-class value 233 9d2d0bc87a56caed
-class identity 27 66c3ce08fc820dd9
+class value 233 494220488269a37d
+class identity 27 4a3de977bb0a826f
 class repr 41 deca997ac3471e37
 class cache 5 66b6c983a5cb9c3e
-class wire 1 699c0a662c1b4800
+class wire 1 f49d73b963cc4ae8
 step 03 narrower measure
-class value 233 1af05a9fb0027317
-class identity 27 68a9ae67bee8f19e
+class value 233 e9ef9b0affc739e3
+class identity 27 ab0578520e0e2da1
 class repr 41 13062b25f7f64964
 class cache 5 25ed881d012485b5
-class wire 1 26b8a1dd14d64855
+class wire 1 7df54bb83152fb87
 step 04 shorter regions
-class value 233 019dac4e98a2227f
-class identity 27 d78483244867be65
+class value 233 0154ad0cfc83edf6
+class identity 27 7f83d154f1459048
 class repr 41 35df1ab9b6f387c4
 class cache 5 25ed881d012485b5
-class wire 1 bbb78ca590755b38
+class wire 1 cee0981ed8e9ba73
 step 05 three columns, wider gap
-class value 233 fef5ba0055518d74
-class identity 27 84a54bd335e30f25
+class value 233 b8cac8bc8d5a601f
+class identity 27 90c2b02c1c614e66
 class repr 41 3dffc59a576c2584
 class cache 5 25ed881d012485b5
-class wire 1 691bedb636df9e97
+class wire 1 0375377eec2f34d2
 step 06 one region
-class value 233 3c0efcd03d25718f
-class identity 27 b8de7f20ef91808b
+class value 233 d38d56a2716c74ce
+class identity 27 7e9353741eb5e0c3
 class repr 41 82d4bf639d9ff4db
 class cache 5 25ed881d012485b5
-class wire 1 70e7f1abf42da628
+class wire 1 d8f1f25d1a051376
 step 07 the starting regions
-class value 233 9d2d0bc87a56caed
-class identity 27 a7356b18c8b578ee
+class value 233 494220488269a37d
+class identity 27 d84a6edc14f1dfb5
 class repr 41 deca997ac3471e37
 class cache 5 25ed881d012485b5
-class wire 1 3297e1a9d1d2fa32
+class wire 1 5d6f462abee4a129

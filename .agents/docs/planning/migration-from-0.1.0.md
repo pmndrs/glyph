@@ -49,6 +49,20 @@ A Three root now keeps a second private object in the Scene, `@pmndrs/glyph-prep
 that walks `scene.children` by index or assumes the first child is its own must skip it. `root.attach(scene)` (new)
 names the Scene before the first traversal; React and Vue call it for you.
 
+### Fixed-height text and `layout.overflow`
+
+With a fixed `height`, a line is judged by its line box: it fits when it ends at or above the block end, it straddles
+when it starts inside the box and ends past it, and it is outside when it starts at or below the block end. Only the
+last column or flow region is affected; earlier ones still pass a line that does not fit on to the next.
+
+| 0.1.0                                                                                                | Now                                                                 |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `'visible'` (the default) drew the lines that fit and dropped the straddling line.                   | `'visible'` also draws the straddling line, spilling over the edge. |
+| `'clip'` drew the same lines, but `measure().lines` and `glyphs()` reported every line past the box. | `'clip'` lays out, draws and reports only the lines that fit.       |
+
+Use `overflow: 'clip'` to keep 0.1.0's drawing. To read all of the text's lines, measure it with an unconstrained
+`height`; no mode lays out a line wholly outside the box. `measure().overflowed` and `contentHeight` are unchanged.
+
 ## 2. Errors
 
 | 0.1.0                                                                                         | Now                                                                                                                                      | What to change                                                                                        |
@@ -253,6 +267,8 @@ draws, before the frame that draws them. MSDF quads are trimmed to the ink.
 
 ### Behaviour a renderer can rely on, or must now handle
 
+- No overflow mode draws outside its box, so none publishes a clip boundary: an instance span's and a draw's `clip`
+  is always `undefined`, and a clipped multi-column paragraph is no longer split into one draw per column.
 - Three materials survive buffer growth: when instance storage outgrows its capacity, the material (node graph,
   shader modules, pipeline) is kept and pointed at the new buffers. The material factory is not called again, so a
   factory with side effects per call sees fewer calls.

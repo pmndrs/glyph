@@ -163,7 +163,7 @@ generated:
 
 ## Active held refactor: preparation before publication
 
-The current WIP ASCII-anchor experiment adds an optional bounded shaping item for screened single-font Latn/LTR printable-ASCII length edits. Actual registered-font lifetime, authoritative prepared text facts and immutable anchors authorize this route; unsupported cases retain the existing producer. The packed raw arena is reconstructed and downstream layout/query/publication stages retain their ownership and work. It changes no public call contract and has no verified complete-operation speed or full-suite parity result. See the [HELD rope ASCII-anchor WIP checkpoint](../log/2026-11-20-held-rope-ascii-anchor-wip.md) in the append-only log.
+One edit inside one shaping run reshapes a window of that run and splices it between the retained glyphs. The window runs from a cluster boundary before the edit to one after it; a refused end is moved out and probed again up to three times, and the whole run is the fallback. A boundary qualifies when no glyph of the retained shape flags it unsafe to concatenate, or when it lies between two clusters outside the edit that stand alone: nothing but a pair adjustment of two adjacent glyphs reaches into or out of either (the HarfRust fork's `UNSAFE_TO_CONCAT_BEYOND_PAIRS`, kept in `ShapeArena::beyond_pairs` beside the published glyph flags, never in them). The fresh shape has to agree: the same boundary unflagged, or the same two clusters standing alone with the same glyphs. Fonts that kern through a legacy `kern` table, and Arabic in fonts that flag every cluster, still reshape the whole run. This replaced the ASCII-anchor experiment (a font screen and a fixed two-anchor window for single-font printable-ASCII paragraphs), deleted on 2026-11-24 with its font screen, nominal-glyph bootstrap, printable-ASCII facts and registration serial. See the [edit windows section](../planning/wasm-size-reduction.md) for the argument and measurements, the [font survey](../log/2026-11-24-font-window-survey.md) for which fonts get windows, and the [HELD rope ASCII-anchor WIP checkpoint](../log/2026-11-20-held-rope-ascii-anchor-wip.md) for the experiment.
 
 The accepted [preparation/publication decision](../planning/decisions/retained-prepare-publish.md) is the contract for
 current ropes work, except for the setter rule, which the [deferred, never-stale preparation
@@ -1244,12 +1244,15 @@ and return an ordinary keyed `TextFlowExclusion`; declared projection error cons
 convex hull. Geometry wholly behind the text plane produces no exclusion. Neither helper reads depth/GPU pixels nor
 claims hidden-surface or material-coverage exactness.
 
-`ParagraphLayout.overflow` decides what happens to lines past a fixed `height` or past the last column or region
-([issue 16](../planning/issues-0.2.0/16-overflow-visible-clip-inverted.md)): the default `'visible'` lays out and draws
-only the lines that fit and drops the rest; `'clip'` lays out every line, continuing below the box (below the last
-column's foot with `columns`) and tagging those lines with a clip boundary that no built-in renderer clips yet
-([issue 01](../planning/issues-0.2.0/01-overflow-clip-pixels.md)); `'ellipsis'` keeps the fitting lines and ends the
-last one in an ellipsis. `measure().overflowed` reports the overflow in every mode.
+`ParagraphLayout.overflow` decides what happens to text that does not fit a fixed `height` in a thread's last region
+(the only region, the last column, the last `flow` region) ([decision](../planning/decisions/overflow-visible-clip-swap.md)).
+A line's line box fits when `block_start + height <= foot`, straddles when `block_start < foot < block_start + height`,
+and is outside when `block_start >= foot`; no band starts at or below a region's foot, so no mode lays out an outside
+line. The default `'visible'` keeps the straddling line (`composition_block_end` in `flow_composition/threads.rs` lets
+it reach past the foot); `'clip'` and `'ellipsis'` drop it, and `'ellipsis'` ends the last fitting line in an
+ellipsis. Layout reads read the drawn layout in every mode. `measure().overflowed` reports the overflow and
+`contentHeight` the full intrinsic extent in every mode. No mode assigns a clip id; the clip-identity plumbing that
+integrators see (`ClipIdentity`, binding-input `clip`, codec `batch.clip`, region `clip`) stays and carries zero.
 
 The shared paragraph layout surface also admits a same-source `dropCap` (its type, `DropCapLayout`, is a root export) with a bounded line span, cap-height text-top or
 baseline alignment, logical side, inline/block margins, and an optional caller-authored simple contour normalized over
@@ -1955,8 +1958,9 @@ equal positions, and records only the changed islands for downstream invalidatio
 retained clusters derives every dirty window and glyph cursor for both LTR and RTL runs. One scope-driven executor then
 handles bounded windows or a whole run and collapses its chunks back into the canonical retained shaped run. Window
 splicing is admitted only when retained and new HarfRust `UNSAFE_TO_CONCAT` flags prove the boundaries safe with full
-source-run context; font fallback, unsafe boundaries, topology changes, and unequal lengths use the broad scopes or
-existing fallback pipeline. The existing canonical cluster comparison also produces coalesced layout dirt when source
+source-run context, or, for one edit of any length, when the clusters beside the boundary stand alone in both shapes;
+font fallback, boundaries the fresh shape keeps refusing, and topology changes use the broad scopes or existing
+fallback pipeline. The existing canonical cluster comparison also produces coalesced layout dirt when source
 coordinates, counts and safe boundaries remain compatible. The shared flow/placement executor uses those intervals to
 retain converged clean line islands; shaping windows no longer independently determine layout invalidation. Missing
 correspondence, unsafe corrected boundaries, changed base direction, geometry/metrics or ellipsis retain full flow.

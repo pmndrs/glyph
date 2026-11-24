@@ -18,7 +18,7 @@ generated:
 # Issue 14: `split()` is tens of milliseconds for thousands of glyphs and cannot be re-synced
 
 - **Severity:** later (design; performance work first, API only with Justin's approval)
-- **Status:** planned — not implemented
+- **Status:** decided (Justin, 2026-11-24): no re-sync API; `split()` stays the freeze tool. Cost reduction without API remains open
 
 ## What happens
 

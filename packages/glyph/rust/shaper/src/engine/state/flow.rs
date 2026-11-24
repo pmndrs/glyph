@@ -399,16 +399,15 @@ impl ParagraphState {
             .regions
             .get_mut(final_region)
             .ok_or(EngineError::InvalidRequest)?;
-        const INTRINSIC_BLOCK_END: f32 = 16_777_216.0;
         constraint.max_lines = 0;
-        constraint.viewport_block_end = INTRINSIC_BLOCK_END;
+        constraint.viewport_block_end = crate::engine::flow_composition::UNBOUNDED_BLOCK_END;
         constraint.overflow = OVERFLOW_VISIBLE;
         constraint.drop_cap_lines = 0;
         constraint.drop_cap_alignment = 0;
         constraint.drop_cap_side = 0;
         constraint.drop_cap_margin_inline = 0.0;
         constraint.drop_cap_margin_block = 0.0;
-        region.record.block_end = INTRINSIC_BLOCK_END;
+        region.record.block_end = crate::engine::flow_composition::UNBOUNDED_BLOCK_END;
 
         let clusters = self.clusters.active();
         let styles = self.styles.active().resolved.segments();
@@ -457,71 +456,12 @@ impl ParagraphState {
         )
     }
 
-    pub(super) fn inspection_positioned(&self) -> &PositionedGlyphArena {
-        let clipped = self.clipped_inspection.active();
-        if clipped.mode == IntrinsicInspection::Positioned {
-            &clipped.positioned
-        } else {
-            self.positioned.active()
-        }
-    }
-
-    pub(super) fn inspection_boundary_shape(&self) -> &BoundaryShapeArena {
-        if self.clipped_inspection.active().mode == IntrinsicInspection::Positioned {
-            &self.intrinsic_boundary_shape
-        } else {
-            self.visible_boundary_shape()
-        }
-    }
-
     pub(super) fn visible_boundary_shape(&self) -> &BoundaryShapeArena {
         if self.flow_layout.is_prepared() {
             &self.pending_boundary_shape
         } else {
             &self.boundary_shape
         }
-    }
-
-    pub(super) fn prepare_intrinsic_positioned(
-        &mut self,
-        shaper: &ShaperRegistry,
-    ) -> Result<(), EngineError> {
-        #[cfg(test)]
-        crate::engine::work_attribution::record(|work| {
-            work.intrinsic_positioning_preparations += 1
-        });
-        let text = self.text.active().units.as_slice();
-        let clusters = self.clusters.active();
-        let runs = self.shaping_runs.active().runs();
-        let styles = self.styles.active().resolved.segments();
-        let bidi = self.bidi.active();
-        let previous = self.positioned.active();
-        let mut next_run_canonical_revision = 1;
-        let boundary_shape = &self.intrinsic_boundary_shape;
-        let geometry = &self.intrinsic_geometry_scratch;
-        self.clipped_inspection
-            .pending_mut()
-            .positioned
-            .build_with_previous(
-                previous,
-                &self.intrinsic_flow_layout_scratch,
-                None,
-                None,
-                text,
-                clusters,
-                clusters,
-                runs,
-                runs,
-                boundary_shape,
-                boundary_shape,
-                styles,
-                bidi,
-                &mut next_run_canonical_revision,
-                |thread| thread_typography(geometry, thread),
-                |thread| thread_typography(geometry, thread),
-                |handle| shaper.font_metrics(handle),
-                |handle, glyph| shaper.font_glyph_extents(handle, glyph),
-            )
     }
 
     pub(super) fn discard_flow_layout_candidate(&mut self) {
@@ -600,10 +540,9 @@ impl ParagraphState {
             |handle, glyph| shaper.font_glyph_extents(handle, glyph),
         )?;
         self.positioned.mark_prepared();
-        // A changed visible layout retires the prior derived inspection. Measurement
-        // replaces this selection with full clipped positioning when requested.
-        self.clipped_inspection.pending_mut().mode = IntrinsicInspection::None;
-        self.clipped_inspection.mark_prepared();
+        // A changed visible layout retires the prior derived intrinsic layout.
+        *self.intrinsic_inspection.pending_mut() = IntrinsicInspection::None;
+        self.intrinsic_inspection.mark_prepared();
         Ok(())
     }
 

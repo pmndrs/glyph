@@ -53,6 +53,10 @@ pub(crate) const GLYPH_FLAG_UNSAFE_TO_CONCAT: u16 = 1 << 1;
 pub(crate) const GLYPH_FLAGS_PRODUCED: u16 =
     GLYPH_FLAG_UNSAFE_TO_BREAK | GLYPH_FLAG_UNSAFE_TO_CONCAT;
 
+/// The HarfRust fork's `UNSAFE_TO_CONCAT_BEYOND_PAIRS`, which shares `SAFE_TO_INSERT_TATWEEL`'s
+/// bit. It is kept beside the published flags, never in them.
+const FLAG_BEYOND_PAIRS: u32 = 1 << 2;
+
 #[derive(Default)]
 pub(crate) struct ShapeArena {
     pub runs: Vec<ShapedRun>,
@@ -63,6 +67,10 @@ pub(crate) struct ShapeArena {
     pub x_offsets: Vec<i32>,
     pub y_offsets: Vec<i32>,
     pub glyph_flags: Vec<u16>,
+    /// Whether each glyph is unsafe to concatenate for more than a pair adjustment of two
+    /// adjacent glyphs (HarfRust fork: `GlyphFlags::UNSAFE_TO_CONCAT_BEYOND_PAIRS`). Only the
+    /// shapings that ask for it set it; it is not part of a glyph's published flags.
+    pub beyond_pairs: Vec<bool>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -292,7 +300,8 @@ impl ShapeArena {
         reserve_vec(&mut self.y_advances, capacity)?;
         reserve_vec(&mut self.x_offsets, capacity)?;
         reserve_vec(&mut self.y_offsets, capacity)?;
-        reserve_vec(&mut self.glyph_flags, capacity)
+        reserve_vec(&mut self.glyph_flags, capacity)?;
+        reserve_vec(&mut self.beyond_pairs, capacity)
     }
 
     #[inline(never)]
@@ -305,6 +314,7 @@ impl ShapeArena {
         self.x_offsets.clear();
         self.y_offsets.clear();
         self.glyph_flags.clear();
+        self.beyond_pairs.clear();
     }
 
     pub(crate) fn append(
@@ -339,10 +349,11 @@ impl ShapeArena {
             self.y_advances.push(position.y_advance);
             self.x_offsets.push(position.x_offset);
             self.y_offsets.push(position.y_offset);
-            self.glyph_flags.push(
-                u16::try_from(info.flags().to_bits())
-                    .map_err(|_| crate::STATUS_RESULT_TOO_LARGE)?,
-            );
+            let flags = info.flags().to_bits();
+            // Two bits, so the cast keeps them.
+            self.glyph_flags
+                .push((flags & u32::from(GLYPH_FLAGS_PRODUCED)) as u16);
+            self.beyond_pairs.push(flags & FLAG_BEYOND_PAIRS != 0);
         }
         Ok(())
     }
@@ -408,6 +419,12 @@ impl ShapeArena {
         self.glyph_flags.extend_from_slice(
             source
                 .glyph_flags
+                .get(source_start..source_end)
+                .ok_or(EngineError::InvalidRequest)?,
+        );
+        self.beyond_pairs.extend_from_slice(
+            source
+                .beyond_pairs
                 .get(source_start..source_end)
                 .ok_or(EngineError::InvalidRequest)?,
         );
@@ -532,6 +549,8 @@ impl ShapeArena {
             .extend_from_slice(&source.y_offsets[selected_start..selected_end]);
         self.glyph_flags
             .extend_from_slice(&source.glyph_flags[selected_start..selected_end]);
+        self.beyond_pairs
+            .extend_from_slice(&source.beyond_pairs[selected_start..selected_end]);
         #[cfg(test)]
         super::work_attribution::record(|work| {
             work.shape_range_copied_glyphs += selected_end - selected_start
@@ -814,6 +833,7 @@ mod tests {
             x_offsets: vec![0; 4],
             y_offsets: vec![0; 4],
             glyph_flags: vec![0, GLYPH_FLAG_UNSAFE_TO_CONCAT, 0, 0],
+            beyond_pairs: vec![false, true, false, false],
         };
         let mut destination = ShapeArena::default();
         destination
@@ -823,6 +843,7 @@ mod tests {
         assert_eq!(destination.clusters, [4, 3]);
         assert_eq!(destination.x_advances, [2, 1]);
         assert_eq!(destination.glyph_flags, [GLYPH_FLAG_UNSAFE_TO_CONCAT, 0]);
+        assert_eq!(destination.beyond_pairs, [true, false]);
         assert_eq!(
             destination.runs,
             [ShapedRun {

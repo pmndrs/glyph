@@ -116,6 +116,26 @@ Equivalent `Text.set()` state is now a no-op. Assign `font` or `material` explic
 restaging. A renderer-side failure keeps the last accepted draw state and is not retried by unchanged traversals; after
 repairing the cause, assign material or other renderer-relevant state to request a new checkpoint.
 
+## Check fixed-height text against the new overflow rule
+
+`layout.overflow` applies when text does not fit a fixed `height` (in the last column with `columns`, or the last
+region of a `flow`). Lines are judged by their line box, not their ink: a line that ends at or above the box's block
+end fits, a line that starts inside the box and ends past it straddles the edge, and a line that starts at or below
+the block end is outside.
+
+| mode                  | 0.1.0 laid out and drew                                            | 0.2 lays out and draws                 |
+| --------------------- | ------------------------------------------------------------------ | -------------------------------------- |
+| `'visible'` (default) | lines that fit                                                     | lines that fit and the straddling line |
+| `'clip'`              | drew lines that fit; layout reads reported every line past the box | lines that fit                         |
+| `'ellipsis'`          | lines that fit, the last ending in an ellipsis                     | unchanged                              |
+
+So a default paragraph with a fixed height now shows one more line, spilling over the box's edge, whenever its text
+does not fit. Use `overflow: 'clip'` to keep 0.1.0's drawing. If you read `measure().lines` or `glyphs()` of a
+`'clip'` paragraph to find the text past the box, measure it with an unconstrained `height` instead; no mode lays out
+lines wholly outside the box. `measure().overflowed` and `contentHeight` are unchanged. With an `at-most` height, the measured `height` follows the lines laid out: it can grow under `'visible'` (the straddling line, capped at the limit) and shrink under `'clip'` (no longer capped by lines past the box). Integrations that read
+`primitive.clip` or a draw's `clip` now always see `undefined`: no overflow mode draws outside its box, so nothing needs
+a clip boundary.
+
 ## Remove options that never did anything
 
 Three `Text` properties, R3F and Vue `Text` props no longer accept `order`: it was typed but never read, and Three

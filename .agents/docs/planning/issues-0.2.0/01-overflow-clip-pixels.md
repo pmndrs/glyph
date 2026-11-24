@@ -2,7 +2,7 @@
 type: Issue Record
 title: "Issue 01: overflow 'clip' does not clip pixels in the Three renderer"
 description: "ParagraphLayout.overflow 'clip' only tags lines with an opaque clip identity; no clip rectangle reaches any renderer, so overflowing glyphs are drawn."
-status: draft
+status: stable
 sources:
   - id: text-properties
     resource: ../../../../packages/glyph/src/text-properties.ts
@@ -21,7 +21,7 @@ generated:
 # Issue 01: `overflow: 'clip'` does not clip pixels in Three
 
 - **Severity:** should-fix (the interim TSDoc note is in 0.2.0; the pixel clip is not)
-- **Status:** planned — the fix needs engine-directory work owned by another lane; the interim TSDoc on `overflow` (issue 12 commit) states that built-in renderers do not clip yet
+- **Status:** fixed by issue 16 on `experiments/sil-overflow`, no pixel mask (Justin, 2026-11-24). Measured before the fix, `'clip'` never drew past the box in Three: it drew the same lines as `'visible'`; the lines below the box were in `measure().lines`/`glyphs()` only. `'clip'` now lays out, draws and reports only the lines that fit, and no line carries a clip id
 
 ## What happens
 

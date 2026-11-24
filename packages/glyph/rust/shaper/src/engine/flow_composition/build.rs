@@ -239,10 +239,12 @@ impl FlowLayoutArena {
             .get(region_index)
             .ok_or(EngineError::InvalidRequest)?
             .record;
-        let block_end = f64::from(region.block_end);
+        // A band starts only inside the region; `fit_end` is how far its line box may reach.
+        let foot = f64::from(region.block_end);
+        let fit_end = composition_block_end(constraint, region_index, region.block_end);
         while !cursor.is_complete(clusters.starts.len())
             && self.lines.len().saturating_sub(thread_line_start) < line_limit
-            && block < block_end
+            && block < foot
         {
             let estimate = extents_for_cluster(
                 clusters,
@@ -260,18 +262,13 @@ impl FlowLayoutArena {
                 constraint.flow_thread_id,
                 region.id,
                 region.transform_index,
-                if constraint.overflow == OVERFLOW_CLIP {
-                    region.id
-                } else {
-                    0
-                },
                 clusters,
                 bidi,
                 styles,
                 slots,
                 cursor,
                 block,
-                block_end,
+                fit_end,
                 estimate,
                 match drop_cap.as_ref() {
                     Some(cap) => cap.cut_for_band(
