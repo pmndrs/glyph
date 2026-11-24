@@ -192,7 +192,7 @@ test('a font disposed between a setter and the frame cannot fail the preparation
 });
 
 test('where an instance cannot be made synchronously the engine restarts asynchronously', { timeout }, async (t) => {
-  const { add, frame } = await createScene(t);
+  const { add, frame, render } = await createScene(t);
   const text = add({ text: 'before' });
   frame();
   text.text = 'after an asynchronous restart';
@@ -207,6 +207,8 @@ test('where an instance cannot be made synchronously the engine restarts asynchr
     text.text = 'setters never enter the engine';
   });
   assert.doesNotThrow(frame, 'a frame during the restart leaves the last draws alone');
+  assert.throws(render, /the text engine is restarting/u, 'the render throws the restart');
+  assert.doesNotThrow(render, 'every frame until the instance lands meets the same failure, thrown once');
   await new Promise((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(shaperInstanceCount(), instances + 1);
