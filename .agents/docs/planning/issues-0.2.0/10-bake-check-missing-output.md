@@ -18,7 +18,7 @@ generated:
 # Issue 10: `glyph bake --check` fails with a raw ENOENT; `--yes` is parsed and unused
 
 - **Severity:** should-fix (CI scripts call `bake:check`; a first run shows a stack trace)
-- **Status:** open
+- **Status:** fixed — `--check` reports a missing output or glyph map as `STALE_OUTPUT`/`STALE_GLYPH_MAP` before baking; `--yes` is removed
 
 ## What happens
 

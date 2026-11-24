@@ -131,6 +131,7 @@ async function rollbackPublication(staged: readonly StagedFileOutput[]): Promise
   }
 }
 
-function isMissing(error: unknown): boolean {
+/** Whether a file-system error says the path does not exist. */
+export function isMissing(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }
