@@ -868,6 +868,84 @@ host was not quiet: another workspace's build kept the load average at 8 to 28, 
 - Engine Labs (`--suite engine --wasm`, 4 rounds, order alternated): every row 0.82 to 1.02.
 - `benchmark:headline-bidi-edit` (5 rounds): 0.97 to 1.02.
 
+### 2026-11-24 retention tiers
+
+Branch `experiments/sil-tiers` on `sil-green-65`. The [engine size report](engine-size-report-2026-11-24.md) priced
+five special-case incremental paths at up to 23.9 kB gzip together (option 3). Each was tried in order as delete,
+parameterise through the general path, de-duplicate, keep, and the first that held speed on the path's own rows was
+kept. Two changed; three stay, because removing them is slower on the rows they exist for.
+
+| Path                                               | Removal price (gzip, raw) | Removed, on its rows (candidate/baseline) | Outcome                                                                                |      Δ raw |     Δ gzip |   Δ Brotli |
+| -------------------------------------------------- | ------------------------: | ----------------------------------------- | -------------------------------------------------------------------------------------- | ---------: | ---------: | ---------: |
+| In-place cluster rebuild of one run                |            −3,403, −7,395 | same-length edit 0.73 to 0.83; rest 1.00  | **deleted**                                                                            |     −6,681 |     −2,749 |     −2,210 |
+| Rebuild after an exclusion change                  |            −4,216, −8,620 | moving exclusion, 26k glyphs: 1.2 to 1.9  | **de-duplicated** (one band loop)                                                      |       −319 |       −409 |     −1,075 |
+| ASCII-anchor splice                                |           −9,933, −25,975 | Inter 1.00; Fredoka insert mid 1.37–1.48  | kept                                                                                   |          0 |          0 |          0 |
+| Reorder-only fast path                             |            −4,038, −8,809 | 1.11 to 1.70                              | kept                                                                                   |          0 |          0 |          0 |
+| Resize equivalence (`flow_positioning_equivalent`) |            −2,015, −4,499 | 1.9 to 3.2                                | kept                                                                                   |          0 |          0 |          0 |
+|                                                    |                           |                                           | **Total: 1,363,129 → 1,356,129 raw, 539,454 → 536,296 gzip, 433,472 → 430,187 Brotli** | **−7,000** | **−3,158** | **−3,285** |
+
+Removal prices are Node zlib level 9 on `sil-green-65` (control 543,055); the delta columns and the total are
+`gzip -9`. Removal ratios were measured on `sil-green-64`.
+
+- **In-place cluster rebuild.** `rebuild_source_run_if_topology_is_stable` rebuilt an edited run inside a copy of the
+  previous arena when the edit kept every cluster and glyph count. The general splice between previous rows accepts
+  the same one-run window, and it is faster: the in-place path copied the whole arena and re-derived every layout unit
+  and chunk sum, where the splice copies the rows outside the window and builds only the window's. The tier, its
+  range-limited stable-id pass and five helpers only it called are gone (820 lines with their two tests). One thing
+  the tier did had to move: it kept the break corrections cached away from the edited run, and the splice started
+  an empty cache, which changed the frozen cache lanes of five reference cases. The splice now keeps the cache in
+  the same case (one run, the same grapheme boundaries, as many glyphs) and clears it around the run as the tier
+  did, so no reference is re-frozen.
+- **Exclusion rebuild.** Removing it is 1.2 to 1.9 times slower on a moving exclusion at 26k glyphs, so it stays.
+  It no longer carries its own copy of the loop that walks a region band by band: the full build and the rebuild
+  both call `compose_region_bands` once per region, and the rebuild passes its "rejoined the previous flow" test as
+  a `&mut dyn FnMut`. A per-line out-of-line step saved about twice as much (−758 gzip) but measured 1.004 to 1.013 on
+  the width sweep against 0.996 to 1.005 for the same build twice, so it was not taken.
+- **ASCII anchor.** It applies to one length-changing edit in a paragraph that is a single Latin run of at most
+  8,192 units in one font that passes its screen. Inter does not pass (1.00 with the path off at 600 to 8,000 units);
+  Fredoka does, and without it an insert in the middle is 1.37 times slower at 2,000 units and 1.48 at 8,000. The
+  general path reshapes the whole run for a length-changing edit, so the plan's premise that the splice tiers replace
+  the anchor does not hold for that class of font. Parameterising was built as a scratch prototype
+  (`glyph-scratch/tiers/patches/p1-general-resized-window-proto.patch`): the existing unsafe-to-concat windows of
+  same-length edits, extended to one length-changing edit with four clusters of probe margin. With the anchor
+  deleted that build is −10,578 gzip (Node zlib, on `sil-green-64`), passes the native oracle (596 equal, nothing unlisted), and makes Inter 0.46 to
+  0.72 on single-run typing and inserts, but Fredoka stays 1.37 to 1.50: HarfRust flags every Fredoka glyph unsafe
+  to concatenate (class kerning matches every pair), so there is no boundary to window on, and the anchor's font
+  screen is the only proof that covers it. The screen is also where the bytes are (`screen_gpos_lookups`,
+  `screen_lookups` and `ascii_anchor_screen` are 13 kB raw of the 26 kB), and nothing else shares it. Kept; the
+  trade (delete the anchor, take the general window: Inter-class single-run edits about twice as fast, Fredoka-class
+  inserts mid-paragraph about 1.45 times slower, about −10 kB) is the owner's.
+- **Reorder-only.** With the path off, reordering 1,000 labels is 1.70 times slower and reordering paragraphs 1.11
+  to 1.16. It is one function plus a walk that collects the drawn stable ids; neither repeats another kernel that
+  could be called at a coarser seam than a glyph. Permuting the committed instances by each paragraph's retained
+  gather range would drop the walk, but the walk is what notices a binding whose strikes changed, and the ranges
+  are stale after the first reorder. Kept.
+- **Resize equivalence.** With the proof off, a width change that composes the same lines is 1.9 to 3.2 times
+  slower, and a fine width sweep 3.2. Calling one out-of-line pen function for both flows is −106 gzip, and
+  `fragment_pen` out of line everywhere is −203 gzip and +417 Brotli; neither is worth a change. Kept.
+
+Speed was measured with a headless package harness (`glyph-scratch/tiers/bench/pkgab.mjs`): both arms load in one
+Node process with the same package JavaScript and a different `text-shaper.wasm`, steps alternate between the arms,
+and each step is the mutation, scene publication and a headless frame end. Ratios are the 10th-percentile step time,
+median over 4 to 8 fresh-process rounds of 200 to 400 steps. The same build against itself gave 0.99 to 1.04 at a
+load average of 20 and 0.996 to 1.005 at 4.
+
+Tip against `sil-green-65` on that harness (5 rounds of 300 steps, 34 rows, Inter): a same-length edit in the middle
+of a paragraph is 0.71 at 26k glyphs in 100 runs and 0.84 at 3k; every other row (typing at the end, inserts, a
+same-length edit in a single run of 600 to 8,000 units, whole-text replacement, width sweeps, equivalent widths,
+moving exclusions, reorders) is 0.984 to 1.007. Kimun on `packages/glyph/rust` is C+ 76.2 before and C+ 76.1 after.
+
+The lanes the earlier passes used, tip against `sil-green-65` with only `text-shaper.wasm` differing. The gates were
+running on the same host during all three.
+
+- Browser headline (`headline.js`, 5 loads per arm, complete GPU-completed frames): every edit, sweep and ASCII-frame
+  row of `latin15k`, `stress22k` and `bidi15k` is 0.990 to 1.006.
+- Engine Labs (`--suite engine --wasm`, 4 rounds, order alternated, 25th percentile): `localized-edit` 0.81; every
+  other row 0.985 to 1.017 except `equivalent-width` at 1.045 (range 0.987 to 1.106, a 0.2 ms row). The same
+  raw-engine case with both modules in one process and steps alternated is 1.000 to 1.008 over three runs of 400
+  steps, and the package harness puts the operation at 0.995 and 1.004.
+- `benchmark:headline-bidi-edit` (4 rounds): 0.98 to 1.00.
+
 ### Not now: estimates
 
 - **Data-driven syllabic interpreter (research step 7).** The Indic, Khmer, Myanmar and USE shapers plus vowel constraints

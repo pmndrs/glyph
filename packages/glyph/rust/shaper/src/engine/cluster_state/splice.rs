@@ -1,10 +1,10 @@
 //! The cluster build of edited source runs, spliced between the previous arena's clusters.
 //!
-//! An edit that changes how many clusters or glyphs a source run has cannot keep the previous
-//! arena's topology, but the incremental shape stage still reshaped the edited source runs
-//! alone: every other source run's glyphs are the previous ones, moved by the edits before
-//! them. So the clusters between the edited runs are the previous arena's rows, renumbered,
-//! and only the edited runs' own clusters are built, by the same passes the full build runs.
+//! The incremental shape stage reshapes the edited source runs alone, whether or not an edit
+//! changes how many clusters or glyphs a run has: every other source run's glyphs are the
+//! previous ones, moved by the edits before them. So the clusters between the edited runs are
+//! the previous arena's rows, renumbered, and only the edited runs' own clusters are built, by
+//! the same passes the full build runs.
 //! What a row reads from outside its run is checked rather than assumed:
 //!
 //! - grapheme boundaries after an edited run, which a run can share context with (a regional
@@ -29,8 +29,8 @@ use super::super::sort;
 
 use super::{
     CLUSTER_ALLOWED_BREAK, CLUSTER_BREAK_CORRECTION, CLUSTER_REQUIRED_BREAK, ClusterArena,
-    ClusterBuildInput, EngineError, LAYOUT_CHUNK, ShapingRun, StyleSegment, all_ltr,
-    build::ShapeScope, reserve, summarize_unit_chunks,
+    ClusterBuildInput, EngineError, LAYOUT_CHUNK, SHAPING_CONTEXT, ShapingRun, StyleSegment,
+    all_ltr, build::ShapeScope, reserve, summarize_unit_chunks,
 };
 
 /// The shaping runs the incremental shape stage reshaped, and what the previous arena was
@@ -439,6 +439,28 @@ impl ClusterArena {
             .any(|flags| flags & CLUSTER_BREAK_CORRECTION != 0)
         {
             self.break_corrections.resize_with(count, Default::default);
+            // One run rebuilt with every cluster where it was and as many glyphs: the corrections
+            // cached away from it still hold. A correction reshapes an island plus SHAPING_CONTEXT
+            // clusters either side of its boundary.
+            if let [window] = plan.windows.as_slice()
+                && window.added_runs == 0
+                && window.source_runs.len() == 1
+                && window.clusters == window.old_clusters
+                && window.text == window.old_text
+                && window.glyphs == window.old_glyphs.len()
+                && self.starts[window.clusters.clone()] == previous.starts[window.clusters.clone()]
+                && self.ends[window.clusters.clone()] == previous.ends[window.clusters.clone()]
+                && previous.break_corrections.len() == count
+            {
+                self.break_corrections
+                    .clone_from_slice(&previous.break_corrections);
+                let first = self.island(window.clusters.start.max(1) - 1).0;
+                let last = self.island(window.clusters.end.min(count - 1)).1;
+                self.reset_break_corrections(
+                    first.saturating_sub(SHAPING_CONTEXT),
+                    last + SHAPING_CONTEXT,
+                );
+            }
         }
 
         // Layout units are per cluster; the chunk summaries from the first changed cluster's
