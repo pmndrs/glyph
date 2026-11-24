@@ -18,13 +18,13 @@ named below.
 ## 1. Where things stand
 
 - **Integration branch** `experiments/segment-indexed-layout`, worktree `/Volumes/Depot/Developer/glyph-held-rope-wip`,
-  pushed to `origin`. Last verified tag: **`sil-green-67`**. It sits on `experiments/held-rope-ascii-anchor-wip`
+  pushed to `origin`. Last verified tag: **`sil-green-68`**. It sits on `experiments/held-rope-ascii-anchor-wip`
   (`8176a24e0a3f`; draft PRs #292 → #301 → #302 → #310). It ships as **0.2.0**, a breaking release.
-- **Oracle:** 596 frozen cases, 928 differential runs (~55,700 requests) comparing incremental against cold in every
+- **Oracle:** 605 frozen cases (~56,400 differential requests) comparing incremental against cold in every
   stage and lane class, natively and in wasm. 0 unlisted divergences. `KNOWN-DIVERGENCES` may only shrink.
 - **Verification on `sil-green-58`:** clippy `-D warnings`, full native and wasm oracle (596 equal), all shaper
   tests, `pnpm --filter @pmndrs/glyph test`, `pnpm check`. Run the full browser set (section 7) before the ship PR.
-- **Core shaper wasm:** 536.3 kB gzip at `sil-green-67`, down from 687.7 kB at `-43`. v0.1.0 was 501 kB, main
+- **Core shaper wasm:** 535.4 kB gzip at `sil-green-68`, down from 687.7 kB at `-43`. v0.1.0 was 501 kB, main
   541 kB. Only the core shaper's size matters; bakers are dynamically imported.
 - **Rust quality (kimun):** C+ 76.1 at `sil-green-58`, up from D+ 65.4; `engine/state.rs` split into 25 modules.
 - **Since `-51`:** `-52` `measure()` lane (summary reads stop after flow; positioning deferred against a kept
