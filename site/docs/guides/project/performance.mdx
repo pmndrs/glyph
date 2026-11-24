@@ -1,0 +1,207 @@
+---
+title: Improve performance
+description: Concrete changes that reduce draw calls, engine calls, uploads and GPU memory for text, with a way to check each one.
+nav: 651
+sourcecode: packages/glyph/src/three/text.ts
+---
+
+Each section is one change you can make, with the situation it helps and a way to confirm it worked. The examples
+use the three.js API. For why these work, read [Performance](/explanation/performance).
+
+## Count draws before and after
+
+Each root keeps a private object in your scene named `@pmndrs/glyph:<root name>` (`@pmndrs/glyph:anonymous` for a
+handle's own root). Every draw the root submits is one mesh under it, so its child count is the root's draw count.
+
+```ts
+function glyphDraws(rootName = 'anonymous'): number {
+  return scene.getObjectByName(`@pmndrs/glyph:${rootName}`)?.children.length ?? 0;
+}
+
+renderer.render(scene, camera);
+console.info('text draws:', glyphDraws());
+```
+
+Use this number, and your renderer's own draw-call counter, to check the changes below.
+
+## Put related labels in one group
+
+Texts created from the same root that share a font, a format and a material can share a draw. A `TextGroup` makes
+that arrangement explicit: it is the scene parent of its labels, the boundary inside which they batch, and the place
+to set a shared material or render order.
+
+```ts
+const labels = handle.createTextGroup();
+for (const [index, name] of ['Mercury', 'Venus', 'Earth', 'Mars'].entries()) {
+  const label = handle.createText({ font: Inter.msdf, text: name, style: { fontSize: 0.3 } });
+  label.position.set(index * 2, 0, 0);
+  labels.add(label);
+}
+scene.add(labels);
+```
+
+The labels keep their own positions and still share a draw, because the default `transformMode: 'indexed'` stores
+each text's transform in a table the shader indexes.
+
+**Check:** `glyphDraws()` reports one draw for the four labels, not four.
+
+## Keep materials and fonts contiguous
+
+Draws merge only between neighbors in draw order. If two materials alternate through a group, every label becomes
+its own draw.
+
+1. Use as few distinct materials as the design allows. Reuse one `defineTextMaterial` result; do not create one per
+   text.
+2. Add texts to a group so that those sharing a material are next to each other, or give each material its own
+   group.
+3. Prefer one font and format per group. A second font, and each fallback font that is actually used, adds draws.
+
+**Check:** the draw count approaches the number of distinct font and material combinations.
+
+## Choose where batches may merge
+
+`TextGroup` takes a `batching` option that decides whether the group owns a batching boundary.
+
+| You want                                                           | Use                                                    |
+| ------------------------------------------------------------------ | ------------------------------------------------------ |
+| The fewest draws across several groups                             | `batching: 'shared'` on those groups                   |
+| A group whose draws can be skipped as a unit when it is hidden     | `batching: 'group'`, or the default on a top-level group |
+| Spatially separate regions that should be culled separately        | One group per region with `batching: 'group'`          |
+
+```ts
+const north = handle.createTextGroup({ batching: 'group' });
+const south = handle.createTextGroup({ batching: 'group' });
+```
+
+**Check:** with the camera facing one region, your renderer's draw-call count drops by the other region's draws.
+
+## Choose a capacity policy
+
+Instance storage for a root is governed by the handle's config. Pick the policy when you create the handle; it
+cannot change afterwards.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
+
+// Text of unpredictable size: grow in steps of 16,384 records.
+const pages = glyph.handle('pages', defineThreeConfig({ capacity: { size: 16_384, policy: 'chunk' } }));
+
+// A HUD with a hard budget: never more than 512 records.
+const hud = glyph.handle('hud', defineThreeConfig({ capacity: { size: 512, policy: 'fixed' } }));
+```
+
+- Keep the default (`{ size: 4096, policy: 'chunk' }`) unless you have a reason.
+- Use a larger `chunk` size when a root holds long documents, so growth reallocates less often.
+- Use `fixed` only where exceeding the budget should be an error. A root over a fixed capacity draws its last
+  complete state, and the render throws once, naming the root and the required size.
+- Use `grow` to size storage exactly to its contents.
+
+**Check:** `handle.gpuBytes` after a representative frame.
+
+## Keep atlases small
+
+GPU atlas memory follows the glyphs you draw, so the first step is not to draw glyphs you do not need: prefer a
+subset font for scripts with large repertoires. See [Subset coverage](/guides/fonts/subset-coverage).
+
+If MSDF text is small on screen and you do not use sharp corners at large sizes, keep only the true-distance channel:
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
+
+const compact = glyph.handle('compact', defineThreeConfig({ msdfAtlas: 'sdf' }));
+```
+
+This uses a quarter of the atlas memory. Corners are rounded, which becomes visible at large sizes.
+
+**Check:** compare `handle.gpuBytes` between the two configs with the same text on screen.
+
+## Prepare once before reading many texts
+
+A read such as `measure()` prepares its text if it is dirty. Reading many dirty texts in a loop makes one engine call
+per text. Prepare them together first.
+
+```ts
+import { glyph, type msdf } from '@pmndrs/glyph';
+import type { Text } from '@pmndrs/glyph/three';
+
+declare const rows: readonly Text<typeof msdf>[];
+
+for (const row of rows) row.constraints = { width: { mode: 'at-most', size: 320 } };
+
+glyph.prepare(); // one engine call for all of them
+let y = 0;
+for (const row of rows) {
+  row.position.y = -y;
+  y += row.measure().height; // already prepared: no engine call
+}
+```
+
+If the reads only serve to position things for the next frame, use `onLayout` instead; it runs inside the frame's
+own preparation. See [React to layout](/guides/inspect/react-to-layout).
+
+**Check:** remove a `glyph.shape()` or `scene.updateMatrixWorld()` you called only to make reads current. Reads are
+always current.
+
+## Put fast-changing text on its own root
+
+A root republishes when any of its texts changed. Give text that changes every frame its own named root so that a
+large static root stays untouched.
+
+```ts
+const clock = handle('clock').createText({ font: Inter.msdf, text: '00:00', style: { fontSize: 0.5 } });
+scene.add(clock);
+
+function tick(elapsedSeconds: number): void {
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = Math.floor(elapsedSeconds % 60);
+  clock.text = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+```
+
+Assigning the same string again is not a change, so calling `tick` every frame republishes once per second.
+
+## Animate with transforms and paint
+
+Changing `position`, `rotation`, `scale` or `visible` never enters the engine. Changing color or opacity does not
+produce a new layout. Changing `fontSize`, `letterSpacing`, the width or the text does.
+
+- To move, fade or scale text, animate the object or its paint.
+- To animate individual glyphs, split the text once and animate the detached glyphs. See
+  [Animate glyphs](/guides/scene/animate-glyphs).
+- Avoid animating `fontSize` or the constraint width per frame on large paragraphs.
+
+## Render on demand
+
+If your scene is static between interactions, render only when something changed. A three.js root tells you when a
+setter left it needing a frame.
+
+```ts
+let scheduled = false;
+function requestFrame(): void {
+  if (scheduled) return;
+  scheduled = true;
+  requestAnimationFrame(() => {
+    scheduled = false;
+    renderer.render(scene, camera);
+  });
+}
+
+handle.onInvalidate = requestFrame;
+text.text = 'Updated'; // requestFrame runs; one frame is drawn
+```
+
+`onInvalidate` is set per root; set it on each named root you use. With React Three Fiber, set
+`frameloop="demand"` on the `<Canvas>`: the components wire the same callback to the canvas, so an imperative
+change through a ref also draws a frame.
+
+**Check:** with the page idle, your render function is not called.
+
+## See also
+
+- [Performance](/explanation/performance)
+- [Group and batch](/guides/scene/group-and-batch)
+- [Culling](/guides/scene/culling)
+- [Three config reference](/reference/three-config)
+- [Troubleshooting](/guides/project/troubleshooting)

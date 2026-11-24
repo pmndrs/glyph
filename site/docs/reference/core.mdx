@@ -1,0 +1,355 @@
+---
+title: '@pmndrs/glyph/core'
+description: Index of every export of the @pmndrs/glyph/core entry point, which holds the renderer-neutral contract for writing a renderer integration or a raster format, grouped by purpose.
+nav: 750
+sourcecode: packages/glyph/src/core.ts
+---
+
+`@pmndrs/glyph/core` is for integrators: code that connects a renderer to the engine or adds a raster format.
+Applications do not need it. This page lists every export with a one-line description. Functions and constants are
+values; everything else is a type. Many of the types are also exported from `@pmndrs/glyph`; all of them can be
+imported from `@pmndrs/glyph/core`.
+
+For how the parts fit together, read [Renderer integration](/explanation/renderer-integration) and
+[The render plan](/explanation/render-plan).
+
+```ts
+import { defineGlyphConfig, defineGlyphSchema, resourceLease } from '@pmndrs/glyph/core';
+import type { CommandBufferView, GlyphRenderer, GlyphTextController } from '@pmndrs/glyph/core';
+```
+
+## Config
+
+A `GlyphConfig` is what `glyph.handle(name, config)` takes.
+
+| Export                 | Kind      | Description                                                                                         |
+| ---------------------- | --------- | --------------------------------------------------------------------------------------------------- |
+| `defineGlyphConfig`    | function  | `(config) => config`. Returns its argument; exists to infer and tie together the config's types.    |
+| `GlyphConfig`          | type      | `<Root, Bindings, RendererResult, FontFormats, Boundary, CodecValue>`: `schema`, `encode`, `resolve`, `renderer`, `root`, optional `fonts` and `commands`. |
+| `GlyphConfigFor`       | type      | `<Schema, Root, RendererResult, CodecValue?, FontFormats?>`: a nameable `GlyphConfig` derived from a schema type. |
+| `GlyphConfigHandle`    | type      | `<Config>`: the handle type `glyph.handle` returns for a config.                                    |
+| `GlyphConfigBindings`  | type      | `<Config>`: the binding set of a config's schema.                                                   |
+| `SelectedGlyphConfig`  | type      | The immutable part of a config visible while a root is constructed (everything except `root`).      |
+| `GlyphFontConfig`      | type      | `{ default, formats }`: the raster formats a handle accepts by key, and the default key.            |
+| `GlyphCommandCapacity` | type      | Initial capacities for a root's publications: `limits`, `requestBytes`, `resultBytes`, `textUnits`, optional `maxTextUnits` (default 65,536). |
+| `GlyphCommandLimits`   | type      | Fixed limits of one root: `maxParagraphs`, `maxClusters`, `maxLines`, `maxRegions`, `maxExclusions`, `maxInlineObjects`, `maxSlotsPerBand`, `maxOutputBytes`. |
+| `Codec`                | type      | What `encode()` returns: `{ descriptor, capabilitySet?, dispose? }`.                                |
+| `EncodeContext`        | type      | Argument of `encode()`: `{ integration, ids }`.                                                     |
+| `ResolveContext`       | type      | Argument of `resolve()`: `format`, `resourceKind`, `resourceName`, `payload`, `resources`, `previous`, `signal`. |
+| `ResourceLease`        | type      | `{ value, disposed, dispose() }`: a resolved resource and its release.                              |
+| `resourceLease`        | function  | `(value, release) => ResourceLease`. The lease's `dispose()` calls `release` at most once. Throws `TypeError` for a non-object value or a non-function release. |
+| `RendererContext`      | type      | Argument of `renderer()`: `boundary`, `signal`, `codec`, optional `defaultRenderer`.                |
+
+## Roots and handles
+
+| Export                    | Kind | Description                                                                                         |
+| ------------------------- | ---- | --------------------------------------------------------------------------------------------------- |
+| `GlyphRoot`               | type | The base of every root: `name`, `handle`, `disposed`, `dispose()`.                                  |
+| `GlyphNamedRoot`          | type | `<Root>`: a root selected by name; `name` is a string.                                              |
+| `GlyphHandle`             | type | `<Root>`: the anonymous root, callable with a name to select a named root.                          |
+| `GlyphRootRecipe`         | type | `{ create(context) }`: the `root` field of a config.                                                |
+| `GlyphRootRecipeContext`  | type | Argument of `root.create`: `name`, `codec`, `config`, `fonts`, `services`, `create(extension, options)`. |
+| `GlyphRootCreateOptions`  | type | Second argument of `context.create`: `boundary`, optional `defaultRenderer`, `shape`, `dispose`.    |
+| `GlyphRootServices`       | type | Engine services for one root: `createText`, `assertTextUnits`, `invalidate`, `syncTransforms`, `copy`. |
+| `GlyphRootShapeHooks`     | type | Optional lifecycle hooks: `prepare`, `prepared`, `layout`, `accepted`, `unchanged`, `rejected`, `invalidated`. |
+| `GlyphShapeOptions`       | type | What `prepare()` may return: `{ semanticViews?: 'none' \| 'measurement' \| 'layout-inspection' \| 'all' }`. |
+| `GlyphHandleFonts`        | type | Font access for a handle's formats: `isLoaded`, `load`, `acquire`, `peek`.                          |
+
+## Text
+
+| Export                  | Kind     | Description                                                                                          |
+| ----------------------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| `GlyphTextState`        | type     | Complete desired state of one text: `font`, `text`, `transform`, optional `material`, `order`, `rasterPixelRatio`, `style`, `layout`, `constraints`, `flow`. |
+| `GlyphFormattedText`    | type     | `{ text, spans }`: a string with spans, as the `text` of a state.                                    |
+| `GlyphTextSpan`         | type     | One span: `start`, `end`, optional `font`, `material`, `style`.                                      |
+| `GlyphTextController`   | type     | Returned by `services.createText`: `update`, `updateParagraphOrder`, `measure`, `measureInk`, `inspect`, `readGlyphs`, `editing`, `preparedMeasurement`, `keepMeasured`, `refusal`, `awaitsPreparation`, `disposed`, `dispose`. |
+| `GlyphCopyRequest`      | type     | What `services.copy` copies: `{ kind: 'glyphs', stableIds }` or `{ kind: 'decorations' }`.           |
+| `GlyphCopyDestination`  | type     | Where a copy goes: `{ boundary, renderer }`.                                                         |
+| `GlyphCopy`             | type     | A retained copy: `result`, `syncTransforms()`, `dispose()`.                                          |
+| `createGlyphPlacements` | function | `(layout, text, displayedX, displayedY, incomplete) => GlyphPlacements`. Combines a layout inspection with renderer-owned drawn origins. Throws `RangeError` if the origin arrays do not match the glyph count. |
+| `GlyphPlacements`       | type     | A snapshot addressed as `glyphs`, `words` and `lines`, with `space`, `layout` and `incomplete`.      |
+| `GlyphPlacement`        | type     | One glyph: `key`, `index`, `cluster`, `bidiLevel`, `line`, `word`, `fontSize`, `advance`, `shapedX`, `shapedY`, `x`, `y`, `ink`, `bounds`. |
+| `GlyphRun`              | type     | A run of glyphs addressed as one unit, such as a word.                                               |
+| `GlyphLine`             | type     | A line run, with the vertical metrics needed to align to its baseline.                               |
+| `GlyphSpace`            | type     | `'paragraph'`: the coordinate space of a placement snapshot (origin top-left, +X right, +Y down).    |
+
+## Binding schema
+
+The schema turns engine identities into renderer objects.
+
+| Export                          | Kind     | Description                                                                                  |
+| ------------------------------- | -------- | -------------------------------------------------------------------------------------------- |
+| `defineGlyphSchema`             | function | `(schema) => Readonly<schema>`. Checks that all seven callbacks are functions and freezes the table; infers the binding set from them. Throws `TypeError` otherwise. |
+| `GlyphSchema`                   | type     | `<Bindings, Boundary>`: callbacks `program`, `buffer`, `material`, `transform`, `batch`, `instance`, `instanceSpan`, and optional `preservesHostTopology`. |
+| `GlyphBindingSet`               | type     | The binding vocabulary of a config: `resource`, `buffer`, `program`, `material`, `transform`, `batch`, `instance`, `instanceSpan`, `materialInput`, `transformInput`. |
+| `GlyphBufferDeclaration`        | type     | `{ kind: 'codec', value }` for a codec buffer, or `{ kind: 'placement' }`.                    |
+| `GlyphBufferBindingInput`       | type     | Argument of `schema.buffer`: `program`, `declaration`.                                       |
+| `GlyphDrawBindingInput`         | type     | Fields common to batches and instances: `program`, `programVariant`, `material`, `buffers`, `resources`, `flags`, `clip`, `depthKey`, `order`. |
+| `GlyphBatchBindingInput`        | type     | Argument of `schema.batch`: a draw input plus `identity` and `instances`.                    |
+| `GlyphRootInstanceBindingInput` | type     | Argument of `schema.instance`: a draw input plus `identity`, `transform`, `instance`.        |
+| `GlyphInstanceSpanBindingInput` | type     | Argument of `schema.instanceSpan`: `identity`, `kind`, `program`, `resource`, `buffer`, `recordIndex`, `recordCount`, `logicalOrder`, `clip`, `semantic`, and inline and block extents. |
+| `GlyphInstanceKind`             | type     | `'glyph' \| 'decoration' \| 'inline-object' \| 'clip' \| 'codec'`.                           |
+| `BatchIdentity`                 | type     | Opaque identity of a batch.                                                                  |
+| `InstanceIdentity`              | type     | Opaque identity of a root instance.                                                          |
+| `InstanceSpanIdentity`          | type     | Opaque identity of an instance span.                                                         |
+| `ClipIdentity`                  | type     | Opaque identity of a clip.                                                                   |
+| `SemanticIdentity`              | type     | Opaque identity of a semantic record.                                                        |
+
+## Render plan and renderer
+
+| Export                     | Kind | Description                                                                                          |
+| -------------------------- | ---- | ---------------------------------------------------------------------------------------------------- |
+| `GlyphRenderer`            | type | `<Bindings, Result>`: `decode(view)`, `syncTransforms(updates)`, `dispose()`.                        |
+| `PreparedRendererCommit`   | type | `<Result>`: what `decode` returns: `result`, `commit()`, `discard()`.                                |
+| `TransformUpdate`          | type | `{ transform }`: one transform binding to synchronize.                                               |
+| `CommandBufferView`        | type | One publication: `delivery`, `engineRevision`, `revision`, `publicationGeneration`, `checkpoint`, `updates`, `displayList`. Valid only during `decode`. |
+| `DisplayListChanges`       | type | The `updates` of a view: `resources`, `buffers`, `patches`, `retirements`.                           |
+| `ResourceUpdate`           | type | `acquire`, `update` or `retain` of one resource binding.                                             |
+| `BufferUpdate`             | type | `ensure`: a buffer with `scalarType`, `vectorWidth`, `capacityRecords`, `byteLength`.                |
+| `BufferPatch`              | type | `allocate-or-resize`, `write`, `fill`, `copy` or `retire` of a byte range.                           |
+| `Retirement`               | type | A `resource`, `buffer`, `slot-range` or `output-bytes` to release.                                   |
+| `DisplayListPhase`         | type | `{ kind: 'unchanged' }` or `{ kind: 'replace', value, retainedTopology? }`.                          |
+| `DisplayList`              | type | `{ transforms, children }`: the ordered draws of a root.                                             |
+| `DisplayListChild`         | type | A `DisplayListBatch` or a `DisplayListRootInstance`.                                                 |
+| `DisplayListBatch`         | type | `{ kind: 'batch', value, instances }`.                                                               |
+| `DisplayListRootInstance`  | type | `{ kind: 'instance', value, transform }`.                                                            |
+| `DisplayListInstanceSpan`  | type | `{ value, kind, recordIndex, recordCount, logicalOrder }`.                                           |
+| `DisplayListTransform`     | type | `{ value, recordIndex }`: a transform binding and its row in the transform table.                    |
+| `BorrowedCommandSequence`  | type | `<Value>`: an iterable with `length` and `at(index)`. Its values expire with the view.               |
+
+## Codec descriptor
+
+| Export                        | Kind     | Description                                                                                      |
+| ----------------------------- | -------- | ------------------------------------------------------------------------------------------------ |
+| `id`                          | constant | `IdFactory`: derives collision-checked identities from stable names: `id.buffer(name)`, `id.technique(format)`, `id.program(format, namespace, variant?)`, `id.resource(resourceId)`. |
+| `IdFactory`                   | type     | `CodecIdFactory` plus `buffer(name)`.                                                            |
+| `CodecIdFactory`              | type     | `technique`, `program`, `resource`: the identities an `EncodeContext` supplies as `ids`.         |
+| `CodecBufferId`               | type     | Branded identity of an instance buffer.                                                          |
+| `CodecTechniqueId`            | type     | Branded identity of a program family.                                                            |
+| `CodecProgramId`              | type     | Branded identity of one program.                                                                 |
+| `CodecResourceId`             | type     | Branded wire identity of a baked resource.                                                       |
+| `CodecDescriptor`             | type     | `{ capabilitySets, programs }`: the complete codec of one handle.                                |
+| `CodecCapabilitySet`          | type     | Renderer limits and features: `capabilities`, `maxBufferBytes`, `updateAlignment`, `coalesceGapBytes`, `rangeCallPenaltyBytes`, `maxBuffersPerDraw`, `maxResourcesPerDraw`, `maxIndirectDraws`, `fragmentationBudget`, `wholeBufferThresholdBasisPoints`. |
+| `CodecCapability`             | type     | `'storage-buffers' \| 'indirect-draws' \| 'alias-vec2' \| 'alias-vec4' \| 'ordered-direct'`.     |
+| `normalizeCodecCapabilitySet` | function | `(value, label?) => CodecCapabilitySet`. Validates and freezes a capability set. Throws `TypeError` for a malformed set or a repeated capability. |
+| `CodecProgram`                | type     | One executable program: ids, inputs, buffers, operations and draw keys.                          |
+| `CodecBuffer`                 | type     | One output buffer of a program: `id`, `scalar`, `vectorWidth`, optional `alignment`, `stride`, `usage`, `capacityClass`. |
+| `CodecScalarType`             | type     | `'f32' \| 'u32' \| 'u16'`.                                                                       |
+| `CodecInput`                  | type     | `{ scope, field }`: one program input.                                                           |
+| `CodecInputScope`             | type     | The scopes a program input can come from.                                                        |
+| `CodecOperation`              | type     | One compiled straight-line operation.                                                            |
+| `CodecTransformMode`          | type     | `'direct' \| 'indexed'`.                                                                         |
+| `ProgramBody`                 | type     | `{ inputs, operations, f32InputCount, u32InputCount }`: a compiled body before identities.       |
+| `createCodecProgram`          | function | `(techniqueId, programId, body, buffers, transformMode) => CodecProgram`. Low-level assembly; prefer `createRasterCodecProgram`. |
+| `compileCodec`                | function | `(descriptor) => Uint8Array`. Serializes a descriptor to the engine's wire form.                 |
+
+## Codec program DSL
+
+| Export                         | Kind     | Description                                                                                     |
+| ------------------------------ | -------- | ----------------------------------------------------------------------------------------------- |
+| `techniqueProgram`             | function | `(schema, options?) => TechniqueCodecProgramBuilder`. Builds a glyph-local program against a technique schema. `options`: `inverseFontSize?`, `textEffects?`. |
+| `TechniqueCodecProgramBuilder` | type     | `{ semantics, binding, compile(stores) }`. `compile` takes one value tuple per schema buffer.   |
+| `TechniqueCodecStores`         | type     | `<Buffers>`: the tuples `compile` expects, by buffer name.                                      |
+| `codecProgram`                 | function | `(options) => CodecProgramBuilder`. Builds a program without a schema, storing by buffer id.    |
+| `CodecProgramOptions`          | type     | `{ scope, bindingF32?, bindingU32?, inverseFontSize?, textEffects? }`.                          |
+| `CodecProgramBuilder`          | type     | `{ semantics, binding, store, storeF32, storeU32, compile() }`.                                 |
+| `CodecProgramSemantics`        | type     | Values the engine supplies per glyph: `inlineOrigin`, `blockOrigin`, `fontSize`, `color`, `outline`, `shadow`, `inverseFontSize`, `transformIndex`, `stableGlyphId`. |
+| `CodecColorChannels`           | type     | `{ red, green, blue, alpha }` as f32 values.                                                    |
+| `CodecProgramSystemBuffers`    | type     | Host-owned buffers: `stableGlyphId`, optional `transformIndex`, optional `placementSlot`.       |
+| `CompiledCodecProgramBody`     | type     | `<Schema>`: the output of `compile`, branded with its schema.                                   |
+| `f32`                          | constant | `CodecF32Expressions`: `add`, `sub`, `mul`, `const`.                                            |
+| `u32`                          | constant | `CodecU32Expressions`: `const`, `toF32`.                                                        |
+| `CodecF32Expressions`          | type     | The type of `f32`.                                                                              |
+| `CodecU32Expressions`          | type     | The type of `u32`.                                                                              |
+| `CodecF32Value`                | type     | An f32 value inside a program.                                                                  |
+| `CodecU32Value`                | type     | A u32 value inside a program.                                                                   |
+
+## Technique schema
+
+| Export                                     | Kind     | Description                                                                        |
+| ------------------------------------------ | -------- | ---------------------------------------------------------------------------------- |
+| `defineTechniqueSchema`                    | function | `(declaration) => TechniqueSchema`. Validates and freezes a technique's schema.    |
+| `TechniqueSchemaDeclaration`               | type     | Input: `technique`, `scope`, `binding`, `buffers`, optional `resources`, `render`, `glyphOrigin`. |
+| `TechniqueSchema`                          | type     | The validated, branded schema.                                                     |
+| `TechniqueSchemaMetadata`                  | type     | The non-generic view of a schema, used as a constraint.                            |
+| `TechniqueBindingDeclaration`              | type     | `{ f32?, u32? }`: names of per-glyph values a font supplies.                       |
+| `defineCodecBuffers`                       | function | `(buffers) => buffers`. Validates and freezes a named buffer set (non-zero unique ids, at least one lane each). |
+| `CodecBufferDeclaration`                   | type     | `{ id, scalar, lanes }`: one buffer; the lane count is its vector width.           |
+| `CodecBufferDeclarations`                  | type     | A record of buffer declarations by name.                                           |
+| `CodecScalarKind`                          | type     | `'f32' \| 'u32'`.                                                                  |
+| `schemaCodecBuffers`                       | function | `(schema) => CodecBuffer[]`. The buffers a schema's programs publish, in declaration order. |
+| `TechniqueResourceDeclaration`             | type     | A buffer, texture, texture-array, geometry or group resource declaration.          |
+| `TechniqueResourceDeclarations`            | type     | A record of resource declarations by name.                                         |
+| `TechniqueBufferResourceDeclaration`       | type     | `{ kind: 'buffer', cardinality? }`.                                                |
+| `TechniqueTextureResourceDeclaration`      | type     | `{ kind: 'texture', format, cardinality? }`.                                       |
+| `TechniqueTextureArrayResourceDeclaration` | type     | `{ kind: 'texture-array', format, cardinality? }`.                                 |
+| `TechniqueGeometryResourceDeclaration`     | type     | `{ kind: 'geometry', attributes }`.                                                |
+| `TechniqueResourceGroupDeclaration`        | type     | `{ kind: 'group', members, cardinality? }`: named leaf payloads realized together. |
+| `TechniqueResourceGroupMembers`            | type     | The members of a group: buffers, textures and texture arrays.                      |
+| `TechniqueRenderDeclaration`               | type     | `{ resource?, geometry }`: which resource a draw selects and what geometry it draws. |
+| `TechniqueGeometryDeclaration`             | type     | `{ kind: 'synthetic-quad' }`, or a supplied `quad`, `hull` or `custom` geometry with `resource` and `coordinates`. |
+| `TechniqueGeometryKind`                    | type     | `'synthetic-quad' \| 'quad' \| 'hull' \| 'custom'`.                                |
+| `TechniqueSuppliedGeometryKind`            | type     | `TechniqueGeometryKind` without `'synthetic-quad'`.                                |
+| `TechniqueGeometryCoordinates`             | type     | `'unit-square' \| 'em'`.                                                           |
+| `TechniqueCustomGeometryKind`              | type     | A branded name for a custom geometry kind.                                         |
+| `defineTechniqueGeometryKind`              | function | `(kind) => TechniqueCustomGeometryKind`. Brands a custom geometry kind name. Throws `TypeError` for an empty or built-in name. |
+
+## Portable resources
+
+Payloads a raster format hands to a renderer. They are plain bytes and metadata, never renderer objects.
+
+| Export                         | Kind     | Description                                                                                 |
+| ------------------------------ | -------- | ------------------------------------------------------------------------------------------- |
+| `PortableResource`             | type     | A leaf payload or a group payload.                                                          |
+| `PortableResourceKind`         | type     | `'buffer' \| 'texture' \| 'texture-array' \| 'geometry' \| 'group'`.                        |
+| `portableResourceKinds`        | constant | The five kinds, as an array.                                                                |
+| `PortableLeafResource`         | type     | A buffer, texture, texture-array or geometry payload.                                       |
+| `PortableBufferPayload`        | type     | `{ kind: 'buffer', bytes, stride? }`.                                                       |
+| `PortableTexturePayload`       | type     | `{ kind: 'texture', format, width, height, bytes }`.                                        |
+| `PortableTextureArrayPayload`  | type     | `{ kind: 'texture-array', format, width, height, layers, bytes }`.                          |
+| `PortableGeometryPayload`      | type     | `{ kind: 'geometry', topology, bytes, views, accessors, attributes, indices?, drawRange? }`. |
+| `PortableResourceGroupPayload` | type     | `{ kind: 'group', members }`.                                                               |
+| `PortableTextureFormat`        | type     | `'r8unorm' \| 'rgba8unorm' \| 'rgba16float' \| 'rgba32uint' \| 'r32uint'`.                  |
+| `portableTextureFormats`       | constant | The texture formats, as an array.                                                           |
+| `PortableTopology`             | type     | `'triangle-list' \| 'triangle-strip'`.                                                      |
+| `portableTopologies`           | constant | The topologies, as an array.                                                                |
+| `PortableComponentType`        | type     | `'f32' \| 'u32' \| 'i16' \| 'u16' \| 'u8'`.                                                 |
+| `PortableBufferView`           | type     | `{ offset, length }`: a slice of a geometry payload's bytes.                                |
+| `PortableAccessor`             | type     | `{ componentType, components, view, count, offset? }`.                                      |
+| `PortableVertexAttribute`      | type     | `{ semantic, accessor }`.                                                                   |
+| `PortableVertexInput`          | type     | `{ semantic, componentType, components }`: a vertex input a technique requires.             |
+| `PortableVertexSemantic`       | type     | `'position' \| 'uv' \| 'normal' \| 'tangent' \| 'color'` or a custom semantic.              |
+| `PortableCustomVertexSemantic` | type     | A branded custom semantic name.                                                             |
+| `definePortableVertexSemantic` | function | `(semantic) => PortableCustomVertexSemantic`. Brands a custom vertex attribute name.        |
+| `PortableGeometryIndices`      | type     | `{ accessor }`.                                                                             |
+| `PortableDrawRange`            | type     | `{ start, count }`.                                                                         |
+| `assertPortableResource`       | function | `(kind, name, payload, declaredFormat?, declaredVertexInputs?) => void`. Structural validation of a payload against its declared kind; throws when it does not match. |
+
+## Raster formats
+
+| Export                        | Kind     | Description                                                                                   |
+| ----------------------------- | -------- | --------------------------------------------------------------------------------------------- |
+| `defineRasterFormat`          | function | `(format) => RasterFormat`. Defines a format from `id`, `kind`, `extension`, `version`, `textEffects`, `descriptor`, `decode`, `dispose` and optional `runtimeBaker`. Throws `TypeError` or `RangeError` for a malformed definition. |
+| `RasterFormat`                | type     | `<Id, Kind, Options, Descriptor, Data>`: a format. Calling it with options returns a request. |
+| `RasterFormatMetadata`        | type     | The non-generic view: `id`, `kind`, `extension`, `version`, `textEffects`.                    |
+| `RasterFormatId`              | type     | Branded format identity.                                                                      |
+| `RasterTextEffect`            | type     | `'outline' \| 'shadow'`.                                                                      |
+| `RasterFormatRequest`         | type     | `<Format>`: a format bound to options: `{ raster, options }`.                                 |
+| `RasterFormatRequestMetadata` | type     | The non-generic view of a request.                                                            |
+| `RasterFormatInput`           | type     | `<Format>`: a format or a request, whichever its options allow.                               |
+| `RasterFormatTypesOf`         | type     | `<Format>`: `{ options, descriptor, data }` of a format.                                      |
+| `RasterOptionsOf`             | type     | `<Format>`: its options type.                                                                 |
+| `RasterFormatDescriptorOf`    | type     | `<Format>`: its descriptor type.                                                              |
+| `RasterDataOf`                | type     | `<Format>`: its decoded data type.                                                            |
+| `RasterResourceId`            | type     | Branded identity of one renderer resource of a font. Equal ids must mean equal bytes.         |
+| `defineRasterResourceId`      | function | `(id) => RasterResourceId`. Brands a non-empty string.                                        |
+
+## Raster codecs
+
+| Export                       | Kind     | Description                                                                                    |
+| ---------------------------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `registerRasterCodec`        | function | `(codec) => RasterCodec`. Registers a format's portable codec. One codec per format.           |
+| `RasterCodec`                | type     | `<Format, Schema>`: `raster`, `schema`, optional `programVariant`, `codecBody`, `compileFont`. |
+| `isRasterCodec`              | function | `(value) => boolean`. Whether a value is a codec returned by registration.                     |
+| `RasterCodecBodyFactory`     | type     | `(capabilities) => CompiledCodecProgramBody`: the type of `codecBody`.                         |
+| `RasterCodecFontCompiler`    | type     | Argument of `compileFont`: `font`, `compile(binding)`, `retain(name, key, resource)`.          |
+| `RasterCodecFont`            | type     | `{ raster, glyphCount, data }`: the decoded font a compiler reads.                             |
+| `RasterFontBinding`          | type     | What `compile` takes: `strikes`, `resource(glyphIndex, strikeIndex)`, and `f32` and `u32` readers by binding name. |
+| `createRasterCodecProgram`   | function | `(codec, options) => CodecProgram`. Assembles a registered codec with an integration's system buffers and capability set. Throws `RangeError` when the program needs more buffers than `maxBuffersPerDraw`. |
+| `RasterCodecProgramOptions`  | type     | `{ namespace, programName?, system, capabilitySet, transformMode, ids? }`.                     |
+| `RasterCodecSystem`          | type     | System buffers with a required `placementSlot`.                                                |
+| `compileRasterFont`          | function | `(font, ids?) => CompiledRasterFont \| undefined`. Compiles a loaded font through its registered codec. |
+| `CompiledRasterFont`         | type     | `{ binding, resources, declaredResources }`: portable binding bytes and retained payloads.     |
+| `readCompiledRasterFont`     | function | `(compiled, codec, ids?) => CompiledRasterFontView`. A read-only view over a compiled font. Throws `TypeError` for a value this package did not compile. |
+| `CompiledRasterFontView`     | type     | `scope`, `glyphCount`, `strikes`, `resources`, `resource(glyph, strike)`, `f32(name, row)`, `u32(name, row)`. |
+| `CompiledRasterFontResource` | type     | `{ key, payload }`.                                                                            |
+
+## Built-in formats
+
+The schemas and codecs of the three built-in formats and of decorations, for integrations that draw them.
+
+| Export                           | Kind     | Description                                                                                 |
+| -------------------------------- | -------- | ------------------------------------------------------------------------------------------- |
+| `bitmapSchema`                   | constant | The bitmap technique schema.                                                                |
+| `bitmapCodec`                    | constant | The registered bitmap codec.                                                                |
+| `selectBitmapStrikePpem`         | function | `(strikes, cssFontSize, rasterPixelRatio) => number`. The ppem of the strike nearest to `cssFontSize × rasterPixelRatio`. |
+| `msdfSchema`                     | constant | The MSDF technique schema. Buffers `rect`, `color`, `effectColor`, `effect`; resource group `atlas` with members `pages`, `pixelRange`, `effectScale`, `glyphs`. |
+| `msdfCodec`                      | constant | The registered MSDF codec.                                                                  |
+| `msdfBakedPages`                 | function | `(pages) => MsdfBakedPages`. Resolves the `pages` member of an MSDF atlas group, which holds a token, to the baked pages. Throws if the pages were released. |
+| `MsdfBakedPages`                 | type     | `{ width, height, pages }`.                                                                 |
+| `MSDF_EM_SIZE`                   | constant | `64`. The default `emSize` of the MSDF format.                                              |
+| `MSDF_PIXEL_RANGE`               | constant | `8`. The default `pixelRange` of the MSDF format.                                           |
+| `MSDF_GLYPH_RECORD_STRIDE`       | constant | `20`. Bytes per glyph in the baked MSDF records.                                            |
+| `MSDF_GLYPH_TABLE_STRIDE`        | constant | `4`. `f32` values per glyph in the atlas `glyphs` table: `left`, `top`, `width`, `height + layer × MSDF_GLYPH_TABLE_LAYER_STEP`, in atlas texels. |
+| `MSDF_GLYPH_TABLE_LAYER_STEP`    | constant | `4096`. The multiplier that packs a glyph's atlas layer into the fourth table value.        |
+| `slugSchema`                     | constant | The Slug technique schema. Buffers `rect`, `color`, `glyph`.                                |
+| `slugCodec`                      | constant | The registered Slug codec.                                                                  |
+| `SLUG_GLYPH_RECORD_STRIDE`       | constant | `40`. Bytes per glyph in the baked Slug records.                                            |
+| `SLUG_GLYPH_TABLE_STRIDE`        | constant | `16`. `u32` words per glyph in a page's `glyphs` table.                                     |
+| `SLUG_PLANE_UNITS_PER_EM`        | constant | `2048`. Units per em of the Slug curve plane.                                               |
+| `SlugBandResidency`              | class    | Keeps one Slug page's band curves resident for the glyphs drawn. `new SlugBandResidency(curves, references, glyphTable)`; `use(lane, start, end, stride)` admits the glyphs of an instance range and returns a `SlugAdmission` or `undefined`; `entries` and `lines` expose the resident texels. |
+| `SlugAdmission`                  | type     | What one `use` call changed: `grew`, `firstLine`, `endLine`, `rows`.                        |
+| `SLUG_RESIDENT_BAND_CURVE_WIDTH` | constant | `1024`. Texels per line of a resident band-curve texture.                                   |
+| `decorationSchema`               | constant | The schema of decoration rectangles. Buffers `rect` (`left`, `top`, `width`, `height`) and `packed` (`color`, `flags`). |
+| `createDecorationCodecProgram`   | function | `(options) => CodecProgram`. The program that publishes decoration rectangles.              |
+| `DecorationCodecProgramOptions`  | type     | `{ techniqueId, programId, transformMode, system }`.                                        |
+
+## Example
+
+The functions an integration calls most, in one typechecked module:
+
+```ts
+import {
+  compileCodec,
+  createRasterCodecProgram,
+  defineCodecBuffers,
+  id,
+  msdfCodec,
+  normalizeCodecCapabilitySet,
+  schemaCodecBuffers,
+  selectBitmapStrikePpem,
+} from '@pmndrs/glyph/core';
+import type { CodecDescriptor } from '@pmndrs/glyph/core';
+
+const capabilitySet = normalizeCodecCapabilitySet({
+  capabilities: ['storage-buffers', 'alias-vec2', 'alias-vec4', 'ordered-direct'],
+  maxBufferBytes: 16 * 1024 * 1024,
+  updateAlignment: 4,
+  coalesceGapBytes: 128,
+  rangeCallPenaltyBytes: 256,
+  maxBuffersPerDraw: 8,
+  maxResourcesPerDraw: 4,
+  maxIndirectDraws: 0,
+  fragmentationBudget: 8,
+  wholeBufferThresholdBasisPoints: 7_500,
+});
+
+const system = defineCodecBuffers({
+  stableGlyphId: { id: id.buffer('example/stable-glyph'), scalar: 'u32', lanes: ['stableGlyphId'] },
+  placementSlot: { id: id.buffer('example/placement-slot'), scalar: 'u32', lanes: ['placementSlot'] },
+});
+
+const descriptor: CodecDescriptor = {
+  capabilitySets: [capabilitySet],
+  programs: [
+    createRasterCodecProgram(msdfCodec, {
+      namespace: 'example',
+      system,
+      capabilitySet,
+      transformMode: 'direct',
+    }),
+  ],
+};
+
+const wire: Uint8Array = compileCodec(descriptor);
+const msdfBuffers = schemaCodecBuffers(msdfCodec.schema); // rect, color, effectColor, effect
+const ppem: number = selectBitmapStrikePpem([{ ppem: 16 }, { ppem: 32 }], 14, 2); // 32
+```
+
+## See also
+
+- [Renderer integration](/explanation/renderer-integration)
+- [The render plan](/explanation/render-plan)
+- [Add a custom raster format](/guides/project/custom-format)
+- [Shaders reference](/reference/shaders)
+- [Formats reference](/reference/formats)

@@ -1,0 +1,267 @@
+---
+title: Use the types
+description: Type fonts and texts by raster format, annotate refs, handles and styles, narrow material contexts and errors, and work with the package's branded identities.
+nav: 653
+sourcecode: packages/glyph/src/index.ts
+---
+
+The package is written in TypeScript and its types carry real information: which raster formats a font was declared
+with, which format a text draws, which shader outputs a material can read. This guide shows how to name those types
+in your own code and how to let inference do it for you.
+
+## Configure the compiler
+
+The package is ESM-only and publishes its entry points through `exports` subpaths (`@pmndrs/glyph/three`,
+`@pmndrs/glyph/react`, and so on). Use a `moduleResolution` that reads `exports`:
+
+```json
+{
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true
+  }
+}
+```
+
+`"node16"` and `"nodenext"` also work. The legacy `"node"` resolution does not find the subpaths.
+
+## Type a font by its formats
+
+`glyph.fontFace` records the formats you declare in the type of the declaration. Each declared format becomes a
+property that selects it.
+
+```ts
+import { bitmap, glyph, msdf, slug, type FontFace } from '@pmndrs/glyph';
+
+const Inter = glyph.fontFace('/fonts/Inter.font.glb', { format: [msdf, slug] });
+const declared: FontFace<typeof msdf | typeof slug> = Inter;
+
+Inter.msdf; // the MSDF selection
+Inter.slug; // the Slug selection
+// @ts-expect-error bitmap was not declared for this FontFace
+Inter.bitmap;
+
+// A format with required options is declared by calling it.
+const Pixel = glyph.fontFace('/fonts/Pixel.font.glb', { format: bitmap({ strikes: [16, 32] }) });
+// @ts-expect-error bitmap needs its strikes
+glyph.fontFace('/fonts/Pixel.font.glb', { format: bitmap });
+```
+
+Pass the formats inline, as above. `format` is typed as a non-empty tuple, so an array stored in a variable first
+needs `as const` to keep its element types.
+
+## Type a text by its format
+
+`createText` infers the text's format from the font you pass. Name it with `Text<typeof format>` when you need to
+store or pass the text.
+
+```ts
+import type { msdf, slug } from '@pmndrs/glyph';
+import type { Text } from '@pmndrs/glyph/three';
+
+const title: Text<typeof slug> = handle.createText({ font: Inter.slug, text: 'Title' });
+const body: Text<typeof msdf> = handle.createText({ font: Inter.msdf, text: 'Body' });
+
+function setLabel(label: Text<typeof msdf>, value: string): void {
+  label.text = value;
+}
+
+setLabel(body, 'Updated');
+// @ts-expect-error a Slug text is not an MSDF text
+setLabel(title, 'Updated');
+```
+
+To accept a text of any format, use the base constraint:
+
+```ts
+import type { RasterFormatMetadata } from '@pmndrs/glyph';
+import type { Text } from '@pmndrs/glyph/three';
+
+function widthOf(label: Text<RasterFormatMetadata>): number {
+  return label.measure().width;
+}
+```
+
+A loaded font has the same parameter: `Font<typeof msdf>`. That is what the React hooks return.
+
+## Type refs in React
+
+The React `Text` component renders the three.js `Text` object, so a ref has the three.js type. Import it under
+another name to avoid the clash.
+
+```tsx
+import type { msdf } from '@pmndrs/glyph';
+import { Text, useMsdf } from '@pmndrs/glyph/react';
+import type { Text as ThreeText } from '@pmndrs/glyph/three';
+import { useRef } from 'react';
+
+export function Title() {
+  const font = useMsdf(url);
+  const ref = useRef<ThreeText<typeof msdf>>(null);
+  return (
+    <Text ref={ref} font={font} onLayout={(_text, layout) => console.info(layout.width)}>
+      Title
+    </Text>
+  );
+}
+```
+
+## Type handles and roots
+
+A three.js handle is a `ThreeHandle`; a named root, and the handle itself, is a `ThreeRoot`.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { ThreeConfig, type ThreeHandle, type ThreeRoot } from '@pmndrs/glyph/three';
+
+const app: ThreeHandle = glyph.handle('app', ThreeConfig);
+const hud: ThreeRoot = app('hud');
+
+function addLabel(root: ThreeRoot, text: string) {
+  return root.createText({ font: Inter.msdf, text });
+}
+
+addLabel(app, 'on the anonymous root');
+addLabel(hud, 'on the named root');
+```
+
+For a config of your own, derive the handle type from the config instead of writing it out:
+
+```ts
+import type { GlyphConfigHandle } from '@pmndrs/glyph';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
+
+const config = defineThreeConfig({ msdfAtlas: 'sdf' });
+type AppHandle = GlyphConfigHandle<typeof config>;
+```
+
+## Type styles, layouts and constraints
+
+`TextStyle`, `ParagraphLayout` and `Constraints` are both types and values. As types they describe one object. As
+values they offer `create`, which checks a table of named presets and returns it with its keys preserved.
+
+```ts
+import { Constraints, ParagraphLayout, TextStyle } from '@pmndrs/glyph';
+
+const styles = TextStyle.create({
+  body: { fontSize: 16, color: '#f4f1ea' },
+  accent: { color: '#ffd166' },
+});
+const layouts = ParagraphLayout.create({ prose: { wrap: 'word', align: 'start' } });
+const boxes = Constraints.create({ card: { width: { mode: 'at-most', size: 320 } } });
+
+text.style = [styles.body, styles.accent];
+text.layout = layouts.prose;
+text.constraints = boxes.card;
+
+// @ts-expect-error not a declared preset
+styles.heading;
+```
+
+Every property that takes a style, layout or constraints also takes a **property list**: a value, a nested array of
+values merged left to right, or `false`, `null` and `undefined`, which are skipped. That makes conditional styling
+type-safe without spreading.
+
+```ts
+import type { PropertyList, TextStyle } from '@pmndrs/glyph';
+
+declare const selected: boolean;
+
+const style: PropertyList<TextStyle> = [{ fontSize: 16 }, selected && { color: '#ffd166' }];
+text.style = style;
+```
+
+To check a standalone object without widening it, use `satisfies`:
+
+```ts
+import type { TextStyle } from '@pmndrs/glyph';
+
+const warning = { color: '#ff595e', decoration: { underline: true } } satisfies TextStyle;
+```
+
+## Narrow a material context
+
+The factory passed to `defineTextMaterial` receives a union: one context per raster format, plus one for
+decorations. Narrow on `kind` and `format` to reach format-specific shader outputs.
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+
+const soft = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  if (context.kind === 'glyph' && context.format === 'pmndrs.msdf') {
+    material.opacityNode = context.shader.fillCoverage; // the MSDF outputs; other formats have no fillCoverage
+  }
+  return material;
+});
+```
+
+`format` is the format's id (`'pmndrs.bitmap'`, `'pmndrs.msdf'`, `'pmndrs.slug'`), not the short key used on a
+`FontFace`.
+
+## Narrow errors
+
+Glyph's errors are classes with a literal `code`. Use `instanceof` for the specific classes and `code` for the
+general one.
+
+```ts
+import { GlyphError, GlyphFontError, GlyphInputError, TextOffsetError } from '@pmndrs/glyph';
+
+function describe(error: unknown): string {
+  if (error instanceof GlyphInputError) return `invalid ${error.path.join('.')}`; // code: 'invalid-input'
+  if (error instanceof TextOffsetError) return `bad offset ${String(error.offset)} in ${error.method}()`;
+  if (error instanceof GlyphFontError) return `font: ${error.reason}`;
+  if (error instanceof GlyphError) return error.code;
+  return 'not a Glyph error';
+}
+```
+
+## Work with branded identities
+
+Some strings and numbers are branded: their types cannot be produced by a plain literal, so two kinds of identity
+cannot be confused. You receive them from the API and pass them back; you do not construct them by casting.
+
+| Type                  | What it identifies                              | Where it comes from                                    |
+| --------------------- | ----------------------------------------------- | ------------------------------------------------------ |
+| `GlyphKey`            | One glyph of a paragraph, stable across reflow  | The `key` of a glyph measurement                       |
+| `Fingerprint`         | Content identity of a font source or artifact   | Bake reports, `fingerprint.source()` and its siblings  |
+| `RasterKey`           | One raster of a font, including its options     | Bake reports and raster requests                       |
+| `RasterFormatId`      | A raster format                                 | `format.id` of a format such as `msdf`                 |
+| `RasterResourceId`    | One renderer resource of a font                 | `defineRasterResourceId()` in `@pmndrs/glyph/core`     |
+| `CodecBufferId`       | One instance buffer of a codec                  | `id.buffer()` in `@pmndrs/glyph/core`                  |
+
+```ts
+import { msdf, type RasterFormatId } from '@pmndrs/glyph';
+
+const formatId: RasterFormatId = msdf.id;
+// @ts-expect-error a plain string is not a format id
+const wrong: RasterFormatId = 'pmndrs.msdf';
+```
+
+Text offsets are plain numbers. They are UTF-16 code units of `text.text`, and the API checks them at run time:
+an offset inside a grapheme throws `TextOffsetError`.
+
+## With `exactOptionalPropertyTypes`
+
+Optional options in this package are declared `name?: Type`, not `name?: Type | undefined`. Under
+`exactOptionalPropertyTypes`, passing an explicit `undefined` is an error. Omit the key instead.
+
+```ts
+import { defineThreeConfig, type GlyphBufferCapacity } from '@pmndrs/glyph/three';
+
+declare const capacity: GlyphBufferCapacity | undefined;
+
+const config = defineThreeConfig({ ...(capacity === undefined ? {} : { capacity }) });
+```
+
+The exceptions are properties where `undefined` is a value with meaning, such as `text.set({ material: undefined })`
+to clear a material; their types say so.
+
+## See also
+
+- [`FontFace` reference](/reference/font-face)
+- [`Text` reference](/reference/three-text)
+- [`TextStyle` reference](/reference/text-style)
+- [Errors reference](/reference/errors)
+- [Reuse styles](/guides/text/reuse-styles)

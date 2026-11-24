@@ -1,0 +1,189 @@
+---
+title: Test text
+description: Test layout, measurement, editing and error behavior of Glyph text in Node without a GPU, simulate a frame headlessly, and know which assertions need a real browser.
+nav: 652
+sourcecode: packages/glyph/tests/integration/deferred-preparation.test.mjs
+---
+
+Layout does not depend on a GPU. Shaping, line breaking, measurement and the editing queries run in the WebAssembly
+engine, which works in Node. This guide sets up a Node test for the three.js API, shows how to stand in for a frame,
+and lists what still needs a browser.
+
+## What needs what
+
+| You want to assert                                                  | Needs                                      |
+| ------------------------------------------------------------------- | ------------------------------------------ |
+| Sizes, line counts, glyph positions, carets, selections             | Node. No scene, renderer or canvas.        |
+| That a text is published, how many draws a root has                 | Node and a `Scene`. No renderer.           |
+| Input validation (`GlyphInputError`, `TextOffsetError`)             | Node.                                      |
+| Pixels, shaders, custom materials                                   | A browser with WebGPU or WebGL2.           |
+
+## Prepare a font fixture
+
+Tests load a baked `.font.glb` from disk. Bake it once and commit it, or bake it in a setup step. Subset it to the
+characters your tests use to keep the fixture small.
+
+```ts
+import { bakeFont } from '@pmndrs/glyph/bake';
+import { msdfBaker } from '@pmndrs/glyph/bakers/msdf';
+
+await bakeFont({
+  input: 'fonts/Inter-Regular.ttf',
+  output: 'test/fixtures/inter.font.glb',
+  font: { fontFaceIndex: 0 },
+  unicodeRanges: [{ start: 0x20, end: 0x7e }],
+  rasters: [{ baker: msdfBaker, packaging: { artifact: 'embedded' }, options: undefined }],
+});
+```
+
+See [Bake fonts](/guides/fonts/bake-fonts) for the options.
+
+## Write a layout test
+
+1. Initialize the engine. `glyph.init()` is safe to await in every test file; calls share one promise.
+2. Declare the font from the file's bytes. A `Blob` is a font source, so no HTTP server is involved.
+3. Create a handle with a name unique to the test, and dispose it afterwards. Handle names must be unique while
+   live, and a leaked handle makes the next test that reuses the name throw.
+4. Create text and read it. Reads prepare the text; no frame is needed.
+
+```ts
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
+
+import { glyph, msdf } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+
+let nextHandle = 0;
+
+test('a long label wraps at 200 units', async (t) => {
+  await glyph.init();
+  const Inter = glyph.fontFace(new Blob([await readFile('test/fixtures/inter.font.glb')]), { format: msdf });
+  await Inter.load();
+  const handle = glyph.handle(`test:${String(nextHandle++)}`, ThreeConfig);
+  t.after(() => {
+    handle.dispose();
+    Inter.dispose();
+  });
+
+  const label = handle.createText({
+    font: Inter.msdf,
+    text: 'The quick brown fox jumps over the lazy dog',
+    style: { fontSize: 32 },
+    constraints: { width: { mode: 'at-most', size: 200 } },
+  });
+  t.after(() => label.dispose());
+
+  const layout = label.measure();
+  assert.ok(layout.lineCount > 1);
+  assert.ok(layout.width <= 200);
+  assert.equal(layout.missingGlyphCount, 0);
+});
+```
+
+A text that is not in a scene reports `commitState().status === 'unbound'`. That does not affect reads.
+
+## Stand in for a frame
+
+To test publication, add the text to a `Scene` and traverse it. With three.js, a root prepares and publishes during
+`scene.updateMatrixWorld(true)`, which is what `renderer.render()` calls first. No renderer is required.
+
+```ts
+import assert from 'node:assert/strict';
+import { Scene } from 'three/webgpu';
+
+const scene = new Scene();
+scene.add(text);
+assert.equal(text.commitState().status, 'pending');
+
+scene.updateMatrixWorld(true); // the frame: prepare, layout callbacks, publish
+assert.equal(text.commitState().status, 'committed');
+
+const draws = scene.getObjectByName('@pmndrs/glyph:anonymous')?.children.length;
+assert.equal(draws, 1);
+```
+
+`glyph.shape()` alone does not publish a three.js text whose scene has never been traversed, because the root learns
+its scene from the traversal. Use the traversal in tests.
+
+`onLayout` callbacks run inside that traversal, so a test can assert what a callback did immediately after it:
+
+```ts
+import assert from 'node:assert/strict';
+
+let seenWidth = 0;
+text.onLayout = (_text, layout) => {
+  seenWidth = layout.width;
+};
+text.text = 'A new, longer label';
+scene.updateMatrixWorld(true);
+assert.equal(seenWidth, text.measure().width);
+```
+
+## Test editing
+
+The editing methods are reads. Test them like measurements, and assert that invalid offsets throw.
+
+```ts
+import assert from 'node:assert/strict';
+import { TextOffsetError } from '@pmndrs/glyph';
+
+text.text = 'café';
+const end = text.move({ offset: 0, affinity: 'downstream' }, 'forward', 'line').position;
+assert.equal(end.offset, text.text.length);
+
+text.replace(end.offset, end.offset, '!');
+assert.equal(text.text, 'café!');
+
+assert.throws(() => text.caret({ offset: 99, affinity: 'downstream' }), TextOffsetError);
+```
+
+## Test errors
+
+Invalid input throws from the setter, synchronously, and leaves the previous value in place.
+
+```ts
+import assert from 'node:assert/strict';
+import { GlyphInputError } from '@pmndrs/glyph';
+
+const before = text.style;
+assert.throws(
+  () => {
+    text.style = { fontSize: -1 };
+  },
+  (error: unknown) => error instanceof GlyphInputError && error.path[0] === 'style',
+);
+assert.equal(text.style, before);
+```
+
+Failures that Glyph finds while rendering are thrown from `renderer.render()`. A bare `updateMatrixWorld` traversal
+defers them to the next render of that scene, so a headless Node test does not see them. Test those paths in a
+browser test that renders, and assert on the render call. See [Handle errors](/guides/project/handle-errors).
+
+## Choose stable assertions
+
+- Assert structure before numbers: `lineCount`, `glyphCount`, `missingGlyphCount`, which line a caret is on.
+- Assert relations: this label is narrower than its constraint, this line's baseline is below the previous one.
+- Compare against values measured from the same fixture, not against constants copied from a browser. Exact widths
+  change when you rebake a fixture from a different font version.
+- Keep one fixture font per test suite and commit it, so results do not depend on a network or a system font.
+
+## Test React components
+
+Components from `@pmndrs/glyph/react` create the same `Text` objects. With a React Three Fiber test renderer, give
+the component a `ref`, wait for it to be set, and call the same reads on `ref.current`. Fonts load through Suspense,
+so wait for the ref before asserting.
+
+## Test pixels in a browser
+
+Anything about appearance needs a real graphics backend: custom materials, outline and shadow, antialiasing, culling
+of displaced glyphs. Run those tests in a browser automation tool against a build of your application, and check
+first that the environment provides WebGPU or WebGL2; many CI machines provide neither without configuration.
+
+## See also
+
+- [Handle errors](/guides/project/handle-errors)
+- [Measure text](/guides/inspect/measure-text)
+- [Bake fonts](/guides/fonts/bake-fonts)
+- [Editing reference](/reference/editing)
+- [When layout runs](/explanation/when-layout-runs)

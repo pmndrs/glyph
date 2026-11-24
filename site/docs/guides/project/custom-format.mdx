@@ -1,0 +1,428 @@
+---
+title: Add a custom raster format
+description: Define your own raster format with its decoder, codec, baker and three.js shader program, and draw text with it through the existing three.js integration.
+nav: 656
+sourcecode: packages/glyph-example-raster/src/raster.ts
+---
+
+A raster format is the per-glyph data one drawing technique needs, together with the code that bakes it, loads it,
+packs instances for it and shades it. Bitmap, MSDF and Slug are built this way, and you can add your own without
+changing the package. This guide builds a small format, `frame`, that draws each glyph as a colored rectangle. It
+follows `packages/glyph-example-raster` in the repository, which is the complete, tested version of the same thing.
+
+You need to be comfortable with three.js node materials. Read
+[Renderer integration](/explanation/renderer-integration) first if the words codec and schema are new.
+
+## The five pieces
+
+| Piece           | Defined with                                    | Runs                        | Purpose                                                        |
+| --------------- | ----------------------------------------------- | --------------------------- | -------------------------------------------------------------- |
+| Format          | `defineRasterFormat` (`/core`)                  | At load time                | Identity, options, and decoding the baked artifact             |
+| Schema          | `defineTechniqueSchema` (`/core`)               | At module load              | The instance buffers and resources the technique uses          |
+| Codec           | `registerRasterCodec` (`/core`)                 | Inside the engine, per glyph | How each instance record is computed                           |
+| Baker           | `defineRasterBaker` (`/baker`)                  | In Node, at bake time       | Producing the artifact from a source font                      |
+| Shader program  | `registerThreeRasterProgram` (`/three`)         | When a draw is first needed | A three.js material that reads the instance buffers            |
+
+Keep the first three free of any renderer import, so the same format can be drawn by other integrations.
+
+## 1. Define the format
+
+The format object carries the identity that a font file and a `FontFace` declaration must agree on, and decodes the
+artifact a baker wrote.
+
+```ts
+import type { JsonValue, RasterDecodeArtifact, RasterDecodeFont, RasterResourceId, RasterResourceSource } from '@pmndrs/glyph';
+import { defineRasterFormat, defineRasterResourceId } from '@pmndrs/glyph/core';
+
+export interface FrameOptions {
+  /** Fraction of the em removed from each side of the frame. */
+  readonly inset?: number;
+}
+
+/** Options with defaults applied. Two declarations with equal descriptors are the same raster. */
+export interface FrameDescriptor {
+  readonly [key: string]: JsonValue;
+  readonly generatorVersion: '0.0.0';
+  readonly inset: number;
+}
+
+export interface FrameData {
+  readonly resource: RasterResourceId;
+  readonly inset: number;
+  readonly colors: Uint8Array; // four bytes per glyph
+  readonly glyphCount: number;
+}
+
+export function frameDescriptor(options: FrameOptions = {}): FrameDescriptor {
+  const inset = options.inset ?? 0.08;
+  if (!Number.isFinite(inset) || inset < 0 || inset >= 0.5) throw new RangeError('frame inset must be in [0, 0.5)');
+  return { generatorVersion: '0.0.0', inset };
+}
+
+/** What the baker writes into the artifact's extension. */
+interface FrameExtension {
+  readonly version: 0;
+  readonly rasterKey: string;
+  readonly descriptor: FrameDescriptor;
+  readonly records: RasterResourceSource;
+}
+
+export const frame = defineRasterFormat({
+  id: 'studio.frame',
+  kind: 'frame',
+  extension: 'STUDIO_frame',
+  version: 0,
+  textEffects: [],
+  descriptor(options: FrameOptions | undefined): FrameDescriptor {
+    return frameDescriptor(options);
+  },
+  async decode(font: RasterDecodeFont, raster: RasterDecodeArtifact<'frame'>, signal?: AbortSignal): Promise<FrameData> {
+    const extension = raster.extensionData as unknown as FrameExtension;
+    if (extension.version !== 0 || extension.rasterKey !== raster.rasterKey) {
+      throw new TypeError('frame extension does not match its font');
+    }
+    const colors = Uint8Array.from(await raster.resource(extension.records, signal));
+    if (colors.byteLength !== font.glyphCount * 4) throw new RangeError('frame records do not cover every glyph');
+    return {
+      resource: defineRasterResourceId(`studio.frame/${font.shapingFingerprint}/${raster.rasterKey}`),
+      inset: extension.descriptor.inset,
+      colors,
+      glyphCount: font.glyphCount,
+    };
+  },
+  dispose(data: FrameData): void {
+    data.colors.fill(0);
+  },
+});
+```
+
+| Field         | Constraint                                                                                         |
+| ------------- | -------------------------------------------------------------------------------------------------- |
+| `id`          | Non-empty and globally unique. Use your own prefix; the built-in formats use `pmndrs.`.            |
+| `kind`        | Letters and digits, optionally separated by `.` or `-`. This is the key on a `FontFace` (`Face.frame`) and in a config's `fonts.formats`. |
+| `extension`   | The glTF extension name the artifact uses, shaped like `VENDOR_feature_name`.                      |
+| `version`     | A non-negative integer. Change it when the artifact layout changes.                                |
+| `textEffects` | Which of `'outline'` and `'shadow'` the technique implements. A style that uses an effect the format does not list is rejected by the setter. |
+| `descriptor`  | Returns the canonical options. Fold defaults in, so "no options" and "the defaults" are one raster. |
+| `decode`      | Validates the artifact and returns the data your codec needs. Treat the artifact as untrusted input. |
+| `dispose`     | Releases what `decode` returned.                                                                   |
+
+The resource id you mint in `decode` must change whenever the bytes it names change. Deriving it from the font's
+shaping fingerprint and the raster key, as above, guarantees that.
+
+## 2. Describe the instance layout
+
+The schema declares what one instance looks like to a shader: named buffers, each with a scalar type and named
+lanes; per-glyph values the font supplies (`binding`); and resources such as geometry or textures.
+
+This format draws a supplied unit quad, so it needs a geometry payload. The payload is plain bytes with accessors,
+never a renderer object.
+
+```ts
+import type { PortableGeometryPayload } from '@pmndrs/glyph';
+
+const bytes = new Uint8Array(92);
+bytes.set(new Uint8Array(new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0]).buffer), 0); // four positions
+bytes.set(new Uint8Array(new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]).buffer), 48); // four uvs
+bytes.set(new Uint8Array(new Uint16Array([0, 1, 2, 0, 2, 3]).buffer), 80); // two triangles
+
+export const unitQuad: PortableGeometryPayload = {
+  kind: 'geometry',
+  topology: 'triangle-list',
+  bytes,
+  views: [
+    { offset: 0, length: 80 },
+    { offset: 80, length: 12 },
+  ],
+  accessors: [
+    { componentType: 'f32', components: 3, view: 0, offset: 0, count: 4 },
+    { componentType: 'f32', components: 2, view: 0, offset: 48, count: 4 },
+    { componentType: 'u16', components: 1, view: 1, offset: 0, count: 6 },
+  ],
+  attributes: [
+    { semantic: 'position', accessor: 0 },
+    { semantic: 'uv', accessor: 1 },
+  ],
+  indices: { accessor: 2 },
+  drawRange: { start: 0, count: 6 },
+};
+```
+
+## 3. Register the codec
+
+The codec has two functions. `codecBody` is compiled into a program the engine runs for every glyph: it combines
+what the engine knows (`semantics`: the glyph's origin, the font size, the resolved color) with what your font
+supplies (`binding`) and stores the results into the schema's buffers. `compileFont` runs once per loaded font and
+supplies those per-glyph binding values and the resources.
+
+```ts
+import type { PortableGeometryPayload, RasterFormat, RasterFormatId, RasterResourceId } from '@pmndrs/glyph';
+import { defineTechniqueSchema, f32, id, registerRasterCodec, techniqueProgram } from '@pmndrs/glyph/core';
+
+// From the previous steps.
+interface FrameDescriptor {
+  readonly [key: string]: string | number;
+  readonly generatorVersion: '0.0.0';
+  readonly inset: number;
+}
+interface FrameData {
+  readonly resource: RasterResourceId;
+  readonly inset: number;
+  readonly colors: Uint8Array;
+  readonly glyphCount: number;
+}
+declare const frame: RasterFormat<
+  RasterFormatId & 'studio.frame',
+  'frame',
+  { readonly inset?: number } | undefined,
+  FrameDescriptor,
+  FrameData
+>;
+declare const unitQuad: PortableGeometryPayload;
+
+export const frameSchema = defineTechniqueSchema({
+  technique: frame.id,
+  scope: 'glyph',
+  binding: { f32: ['inset', 'red', 'green', 'blue', 'alpha'] },
+  buffers: {
+    origin: { id: id.buffer('studio.frame/origin'), scalar: 'f32', lanes: ['left', 'top'] },
+    size: { id: id.buffer('studio.frame/size'), scalar: 'f32', lanes: ['widthX', 'heightY'] },
+    color: { id: id.buffer('studio.frame/color'), scalar: 'f32', lanes: ['red', 'green', 'blue', 'alpha'] },
+  },
+  resources: {
+    glyphGeometry: {
+      kind: 'geometry',
+      attributes: [
+        { semantic: 'position', componentType: 'f32', components: 3 },
+        { semantic: 'uv', componentType: 'f32', components: 2 },
+      ],
+    },
+  },
+  render: {
+    resource: 'glyphGeometry',
+    geometry: { kind: 'quad', resource: 'glyphGeometry', coordinates: 'unit-square' },
+  },
+  glyphOrigin: { buffer: 'origin' },
+});
+
+export const frameCodec = registerRasterCodec({
+  raster: frame,
+  schema: frameSchema,
+  programVariant: 0,
+  codecBody() {
+    const p = techniqueProgram(frameSchema);
+    const { inlineOrigin, blockOrigin, fontSize, color } = p.semantics;
+    const { inset, red, green, blue, alpha } = p.binding;
+    const insetUnits = f32.mul(inset, fontSize);
+    const twice = f32.mul(insetUnits, f32.const(2)); // the inset trims both edges
+    return p.compile({
+      origin: [f32.add(inlineOrigin, insetUnits), f32.sub(blockOrigin, insetUnits)],
+      size: [f32.sub(f32.mul(fontSize, f32.const(0.65)), twice), f32.sub(fontSize, twice)],
+      color: [f32.mul(color.red, red), f32.mul(color.green, green), f32.mul(color.blue, blue), f32.mul(color.alpha, alpha)],
+    });
+  },
+  compileFont(compiler) {
+    const data = compiler.font.data;
+    compiler.retain('glyphGeometry', data.resource, unitQuad);
+    return compiler.compile({
+      strikes: [0], // one scalable strike
+      resource: () => data.resource,
+      f32: {
+        inset: () => data.inset,
+        red: (row) => data.colors[row * 4]! / 255,
+        green: (row) => data.colors[row * 4 + 1]! / 255,
+        blue: (row) => data.colors[row * 4 + 2]! / 255,
+        alpha: (row) => data.colors[row * 4 + 3]! / 255,
+      },
+    });
+  },
+});
+```
+
+Points to get right:
+
+- `p.compile` takes exactly one tuple per schema buffer, with one value per lane. A missing buffer or a lane count
+  mismatch is a type error.
+- Buffer ids come from `id.buffer(name)`. Choose names that are unique to your format.
+- The expression vocabulary is small on purpose: `f32.add`, `f32.sub`, `f32.mul`, `f32.const`, `u32.const` and
+  `u32.toF32`. Anything more elaborate belongs in the shader.
+- `glyphOrigin` names the buffer whose first two lanes are the glyph's origin, so that the integration can compute
+  draw bounds and glyph positions.
+- Register the codec at module load, before any handle is created. A handle compiles the codecs that are registered
+  when it is created.
+
+## 4. Write the baker
+
+The baker turns a source font into the artifact your `decode` reads. It runs in Node through `bakeFont` or the CLI.
+`descriptor` must return the same canonical value as the format's `descriptor`, because the two are compared to
+decide whether a baked raster satisfies a declaration; share one function between them.
+
+```ts
+import type { JsonValue, RasterBakeArtifact, RasterBakeRequest } from '@pmndrs/glyph';
+import { defineRasterBaker } from '@pmndrs/glyph/baker';
+
+// From step 1.
+interface FrameOptions {
+  readonly inset?: number;
+}
+interface FrameDescriptor {
+  readonly [key: string]: JsonValue;
+  readonly generatorVersion: '0.0.0';
+  readonly inset: number;
+}
+declare function frameDescriptor(options?: FrameOptions): FrameDescriptor;
+
+/** Builds the GLB that carries the STUDIO_frame extension and the per-glyph records. */
+declare function bakeFrameArtifact(request: RasterBakeRequest<FrameDescriptor>): Promise<RasterBakeArtifact<'frame'>>;
+
+export default defineRasterBaker({
+  kind: 'frame',
+  extension: 'STUDIO_frame',
+  version: 0,
+  descriptor: (options: FrameOptions) => frameDescriptor(options),
+  bake: bakeFrameArtifact,
+});
+```
+
+`bake` receives the source font bytes and their fingerprint, the glyph count, the shaping fingerprint, the raster
+key, the packaging choice and your descriptor. It returns one or more artifacts with role `'raster'`, each a GLB
+whose JSON declares your extension, plus a size report. Writing that GLB is the bulk of a real baker;
+`packages/glyph-example-raster/src/artifact.ts` is a complete one to start from.
+
+Bake a font with it:
+
+```ts
+import type { RasterBakerModule } from '@pmndrs/glyph/baker';
+import { bakeFont } from '@pmndrs/glyph/bake';
+import { rasterBake } from '@pmndrs/glyph/baker';
+
+declare const frameBaker: RasterBakerModule<'frame', { readonly inset?: number }, { readonly inset: number }>;
+
+await bakeFont({
+  input: 'fonts/Inter-Regular.ttf',
+  output: 'public/fonts/inter-frame.font.glb',
+  font: { fontFaceIndex: 0 },
+  rasters: [rasterBake(frameBaker, { packaging: { artifact: 'embedded' }, options: { inset: 0.05 } })],
+});
+```
+
+To let a `FontFace` declared from a `.ttf` use your format without a bake step, also give the format a
+`runtimeBaker: () => import('./runtime-baker.js')` that resolves to a module with the same `bake` logic. See
+[Runtime baking](/guides/fonts/runtime-baking).
+
+## 5. Register the three.js program
+
+The three.js integration needs a material for your format. `registerThreeRasterProgram` pairs the registered codec
+with one shader variant. The variant restates the buffer shapes and resources it consumes, and `createMaterial`
+builds a `NodeMaterial` from the instance buffers, which arrive by the names your schema gave them.
+
+```ts
+import type { RasterCodec, RasterFormatMetadata } from '@pmndrs/glyph';
+import type { TechniqueSchemaMetadata } from '@pmndrs/glyph/core';
+import { registerThreeRasterProgram, type ThreeRasterMaterialContext } from '@pmndrs/glyph/three';
+import { add, mul, positionLocal, storage, sub, vec3 } from 'three/tsl';
+import { MeshBasicNodeMaterial } from 'three/webgpu';
+
+declare const frameCodec: RasterCodec<RasterFormatMetadata, TechniqueSchemaMetadata>; // from step 3
+
+function instanceBuffer(context: ThreeRasterMaterialContext, name: string, width: number) {
+  const buffer = context.namedBuffers.get(name);
+  if (buffer === undefined || buffer.scalarType !== 'f32' || buffer.vectorWidth !== width) {
+    throw new TypeError(`frame draw needs an f32x${String(width)} buffer named "${name}"`);
+  }
+  return buffer.attribute;
+}
+
+registerThreeRasterProgram({
+  codec: frameCodec,
+  variant: {
+    id: 'tsl',
+    language: 'tsl',
+    buffers: {
+      origin: { scalar: 'f32', vectorWidth: 2 },
+      size: { scalar: 'f32', vectorWidth: 2 },
+      color: { scalar: 'f32', vectorWidth: 4 },
+    },
+    resources: { glyphGeometry: { kind: 'geometry' } },
+    outputs: { position: 'vec3', color: 'vec3', opacity: 'float' },
+    geometry: { kind: 'quad', resource: 'glyphGeometry', coordinates: 'unit-square' },
+    createMaterial(context) {
+      const originBuffer = instanceBuffer(context, 'origin', 2);
+      const sizeBuffer = instanceBuffer(context, 'size', 2);
+      const colorBuffer = instanceBuffer(context, 'color', 4);
+      const origin = storage(originBuffer, 'vec2', originBuffer.count).element(context.instance);
+      const size = storage(sizeBuffer, 'vec2', sizeBuffer.count).element(context.instance);
+      const color = storage(colorBuffer, 'vec4', colorBuffer.count).element(context.instance);
+
+      // Instance values are paragraph-local with y down; three.js object space has y up.
+      const position = vec3(
+        add(origin.x, mul(positionLocal.x, size.x)),
+        sub(0, add(origin.y, mul(positionLocal.y, size.y))),
+        0,
+      );
+      const material = new MeshBasicNodeMaterial({ transparent: true });
+      material.positionNode = context.transformPosition(position);
+      material.colorNode = color.rgb;
+      material.opacityNode = color.a;
+      return material;
+    },
+  },
+});
+```
+
+Always pass the position through `context.transformPosition`. It applies the text's transform in the config's
+transform mode; skipping it draws every text at the root's origin. Register the program before creating the handle
+that will draw the format.
+
+## 6. Add the format to a config
+
+A handle accepts only the formats its config lists. Spread the three.js config and extend its `fonts` map. The key
+you choose is the name applications use for the format on this handle.
+
+```ts
+import { glyph, type RasterFormat, type RasterFormatId } from '@pmndrs/glyph';
+import { defineGlyphConfig } from '@pmndrs/glyph/core';
+import { ThreeConfig, ThreeFontFormats } from '@pmndrs/glyph/three';
+
+declare const frame: RasterFormat<
+  RasterFormatId & 'studio.frame',
+  'frame',
+  { readonly inset?: number } | undefined,
+  { readonly inset: number },
+  object
+>; // from step 1
+
+const FrameConfig = defineGlyphConfig({
+  ...ThreeConfig,
+  fonts: { default: 'msdf', formats: { ...ThreeFontFormats, frame } },
+});
+
+await glyph.init();
+const framed = glyph.handle('framed', FrameConfig);
+
+const Face = glyph.fontFace('/fonts/inter-frame.font.glb', { format: frame({ inset: 0.05 }) });
+await Face.frame.load();
+
+const label = framed.createText({ font: Face.frame, text: 'CUSTOM FORMAT', style: { fontSize: 48 } });
+scene.add(label);
+```
+
+## Check the result
+
+- `await Face.formats()` includes `'frame'`. If it does not, the bake did not write your raster.
+- `Face.frame.load()` resolves. A rejection with `FONT_FACE_FORMAT_UNAVAILABLE` means the declared options do not
+  match the baked descriptor.
+- `label.measure()` returns the same layout as the same text in a built-in format. Layout never depends on the
+  raster.
+- After a frame, the scene object named `@pmndrs/glyph:anonymous` has a mesh child that uses your material.
+
+To give custom text materials (`defineTextMaterial`) a typed context for your format, augment the
+`ThreeTextMaterialContextMap` interface of `@pmndrs/glyph/three` with a key equal to your format id.
+
+## See also
+
+- [Renderer integration](/explanation/renderer-integration)
+- [`@pmndrs/glyph/core` reference](/reference/core)
+- [Bakers reference](/reference/bakers)
+- [Shaders reference](/reference/shaders)
+- [Formats](/explanation/formats)

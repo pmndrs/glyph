@@ -1,0 +1,172 @@
+---
+title: Performance
+description: What costs what in Glyph (preparation, publication, draw calls, GPU memory and culling) and how to reason about each from what your application changes per frame.
+nav: 806
+sourcecode: packages/glyph/src/three/text.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="scene fonts" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+The cost of text in Glyph depends on what changes, not on how much text exists. Text that does not change costs its
+draw calls and nothing else. This page describes each cost, what makes it larger, and which choices in your code
+move it. For the corresponding tasks, see [Improve performance](/guides/project/performance).
+
+## Five costs
+
+| Cost            | Paid when                                           | Grows with                                                     |
+| --------------- | --------------------------------------------------- | -------------------------------------------------------------- |
+| Preparation     | A layout input of a text changed                    | The amount of text to reshape and the lines to break again     |
+| Publication     | Anything drawn changed, including color             | The instance bytes that changed and whether the draw list changed |
+| Transform sync  | A text or an ancestor moved                         | The number of texts that moved                                 |
+| Draw submission | Every rendered frame                                | The number of draws, and the pixels the glyphs cover           |
+| GPU memory      | Glyphs are first drawn                              | The distinct glyphs drawn per font, and the instance capacity  |
+
+A frame in which nothing changed pays only draw submission. It makes no call into the engine and uploads nothing.
+
+## Preparation: shaping and layout
+
+Preparation runs in the engine and has two parts with very different prices.
+
+**Shaping** applies a font's substitution and positioning rules to runs of text. It is the most expensive thing the
+engine does per character, and its cost depends on the font: a font with many contextual rules costs more per
+character than one with few. Shaping reruns when the text, font, language, direction or font features of a run
+change.
+
+**Line layout** breaks shaped runs into lines, aligns them and positions glyphs. It reruns when the available width,
+the flow regions or paragraph options change. A width change reuses the paragraph's shaping, apart from runs at new
+line boundaries where the font's rules make the break itself change the glyphs.
+
+The practical consequence is that the kind of change matters more than the size of the text. In one profile recorded
+in the repository's benchmark notes (2026-11-22), a text whose 2,880 characters were all replaced every frame spent
+59% of its busy CPU time in shaping, while a width sweep over a 14,850-glyph paragraph spent none there; its largest
+share, 34%, went to gathering instance data for publication. Those figures describe one machine and one build; the
+contrast is the point, not the absolute numbers.
+
+Setters do not prepare. Assigning five properties to a text before a frame costs one preparation, not five, and a
+value overwritten before the frame is never laid out. Reads do prepare, one text at a time, which is why a loop of
+reads over many dirty texts should be preceded by `glyph.prepare()`; see
+[When layout runs](/explanation/when-layout-runs).
+
+## Publication
+
+Publication turns a prepared layout into instance records and uploads what changed. Its cost has a CPU part (packing
+records, comparing with what was last published) and an upload part (the byte ranges written to GPU buffers).
+
+A paint-only change, such as a new color or opacity, produces no new layout; it republishes the affected records. A
+change to
+`material` or `renderOrder` can change which draws exist, which replaces the display list. Transforms and visibility
+are neither: the integration synchronizes them without the engine.
+
+## Draw calls and batching
+
+Each draw the renderer submits has a fixed overhead, so a thousand labels should not be a thousand draws. The engine
+merges adjacent instance spans into one draw while they agree on everything a draw binds: the raster format and
+program, the font, the material, clipping, depth key and render order.
+
+Three things in your code decide how well that works.
+
+**Adjacency.** Batching follows draw order. Texts that share a material but are interleaved with texts that do not
+are split at every change.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="batching" aria-label="Thirty labels with two materials, interleaved on the left and sorted on the right, with draw counts" aspect="16 / 9" />
+
+Both sides hold the same thirty labels and the same two materials. Compare the draw counts under each: only the
+order differs.
+
+**Grouping.** In three.js a `TextGroup` is a batching boundary as well as a scene parent. `batching: 'auto'` (the
+default) lets a top-level group own a boundary that nested groups inherit; `'shared'` joins the nearest enclosing
+boundary, or the root's pool; `'group'` forces a boundary of its own. A boundary lets three skip a hidden group's
+draws as a unit, at the price of not merging with text outside it. See
+[Group and batch](/guides/scene/group-and-batch).
+
+**Transforms.** The three.js config defaults to `transformMode: 'indexed'`: each instance carries an index into a
+transform table, so texts at different positions can share one draw. `'direct'` leaves the transform on the draw
+itself, which makes every differently placed text its own draw.
+
+Fonts and formats also split draws. Two fonts cannot share a draw, and neither can an MSDF text and a Slug text.
+A fallback stack that actually falls back therefore adds draws for the glyphs taken from the later fonts.
+
+## GPU memory
+
+**Atlases follow what is drawn.** An MSDF font's baked atlas stays in CPU memory. The three.js integration copies a
+glyph's cell into a GPU atlas layer the first time an instance of that glyph is published, so GPU memory tracks the
+glyphs you draw, not the glyphs the font contains. Slug fonts work the same way for their curve data. Resident cells
+are not evicted while the font resource is in use. A font with a very large repertoire is therefore cheap until you
+draw a large part of it.
+
+The `msdfAtlas: 'sdf'` config option keeps only the true-distance channel of an MSDF atlas on the GPU. That is a
+quarter of the atlas memory, at the price of rounded corners that the multi-channel field keeps sharp, which shows
+at large sizes.
+
+**Instance storage follows capacity.** Each root keeps instance buffers sized by its config's `capacity`:
+
+| Policy  | Behavior                                                                                         |
+| ------- | ------------------------------------------------------------------------------------------------ |
+| `grow`  | Storage is resized to fit.                                                                       |
+| `chunk` | Storage grows in multiples of `size`. This is the default, with `size: 4096`.                    |
+| `fixed` | Storage never exceeds `size`. Text that does not fit is not drawn; the last complete state stays. |
+
+`chunk` bounds how often storage is reallocated; `fixed` bounds memory absolutely and turns an overflow into an
+error thrown from the render. When storage does grow, the three.js integration keeps its materials and pipelines and
+points them at the new buffers.
+
+`root.gpuBytes` reports the bytes a three.js root currently retains: instance buffers, the transform table, and its
+atlases and pages.
+
+## Raster formats
+
+The three built-in formats trade memory, per-pixel work and quality differently. A bitmap strike is a texel lookup
+and is exact only at the sizes it was baked for. An MSDF glyph is a filtered texture sample and holds a clean edge
+across a wide range of sizes. Slug evaluates the glyph's curves at each covered pixel: it has no atlas resolution to
+run out of, and its fragment work grows with the pixels a glyph covers and the complexity of its outline.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="zoom" aria-label="One word in bitmap, MSDF and Slug, magnified from one to four times" aspect="3 / 2" />
+
+The same word at the same baked size is magnified by the scene transform. Watch where each format's edge stops
+holding. [Formats](/explanation/formats) covers the choice in depth.
+
+## Culling
+
+Every built-in draw is frustum culled by a bound computed from the records it draws. Culling is per draw: a draw is
+submitted whole or skipped whole. One large batch that spans the scene is nearly always partly visible and so nearly
+always submitted; several spatially coherent groups can be skipped individually. This is the one case where fewer,
+larger draws is not automatically better.
+
+A custom material that moves vertices must declare how far with `boundsPadding`, or opt out with
+`frustumCulled: false`; otherwise its glyphs can be culled while still on screen. See
+[Culling](/guides/scene/culling).
+
+## Roots as units of change
+
+A root is the unit of publication. When any text in a root is dirty, that root takes part in the frame's publication;
+other roots do not. Putting text that changes every frame (a timer, a frame counter) on its own named root keeps a
+large, static body of text out of that work. Each root keeps its own instance buffers and draws, so a split costs
+draws; the roots of one handle share that handle's atlases. See [Topologies](/explanation/topologies).
+
+## Rendering on demand
+
+Because unchanged text costs nothing but its draws, an application that only renders when something changes pays
+nothing between changes. A three.js root exposes `onInvalidate`, which runs when a setter leaves the root needing a
+frame; the React and Vue components wire it to their canvas, so `frameloop="demand"` redraws after an imperative
+change.
+
+## How to reason about a slow frame
+
+Ask three questions in order.
+
+- Did layout inputs change, and for how much text? That is preparation. Reduce what changes, or how often.
+- How many bytes were republished? That is publication. Separate fast-changing text from static text.
+- How many draws does the scene submit? That is batching. Look at order, grouping, material count and fonts.
+
+Measure before changing anything: the stage that dominates differs between an editor, a HUD and a scene with ten
+thousand labels.
+
+## See also
+
+- [Improve performance](/guides/project/performance)
+- [Group and batch](/guides/scene/group-and-batch)
+- [When layout runs](/explanation/when-layout-runs)
+- [The render plan](/explanation/render-plan)
+- [Formats](/explanation/formats)

@@ -1,0 +1,271 @@
+---
+title: Troubleshooting
+description: Common symptoms when using Glyph, each with its cause and its fix, including the error messages the package throws.
+nav: 654
+sourcecode: packages/glyph/src/glyph-error.ts
+---
+
+Find your symptom or error message below. Each entry gives the cause and the fix. Messages are quoted as the package
+throws them, so searching this page for part of a message works.
+
+## Setup
+
+### `await glyph.init() before creating a Glyph handle`
+
+**Cause:** `glyph.handle()` ran before the engine finished loading. `glyph.shape()` and `glyph.prepare()` throw a
+similar message for the same reason.
+
+**Fix:** await `glyph.init()` once at startup, before creating handles. Repeated calls share one promise, so it is
+safe to await in several places.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+
+await glyph.init();
+const app = glyph.handle('app', ThreeConfig);
+```
+
+### `Glyph handle "app" already exists`
+
+**Cause:** a handle with that name is still alive. This usually happens when module code that creates the handle
+runs again (hot reload, a remounted component, a second test) without disposing the first handle.
+
+**Fix:** create the handle once and reuse it, or dispose it in the matching cleanup. Disposing a handle frees its
+name.
+
+### `Three Text must be created with handle.createText() or an R3F Text component`
+
+**Cause:** `new Text(...)` was called directly.
+
+**Fix:** create text from a handle or a named root: `handle.createText({ font, text })`. The same applies to
+`TextGroup` and `handle.createTextGroup()`.
+
+## Fonts
+
+### `FontFace "Inter" format "msdf" is not loaded`
+
+**Cause:** a text was created from a font selection before its data was loaded. Declaring a `FontFace` loads
+nothing. The error is a `GlyphFontError` with `reason: 'FONT_FACE_FORMAT_NOT_LOADED'`.
+
+**Fix:** await `load()` on the declaration, or on the selection you use, before creating text.
+
+```ts
+import { glyph, msdf } from '@pmndrs/glyph';
+
+const Body = glyph.fontFace('/fonts/Inter.font.glb', { family: 'Inter', format: msdf });
+await Body.msdf.load();
+handle.createText({ font: Body.msdf, text: 'Ready' });
+```
+
+In React, `useMsdf`, `useSlug`, `useBitmap` and `useFont` suspend until the font is loaded; wrap the text in
+`<Suspense>`.
+
+### `FontFace "Inter" does not implement the declared "msdf" format`
+
+**Cause:** the file does not contain a raster that matches the declaration. A raster's options are part of its
+identity: a font baked with `msdf({ emSize: 32, pixelRange: 6 })` does not satisfy a declaration of plain `msdf`.
+`formats()` lists the kinds a file holds, not their options, so it can list `'msdf'` while the load still fails. The
+error is a `GlyphFontError` with `reason: 'FONT_FACE_FORMAT_UNAVAILABLE'`; its `cause` says why the raster could not
+be produced instead.
+
+**Fix:** declare the format with the same options the font was baked with, or bake the font again with the options
+you declare.
+
+```ts
+import { glyph, msdf } from '@pmndrs/glyph';
+
+const Geist = glyph.fontFace('/fonts/geist.font.glb', { format: msdf({ emSize: 32, pixelRange: 6 }) });
+await Geist.load();
+```
+
+See [Bake fonts](/guides/fonts/bake-fonts) and [Runtime baking](/guides/fonts/runtime-baking).
+
+### Some characters draw as empty boxes or nothing
+
+**Cause:** the font, or the subset you baked, has no glyph for those characters. The engine draws the font's
+missing-glyph shape for them.
+
+**Fix:** check `text.measure().missingGlyphCount`. If it is not zero, bake a subset that covers the characters, or
+add a fallback font that does. See [Subset coverage](/guides/fonts/subset-coverage) and
+[Fallback stacks](/guides/fonts/fallback-stacks).
+
+### `raster format pmndrs.bitmap does not support outline in Text style`
+
+**Cause:** `outline` and `shadow` are implemented by the MSDF format only. Setting either on a bitmap or Slug text
+throws `GlyphInputError`.
+
+**Fix:** use an MSDF font for text that needs an outline or shadow. See
+[Outline and shadow](/guides/text/outline-and-shadow).
+
+## Nothing is drawn
+
+### A three.js text never appears and `commitState()` stays `pending` or `unbound`
+
+Check these in order.
+
+1. **The text is not in the scene.** `commitState().status === 'unbound'` means the text has no parent. Add it, or
+   its group, to the scene.
+2. **Nothing renders the scene.** A root publishes when three.js traverses its scene, which
+   `renderer.render(scene, camera)` does. Calling `glyph.shape()` alone does not draw a three.js text whose scene has
+   not been traversed yet.
+3. **The text is outside the view, or tiny.** `fontSize` is in scene units and defaults to `16`. Under a
+   perspective camera a few units from the origin, a 16-unit glyph fills the view; under a pixel-unit orthographic
+   camera, `fontSize: 0.3` is a third of a pixel. Remember that text extends downward from its origin unless you set
+   an anchor.
+4. **A fixed capacity is exceeded.** See the next entry.
+5. **The render threw.** Look for an error from `renderer.render()` in the console.
+
+### `Three root (unnamed) capacity is fixed at 512 text units and 600 are needed`
+
+**Cause:** the handle's config uses `capacity: { policy: 'fixed' }` and the root's text no longer fits. The root keeps
+drawing its last complete state, affected texts stay `pending`, and the render throws this error once.
+
+**Fix:** shorten the text, or create the handle with a larger `size` or a `chunk` policy. Capacity cannot change on
+a live handle.
+
+### `renderer.render()` throws `Glyph text "…" was not drawn: …`
+
+**Cause:** the engine refused that paragraph. The message quotes the start of the text, and the engine's error is
+the `cause`. The failed text draws nothing until its input changes; other texts are unaffected. The error is thrown
+once, not every frame.
+
+**Fix:** catch errors around `renderer.render()` or in your global error handler, and change the text named in the
+message. See [Handle errors](/guides/project/handle-errors).
+
+### Glyphs of a custom material disappear near the screen edge
+
+**Cause:** draws are frustum culled by a bound computed from where glyphs are laid out. A material that moves
+vertices in its vertex stage can move them outside that bound.
+
+**Fix:** declare how far the material moves vertices, or turn culling off for it.
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+
+const wavy = defineTextMaterial((context) => context.createDefaultMaterial(), { boundsPadding: 0.5 });
+const unbounded = defineTextMaterial((context) => context.createDefaultMaterial(), { frustumCulled: false });
+```
+
+See [Culling](/guides/scene/culling).
+
+## Wrong place or size
+
+### Text hangs below the point where it was placed
+
+**Cause:** with no anchor, a text's origin is the top-left corner of its paragraph box, and in three.js the
+paragraph extends toward −Y.
+
+**Fix:** set `constraints.anchor`, for example `{ x: 'center', y: 'middle' }` or
+`{ x: 'left', y: 'first-baseline' }`. See [Anchor text](/guides/layout/anchor-text).
+
+### A caret or selection is drawn mirrored vertically or offset from the text
+
+**Cause:** editing methods use Text-local coordinates with +Y down; three.js object space has +Y up. Using
+`rect.y` directly as a three.js `y` flips it.
+
+**Fix:** negate `y` when going from editing coordinates to object space, and do the reverse for pointer positions
+passed to `hitTest`. See [Coordinate spaces](/explanation/coordinate-spaces).
+
+### A box sized from `measure()` is one frame behind the text
+
+**Cause:** the measurement was read after the frame that drew the text, so the box is updated for the next frame.
+
+**Fix:** read `measure()` right after the setter (reads are always current), or size the box in `onLayout`, which
+runs before the frame is drawn. See [React to layout](/guides/inspect/react-to-layout).
+
+### Bitmap text is blurry
+
+**Cause:** the strike drawn does not match the pixels covered, or glyph quads fall between pixels.
+
+**Fix:** follow [Pixel-perfect bitmap text](/guides/fonts/pixel-perfect-bitmap): bake the strike sizes you draw, set
+`rasterPixelRatio`, and enable `pixelSnapping`.
+
+## Errors from setters and reads
+
+### `GlyphInputError`
+
+**Cause:** a setter, `set()` or `createText()` received a value it cannot accept: a non-positive `fontSize`, a color
+that is not `#rrggbb`, `#rrggbbaa` or a linear RGBA tuple, a decoration style other than `'solid'`, a text longer
+than `maxTextUnits`. The text keeps its previous value. `error.path` names the property, for example `['style']`.
+
+**Fix:** correct the value named by `path` and `message`. For long documents, raise the limit with
+`defineThreeConfig({ maxTextUnits })`.
+
+### `GlyphLayoutPhaseError` inside `onLayout`
+
+**Cause:** the callback wrote a layout input (`text`, `font`, `layout`, `constraints`, `flow`, a non-paint part of
+`style`) of some text. Layout callbacks run after layout and before the frame is drawn, so such a write could not
+take effect in that frame and is refused.
+
+**Fix:** in `onLayout`, write only transforms, visibility, color, opacity and material. Make layout changes outside
+the callback, for example in the event handler that caused them.
+
+### `TextOffsetError`
+
+**Cause:** an editing method received an offset that is out of range, not a whole number, inside a grapheme (for
+example between the two code units of an emoji), or a range whose end precedes its start.
+
+**Fix:** offsets are UTF-16 code units of `text.text` on grapheme boundaries. Produce them with `hitTest`, `move`
+and `boundary` instead of arithmetic. The error carries `before` and `after`, the nearest valid boundaries.
+
+### `Text has been disposed`
+
+**Cause:** a setter or read was called on a text after `dispose()`.
+
+**Fix:** drop references to disposed texts. In React, do not keep a `ref.current` past unmount.
+
+### `glyph.shape() cannot be reentered`
+
+**Cause:** `glyph.shape()` was called from inside a layout callback or another point within a publication.
+`glyph.prepare()` called there throws `glyph.prepare() cannot run inside glyph.shape() or glyph.prepare()`.
+
+**Fix:** remove the call. Inside `onLayout`, every text is already prepared, and reads are current.
+
+## Scenes and roots
+
+### `Three root "hud" spans more than one Scene`
+
+**Cause:** texts created from one root were added to two different scenes. A root binds to one scene.
+
+**Fix:** create the second scene's text from another named root: `handle('overlay').createText(...)`. See
+[Topologies](/explanation/topologies).
+
+### `one Three TextGroup cannot contain Text objects from different Glyph roots`
+
+**Cause:** a text created from one root was added to a group created from another.
+
+**Fix:** create the group and its texts from the same root.
+
+### `scene.children[0]` is not my object
+
+**Cause:** a root keeps two private objects in the scene that holds its text: `@pmndrs/glyph-prepare`, which it
+keeps as the scene's first child, and `@pmndrs/glyph:<root>`, which holds its draws.
+
+**Fix:** do not address your objects by child index. Find them by reference or by name, and skip objects whose name
+starts with `@pmndrs/glyph` when walking a scene.
+
+## Frameworks
+
+### An invalid prop unmounts the React canvas
+
+**Cause:** an invalid prop on `<Text>` throws `GlyphInputError` while React commits. Without an error boundary
+inside the canvas, React unmounts the canvas tree.
+
+**Fix:** wrap text in `<GlyphErrorBoundary fallback={…}>` inside the canvas. See
+[React Three Fiber](/guides/renderers/react-three-fiber).
+
+### `process is not defined` when loading the TypeGPU entry directly in a browser
+
+**Cause:** the `typegpu` peer package reads `process.env.NODE_ENV`. Loading `@pmndrs/glyph/typegpu` or
+`@pmndrs/glyph/three/typegpu` as unbundled browser modules leaves `process` undefined.
+
+**Fix:** use a bundler, or define a `process` shim before the import.
+
+## See also
+
+- [Handle errors](/guides/project/handle-errors)
+- [Errors reference](/reference/errors)
+- [When layout runs](/explanation/when-layout-runs)
+- [Coordinate spaces](/explanation/coordinate-spaces)
+- [Test text](/guides/project/testing)

@@ -1,0 +1,309 @@
+---
+title: Shader entry points
+description: Reference for @pmndrs/glyph/shaders/tsl and @pmndrs/glyph/shaders/typegpu, the shader implementations of the bitmap, MSDF, Slug and decoration techniques, for renderer integrations.
+nav: 751
+sourcecode: packages/glyph/src/shaders/tsl/index.ts
+---
+
+The two shader entry points export the coverage and placement math of the built-in techniques without any renderer
+integration around it. They are for integrators who draw Glyph's instance data with their own materials or
+pipelines. Applications using `@pmndrs/glyph/three` do not import them: a custom text material receives the same
+outputs as `context.shader` (see [Materials](/reference/three-materials)).
+
+| Entry point                      | Language                         | Peer dependency  |
+| -------------------------------- | -------------------------------- | ---------------- |
+| `@pmndrs/glyph/shaders/tsl`      | three.js Shading Language nodes  | `three`          |
+| `@pmndrs/glyph/shaders/typegpu`  | TypeGPU shader functions         | `typegpu`        |
+
+Both implement the same techniques and read the same instance fields. Coordinates follow one convention in both:
+instance origins and sizes are paragraph-local with y measured downward, the unit quad spans `[0, 1]` with its origin
+at the upper-left corner, and output positions have y upward.
+
+## `@pmndrs/glyph/shaders/tsl`
+
+Each function takes the instance's fields as nodes and the resources the batch binds, and returns a set of output
+nodes. Assign them to a `NodeMaterial`, or compose over them.
+
+```ts
+import { msdfShader, type TslMsdfInstanceNodes, type TslMsdfShaderResources } from '@pmndrs/glyph/shaders/tsl';
+import { MeshBasicNodeMaterial } from 'three/webgpu';
+
+declare const instance: TslMsdfInstanceNodes; // your storage or attribute reads
+declare const resources: TslMsdfShaderResources; // your atlas texture and its constants
+
+const shader = msdfShader(instance, resources);
+const material = new MeshBasicNodeMaterial({ transparent: true });
+material.positionNode = shader.position;
+material.colorNode = shader.color;
+material.opacityNode = shader.opacity;
+```
+
+### `bitmapShader()`
+
+Builds the bitmap graph: nearest-texel coverage from a single-channel page, composed with the paint color.
+
+```ts
+import { bitmapShader } from '@pmndrs/glyph/shaders/tsl';
+import type { TslBitmapInstanceNodes, TslBitmapShaderOptions, TslBitmapShaderOutput, TslBitmapShaderResources } from '@pmndrs/glyph/shaders/tsl';
+
+const signature: (
+  instance: TslBitmapInstanceNodes,
+  resources: TslBitmapShaderResources,
+  options?: TslBitmapShaderOptions,
+) => TslBitmapShaderOutput = bitmapShader;
+```
+
+| Parameter                 | Type                   | Description                                                                 |
+| ------------------------- | ---------------------- | --------------------------------------------------------------------------- |
+| `instance.origin`         | `Node<'vec2'>`         | Paragraph-local glyph origin, y downward.                                   |
+| `instance.size`           | `Node<'vec2'>`         | Quad extent in paragraph-local units.                                       |
+| `instance.uvOrigin`       | `Node<'vec2'>`         | Upper-left atlas coordinate of the glyph's coverage rectangle.              |
+| `instance.uvSize`         | `Node<'vec2'>`         | Atlas extent of that rectangle.                                             |
+| `instance.color`          | `Node<'vec4'>`         | Paint color with alpha, unpremultiplied.                                    |
+| `instance.pageIndex`      | `Node<'uint'>`         | Texture-array layer holding the glyph.                                      |
+| `resources.page`          | `Texture`              | Coverage page in top-down row order; `flipY` must stay disabled.            |
+| `options.pixelSnapping`   | `boolean`, default off | Snap projected vertices to physical pixels. Sharp at rest; quantizes motion. |
+
+| Output         | Type            | Description                                                              |
+| -------------- | --------------- | ------------------------------------------------------------------------ |
+| `position`     | `Node<'vec3'>`  | Quad position.                                                           |
+| `clipPosition` | `Node<'vec4'>`  | Clip-space position selected by the options; assign to `vertexNode`.     |
+| `atlasUv`      | `Node<'vec2'>`  | Atlas coordinate sampled, in top-down texel space.                       |
+| `coverage`     | `Node<'float'>` | Sampled coverage before paint alpha.                                     |
+| `color`        | `Node<'vec3'>`  | Paint color.                                                             |
+| `opacity`      | `Node<'float'>` | Coverage multiplied by paint alpha.                                      |
+
+### `msdfShader()`
+
+Builds the MSDF graph: median decode of the multi-channel field, screen-space antialiasing, and outline and shadow
+composition.
+
+```ts
+import { msdfShader } from '@pmndrs/glyph/shaders/tsl';
+import type { TslMsdfInstanceNodes, TslMsdfShaderOutput, TslMsdfShaderResources } from '@pmndrs/glyph/shaders/tsl';
+
+const signature: (instance: TslMsdfInstanceNodes, resources: TslMsdfShaderResources) => TslMsdfShaderOutput =
+  msdfShader;
+```
+
+| Parameter                 | Type                        | Description                                                                   |
+| ------------------------- | --------------------------- | ----------------------------------------------------------------------------- |
+| `instance.origin`         | `Node<'vec2'>`              | Paragraph-local glyph origin, y downward.                                     |
+| `instance.size`           | `Node<'vec2'>`              | Quad extent in paragraph-local units.                                         |
+| `instance.uvOrigin`       | `Node<'vec2'>`              | Upper-left atlas coordinate of the glyph's distance rectangle.                |
+| `instance.uvSize`         | `Node<'vec2'>`              | Atlas extent of that rectangle.                                               |
+| `instance.uvBounds`       | `Node<'vec4'>`              | Sampling clamp for the cell: `(minU, minV, maxU, maxV)`.                      |
+| `instance.fillColor`      | `Node<'vec4'>`              | Fill color.                                                                   |
+| `instance.effectColor`    | `Node<'uvec2'>`             | Packed sRGB outline and shadow colors.                                        |
+| `instance.shadowOffset`   | `Node<'vec2'>`              | Shadow displacement in atlas units.                                           |
+| `instance.outlineWidth`   | `Node<'float'>`             | Outline half-width in signed-distance units.                                  |
+| `instance.pageIndex`      | `Node<'float'>`             | Atlas layer holding the glyph.                                                |
+| `resources.atlas`         | `Texture`                   | Layered atlas: RGB holds the multi-channel field, alpha the true distance.    |
+| `resources.atlasWidth`    | `number \| Node<'float'>`   | Atlas width in texels.                                                        |
+| `resources.atlasHeight`   | `number \| Node<'float'>`   | Atlas height in texels.                                                       |
+| `resources.pixelRange`    | `number \| Node<'float'>`   | Distance-field range in atlas texels, as baked.                               |
+| `resources.trim`          | `TslMsdfQuadTrim`, optional | `{ project(position) }`. Shrinks each quad to the glyph's ink plus what antialiasing, outline and shadow can draw outside it. Omitted, the quad covers the whole cell. |
+| `resources.effects`       | `TslMsdfEffects`, optional  | `{ outline, shadow }`. An effect set to `false` is not computed. Omitted, both are composed. |
+| `resources.singleChannel` | `boolean`, optional         | The atlas holds only the true distance, in its red channel.                   |
+
+| Output            | Type            | Description                                                                 |
+| ----------------- | --------------- | --------------------------------------------------------------------------- |
+| `position`        | `Node<'vec3'>`  | Quad position.                                                              |
+| `atlasUv`         | `Node<'vec2'>`  | Unclamped atlas coordinate sampled.                                         |
+| `fillDistance`    | `Node<'float'>` | Corner-preserving median distance in normalized atlas units; negative outside, zero on the edge. |
+| `trueDistance`    | `Node<'float'>` | Smooth true distance in the same units, for glows and bevels.               |
+| `pixelRange`      | `Node<'float'>` | Screen pixels per normalized distance unit.                                 |
+| `fillCoverage`    | `Node<'float'>` | Fill coverage.                                                              |
+| `outlineCoverage` | `Node<'float'>` | Outline ring coverage with the fill subtracted.                             |
+| `shadowCoverage`  | `Node<'float'>` | Coverage of the displaced fill.                                             |
+| `color`           | `Node<'vec3'>`  | Unpremultiplied composite of fill, outline and shadow.                      |
+| `opacity`         | `Node<'float'>` | Composite opacity.                                                          |
+
+### `slugShader()`
+
+Builds the Slug graph: per-pixel analytic coverage from quadratic curves, with the quad dilated to cover the
+antialiasing fringe. `position` and `coverage` are two halves of one graph: using `coverage` requires driving the
+material's position from `position`.
+
+```ts
+import { slugShader } from '@pmndrs/glyph/shaders/tsl';
+import type { TslSlugInstanceNodes, TslSlugShaderOutput, TslSlugShaderResources } from '@pmndrs/glyph/shaders/tsl';
+
+const signature: (instance: TslSlugInstanceNodes, resources: TslSlugShaderResources) => TslSlugShaderOutput =
+  slugShader;
+```
+
+| Parameter                          | Type                              | Description                                                        |
+| ---------------------------------- | --------------------------------- | ------------------------------------------------------------------ |
+| `instance.origin`, `instance.size` | `Node<'vec2'>`                    | Paragraph-local quad origin (y downward) and extent.               |
+| `instance.emOrigin`, `instance.emSize` | `Node<'vec2'>`                | The quad in em space.                                              |
+| `instance.inverseScale`            | `Node<'float'>`                   | Layout units per em.                                               |
+| `instance.color`                   | `Node<'vec4'>`                    | Paint color with alpha, unpremultiplied.                           |
+| `instance.bandTransform`           | `Node<'vec4'>`                    | Band grid placement `(originX, originY, scaleX, scaleY)` in em space. |
+| `instance.curveBaseTexel`, `horizontalHeaderBase`, `verticalHeaderBase`, `referenceBase`, `horizontalBandCount`, `verticalBandCount` | `Node<'uint'>` | The glyph's addresses and counts in the page tables. |
+| `resources.page`                   | `TslSlugPageResources`            | `headerTexture`, `headerWidth`, `bandCurveTexture`, `bandCurveWidth`. |
+| `resources.viewport`               | `Node<'vec2'>`                    | Drawing-buffer size in device pixels.                              |
+| `resources.modelViewProjection`    | `Node<'mat4'>`                    | The full matrix, per glyph. Use this form, or the three rows below, not both. |
+| `resources.modelViewProjectionRow0`, `Row1`, `Row3` | `Node<'vec4'>`   | Rows 0, 1 and 3 of the matrix, for a draw with one transform.      |
+| `resources.fillRule`               | `TslSlugFillRule`, optional       | `evenOdd`, `weightBoost`, `stemDarken`, `thicken`. Omitted: non-zero winding, no weight compensation. |
+
+| Output             | Type                        | Description                                                            |
+| ------------------ | --------------------------- | ---------------------------------------------------------------------- |
+| `position`         | `Node<'vec3'>`              | Dilated quad position.                                                 |
+| `renderCoordinate` | `Node<'vec2'>`              | Interpolated em-space coordinate at which coverage is evaluated.       |
+| `coverage`         | `Node<'float'>`             | Analytic fill coverage before paint alpha.                             |
+| `coverageAt`       | `(coordinate) => Node<'float'>` | Coverage at another em-space coordinate. Each call evaluates a full integral. |
+| `color`            | `Node<'vec3'>`              | Paint color.                                                           |
+| `opacity`          | `Node<'float'>`             | Coverage multiplied by paint alpha.                                    |
+
+### `decorationShader()`
+
+Places one decoration rectangle (underline, overline or line-through) and decodes its packed color.
+
+```ts
+import { decorationShader } from '@pmndrs/glyph/shaders/tsl';
+import type { TslDecorationInstanceNodes, TslDecorationShaderOutput } from '@pmndrs/glyph/shaders/tsl';
+
+const signature: (instance: TslDecorationInstanceNodes) => TslDecorationShaderOutput = decorationShader;
+```
+
+| Parameter         | Type             | Description                                                              |
+| ----------------- | ---------------- | ------------------------------------------------------------------------ |
+| `instance.rect`   | `Node<'vec4'>`   | Inline start, block start, inline extent, block extent.                  |
+| `instance.packed` | `Node<'uvec2'>`  | `x`: little-endian RGBA color, sRGB-encoded. `y`: flags and line style.  |
+
+Returns `position` (`Node<'vec3'>`), `color` (`Node<'vec3'>`, linear) and `opacity` (`Node<'float'>`).
+
+### Types
+
+| Type                         | Description                                           |
+| ---------------------------- | ----------------------------------------------------- |
+| `TslBitmapInstanceNodes`     | Instance fields of `bitmapShader`.                    |
+| `TslBitmapShaderResources`   | Resources of `bitmapShader`.                          |
+| `TslBitmapShaderOptions`     | Options of `bitmapShader`.                            |
+| `TslBitmapShaderOutput`      | Output of `bitmapShader`.                             |
+| `TslMsdfInstanceNodes`       | Instance fields of `msdfShader`.                      |
+| `TslMsdfShaderResources`     | Resources of `msdfShader`.                            |
+| `TslMsdfEffects`             | Which effects an MSDF graph composes.                 |
+| `TslMsdfQuadTrim`            | The projection an MSDF graph uses to trim its quads.  |
+| `TslMsdfShaderOutput`        | Output of `msdfShader`.                               |
+| `TslSlugInstanceNodes`       | Instance fields of `slugShader`.                      |
+| `TslSlugPageResources`       | The two textures of a Slug page and their row widths. |
+| `TslSlugShaderResources`     | Resources of `slugShader`.                            |
+| `TslSlugFillRule`            | Optional coverage controls of `slugShader`.           |
+| `TslSlugShaderOutput`        | Output of `slugShader`.                               |
+| `TslDecorationInstanceNodes` | Instance fields of `decorationShader`.                |
+| `TslDecorationShaderOutput`  | Output of `decorationShader`.                         |
+
+## `@pmndrs/glyph/shaders/typegpu`
+
+This entry point exports TypeGPU shader functions, the struct schemas they take and return, and the slots and
+accessors through which a host supplies resources. It owns shader code only. A host composes these into its own
+entry points, bind groups, pipelines and submission.
+
+Struct schemas are exported as values and, under the same name, as their inferred TypeScript types.
+
+```ts
+import {
+  bitmapFragment,
+  bitmapVertex,
+  msdfFragment,
+  msdfVertex,
+  type TypeGpuBitmapInstance,
+  type TypeGpuMsdfInstance,
+} from '@pmndrs/glyph/shaders/typegpu';
+
+// Stage functions are TypeGPU functions over the exported structs.
+const bitmapStages = { vertex: bitmapVertex, fragment: bitmapFragment };
+const msdfStages = { vertex: msdfVertex, fragment: msdfFragment };
+
+type BitmapOrigin = TypeGpuBitmapInstance['origin']; // a vec2f
+type MsdfOutlineWidth = TypeGpuMsdfInstance['outlineWidth']; // number
+```
+
+### Bitmap
+
+| Export                        | Kind      | Description                                                                                 |
+| ----------------------------- | --------- | ------------------------------------------------------------------------------------------- |
+| `bitmapVertex`                | function  | Vertex stage under the default projection. `TypeGpuBitmapVertexInput` to `TypeGpuBitmapVertexOutput`. |
+| `bitmapVertexSnapped`         | function  | The same stage with projected x and y rounded to whole physical pixels.                     |
+| `bitmapFragment`              | function  | Fragment stage: fetches coverage and composes paint. `TypeGpuBitmapFragmentInput` to `TypeGpuBitmapFragmentOutput`. |
+| `TypeGpuBitmapInstance`       | struct    | `origin`, `size`, `uvOrigin`, `uvSize` (vec2f), `color` (vec4f), `pageIndex` (u32).         |
+| `TypeGpuBitmapVertexInput`    | struct    | `quadPosition`, `quadUv` (vec2f), `instance`, `modelViewProjection` (mat4x4f), `screenSize` (vec2f, physical pixels; read only by the snapped stage). |
+| `TypeGpuBitmapVertexOutput`   | struct    | `position` (vec3f, y upward), `clipPosition` (vec4f), `atlasUv` (vec2f), `color` (vec4f), `pageLayer` (u32). |
+| `TypeGpuBitmapFragmentInput`  | struct    | `atlasUv` (vec2f), `color` (vec4f), `pageLayer` (u32).                                      |
+| `TypeGpuBitmapFragmentOutput` | struct    | `coverage` (f32), `color` (vec3f), `opacity` (f32).                                         |
+| `TypeGpuBitmapPageLayout`     | bind group layout | One fragment-visible `page`: a 2D array texture of f32.                              |
+| `bitmapPageAccessor`          | accessor  | The page the fragment stage reads. Defaults to `TypeGpuBitmapPageLayout`'s `page`; a host can bind its own texture view. |
+| `bitmapCoverageSlot`          | slot      | The coverage lookup, `(atlasUv, pageLayer) => number`. Defaults to reading `bitmapPageAccessor`. |
+| `BitmapCoverageSource`        | type      | The function type of `bitmapCoverageSlot`.                                                  |
+
+### MSDF
+
+| Export                      | Kind     | Description                                                                                   |
+| --------------------------- | -------- | --------------------------------------------------------------------------------------------- |
+| `msdfVertex`                | function | Vertex stage. `TypeGpuMsdfVertexInput` to `TypeGpuMsdfVertexOutput`.                          |
+| `msdfFragment`              | function | Fragment stage: reconstructs and composites one fragment from the configured sample source. `TypeGpuMsdfFragmentInput` to `TypeGpuMsdfFragmentOutput`. |
+| `msdfRenderDetailed`        | function | `(input: TypeGpuMsdfRenderInput) => TypeGpuMsdfFragmentOutput`. The reconstruction for hosts that supply the two filtered samples themselves. |
+| `msdfCoverage`              | function | `(input: MsdfCoverageInput) => vec3f`. Fill, outline-only and shadow coverage.                |
+| `msdfComposite`             | function | `(input: MsdfCompositeInput) => vec4f`. Composites coverages into unpremultiplied RGB and opacity. |
+| `TypeGpuMsdfInstance`       | struct   | `origin`, `size`, `uvOrigin`, `uvSize` (vec2f), `uvBounds` (vec4f), `fillColor`, `outlineColor`, `shadowColor` (vec4f), `shadowOffset` (vec2f), `outlineWidth` (f32), `pageIndex` (u32). |
+| `TypeGpuMsdfVertexInput`    | struct   | The unit quad (`unitPosition`, `unitUv`) and the instance.                                    |
+| `TypeGpuMsdfVertexOutput`   | struct   | `position`, `atlasCoordinate`, `shadowCoordinate`, `uvBounds`, the three colors, `outlineWidth`, `pageIndex`. |
+| `TypeGpuMsdfFragmentInput`  | struct   | The same struct as `TypeGpuMsdfVertexOutput`.                                                 |
+| `TypeGpuMsdfFragmentOutput` | struct   | `fillCoverage`, `outlineCoverage`, `shadowCoverage`, `color`, `opacity`, `fillDistance`, `trueDistance`, `pixelRange`. |
+| `TypeGpuMsdfRenderInput`    | type     | Input of `msdfRenderDetailed`: coordinates, `uvBounds`, `atlasSize`, `pixelRange`, `baseSample`, `shadowSample`, colors and `outlineWidth`. |
+| `MsdfCoverageInput`         | struct   | Input of `msdfCoverage`.                                                                      |
+| `MsdfCompositeInput`        | struct   | Input of `msdfComposite`: `coverage` and the three colors.                                    |
+| `msdfAtlasSizeAccessor`     | accessor | Atlas size in texels (vec2f). A literal, uniform, buffer or GPU function.                     |
+| `msdfPixelRangeAccessor`    | accessor | The baked pixel range (f32).                                                                  |
+| `msdfSampleSlot`            | slot     | The atlas sample source, `(atlasCoordinate, pageIndex) => vec4f`. The host must bind it.      |
+| `MsdfSampleSource`          | type     | The function type of `msdfSampleSlot`.                                                        |
+
+### Slug
+
+| Export                       | Kind     | Description                                                                                  |
+| ---------------------------- | -------- | -------------------------------------------------------------------------------------------- |
+| `slugRender`                 | function | `(glyph: SlugShaderGlyph, renderCoordinate: vec2f) => f32`. Analytic fill coverage for one fragment, non-zero winding. |
+| `slugRenderWithOptions`      | function | `(glyph, renderCoordinate, evenOdd, weightBoost, stemDarken, thicken) => f32`. The same with fill controls. |
+| `slugDilate`                 | function | `(position, outwardNormal, textureCoordinate, inverseScale, mvpRow0, mvpRow1, mvpRow3, viewport) => vec4f`. Expands one quad corner to cover the antialiasing fringe. `xy` is the dilated position, `zw` the dilated em coordinate. |
+| `slugDilateMatrix`           | function | `(position, outwardNormal, textureCoordinate, inverseScale, modelViewProjection, viewport) => vec4f`. The matrix-input form. |
+| `SlugShaderGlyph`            | struct   | `curveBaseTexel`, `horizontalHeaderBase`, `verticalHeaderBase`, `referenceBase`, `horizontalBandCount`, `verticalBandCount` (u32), `bandTransform` (vec4f). |
+| `SlugShaderPage`             | type     | `loadHeader`, `headerWidth`, `loadBandCurve`, `bandCurveWidth`: how a host exposes a Slug page. |
+| `slugHeaderTexelSlot`        | slot     | Loads one band-header texel: `(coords: vec2i) => vec4u`. The host must bind it.              |
+| `slugHeaderWidthAccessor`    | accessor | Row width of the header texture (u32).                                                       |
+| `slugBandCurveTexelSlot`     | slot     | Loads one band-curve texel: `(coords: vec2i) => vec4u`. The host must bind it.               |
+| `slugBandCurveWidthAccessor` | accessor | Row width of the band-curve texture (u32).                                                   |
+
+### Decoration
+
+| Export                    | Kind     | Description                                                                            |
+| ------------------------- | -------- | -------------------------------------------------------------------------------------- |
+| `decorationShader`        | function | Places a decoration rectangle and decodes its packed color. `TypeGpuDecorationInput` to `TypeGpuDecorationOutput`. |
+| `TypeGpuDecorationInput`  | struct   | `rect` (vec4f), `packed` (vec2u), `unitPosition` (vec3f).                              |
+| `TypeGpuDecorationOutput` | struct   | `position` (vec3f), `color` (vec3f, linear), `opacity` (f32).                          |
+
+## Differences between the two
+
+- The TSL bitmap output leaves `position` in object space for the renderer to project and also offers
+  `clipPosition`. The TypeGPU bitmap vertex stage takes the model-view-projection matrix as input and returns
+  clip-space placement directly.
+- The TypeGPU MSDF instance carries `outlineColor` and `shadowColor` as two vec4f. The TSL instance carries them packed
+  in `effectColor`.
+- Resources reach TSL functions as arguments. They reach TypeGPU functions through slots and accessors, which the
+  host binds per pipeline.
+
+## Technique coverage
+
+Both entry points implement all four techniques: bitmap, MSDF, Slug and decoration. The TSL functions are what
+`@pmndrs/glyph/three` renders with on three.js's WebGPU and WebGL2 backends. The TypeGPU functions are what
+`@pmndrs/glyph/typegpu` and `@pmndrs/glyph/three/typegpu` render with. The `@pmndrs/glyph/typegpu` integration does
+not draw decorations, although the decoration shader function is exported here.
+
+## See also
+
+- [`@pmndrs/glyph/core` reference](/reference/core)
+- [Renderer integration](/explanation/renderer-integration)
+- [Materials reference](/reference/three-materials)
+- [TypeGPU reference](/reference/typegpu)
+- [Formats](/explanation/formats)
