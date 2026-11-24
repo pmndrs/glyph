@@ -42,9 +42,10 @@ export function pointerToWorld(
 ): Vector3 {
   out.set((x / Math.max(size.width, 1)) * 2 - 1, -((y / Math.max(size.height, 1)) * 2 - 1), 0.5).unproject(camera);
   if (camera instanceof PerspectiveCamera) {
-    const direction = out.sub(camera.position).normalize();
-    const distance = (plane - camera.position.z) / direction.z;
-    return out.copy(camera.position).addScaledVector(direction, distance);
+    // `out` holds the ray direction until the last line; scale it in place rather than through an alias.
+    out.sub(camera.position).normalize();
+    const distance = (plane - camera.position.z) / out.z;
+    return out.multiplyScalar(distance).add(camera.position);
   }
   out.z = plane;
   return out;

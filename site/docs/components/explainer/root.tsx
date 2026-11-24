@@ -1,4 +1,4 @@
-import { createRoot, flushSync, useFrame } from '@react-three/fiber/webgpu';
+import { createRoot, useFrame } from '@react-three/fiber/webgpu';
 import { createElement, Fragment, Suspense, type ReactNode } from 'react';
 import { PerspectiveCamera, WebGPURenderer } from 'three/webgpu';
 
@@ -601,14 +601,14 @@ export abstract class GlyphOffscreenRootElement extends HTMLElement {
   }
 
   /**
-   * A pooled root outlives the scenes it shows. Before it takes another one, the previous scene is unmounted
-   * synchronously so its cleanup runs first, and the camera and viewport are put back to what every scene is
-   * told to expect, whatever the last scene did to them.
+   * A pooled root outlives the scenes it shows. Before it takes another one, the camera and viewport are put
+   * back to what every scene is told to expect, whatever the last scene did to them. The outgoing scene is
+   * replaced in the same commit as the incoming one, not unmounted first: scenes share fonts, and a font whose
+   * last user unmounts is disposed before a scene mounted a moment later can retain it.
    */
   #resetSlot(slot: GlyphRenderSlot) {
     const store = slot.store;
     if (store === undefined) return;
-    flushSync(() => slot.r3f.render(null));
     const state = store.getState();
     const camera = slot.camera ?? state.camera;
     slot.camera = camera;
@@ -1213,7 +1213,10 @@ export class GlyphProxyElement extends HTMLElement {
   };
 
   #sendKeyDown = (event: KeyboardEvent) => {
-    if (['ArrowLeft', 'ArrowRight', 'Backspace', ' '].includes(event.key)) event.preventDefault();
+    // Keys a scene handles must not also scroll the page or leave it. A text field takes the editing keys too.
+    const editing = this.getAttribute('role') === 'textbox';
+    const handled = editing ? TEXTBOX_KEYS : SCENE_KEYS;
+    if (handled.has(event.key) && !event.metaKey && !event.ctrlKey) event.preventDefault();
     this.#root?.engage(this);
     if (this.getAttribute('role') === 'button' && (event.key === 'Enter' || event.key === ' ')) {
       const rect = this.getBoundingClientRect();
@@ -1232,6 +1235,9 @@ export class GlyphProxyElement extends HTMLElement {
     this.#root?.sendInput({ type: 'keydown', value: event.key }, { proxyId: this.channelId });
   };
 }
+
+const SCENE_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Backspace', ' ']);
+const TEXTBOX_KEYS = new Set([...SCENE_KEYS, 'ArrowUp', 'ArrowDown', 'Home', 'End', 'Enter', 'Delete']);
 
 /** The canvas is the complete page-level frame, centered; the host's own box is the clipping window. */
 const PROXY_SHADOW_CSS = `

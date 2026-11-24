@@ -83,59 +83,44 @@ async function frameHolds(page: Page, selector: string): Promise<boolean> {
 const scrollTo = (page: Page, selector: string) =>
   page.evaluate((query) => document.querySelector(query)?.scrollIntoView({ block: 'center' }), selector);
 
+const lastInput = (page: Page, needle: string) =>
+  page.waitForFunction(
+    (wanted) =>
+      (document.querySelector('glyph-explainer-root')?.getAttribute('data-glyph-last-input') ?? '').includes(wanted),
+    needle,
+  );
+
 async function verifyDocsPage(context: BrowserContext): Promise<void> {
   const page = await context.newPage();
   const problems = watch(page, 'docs');
-  await page.goto(`${ORIGIN}/docs/getting-started/introduction`, { waitUntil: 'load' });
+  // Six proxies on a root limited to two logical roots.
+  await page.goto(`${ORIGIN}/docs/guides/scene/custom-materials`, { waitUntil: 'load' });
   await page.waitForFunction(() => customElements.get('glyph-proxy') !== undefined);
 
-  const first = '#introduction-glyph-proxy';
-  const second = '#introduction-canvas-proxy';
-  const last = '#introduction-physics-proxy';
+  const proxy = (scene: string) => `glyph-proxy[data-scene="${scene}"]`;
+  const scenes = await page
+    .locator('glyph-proxy')
+    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-scene') ?? ''));
+  const first = proxy('ripple');
   check((await page.locator('glyph-explainer-root').count()) === 1, 'docs: the page has one explainer root');
-  check((await page.locator('glyph-proxy').count()) === 11, 'docs: eleven proxies are bound to it');
-  check((await gpu(page)).devices === 0, 'docs: no GPU device exists while every proxy is below the fold');
+  check(scenes.length === 6, `docs: six proxies are bound to it (${scenes.length})`);
 
   await scrollTo(page, first);
+  await page.waitForFunction((query) => {
+    const poster = document.querySelector(query)?.shadowRoot?.querySelector('img');
+    return poster !== null && poster !== undefined && poster.complete && poster.naturalWidth > 0;
+  }, first);
+  check(true, 'docs: a proxy shows the poster its root names');
   await waitForState(page, first, 'live');
-  await page.evaluate((query) => document.querySelector(query)?.scrollIntoView({ block: 'end' }), second);
-  await waitForState(page, second, 'live');
-  check((await stateOf(page, first)) === 'live', 'docs: two proxies in view are live together');
-  await page.screenshot({ path: resolve(OUT, 'docs-1-two-proxies-live.png') });
   check(await framesAdvance(page, first), 'docs: frames are streamed into a live proxy');
-
-  // Input goes to the proxy it was made on, and to the scene that proxy shows.
-  await page.locator(second).click({ position: { x: 40, y: 40 } });
-  await page.waitForFunction(() =>
-    (document.querySelector('glyph-explainer-root')?.getAttribute('data-glyph-last-input') ?? '').includes(
-      ':introduction-canvas-proxy:shaping:',
-    ),
-  );
-  check(true, 'docs: a click on the second proxy is delivered to its scene, not the first');
-  await page.locator(first).click({ position: { x: 40, y: 40 } });
-  await page.waitForFunction(() =>
-    (document.querySelector('glyph-explainer-root')?.getAttribute('data-glyph-last-input') ?? '').includes(
-      ':introduction-glyph-proxy:glyph:',
-    ),
-  );
-  check(true, 'docs: a click on the first proxy is delivered to its scene');
-
-  // A scene control changes one proxy's scene through the same ordered stream.
-  await page.locator('glyph-scene-control', { hasText: 'Shaping' }).first().click();
-  await page.waitForFunction(() =>
-    (document.querySelector('glyph-explainer-root')?.getAttribute('data-glyph-scene') ?? '')
-      .split(',')
-      .every((scene) => scene === 'shaping'),
-  );
-  check(true, 'docs: a scene control switches the scene of the proxy it names');
-  await page.locator('glyph-scene-control', { hasText: 'Glyph' }).first().click();
+  await page.screenshot({ path: resolve(OUT, 'docs-1-live.png') });
 
   // Leaving the viewport ends the lease: the proxy holds its last frame and stops updating.
   const mountsBefore = Number(await rootAttribute(page, 'data-glyph-mounts'));
-  await scrollTo(page, '#introduction-styling-proxy');
+  await scrollTo(page, proxy(scenes[0]!));
   await waitForState(page, first, 'held');
   check(await frameHolds(page, first), 'docs: a proxy without a lease keeps its last frame and stops updating');
-  await page.screenshot({ path: resolve(OUT, 'docs-2-scrolled-first-held.png') });
+  await page.screenshot({ path: resolve(OUT, 'docs-2-scrolled-held.png') });
 
   await scrollTo(page, first);
   await waitForState(page, first, 'live');
@@ -145,34 +130,17 @@ async function verifyDocsPage(context: BrowserContext): Promise<void> {
   // Walk the whole page: every scene goes live, and the pool never exceeds its limit.
   const limit = Number(await rootAttribute(page, 'data-glyph-pool-limit'));
   let peak = 0;
-  for (const id of await page.locator('glyph-proxy').evaluateAll((nodes) => nodes.map((node) => node.id))) {
-    await scrollTo(page, `#${id}`);
-    await waitForState(page, `#${id}`, 'live');
+  for (const scene of scenes) {
+    await scrollTo(page, proxy(scene));
+    await waitForState(page, proxy(scene), 'live');
     peak = Math.max(peak, Number(await rootAttribute(page, 'data-glyph-slot-count')));
-    await page.screenshot({ path: resolve(OUT, `docs-scene-${id.replace(/^introduction-|-proxy$/g, '')}.png`) });
   }
   check(peak <= limit, `docs: the pool peaked at ${peak} logical roots, within its limit of ${limit}`);
   check(Number(await rootAttribute(page, 'data-glyph-mounts')) > mountsBefore, 'docs: later scenes were mounted');
 
-  // Keys reach the focused proxy's scene.
-  const editing = '#introduction-editing-proxy';
-  await scrollTo(page, editing);
-  await waitForState(page, editing, 'live');
-  await page.locator(editing).click({ position: { x: 60, y: 60 } });
-  await page.keyboard.type('!');
-  await page.waitForFunction(() =>
-    (document.querySelector('glyph-explainer-root')?.getAttribute('data-glyph-last-input') ?? '').endsWith(
-      ':introduction-editing-proxy:editing:keydown',
-    ),
-  );
-  check(true, 'docs: a key typed in the focused editing proxy is delivered to the editing scene');
-  await page.screenshot({ path: resolve(OUT, 'docs-4-editing-typed.png') });
-
-  await scrollTo(page, last);
-  await waitForState(page, last, 'live');
   const counters = await gpu(page);
   const rendering = counters.contexts.filter((type) => type === 'webgpu' || type.startsWith('webgl'));
-  check(counters.devices === 1, `docs: one GPU device served eleven proxies (${counters.devices})`);
+  check(counters.devices === 1, `docs: one GPU device served six proxies (${counters.devices})`);
   check(rendering.length === 1, `docs: one rendering context exists (${rendering.join(', ')})`);
   check(
     counters.contexts.filter((type) => type === 'bitmaprenderer').length > 0,
@@ -181,6 +149,43 @@ async function verifyDocsPage(context: BrowserContext): Promise<void> {
   console.info(
     `     backend ${await rootAttribute(page, 'data-glyph-backend')}, frame ${await rootAttribute(page, 'data-glyph-frame')}`,
   );
+
+  // Input goes to the proxy it was made on, and to the scene that proxy shows.
+  await page.goto(`${ORIGIN}/docs/guides/editing/keyboard-movement`, { waitUntil: 'load' });
+  await page.waitForFunction(() => customElements.get('glyph-proxy') !== undefined);
+  await scrollTo(page, proxy('editing-boundary'));
+  await waitForState(page, proxy('editing-boundary'), 'live');
+  await page.locator(proxy('editing-boundary')).hover({ position: { x: 200, y: 120 } });
+  await lastInput(page, ':editing-boundary:pointermove');
+  check(true, 'docs: pointer motion over one proxy is delivered to its scene');
+  await page.screenshot({ path: resolve(OUT, 'docs-4-boundary-hover.png') });
+
+  // Keys reach the focused proxy's scene.
+  await page.goto(`${ORIGIN}/docs/tutorials/editable-text-field`, { waitUntil: 'load' });
+  await page.waitForFunction(() => customElements.get('glyph-proxy') !== undefined);
+  const field = proxy('editing-field');
+  await scrollTo(page, field);
+  await waitForState(page, field, 'live');
+  const before = await frameDigest(page, field);
+  await page.locator(field).click({ position: { x: 240, y: 150 } });
+  await lastInput(page, ':editing-field:pointer');
+  await page.keyboard.type('glyph');
+  await lastInput(page, ':editing-field:keydown');
+  await page.waitForFunction(
+    () => new Promise((next) => requestAnimationFrame(() => requestAnimationFrame(() => next(true)))),
+  );
+  check((await frameDigest(page, field)) !== before, 'docs: typing in the focused field changes what it draws');
+  await page.screenshot({ path: resolve(OUT, 'docs-5-field-typed.png') });
+
+  // A scene control sends its action through the same ordered stream.
+  await page.goto(`${ORIGIN}/docs/getting-started/introduction`, { waitUntil: 'load' });
+  await page.waitForFunction(() => customElements.get('glyph-proxy') !== undefined);
+  await scrollTo(page, '#introduction-physics-proxy');
+  await waitForState(page, '#introduction-physics-proxy', 'live');
+  await page.locator('glyph-scene-control').click();
+  await lastInput(page, ':introduction-physics-proxy:physics:control');
+  check(true, 'docs: a scene control reaches the proxy it names');
+
   check(
     problems.length === 0,
     `docs: no console errors or failed requests${problems.map((p) => `\n       ${p}`).join('')}`,

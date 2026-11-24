@@ -1,14 +1,14 @@
-import { EDITING } from './catalog/editing';
-import { FONTS } from './catalog/fonts';
-import { INSPECT } from './catalog/inspect';
-import { LAYOUT } from './catalog/layout';
-import { MOTION } from './catalog/motion';
-import { SCENE } from './catalog/scene';
-import { START } from './catalog/start';
-import { STYLING } from './catalog/styling';
-import type { ExampleEntry } from './catalog/types';
+import { EDITING } from './catalog/editing.ts';
+import { FONTS } from './catalog/fonts.ts';
+import { INSPECT } from './catalog/inspect.ts';
+import { LAYOUT } from './catalog/layout.ts';
+import { MOTION } from './catalog/motion.ts';
+import { SCENE } from './catalog/scene.ts';
+import { START } from './catalog/start.ts';
+import { STYLING } from './catalog/styling.ts';
+import type { ExampleEntry } from './catalog/types.ts';
 
-export type { ExampleEntry, StageOptions } from './catalog/types';
+export type { ExampleEntry, StageOptions } from './catalog/types.ts';
 
 /**
  * Every hosted example, grouped by the explainer section that owns it. A docs page loads one section, and

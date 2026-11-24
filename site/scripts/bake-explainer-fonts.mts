@@ -10,7 +10,7 @@ import iconManifest from '../docs/assets/fonts/font-awesome-icons.json' with { t
 
 const site = resolve(dirname(new URL(import.meta.url).pathname), '..');
 const fonts = resolve(site, 'docs/assets/fonts');
-const benchmarkFonts = resolve(site, '../apps/benchmarks/fixtures/fonts');
+const benchmarkFonts = resolve(site, '../benches/fixtures/fonts');
 
 await mkdir(fonts, { recursive: true });
 

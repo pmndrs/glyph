@@ -10,7 +10,8 @@ examples/
   index.html                     the one page: the gallery, or one scene with ?example=
   public/diagrams/               the docs' SVG figures, served at /examples/diagrams/
   src/main.tsx                   installs the examples explainer page, then renders the gallery or the preview
-  src/catalog.ts                 slug → title, docs page, stage options, gallery aspect, scene loader
+  src/catalog.ts                 every section merged; slug → title, docs page, stage options, aspect, scene loader
+  src/catalog/<section>.ts       one explainer section's scenes; a docs page loads the sections its root names
   src/theme.ts                   ground, paper, accent, and the world width every scene assumes
   src/fonts.ts                   the checked-in fonts every scene draws from
   src/custom-elements.d.ts       JSX typings for glyph-explainer-root, glyph-proxy, glyph-scene-control
@@ -56,9 +57,10 @@ mise exec -- pnpm --filter @pmndrs/glyph-site check:snippets    # every ts/tsx b
 ## Adding one
 
 1. Add a folder under `src/scenes/` with `scene.tsx` (default-export a component) and `three.ts` (export `mount`).
-2. Register it in `src/catalog.ts` with its docs page and stage options.
+2. Register it in its section's file under `src/catalog/` (`layout.ts`, `styling.ts`, …) with its docs page and
+   stage options; `src/catalog.ts` merges the sections.
 3. Embed it from the page with `<glyph-proxy root="scenes" data-scene="<slug>" aria-label="…" aspect="16 / 9" />`
-   under the page's `<glyph-explainer-root id="scenes" data-explainer-page="examples" …/>`. The gallery lists the
+   under the page's `<glyph-explainer-root id="scenes" data-explainer-page="<section>" posters="/examples/thumbnails/" …/>`. The gallery lists the
    catalog, so it has the card already.
 
 ## Attribution
