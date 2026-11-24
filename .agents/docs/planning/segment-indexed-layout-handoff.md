@@ -89,7 +89,7 @@ its upload from 695 kB to 1.7 kB per keystroke.
 
 | Lane             | Branch                    | Model | What                                                                                                                                                                                           |
 | ---------------- | ------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frame regression | `experiments/sil-frame8`  | Fable | Two frame rows read ~+8% once each after the structural split (22k type-end, bidi paste-middle): A/B `-57` vs `-58`, find the mechanism, fix while keeping the split                           |
+| Frame regression | —                         | Fable | Closed 2026-11-23: noise (1.00 ± 0.015 over 18 interleaved pairs), no commits                                                                                                                  |
 | Pre-ship bugs    | `experiments/sil-preship` | Opus  | Deferred facts after an engine restart with changed text; `compileAsync` leak for `split()` copies; culling reparent detection; the 6 oracle driver rejections; recheck the `-54` package bugs |
 
 ## 4. Decisions waiting on Justin
