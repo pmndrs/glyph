@@ -2,7 +2,7 @@
 
 import type { MsdfOptions } from '../internal/msdf-contract.js';
 import type { SlugOptions } from '../internal/slug-contract.js';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url';
 import type { RasterBakePlan } from '../bake.js';
 import type { UnicodeRange } from '../font-baker/index.js';
 import { normalizeUnicodeRanges } from '../internal/font-selection.js';
-import { assertDistinctInputOutputs, publishFilesWithRollback } from '../internal/node-file-publication.js';
+import { assertDistinctInputOutputs, isMissing, publishFilesWithRollback } from '../internal/node-file-publication.js';
 import { resolveRasterBakePlan, type ResolvedRasterBakePlan } from '../internal/raster-bake-plan.js';
 import {
   bakeFont,
@@ -258,7 +258,6 @@ interface DirectBakeArguments {
   readonly check: boolean;
   readonly split: boolean;
   readonly force: boolean;
-  readonly yes: boolean;
 }
 
 /** Derives a URL-safe core name such as `My Font.ttf` -> `my-font.glb`. */
@@ -288,7 +287,6 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
   let outlines = false;
   let split = false;
   let force = false;
-  let yes = false;
   let bitmapStrikes: readonly [number, ...number[]] | undefined;
   let msdf = false;
   let msdfOptions: MsdfOptions | undefined;
@@ -355,8 +353,6 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
       split = true;
     } else if (argument === '--force') {
       force = true;
-    } else if (argument === '--yes') {
-      yes = true;
     } else {
       throw new TypeError(`Unknown argument: ${argument}`);
     }
@@ -373,7 +369,6 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
     check ||
     split ||
     force ||
-    yes ||
     fontFaceIndexSet;
   const projectSelected =
     projectRoot !== undefined || outputRoot !== undefined || entries.length !== 0 || assetRoots.length !== 0;
@@ -406,7 +401,6 @@ function parseBakeArguments(argv: readonly string[]): ParsedBakeArguments {
             check,
             split,
             force,
-            yes,
           },
         }
       : {}),
@@ -453,6 +447,13 @@ async function bakeDirect(
   io: { readonly stdout: { write(text: string): unknown } },
 ): Promise<NodeFontBakeReport | undefined> {
   const { plans, resolved } = await directRasterPlans(options);
+  if (options.check) {
+    // Nothing to compare against is a stale result, and a bake could not change that.
+    await assertCheckedFile(options.output, 'STALE_OUTPUT', 'no font exists at the requested output');
+    if (options.glyphMap !== undefined) {
+      await assertCheckedFile(options.glyphMap, 'STALE_GLYPH_MAP', 'no glyph map exists at the requested path');
+    }
+  }
   if (!options.check && !options.force) {
     const freshness = await fontIsUpToDate({
       output: options.output,
@@ -519,6 +520,19 @@ async function bakeDirect(
     return staged ? reportWithPublishedOutput(report, output, options.output, 0) : report;
   } finally {
     await rm(temporaryDirectory, { force: true, recursive: true });
+  }
+}
+
+async function assertCheckedFile(
+  path: string,
+  reason: 'STALE_OUTPUT' | 'STALE_GLYPH_MAP',
+  message: string,
+): Promise<void> {
+  try {
+    await access(path);
+  } catch (error) {
+    if (!isMissing(error)) throw error;
+    throw new NodeBakeError(reason, `${message}; run without --check to create it`, path);
   }
 }
 
@@ -760,7 +774,6 @@ Packaging options:
   --split                Write each raster beside the core as <name>.<technique>.glb
                         Default packs every raster into the one output file
   --force                Always bake, skipping the up-to-date check
-  --yes                  Do not prompt before replacing an existing font
 
 Discovery options:
   --project-root <path>  Project root (default: current directory)

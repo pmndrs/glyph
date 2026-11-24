@@ -31,7 +31,7 @@ import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug.js';
 import { Box, Container3D, type Destroy3DOptions, Mesh3D } from '@pixi/3d';
 import { createGlyphPlacements } from '../glyph-placement.js';
-import { GlyphInputError } from '../glyph-error.js';
+import { GlyphInputError, glyphInputError, validatingInput } from '../glyph-error.js';
 import type { RenderFailures } from '../render-failures.js';
 import { replaceInText } from '../text-editing.js';
 
@@ -96,9 +96,10 @@ export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelect
     this.#services = services;
     this.#material = options.material;
     this.#state = options;
-    this.#font = fonts.acquire(options.font);
+    this.#font = validatingInput(['font'], () => fonts.acquire(options.font));
     try {
-      this.#controller = services.createText(this.#coreState(options, this.#font));
+      // The core validates style, layout, constraints, flow and text units together; a refusal names no one input.
+      this.#controller = validatingInput([], () => services.createText(this.#coreState(options, this.#font)));
     } catch (error) {
       this.#font.dispose();
       throw error;
@@ -189,7 +190,17 @@ export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelect
     return [...buffers].reduce((total, buffer) => total + buffer.data.byteLength, 0);
   }
 
+  /** Every value an update refuses is a `GlyphInputError`; one the validators did not place names the property written. */
   update(update: Pixi3DTextUpdate<Selection>): void {
+    try {
+      this.#applyUpdate(update);
+    } catch (error) {
+      const keys = typeof update === 'object' && update !== null ? Object.keys(update) : [];
+      throw glyphInputError(keys.length === 1 ? keys : [], error);
+    }
+  }
+
+  #applyUpdate(update: Pixi3DTextUpdate<Selection>): void {
     this.#assertActive();
     if (typeof update !== 'object' || update === null || Array.isArray(update)) {
       throw new TypeError('Pixi3D text update must be an object');
@@ -410,11 +421,15 @@ export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelect
   }
 }
 
+/** Refuses options with the `GlyphInputError` path Three reports for the same input. */
 function assertTextOptions<Selection extends Pixi3DFontSelection>(options: Pixi3DTextOptions<Selection>): void {
-  if (typeof options !== 'object' || options === null || Array.isArray(options)) {
-    throw new TypeError('Pixi3D text options must be an object');
-  }
-  if (typeof options.text !== 'string') {
+  validatingInput([], () => {
+    if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+      throw new TypeError('Pixi3D text options must be an object');
+    }
+  });
+  validatingInput(['text'], () => {
+    if (typeof options.text === 'string') return;
     if (
       typeof options.text !== 'object' ||
       options.text === null ||
@@ -423,10 +438,12 @@ function assertTextOptions<Selection extends Pixi3DFontSelection>(options: Pixi3
     ) {
       throw new TypeError('Pixi3D text content must be a string or formatted text');
     }
-  }
-  if (options.material !== undefined && !isPixi3DTextMaterial(options.material)) {
-    throw new TypeError('Pixi3D text material must be a Pixi3DTextMaterial');
-  }
+  });
+  validatingInput(['material'], () => {
+    if (options.material !== undefined && !isPixi3DTextMaterial(options.material)) {
+      throw new TypeError('Pixi3D text material must be a Pixi3DTextMaterial');
+    }
+  });
 }
 
 function plainText(input: string | { readonly text: string }): string {

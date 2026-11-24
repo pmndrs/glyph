@@ -107,12 +107,20 @@ Top-level `TextGroup`s now use an automatic batch boundary. Keep the default `ba
 hiding a group should skip its owned draws. Use `batching: 'shared'` to retain 0.1-style cross-group coalescing, or
 `batching: 'group'` to force a nested boundary.
 
-Visibility culling is manual in 0.2: set `group.visible` from the application's own bounds or camera test. Automatic
-off-screen group culling is not shipped.
+Frustum culling is on by default for every built-in draw: each draw is culled by a bound computed from the records it
+draws. Set `frustumCulled = false` on a `Text`, an enclosing `TextGroup` or a `Glyphs` to submit every draw, and give a
+custom material that moves glyphs `boundsPadding` (see `defineTextMaterial`). Hiding a group with `group.visible`
+still skips its owned draws under `batching: 'auto'`.
 
 Equivalent `Text.set()` state is now a no-op. Assign `font` or `material` explicitly when the application needs resource
 restaging. A renderer-side failure keeps the last accepted draw state and is not retried by unchanged traversals; after
 repairing the cause, assign material or other renderer-relevant state to request a new checkpoint.
+
+## Remove options that never did anything
+
+Three `Text` properties, R3F and Vue `Text` props no longer accept `order`: it was typed but never read, and Three
+paints in scene order with `renderOrder`. `glyph bake` no longer accepts `--yes`: the CLI never prompts. Delete both.
+`glyph bake --check` against a missing output now fails with `STALE_OUTPUT` instead of a Node `ENOENT` stack.
 
 ## Read glyph facts after `measure()` deliberately
 

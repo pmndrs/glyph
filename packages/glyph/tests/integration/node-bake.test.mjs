@@ -367,6 +367,50 @@ test('direct bake writes and checks a glyph-name lookup for its selected Unicode
   assert.equal(await readFile(glyphMap, 'utf8'), '{}\n');
 });
 
+test('a Unicode subset of a CFF font keeps its outlines', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-cff-subset-cli-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const input = fileURLToPath(
+    new URL('../../../../benches/fixtures/fonts/dancing-script-3.000/DancingScript-Regular.otf', import.meta.url),
+  );
+  const output = join(root, 'dancing.font.glb');
+  const bake = captureIo();
+  assert.equal(
+    await runCli(
+      ['bake', '--input', input, '--output', output, '--unicodes', 'U+0020-007E', '--bitmap', '16'],
+      bake.io,
+    ),
+    0,
+    bake.stderr(),
+  );
+  assert.ok((await readFile(output)).byteLength > 0);
+});
+
+test('the CLI check reports a missing output or glyph map as stale without baking', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-check-missing-cli-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const input = join(root, 'fa-solid-900.ttf');
+  const output = join(root, 'icons.font.glb');
+  const glyphMap = join(root, 'icons.json');
+  await writeFile(input, await readFile(iconFontUrl));
+  const argv = ['bake', '--input', input, '--output', output, '--unicodes', 'U+F0AC', '--bitmap', '16'];
+
+  const missingFont = captureIo();
+  assert.equal(await runCli([...argv, '--check'], missingFont.io), 1);
+  assert.match(missingFont.stderr(), /^STALE_OUTPUT: no font exists at the requested output/);
+  assert.doesNotMatch(missingFont.stderr(), /ENOENT|\n\s+at /);
+
+  assert.equal(await runCli(argv, captureIo().io), 0);
+  const missingMap = captureIo();
+  assert.equal(await runCli([...argv, '--glyph-map', glyphMap, '--check'], missingMap.io), 1);
+  assert.match(missingMap.stderr(), /^STALE_GLYPH_MAP: no glyph map exists at the requested path/);
+  await assert.rejects(readFile(glyphMap), { code: 'ENOENT' }, 'a check never writes');
+
+  const yes = captureIo();
+  assert.equal(await runCli([...argv, '--yes'], yes.io), 2, 'the CLI never prompts, so --yes is not an option');
+  assert.match(yes.stderr(), /^Unknown argument: --yes/);
+});
+
 test('glyph-map aliases fail before either direct bake output is published', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'pmndrs-glyph-map-alias-cli-'));
   t.after(() => rm(root, { recursive: true, force: true }));

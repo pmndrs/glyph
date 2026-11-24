@@ -195,6 +195,10 @@ labels.batching = 'shared';
 // @ts-expect-error TextGroup batching is a closed policy union.
 labels.batching = 'isolated';
 label.set({ material: undefined, flow: undefined, style: undefined, layout: undefined, constraints: undefined });
+// @ts-expect-error Three paint order is the scene graph and renderOrder; core paragraph order is not a Text property.
+label.set({ order: 1 });
+// @ts-expect-error A Three Text is constructed without a core paragraph order.
+three.createText({ font: bitmapFont, text: 'Ordered by the scene', order: 1 });
 // @ts-expect-error TextGroup material mutation has one property surface, not a duplicate setter method.
 labels.setMaterial(undefined);
 const capacityThree = glyph.handle(

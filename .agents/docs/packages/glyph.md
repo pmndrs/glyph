@@ -496,7 +496,11 @@ executable before `dist` exists. Direct mode accepts one input/output pair, a co
 Unicode subsetting through the package-owned Fontations/Skera baker Wasm, and independently selected embedded Bitmap,
 MSDF, and Slug rasters. The prepared source bytes feed the core shaping bake and every selected raster bake; neither the
 CLI nor the programmatic `@pmndrs/glyph/bake` path invokes a platform font tool. `--check`
-publishes only to temporary storage and compares the complete GLB byte-for-byte with the requested output. It calls the
+publishes only to temporary storage and compares the complete GLB byte-for-byte with the requested output; a missing
+output (or glyph map) is reported as `STALE_OUTPUT` (`STALE_GLYPH_MAP`) before any bake. The CLI never prompts, and
+0.1.0's no-op `--yes` is gone. Skera 0.5.1 has no CFF/CFF2 subsetter, so a CFF-flavoured source is subset with retained
+glyph IDs and keeps its source `CFF `/`CFF2` table, which stays valid for every retained glyph; the subset carries every
+charstring, and only the rasters shrink to the selection. It calls the
 same `bakeFont` host as programmatic consumers rather than maintaining an example-only composition path.
 
 Project discovery uses Oxc Parser 0.150.0 for JS/JSX/TS/TSX syntax, Oxc Walker 1.1.1 for lexical scopes, and Oxc Resolver 11.24.2 for
@@ -1233,7 +1237,14 @@ and return an ordinary keyed `TextFlowExclusion`; declared projection error cons
 convex hull. Geometry wholly behind the text plane produces no exclusion. Neither helper reads depth/GPU pixels nor
 claims hidden-surface or material-coverage exactness.
 
-The shared paragraph layout surface also admits a same-source `dropCap` with a bounded line span, cap-height text-top or
+`ParagraphLayout.overflow` decides what happens to lines past a fixed `height` or past the last column or region
+([issue 16](../planning/issues-0.2.0/16-overflow-visible-clip-inverted.md)): the default `'visible'` lays out and draws
+only the lines that fit and drops the rest; `'clip'` lays out every line, continuing below the box (below the last
+column's foot with `columns`) and tagging those lines with a clip boundary that no built-in renderer clips yet
+([issue 01](../planning/issues-0.2.0/01-overflow-clip-pixels.md)); `'ellipsis'` keeps the fitting lines and ends the
+last one in an ellipsis. `measure().overflowed` reports the overflow in every mode.
+
+The shared paragraph layout surface also admits a same-source `dropCap` (its type, `DropCapLayout`, is a root export) with a bounded line span, cap-height text-top or
 baseline alignment, logical side, inline/block margins, and an optional caller-authored simple contour normalized over
 the generated cap exclusion box. Text-top alignment uses the shaping face's retained OpenType `sCapHeight` against the
 surrounding stack's first available font and synthesizes `.66em` when the metric is absent; line-box leading therefore

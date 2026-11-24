@@ -7,6 +7,7 @@ import {
   forwardRef,
   isValidElement,
   use,
+  useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useState,
@@ -549,8 +550,11 @@ export const Text = forwardRef(function Text(
   const selected = resolveReactTextFont(properties.font, context);
   const flattened = useMemo(() => flattenText(properties.children, context), [context, properties.children]);
   const fontFaces = useMemo(() => collectTextFontFaces(selected, flattened.fontFaces), [flattened.fontFaces, selected]);
-  const [object, publishObject] = useState<ThreeText<RasterFormatMetadata> | null>(null);
-  useLayoutEffect(() => assignRef(forwardedRef, object ?? undefined), [forwardedRef, object]);
+  // The host object is published by its ref, which attaches in the commit's layout phase before this component's own
+  // layout work, so the caller's ref holds it from the first commit. A remount under a new key publishes a new object.
+  const [store] = useState(() => createObjectStore<ThreeText<RasterFormatMetadata>>());
+  const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+  useImperativeHandle(forwardedRef, () => object ?? store.getSnapshot()!, [object, store]);
   return createElement(ResolvedTextObject, {
     key: `${rootId(root)}:${properties.pixelSnapping === true ? 'pixel-snapped' : 'unsnapped'}`,
     handle,
@@ -561,7 +565,7 @@ export const Text = forwardRef(function Text(
     fontFaces,
     object: objectProperties(properties),
     onLayout: properties.onLayout,
-    publishObject,
+    store,
   });
 }) as TextComponent;
 
@@ -581,7 +585,7 @@ function ResolvedTextObject({
   readonly root: ThreeRoot;
   readonly object: TextElementProps;
   readonly onLayout: ((text: ThreeText<RasterFormatMetadata>, layout: ParagraphLayoutSummary) => void) | undefined;
-  readonly publishObject: (value: ThreeText<RasterFormatMetadata> | null) => void;
+  readonly store: ObjectStore<ThreeText<RasterFormatMetadata>>;
 }): ReactElement {
   const loadedFonts = useHandleFontFaces(handle, fontFaces);
   const { constraints, flow, layout, material, pixelSnapping, rasterPixelRatio, style } = input;
@@ -680,28 +684,24 @@ function TextObject({
   root,
   object: objectProps,
   onLayout,
-  publishObject: publishCommittedObject,
+  store,
 }: {
   readonly desired: DesiredR3fTextProperties<RasterFormatMetadata>;
   readonly root: ThreeRoot;
   readonly object: TextElementProps;
   readonly onLayout: ((text: ThreeText<RasterFormatMetadata>, layout: ParagraphLayoutSummary) => void) | undefined;
-  readonly publishObject: (value: ThreeText<RasterFormatMetadata> | null) => void;
+  readonly store: ObjectStore<ThreeText<RasterFormatMetadata>>;
 }): ReactElement {
   const [constructorArguments] = useState<
     [typeof threeTextConstructionToken, StandaloneTextProperties<RasterFormatMetadata>, readonly [], ThreeRootHost]
   >(() => [threeTextConstructionToken, desired, [], threeRootHost(root)]);
-  const [store] = useState(() => createObjectStore<ThreeText<RasterFormatMetadata>>());
   const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const invalidate = useThree((state) => state.invalidate);
   const frameStore = useStore();
   useLayoutEffect(() => retainGlyphFrame(frameStore, root), [frameStore, root]);
   const publishObject = useMemo(
-    () => (value: ThreeText<RasterFormatMetadata> | null) => {
-      store.publish(value ?? undefined);
-      publishCommittedObject(value);
-    },
-    [publishCommittedObject, store],
+    () => (value: ThreeText<RasterFormatMetadata> | null) => store.publish(value ?? undefined),
+    [store],
   );
 
   useLayoutEffect(() => {
@@ -793,14 +793,16 @@ export const TextGroup: (input: R3fTextGroupProps) => ReactElement | null = forw
   assertNoHandleProp(properties, 'TextGroup');
   const context = useSelectedGlyphContext();
   const root = context.root;
-  const [object, publishObject] = useState<ThreeTextGroup | null>(null);
-  useLayoutEffect(() => assignRef(forwardedRef, object ?? undefined), [forwardedRef, object]);
+  // As for Text: the host ref publishes the group before this component's layout work in the first commit.
+  const [store] = useState(() => createObjectStore<ThreeTextGroup>());
+  const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+  useImperativeHandle(forwardedRef, () => object ?? store.getSnapshot()!, [object, store]);
   return createElement(TextGroupObject, {
     key: `${rootId(root)}:${properties.pixelSnapping === true ? 'pixel-snapped' : 'unsnapped'}`,
     root,
     object: groupObjectProperties(properties),
     options: properties,
-    publishObject,
+    store,
   });
 }) as (input: R3fTextGroupProps) => ReactElement | null;
 
@@ -808,12 +810,12 @@ function TextGroupObject({
   object: objectProps,
   root,
   options,
-  publishObject: publishCommittedObject,
+  store,
 }: {
   readonly object: TextGroupElementProps;
   readonly root: ThreeRoot;
   readonly options: Omit<R3fTextGroupProps, 'ref'>;
-  readonly publishObject: (value: ThreeTextGroup | null) => void;
+  readonly store: ObjectStore<ThreeTextGroup>;
 }): ReactElement {
   const [constructorArguments] = useState<[typeof threeTextConstructionToken, TextGroupOptions, ThreeRootHost]>(() => [
     threeTextConstructionToken,
@@ -825,16 +827,9 @@ function TextGroupObject({
     },
     threeRootHost(root),
   ]);
-  const [store] = useState(() => createObjectStore<ThreeTextGroup>());
   const object = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const invalidate = useThree((state) => state.invalidate);
-  const publishObject = useMemo(
-    () => (value: ThreeTextGroup | null) => {
-      store.publish(value ?? undefined);
-      publishCommittedObject(value);
-    },
-    [publishCommittedObject, store],
-  );
+  const publishObject = useMemo(() => (value: ThreeTextGroup | null) => store.publish(value ?? undefined), [store]);
   const { batching, material, renderOrder } = options;
 
   // Group presentation is complete desired state owned here, not by r3f prop diffing, so a removed prop resets.
@@ -1093,16 +1088,6 @@ function createObjectStore<Value>(): ObjectStore<Value> {
       current = value;
       for (const listener of listeners) listener();
     },
-  };
-}
-
-function assignRef<Value>(ref: Ref<Value> | undefined, value: Value | undefined): () => void {
-  const resolved = value ?? null;
-  if (typeof ref === 'function') ref(resolved);
-  else if (ref !== undefined && ref !== null) ref.current = resolved;
-  return () => {
-    if (typeof ref === 'function') ref(null);
-    else if (ref !== undefined && ref !== null) ref.current = null;
   };
 }
 
