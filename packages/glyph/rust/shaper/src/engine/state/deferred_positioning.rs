@@ -82,13 +82,13 @@ impl ParagraphState {
         }
     }
 
-    /// Leaves the staged layout unpositioned. The layout changed, so the derived clipped
+    /// Leaves the staged layout unpositioned. The layout changed, so the derived intrinsic
     /// inspection retires exactly as positioning retires it.
     pub(super) fn skip_positioning(&mut self) {
         self.discard_positioned_candidate();
         self.positioning = PositioningState::Skipped(self.positioning_plan());
-        self.clipped_inspection.pending_mut().mode = IntrinsicInspection::None;
-        self.clipped_inspection.mark_prepared();
+        *self.intrinsic_inspection.pending_mut() = IntrinsicInspection::None;
+        self.intrinsic_inspection.mark_prepared();
     }
 
     /// Commits a preparation whose positioning is owed. Every stage commits as `commit_all`
@@ -119,7 +119,7 @@ impl ParagraphState {
         self.flow_layout.commit();
         self.commit_positioned();
         self.prepared_layout.commit();
-        self.clipped_inspection.commit();
+        self.intrinsic_inspection.commit();
         self.positioning = PositioningState::Deferred(plan, retained);
     }
 
@@ -148,6 +148,9 @@ impl ParagraphState {
                     core::mem::swap(&mut self.boundary_shape, &mut self.pending_boundary_shape);
                 }
                 let positioned = self.position(shaper, plan);
+                // The layout is the accepted one the intrinsic layout was derived from; only
+                // its positions were owed, so that derivation stays current.
+                self.intrinsic_inspection.discard_candidate();
                 // Whether or not it positioned, the restored stages are accepted again; a failed
                 // positioning leaves the paragraph as a failed read would, for the caller to refuse.
                 self.commit_shaping_runs();

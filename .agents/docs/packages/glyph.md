@@ -1237,12 +1237,15 @@ and return an ordinary keyed `TextFlowExclusion`; declared projection error cons
 convex hull. Geometry wholly behind the text plane produces no exclusion. Neither helper reads depth/GPU pixels nor
 claims hidden-surface or material-coverage exactness.
 
-`ParagraphLayout.overflow` decides what happens to lines past a fixed `height` or past the last column or region
-([issue 16](../planning/issues-0.2.0/16-overflow-visible-clip-inverted.md)): the default `'visible'` lays out and draws
-only the lines that fit and drops the rest; `'clip'` lays out every line, continuing below the box (below the last
-column's foot with `columns`) and tagging those lines with a clip boundary that no built-in renderer clips yet
-([issue 01](../planning/issues-0.2.0/01-overflow-clip-pixels.md)); `'ellipsis'` keeps the fitting lines and ends the
-last one in an ellipsis. `measure().overflowed` reports the overflow in every mode.
+`ParagraphLayout.overflow` decides what happens to text that does not fit a fixed `height` in a thread's last region
+(the only region, the last column, the last `flow` region) ([decision](../planning/decisions/overflow-visible-clip-swap.md)).
+A line's line box fits when `block_start + height <= foot`, straddles when `block_start < foot < block_start + height`,
+and is outside when `block_start >= foot`; no band starts at or below a region's foot, so no mode lays out an outside
+line. The default `'visible'` keeps the straddling line (`composition_block_end` in `flow_composition/threads.rs` lets
+it reach past the foot); `'clip'` and `'ellipsis'` drop it, and `'ellipsis'` ends the last fitting line in an
+ellipsis. Layout reads read the drawn layout in every mode. `measure().overflowed` reports the overflow and
+`contentHeight` the full intrinsic extent in every mode. No mode assigns a clip id; the clip-identity plumbing that
+integrators see (`ClipIdentity`, binding-input `clip`, codec `batch.clip`, region `clip`) stays and carries zero.
 
 The shared paragraph layout surface also admits a same-source `dropCap` (its type, `DropCapLayout`, is a root export) with a bounded line span, cap-height text-top or
 baseline alignment, logical side, inline/block margins, and an optional caller-authored simple contour normalized over

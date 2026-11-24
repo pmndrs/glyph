@@ -243,7 +243,7 @@ impl PlannerState {
             crate::engine::work_attribution::record(|work| work.publication_commit_visits += 1);
             let paragraph = &mut self.paragraphs[index];
             if !paragraph.state.has_pending_preparation()
-                && !paragraph.state.clipped_inspection.is_prepared()
+                && !paragraph.state.intrinsic_inspection.is_prepared()
                 && !paragraph.positioned_changed
             {
                 #[cfg(test)]

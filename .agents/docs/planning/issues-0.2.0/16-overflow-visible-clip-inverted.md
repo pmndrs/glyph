@@ -2,7 +2,7 @@
 type: Issue Record
 title: 'Issue 16: overflow visible drops lines past the box while clip lays them all out'
 description: 'Found while reproducing 01 and 12: with a fixed height, overflow visible keeps only the lines that fit, and clip composes every line past the box, the opposite of what the names say.'
-status: draft
+status: stable
 sources:
   - id: text-properties
     resource: ../../../../packages/glyph/src/text-properties.ts
@@ -15,7 +15,7 @@ generated:
 # Issue 16: `overflow: 'visible'` drops lines past the box while `'clip'` lays them all out
 
 - **Severity:** should-fix (decide before 0.2.0 whether to keep the names; behaviour change is engine work)
-- **Status:** planned — engine-directory work; TSDoc documents today's behaviour (issue 12)
+- **Status:** fixed on `experiments/sil-overflow` ([decision](../decisions/overflow-visible-clip-swap.md)). Justin, 2026-11-24, corrected the first approval ("visible lays out every line"): `visible` keeps the one line straddling the block end, `clip` keeps only the lines that fit, and no mode lays out a line wholly outside the box
 
 ## What happens
 
@@ -44,3 +44,21 @@ last region with a clip id; under `'visible'` it stops when the regions are full
 
 Option 2 with issue 01, decided by Justin because it changes default layout output and oracle references; this lane
 stops at the plan (engine directory, oracle changes).
+
+## Resolution
+
+Before the change, measured with a renderer that counts draw instances (the numbers above came from `measure()` and
+`glyphs()`): `'visible'` and `'clip'` drew the same 52 instances, the lines that fit. The difference was only in layout
+reads: under `'clip'` measurement served the full intrinsic layout (the last region extended to 16,777,216), and each
+column region carried its own clip id, splitting draws. The fix (decision
+[overflow-visible-clip-swap](../decisions/overflow-visible-clip-swap.md)):
+
+- `flow_composition/threads.rs` `composition_block_end`: a `'visible'` thread's last region lets a line box reach past
+  the foot; bands still only start above it (`build.rs`), so exactly one straddling line is added. `convergence.rs`
+  recomposes with the same rule.
+- `state/measurement.rs`: the full clipped inspection is removed; reads serve the drawn layout.
+- `band.rs`, `drop_cap.rs`: no line gets a clip id.
+- Tests: `visible_keeps_the_straddling_line_and_clip_drops_it`, `only_the_last_region_keeps_a_straddling_line`,
+  `no_overflow_mode_assigns_a_clip_id_to_lines` (Rust), `tests/integration/overflow-modes.test.mjs` (draw instances and
+  layout reads), oracle cases `feature-visible-height-latin`, `rg-columns-2-visible-latin-*`,
+  `rg-boxes-visible-latin-*`.
