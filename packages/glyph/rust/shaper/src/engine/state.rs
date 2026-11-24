@@ -227,14 +227,38 @@ struct ShapeWindow {
     probe_end: u32,
     old_glyph_start: usize,
     old_glyph_end: usize,
+    /// Whether an end is a boundary between two clusters that stand alone rather than one no
+    /// glyph flags unsafe to concatenate: only an edit's window has such ends.
+    start_alone: bool,
+    end_alone: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ShapeAttempt {
     Prepared,
     RetryWholeRun,
+    /// The fresh shape refused these ends of an edit's window.
+    Widen {
+        start: bool,
+        end: bool,
+    },
     NeedsFallback,
 }
+
+/// How a fresh shape's agreement to the windows' ends is checked.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum VerifyWindows {
+    /// The window is the run.
+    No,
+    /// Same-length edits between boundaries no glyph flags.
+    Sparse,
+    /// One edit's window.
+    Edit,
+}
+
+/// HarfRust buffer flags of every shaping whose glyphs the paragraph's shape retains:
+/// `PRODUCE_UNSAFE_TO_CONCAT` and the fork's `PRODUCE_UNSAFE_TO_CONCAT_BEYOND_PAIRS`.
+const SHAPE_FLAGS: u32 = 0x140;
 
 impl TextEdit {
     fn is_same_length(self) -> bool {
@@ -1386,6 +1410,7 @@ mod tests {
             x_offsets: vec![],
             y_offsets: vec![],
             glyph_flags: vec![],
+            beyond_pairs: Vec::new(),
         };
         let mut records = Vec::new();
         collect_cluster_records(
@@ -1438,6 +1463,7 @@ mod tests {
             x_offsets: vec![],
             y_offsets: vec![],
             glyph_flags: vec![],
+            beyond_pairs: Vec::new(),
         };
         let mut records = Vec::new();
         collect_cluster_records(&shape, &[0, 1, 3, 4, 5], &mut records, &mut Vec::new()).unwrap();
@@ -4766,6 +4792,7 @@ mod tests {
                 x_offsets: vec![0; UNIT_COUNT],
                 y_offsets: vec![0; UNIT_COUNT],
                 glyph_flags: vec![0; UNIT_COUNT],
+                beyond_pairs: Vec::new(),
             };
             let before = crate::SPARSE_BOUNDARY_VISITS.with(core::cell::Cell::get);
             let mut windows = Vec::new();
@@ -7865,12 +7892,12 @@ mod tests {
         assert_eq!(original.as_bytes()[middle], b'\n');
         let grown = alloc::format!("{}x{}", &original[..middle], &original[middle..]);
         let (mut engine, mut shaper) = benchmark_engine(&original);
-        // The edit is at the end of the seventh paragraph's run. Its window starts at the last
-        // word, `candidates.`, whose first glyph the retained shape does not flag, and the
-        // probe four clusters before that.
+        // The edit is at the end of the seventh paragraph's run, after `candidates.`. The `s`
+        // and the full stop each stand alone, so the window starts between them, and the probe
+        // four clusters before that.
         for (index, (value, old_end, new_end, window_start, shaped_units)) in [
-            (grown.as_str(), 2_456, 2_457, 2_445, 16),
-            (original.as_str(), 2_457, 2_456, 2_445, 15),
+            (grown.as_str(), 2_456, 2_457, 2_455, 6),
+            (original.as_str(), 2_457, 2_456, 2_455, 5),
         ]
         .into_iter()
         .enumerate()

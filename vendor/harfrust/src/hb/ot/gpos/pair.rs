@@ -8,6 +8,15 @@ use crate::hb::ot_layout_gsubgpos::{
 use alloc::boxed::Box;
 use read_fonts::tables::gpos::{PairPosFormat1, PairPosFormat2};
 
+/// pmndrs/glyph fork addition (see GLYPH-FORK.md): whether this match is a pair adjustment of
+/// two adjacent glyphs that the two glyphs alone decide. A second value record makes the lookup
+/// skip the second glyph, so which pairs it visits depends on every pair before; skipped glyphs
+/// between the two are read as well.
+#[inline]
+fn simple_pair(ctx: &hb_ot_apply_context_t, second_glyph_index: usize, has_record2: bool) -> bool {
+    !has_record2 && second_glyph_index == ctx.buffer.idx + 1
+}
+
 impl Apply for PairPosFormat1<'_> {
     fn apply_with_external_cache(
         &self,
@@ -33,8 +42,13 @@ impl Apply for PairPosFormat1<'_> {
 
         let mut unsafe_to = 0;
         if !iter.next(Some(&mut unsafe_to)) {
-            ctx.buffer
-                .unsafe_to_concat(Some(ctx.buffer.idx), Some(unsafe_to));
+            // No second glyph yet: a simple pair once one follows this glyph directly.
+            let start = Some(ctx.buffer.idx);
+            if self.value_format2().is_empty() && unsafe_to == ctx.buffer.idx + 1 {
+                ctx.buffer.unsafe_to_concat_pair(start, Some(unsafe_to));
+            } else {
+                ctx.buffer.unsafe_to_concat(start, Some(unsafe_to));
+            }
             return None;
         }
 
@@ -56,16 +70,24 @@ impl Apply for PairPosFormat1<'_> {
         };
 
         let boring = |ctx: &mut hb_ot_apply_context_t, iter_index: &mut usize, has_record2| {
-            ctx.buffer
-                .unsafe_to_concat(Some(ctx.buffer.idx), Some(second_glyph_index + 1));
+            let (start, end) = (Some(ctx.buffer.idx), Some(second_glyph_index + 1));
+            if simple_pair(ctx, second_glyph_index, has_record2) {
+                ctx.buffer.unsafe_to_concat_pair(start, end);
+            } else {
+                ctx.buffer.unsafe_to_concat(start, end);
+            }
             finish(ctx, iter_index, has_record2)
         };
 
         let success =
             |ctx: &mut hb_ot_apply_context_t, iter_index: &mut usize, flag1, flag2, has_record2| {
                 if flag1 || flag2 {
-                    ctx.buffer
-                        .unsafe_to_break(Some(ctx.buffer.idx), Some(second_glyph_index + 1));
+                    let (start, end) = (Some(ctx.buffer.idx), Some(second_glyph_index + 1));
+                    if simple_pair(ctx, second_glyph_index, has_record2) {
+                        ctx.buffer.unsafe_to_break_pair(start, end);
+                    } else {
+                        ctx.buffer.unsafe_to_break(start, end);
+                    }
                     finish(ctx, iter_index, has_record2)
                 } else {
                     boring(ctx, iter_index, has_record2)
@@ -169,8 +191,13 @@ impl Apply for PairPosFormat2<'_> {
 
         let mut unsafe_to = 0;
         if !iter.next(Some(&mut unsafe_to)) {
-            ctx.buffer
-                .unsafe_to_concat(Some(ctx.buffer.idx), Some(unsafe_to));
+            // No second glyph yet: a simple pair once one follows this glyph directly.
+            let start = Some(ctx.buffer.idx);
+            if self.value_format2().is_empty() && unsafe_to == ctx.buffer.idx + 1 {
+                ctx.buffer.unsafe_to_concat_pair(start, Some(unsafe_to));
+            } else {
+                ctx.buffer.unsafe_to_concat(start, Some(unsafe_to));
+            }
             return None;
         }
 
@@ -192,16 +219,24 @@ impl Apply for PairPosFormat2<'_> {
         };
 
         let boring = |ctx: &mut hb_ot_apply_context_t, iter_index: &mut usize, has_record2| {
-            ctx.buffer
-                .unsafe_to_concat(Some(ctx.buffer.idx), Some(second_glyph_index + 1));
+            let (start, end) = (Some(ctx.buffer.idx), Some(second_glyph_index + 1));
+            if simple_pair(ctx, second_glyph_index, has_record2) {
+                ctx.buffer.unsafe_to_concat_pair(start, end);
+            } else {
+                ctx.buffer.unsafe_to_concat(start, end);
+            }
             finish(ctx, iter_index, has_record2)
         };
 
         let success =
             |ctx: &mut hb_ot_apply_context_t, iter_index: &mut usize, flag1, flag2, has_record2| {
                 if flag1 || flag2 {
-                    ctx.buffer
-                        .unsafe_to_break(Some(ctx.buffer.idx), Some(second_glyph_index + 1));
+                    let (start, end) = (Some(ctx.buffer.idx), Some(second_glyph_index + 1));
+                    if simple_pair(ctx, second_glyph_index, has_record2) {
+                        ctx.buffer.unsafe_to_break_pair(start, end);
+                    } else {
+                        ctx.buffer.unsafe_to_break(start, end);
+                    }
                     finish(ctx, iter_index, has_record2)
                 } else {
                     boring(ctx, iter_index, has_record2)

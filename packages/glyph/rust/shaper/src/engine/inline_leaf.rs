@@ -1094,6 +1094,10 @@ impl InlineShape {
             target.x_offsets.push(glyph.x_offset);
             target.y_offsets.push(glyph.y_offset);
             target.glyph_flags.push(glyph.flags);
+            // The inline shape does not record why a glyph is unsafe to concatenate.
+            target
+                .beyond_pairs
+                .push(glyph.flags & super::shaping_state::GLYPH_FLAG_UNSAFE_TO_CONCAT != 0);
         }
         Ok(())
     }

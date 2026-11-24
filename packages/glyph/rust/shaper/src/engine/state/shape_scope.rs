@@ -15,7 +15,7 @@ impl ParagraphState {
         affected_shape_index: usize,
         affected_shape: ShapedRun,
         fallback: FallbackSpan,
-        verify_boundaries: bool,
+        verify: VerifyWindows,
     ) -> Result<ShapeAttempt, EngineError> {
         self.shape.pending_mut().clear();
         let source_run =
@@ -103,14 +103,14 @@ impl ParagraphState {
                         features: styles.resolved_features(new_run.style),
                         direction: new_run.direction,
                         cluster_level: 0,
-                        flags: 0x40,
+                        flags: SHAPE_FLAGS,
                     },
                     ShapeRangeRef {
                         item_start: window.probe_start,
                         item_end: window.probe_end,
                         context_start: new_run.text_start,
                         context_end: new_run.text_end,
-                        flags: 0x40,
+                        flags: SHAPE_FLAGS,
                     },
                     |shaped| {
                         scratch.append(
@@ -138,17 +138,39 @@ impl ParagraphState {
                     self.boundary_shape_scratch.clear();
                     return Ok(ShapeAttempt::NeedsFallback);
                 }
-                if verify_boundaries
-                    && !sparse_shape_boundaries_are_safe(
+                let refused = match verify {
+                    VerifyWindows::No => None,
+                    VerifyWindows::Sparse => (!sparse_shape_boundaries_are_safe(
                         &self.boundary_shape_scratch,
                         window,
                         new_run.text_start,
                         new_run.text_end,
-                    )
-                {
+                    ))
+                    .then_some(ShapeAttempt::RetryWholeRun),
+                    VerifyWindows::Edit => {
+                        let fresh = &self.boundary_shape_scratch;
+                        let ends = edit_window_ends_hold(
+                            RunClusters::of(self.shape.committed(), affected_shape, rtl)?,
+                            RunClusters {
+                                shape: fresh,
+                                first: 0,
+                                len: fresh.glyph_ids.len(),
+                                rtl,
+                            },
+                            window,
+                            old_run,
+                            delta,
+                        );
+                        (ends != (true, true)).then_some(ShapeAttempt::Widen {
+                            start: !ends.0,
+                            end: !ends.1,
+                        })
+                    }
+                };
+                if let Some(refused) = refused {
                     self.shape.pending_mut().clear();
                     self.boundary_shape_scratch.clear();
-                    return Ok(ShapeAttempt::RetryWholeRun);
+                    return Ok(refused);
                 }
                 // A complete sole run is already shaped in its final coordinates. Move its
                 // owned columns into pending; the old empty pending arena becomes reusable
@@ -259,19 +281,10 @@ pub(super) fn build_sparse_shape_windows(
     let mut previous_end =
         usize::try_from(source_run.text_start).map_err(|_| EngineError::ResultTooLarge)?;
     let run_end = usize::try_from(source_run.text_end).map_err(|_| EngineError::ResultTooLarge)?;
-    // One edit may change the run's length: its window then keeps a cluster of the retained
-    // shape on each side, so an insertion or a deletion never leaves an empty window.
-    let grown = match edits {
-        [edit] if !edit.is_same_length() => i64::try_from(edit.new_end - edit.new_start)
-            .ok()
-            .zip(i64::try_from(edit.old_end - edit.old_start).ok())
-            .map(|(new, old)| new - old)
-            .ok_or(EngineError::ResultTooLarge)?,
-        _ => 0,
-    };
     for edit in edits.iter().copied() {
-        if (grown == 0 && (!edit.is_same_length() || edit.old_start == edit.old_end))
+        if !edit.is_same_length()
             || edit.old_start != edit.new_start
+            || edit.old_start == edit.old_end
             || edit.old_start < previous_end
             || edit.old_end > run_end
         {
@@ -297,12 +310,9 @@ pub(super) fn build_sparse_shape_windows(
     let mut builder = SparseWindowBuilder {
         edits,
         next_edit: 0,
-        recent_boundaries: [source_run.text_start; PROBE_MARGIN],
-        probe_margin: if grown == 0 { 1 } else { PROBE_MARGIN },
-        probe_boundaries_due: 0,
+        previous_boundary: source_run.text_start,
         previous_safe: run_start,
         window_start: run_start,
-        resized_run: (grown != 0).then_some((source_run.text_start, source_run.text_end)),
         rtl,
         windows,
     };
@@ -367,27 +377,8 @@ pub(super) fn build_sparse_shape_windows(
     {
         window.probe_end = source_run.text_end;
     }
-    if grown != 0 {
-        // The walk above ran in the retained shape's text; the window's end and the probe's
-        // end lie after the edit, in the new text.
-        let [window] = windows.as_mut_slice() else {
-            windows.clear();
-            return Ok(false);
-        };
-        window.new_end = shifted_text_offset(window.new_end, grown)?;
-        window.probe_end = shifted_text_offset(window.probe_end, grown)?;
-        if window.new_end <= window.new_start {
-            windows.clear();
-            return Ok(false);
-        }
-    }
     Ok(!windows.is_empty())
 }
-
-/// Clusters of the retained shape a length-changing window's probe shapes on each side. A
-/// lookup that looks past the end of the probe flags its last clusters unsafe to concatenate,
-/// so the probe has to end further out than fonts look ahead.
-pub(super) const PROBE_MARGIN: usize = 4;
 
 /// A cluster boundary no glyph of the retained shape flags unsafe to concatenate across.
 #[derive(Clone, Copy)]
@@ -401,17 +392,10 @@ pub(super) struct SafeBoundary {
 pub(super) struct SparseWindowBuilder<'a> {
     pub(super) edits: &'a [TextEdit],
     pub(super) next_edit: usize,
-    /// The boundaries of the last visits, safe or not, latest first.
-    pub(super) recent_boundaries: [u32; PROBE_MARGIN],
-    /// How many clusters of the retained shape the probe shapes on each side of a window.
-    pub(super) probe_margin: usize,
-    /// How many boundaries past the last window's end its probe still has to reach.
-    pub(super) probe_boundaries_due: usize,
+    /// The boundary of the last visit, safe or not.
+    pub(super) previous_boundary: u32,
     pub(super) previous_safe: SafeBoundary,
     pub(super) window_start: SafeBoundary,
-    /// The run's text when its one edit changes its length: the window then starts before
-    /// the edit and ends after it, unless the edit touches that end of the run.
-    pub(super) resized_run: Option<(u32, u32)>,
     pub(super) rtl: bool,
     pub(super) windows: &'a mut Vec<ShapeWindow>,
 }
@@ -426,14 +410,9 @@ impl SparseWindowBuilder<'_> {
             && window.probe_end == 0
             && boundary > window.new_end
         {
-            self.probe_boundaries_due -= 1;
-            if self.probe_boundaries_due == 0 {
-                window.probe_end = boundary;
-            }
+            window.probe_end = boundary;
         }
-        let preceding = self.recent_boundaries[self.probe_margin - 1];
-        self.recent_boundaries.rotate_right(1);
-        self.recent_boundaries[0] = boundary;
+        let preceding = core::mem::replace(&mut self.previous_boundary, boundary);
         if !safe {
             return Ok(());
         }
@@ -446,18 +425,11 @@ impl SparseWindowBuilder<'_> {
             let edit_start =
                 u32::try_from(edit.old_start).map_err(|_| EngineError::ResultTooLarge)?;
             let edit_end = u32::try_from(edit.old_end).map_err(|_| EngineError::ResultTooLarge)?;
-            let (before, inside) = match self.resized_run {
-                Some((run_start, run_end)) => (
-                    boundary < edit_start || (boundary == edit_start && boundary == run_start),
-                    boundary < edit_end || (boundary == edit_end && boundary != run_end),
-                ),
-                None => (boundary <= edit_start, boundary < edit_end),
-            };
-            if before {
+            if boundary <= edit_start {
                 self.window_start = here;
                 break;
             }
-            if inside {
+            if boundary < edit_end {
                 break;
             }
             self.push_window(boundary, glyph_boundary)?;
@@ -502,13 +474,11 @@ impl SparseWindowBuilder<'_> {
             previous.old_glyph_start = previous.old_glyph_start.min(old_glyph_start);
             previous.old_glyph_end = previous.old_glyph_end.max(old_glyph_end);
             previous.probe_end = 0;
-            self.probe_boundaries_due = self.probe_margin;
             return Ok(());
         }
         self.windows
             .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
-        self.probe_boundaries_due = self.probe_margin;
         self.windows.push(ShapeWindow {
             old_start: start,
             old_end: end,
@@ -518,6 +488,8 @@ impl SparseWindowBuilder<'_> {
             probe_end: 0,
             old_glyph_start,
             old_glyph_end,
+            start_alone: false,
+            end_alone: false,
         });
         Ok(())
     }
@@ -549,6 +521,8 @@ pub(super) fn set_whole_shape_window(
         probe_end: new_run.text_end,
         old_glyph_start,
         old_glyph_end,
+        start_alone: false,
+        end_alone: false,
     });
     Ok(())
 }
@@ -590,4 +564,308 @@ pub(super) fn concat_boundary_is_safe(shape: &ShapeArena, boundary: u32) -> bool
         }
     }
     found
+}
+
+/// Clusters of the retained shape an edit window's probe shapes beyond each end. A lookup that
+/// looks past the end of the probe flags its last clusters, so the probe ends further out than
+/// fonts look ahead, and an end the fresh shape refuses is moved out instead.
+const PROBE_MARGIN: usize = 4;
+
+/// How many times one edit moves a refused end of its window further out before the run is
+/// reshaped whole.
+pub(super) const WINDOW_WIDENINGS: u8 = 3;
+
+/// One shaped run's clusters by position in text order, whichever way its glyphs run. A
+/// position is a count of glyphs from the run's first character.
+#[derive(Clone, Copy)]
+pub(super) struct RunClusters<'a> {
+    pub(super) shape: &'a ShapeArena,
+    pub(super) first: usize,
+    pub(super) len: usize,
+    pub(super) rtl: bool,
+}
+
+impl<'a> RunClusters<'a> {
+    #[inline(never)]
+    pub(super) fn of(
+        shape: &'a ShapeArena,
+        shaped_run: ShapedRun,
+        rtl: bool,
+    ) -> Result<Self, EngineError> {
+        let (first, end) = shaped_run_glyph_range(shape, shaped_run)?;
+        Ok(Self {
+            shape,
+            first,
+            len: end - first,
+            rtl,
+        })
+    }
+
+    fn glyph(self, position: usize) -> usize {
+        if self.rtl {
+            self.first + self.len - 1 - position
+        } else {
+            self.first + position
+        }
+    }
+
+    #[inline(never)]
+    fn text(self, position: usize) -> u32 {
+        self.shape.clusters[self.glyph(position)]
+    }
+
+    /// Where the cluster holding text offset `text` starts, or the first one after it.
+    #[inline(never)]
+    fn at_or_after(self, text: u32) -> usize {
+        let (mut low, mut high) = (0, self.len);
+        while low < high {
+            let middle = low + (high - low) / 2;
+            if self.text(middle) < text {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        low
+    }
+
+    /// Where the cluster after the one that starts at `position` starts.
+    #[inline(never)]
+    fn after(self, position: usize) -> usize {
+        let text = self.text(position);
+        let mut next = position + 1;
+        while next < self.len && self.text(next) == text {
+            next += 1;
+        }
+        next
+    }
+
+    /// Where the cluster before the one that starts at `position` starts.
+    #[inline(never)]
+    fn before(self, position: usize) -> usize {
+        let text = self.text(position - 1);
+        let mut previous = position - 1;
+        while previous > 0 && self.text(previous - 1) == text {
+            previous -= 1;
+        }
+        previous
+    }
+
+    /// Whether no glyph of the cluster that starts at `position` is flagged: unsafe to
+    /// concatenate, or only for more than a simple pair. An end of the run is never flagged.
+    #[inline(never)]
+    fn free(self, position: usize, of_more_than_pairs: bool) -> bool {
+        position == 0
+            || position == self.len
+            || (position..self.after(position)).all(|position| {
+                let glyph = self.glyph(position);
+                if of_more_than_pairs {
+                    !self.shape.beyond_pairs[glyph]
+                } else {
+                    self.shape.glyph_flags[glyph] & GLYPH_FLAG_UNSAFE_TO_CONCAT == 0
+                }
+            })
+    }
+
+    /// Whether the cluster that starts at `position` and the one before it stand alone: nothing
+    /// but a simple pair reaches into or out of either.
+    #[inline(never)]
+    fn stands_alone(self, position: usize) -> bool {
+        position > 0
+            && position < self.len
+            && self.free(self.before(position), true)
+            && self.free(position, true)
+            && self.free(self.after(position), true)
+    }
+
+    /// Whether the glyphs at `count` positions from `start` are the glyphs `other` has from
+    /// `other_start`.
+    #[inline(never)]
+    fn same_glyphs(self, start: usize, other: Self, other_start: usize, count: usize) -> bool {
+        (0..count).all(|offset| {
+            self.shape.glyph_ids[self.glyph(start + offset)]
+                == other.shape.glyph_ids[other.glyph(other_start + offset)]
+        })
+    }
+}
+
+/// The window one edit of a run reshapes: from a boundary before the edit to one after it, each
+/// either the run's or one the retained shape lets a fresh shape be spliced at.
+///
+/// A boundary no glyph flags unsafe to concatenate is one. So is a boundary between two
+/// clusters outside the edit that stand alone (`RunClusters::stands_alone`): then only a pair
+/// adjustment of the two glyphs beside the boundary reaches across it, the two glyphs alone
+/// decide it, and both are the same glyphs in the old text and the new.
+/// `widen` skips that many boundaries on each side, for an end a fresh shape refused.
+#[inline(never)]
+pub(super) fn build_edit_shape_window(
+    edit: TextEdit,
+    shape: &ShapeArena,
+    shaped_run: ShapedRun,
+    old_run: ShapingRun,
+    new_run: ShapingRun,
+    widen: (u8, u8),
+    windows: &mut Vec<ShapeWindow>,
+) -> Result<bool, EngineError> {
+    windows.clear();
+    let rtl = match old_run.direction {
+        0 => false,
+        1 => true,
+        _ => return Ok(false),
+    };
+    let to_u32 = |value: usize| u32::try_from(value).map_err(|_| EngineError::ResultTooLarge);
+    let (edit_start, edit_end) = (to_u32(edit.old_start)?, to_u32(edit.old_end)?);
+    if shaped_run.text_start != old_run.text_start
+        || shaped_run.text_end != old_run.text_end
+        || edit.old_start != edit.new_start
+        || edit_start < old_run.text_start
+        || edit_end > old_run.text_end
+    {
+        return Ok(false);
+    }
+    let clusters = RunClusters::of(shape, shaped_run, rtl)?;
+    let len = clusters.len;
+    let text_at = |position: usize| {
+        if position == len {
+            old_run.text_end
+        } else {
+            clusters.text(position)
+        }
+    };
+
+    // The last boundary before the edit, then outwards.
+    let mut start = clusters.at_or_after(edit_start);
+    let mut start_alone = false;
+    let mut skip = widen.0;
+    while start > 0 {
+        let inner = start;
+        start = clusters.before(start);
+        if start == 0 {
+            break;
+        }
+        let free = clusters.free(start, false);
+        // The cluster between this boundary and the edit is not part of the edit.
+        start_alone = !free && text_at(inner) <= edit_start && clusters.stands_alone(start);
+        if free || start_alone {
+            if skip == 0 {
+                break;
+            }
+            skip -= 1;
+        }
+        start_alone = false;
+    }
+    // The first boundary after the edit, then outwards.
+    let mut end = clusters.at_or_after(edit_end);
+    if end < len && clusters.text(end) == edit_end {
+        end = clusters.after(end);
+    }
+    let mut end_alone = false;
+    let mut skip = widen.1;
+    while end < len {
+        let free = clusters.free(end, false);
+        // The cluster between the edit and this boundary is not part of the edit.
+        end_alone =
+            !free && clusters.stands_alone(end) && clusters.text(clusters.before(end)) >= edit_end;
+        if free || end_alone {
+            if skip == 0 {
+                break;
+            }
+            skip -= 1;
+        }
+        end_alone = false;
+        end = clusters.after(end);
+    }
+    let (mut probe_start, mut probe_end) = (start, end);
+    for _ in 0..PROBE_MARGIN {
+        if probe_start > 0 {
+            probe_start = clusters.before(probe_start);
+        }
+        if probe_end < len {
+            probe_end = clusters.after(probe_end);
+        }
+    }
+    let delta = i64::from(new_run.text_end) - i64::from(old_run.text_end);
+    let (old_start, old_end) = (text_at(start), text_at(end));
+    let new_end = shifted_text_offset(old_end, delta)?;
+    if new_end <= old_start {
+        return Ok(false);
+    }
+    let (old_glyph_start, old_glyph_end) = if rtl {
+        (clusters.first + len - end, clusters.first + len - start)
+    } else {
+        (clusters.first + start, clusters.first + end)
+    };
+    windows
+        .try_reserve_cold(1)
+        .map_err(|_| EngineError::ResultTooLarge)?;
+    windows.push(ShapeWindow {
+        old_start,
+        old_end,
+        probe_start: text_at(probe_start),
+        new_start: old_start,
+        new_end,
+        probe_end: shifted_text_offset(text_at(probe_end), delta)?,
+        old_glyph_start,
+        old_glyph_end,
+        start_alone,
+        end_alone,
+    });
+    Ok(true)
+}
+
+/// Whether the fresh shape of an edit window's probe agrees to each end of the window: the
+/// start, then the end. An end of the run needs no agreement.
+///
+/// A boundary the retained shape leaves unflagged holds when the fresh shape leaves it
+/// unflagged too. A boundary between two clusters that stand alone holds when they stand alone
+/// in the fresh shape as well and are the same glyphs there, so the pair adjustment across the
+/// boundary is the retained one.
+#[inline(never)]
+pub(super) fn edit_window_ends_hold(
+    old: RunClusters<'_>,
+    fresh: RunClusters<'_>,
+    window: ShapeWindow,
+    old_run: ShapingRun,
+    delta: i64,
+) -> (bool, bool) {
+    let moved = |text: u32, by: i64| u32::try_from(i64::from(text) + by).ok();
+    let holds = |old_text: u32, by: i64, alone: bool| {
+        let Some(new_text) = moved(old_text, by) else {
+            return false;
+        };
+        let at = fresh.at_or_after(new_text);
+        if at == fresh.len || fresh.text(at) != new_text {
+            return false;
+        }
+        if !alone {
+            return fresh.free(at, false);
+        }
+        // The probe reaches `PROBE_MARGIN` clusters past this boundary or to the end of the
+        // run, so an end of the probe among the three boundaries read here is the run's.
+        if !fresh.stands_alone(at) {
+            return false;
+        }
+        let place = old.at_or_after(old_text);
+        let (old_before, old_after) = (old.before(place), old.after(place));
+        let (before, after) = (fresh.before(at), fresh.after(at));
+        let old_after_text = if old_after == old.len {
+            old_run.text_end
+        } else {
+            old.text(old_after)
+        };
+        let after_text = if after == fresh.len {
+            window.probe_end
+        } else {
+            fresh.text(after)
+        };
+        moved(old.text(old_before), by) == Some(fresh.text(before))
+            && moved(old_after_text, by) == Some(after_text)
+            && old_after - old_before == after - before
+            && place - old_before == at - before
+            && old.same_glyphs(old_before, fresh, before, after - before)
+    };
+    (
+        window.old_start == old_run.text_start || holds(window.old_start, 0, window.start_alone),
+        window.old_end == old_run.text_end || holds(window.old_end, delta, window.end_alone),
+    )
 }

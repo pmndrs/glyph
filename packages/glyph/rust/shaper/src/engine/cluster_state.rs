@@ -1408,6 +1408,7 @@ mod tests {
             x_offsets: vec![0; 3],
             y_offsets: vec![0; 3],
             glyph_flags: vec![0; 3],
+            beyond_pairs: Vec::new(),
         };
         let metrics = |_| {
             Some(FontMetrics {
@@ -1573,6 +1574,7 @@ mod tests {
             x_offsets: vec![0; 3],
             y_offsets: vec![0; 3],
             glyph_flags: vec![0; 3],
+            beyond_pairs: Vec::new(),
         };
         let metrics = |_| {
             Some(FontMetrics {
@@ -1655,6 +1657,7 @@ mod tests {
             x_offsets: vec![0; 3],
             y_offsets: vec![0; 3],
             glyph_flags: vec![0; 3],
+            beyond_pairs: Vec::new(),
         };
         let metrics = |_| {
             Some(FontMetrics {
@@ -1763,6 +1766,7 @@ mod tests {
             x_offsets: vec![0],
             y_offsets: vec![0],
             glyph_flags: vec![GLYPH_UNSAFE_TO_BREAK],
+            beyond_pairs: Vec::new(),
         };
         let mut clusters = ClusterArena::default();
         clusters
@@ -2017,6 +2021,7 @@ mod tests {
             x_offsets: vec![0],
             y_offsets: vec![0],
             glyph_flags: vec![GLYPH_UNSAFE_TO_BREAK],
+            beyond_pairs: Vec::new(),
         };
         let mut clusters = ClusterArena::default();
         clusters
@@ -2072,6 +2077,7 @@ mod tests {
             x_offsets: vec![0; 3],
             y_offsets: vec![0; 3],
             glyph_flags: vec![0; 3],
+            beyond_pairs: Vec::new(),
         };
         assert!(scatter_is_identity(&shape(0, vec![0, 1, 2])));
         assert!(scatter_is_identity(&shape(0, vec![0, 0, 2])));
@@ -2121,6 +2127,7 @@ mod tests {
             x_offsets: vec![0; 3],
             y_offsets: vec![0; 3],
             glyph_flags: vec![0; 3],
+            beyond_pairs: Vec::new(),
         };
         let metrics = |_| {
             Some(FontMetrics {

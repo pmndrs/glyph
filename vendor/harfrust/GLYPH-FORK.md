@@ -1,7 +1,7 @@
 # HarfRust fork carried by pmndrs/glyph
 
 This directory is the published `harfrust` 0.12.0 crate with four cargo features, one constructor,
-three inlining attributes, three keyed plan-compile sorts, a per-property split of the generated Unicode table and one additive module (`SimpleTextPlan`) added. It is wired into `packages/glyph/rust/shaper` and `packages/glyph/rust/font-baker`
+three inlining attributes, three keyed plan-compile sorts, a per-property split of the generated Unicode table, one additive module (`SimpleTextPlan`) and one additive glyph flag (`UNSAFE_TO_CONCAT_BEYOND_PAIRS`) added. It is wired into `packages/glyph/rust/shaper` and `packages/glyph/rust/font-baker`
 with `[patch.crates-io]`, so both manifests still ask for `harfrust = "0.12.0"`.
 
 ## Base
@@ -194,6 +194,34 @@ All three produce the same sequence as upstream, and the shaper links no sort ov
 type. In the shaper the two cuts removed `18,118` raw / `5,751` gzip and `5,456` raw / `1,728`
 gzip.
 
+### `UNSAFE_TO_CONCAT_BEYOND_PAIRS` (additive, not offered upstream)
+
+`UNSAFE_TO_CONCAT` says some stage examined a range of glyphs that holds this one, but not which
+stage. A `PairPos` lookup whose first-glyph coverage holds the space (Fredoka's `kern`) examines
+every adjacent pair, so every glyph of a paragraph carries the flag and no boundary is left where a
+caller could splice a reshaped piece of the text in.
+
+With the buffer flag `BufferFlags::PRODUCE_UNSAFE_TO_CONCAT_BEYOND_PAIRS` (`0x100`) next to
+`PRODUCE_UNSAFE_TO_CONCAT`, the shaper also sets `GlyphFlags::UNSAFE_TO_CONCAT_BEYOND_PAIRS` on
+every glyph of an examined range except the range's first cluster, unless the range is a simple
+pair: a `PairPos` match or miss with an empty second value record whose second glyph directly
+follows the first. Such a pair reads nothing but its two glyphs and writes nothing but their
+positions and flags. A second value record makes the lookup step over the second glyph, so the
+pairs it visits depend on every pair before it, and a skipped glyph between the two is read as
+well; both keep the flag. The legacy `kern` table keeps it too: it flags the whole buffer when any
+pair of it can match, which no piece of the text can know.
+
+The flag is clear on a cluster exactly when nothing but simple pairs reaches across the boundary
+before it. It shares its bit (`0x4`) with `SAFE_TO_INSERT_TATWEEL` and is not produced when
+`PRODUCE_SAFE_TO_INSERT_TATWEEL` is set. Without the buffer flag nothing changes: the mask bit is
+never set and every other flag is as upstream sets it.
+
+| File                     | Change                                                                                                                                                                                                                             |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib.rs`             | `BufferFlags::PRODUCE_UNSAFE_TO_CONCAT_BEYOND_PAIRS`; `BufferFlags::DEFINED` is `0x1FF`.                                                                                                                                           |
+| `src/hb/buffer.rs`       | `GlyphFlags::UNSAFE_TO_CONCAT_BEYOND_PAIRS`; `unsafe_to_break`, `unsafe_to_concat` and their `_from_outbuffer` forms add it to the range's interior; `unsafe_to_break_pair` and `unsafe_to_concat_pair` are the forms that do not. |
+| `src/hb/ot/gpos/pair.rs` | `PairPosFormat1` and `PairPosFormat2` call the `_pair` forms for a simple pair (`simple_pair`), and for a first glyph with nothing after it yet.                                                                                   |
+
 ## Checks
 
 ```sh
@@ -218,8 +246,8 @@ the published crate and is not vendored.
 1. Check out upstream at the base commit and copy `src/` over `harfrust/src/`.
 2. In `harfrust/Cargo.toml` add `aat = []`, `language-tags = []`, `rand = []` and `variations = []`
    under `[features]` and add all four to `default`.
-3. Drop this file, `src/hb/simple_text.rs`, its `mod` and re-export lines and
-   `SubtableInfo::primary_coverage`. Restore `src/hb/ucd_table.rs` from `ucd_table_upstream.rs`
+3. Drop this file, `src/hb/simple_text.rs`, its `mod` and re-export lines,
+   `SubtableInfo::primary_coverage` and the `UNSAFE_TO_CONCAT_BEYOND_PAIRS` changes. Restore `src/hb/ucd_table.rs` from `ucd_table_upstream.rs`
    (the split belongs in upstream's generator, `gen-ucd-table.py`, if it is offered at all) and drop
    `tools/`. The `shape` dead-code attribute is independent and can be sent
    separately.

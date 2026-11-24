@@ -95,7 +95,7 @@ fn cold_shape(shaper: &mut ShaperRegistry, text: &[u16]) -> ShapeArena {
         features: &[],
         direction: 0,
         cluster_level: 0,
-        flags: 0x40,
+        flags: SHAPE_FLAGS,
     };
     shaper
         .with_shaped_run(1, text, run, |glyphs| {
@@ -127,6 +127,10 @@ fn assert_shapes_equal(actual: &ShapeArena, expected: &ShapeArena, label: &str) 
     assert_eq!(
         actual.glyph_flags, expected.glyph_flags,
         "{label}: glyph flags"
+    );
+    assert_eq!(
+        actual.beyond_pairs, expected.beyond_pairs,
+        "{label}: beyond pairs"
     );
 }
 
@@ -611,9 +615,9 @@ fn letter_edit_reuses_unicode_and_a_following_length_edit_matches_whole_run() {
 #[test]
 fn alternating_insert_and_removal_match_cold_shape_with_one_bounded_window() {
     let pad = "Typography is a moving system. Layout stays put. ".repeat(40);
-    for (font, sfnt, a, bounded) in [
-        ("Fredoka", fredoka_baked_views().0, fredoka_corpus(), false),
-        ("kerned", KERNED_SFNT, alloc::format!("{pad}AV{pad}"), true),
+    for (font, sfnt, a) in [
+        ("Fredoka", fredoka_baked_views().0, fredoka_corpus()),
+        ("kerned", KERNED_SFNT, alloc::format!("{pad}AV{pad}")),
     ] {
         let b = with_middle_insert(&a);
         let (a, b) = (utf16(&a), utf16(&b));
@@ -627,24 +631,17 @@ fn alternating_insert_and_removal_match_cold_shape_with_one_bounded_window() {
         );
         for (stage, next) in [("insert", &b), ("remove", &a), ("insert again", &b)] {
             let (_, work) = replace_text(&mut engine, &mut shaper, next);
-            assert_eq!(
-                (
-                    work.main_full_run_shape_calls,
-                    work.incremental_window_shape_calls
-                ),
-                (0, 1),
-                "{font} {stage}: one window, no cold shape"
+            assert_eq!(work.main_full_run_shape_calls, 0, "{font} {stage}");
+            // Two clusters that stand alone on each side of the edit, the probe four clusters
+            // further, and at most one end moved out once.
+            assert!(
+                (1..=2).contains(&work.incremental_window_shape_calls)
+                    && work.incremental_window_shape_utf16_units <= 40,
+                "{font} {stage}: shaped {} units of {} in {} windows",
+                work.incremental_window_shape_utf16_units,
+                next.len(),
+                work.incremental_window_shape_calls
             );
-            if bounded {
-                // The window ends at the nearest boundary the kerned pair does not reach, and
-                // its probe four clusters further on each side.
-                assert!(
-                    work.incremental_window_shape_utf16_units <= 16,
-                    "{font} {stage}: shaped {} units of {}",
-                    work.incremental_window_shape_utf16_units,
-                    next.len()
-                );
-            }
             let cold = cold_shape(&mut shaper, next);
             let state = &engine.planners.get(&4).unwrap().paragraph(1).unwrap().state;
             assert_shapes_equal(

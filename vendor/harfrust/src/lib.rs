@@ -76,8 +76,12 @@ bitflags::bitflags! {
         const PRODUCE_UNSAFE_TO_CONCAT      = 0x0000_0040;
         /// Indicates that the `SAFE_TO_INSERT_TATWEEL` glyph-flag should be produced by the shaper. By default it will not be produced.
         const PRODUCE_SAFE_TO_INSERT_TATWEEL      = 0x0000_0080;
+        /// pmndrs/glyph fork addition (see GLYPH-FORK.md). Indicates that the
+        /// `UNSAFE_TO_CONCAT_BEYOND_PAIRS` glyph-flag should be produced with `UNSAFE_TO_CONCAT`.
+        /// It shares a bit with `SAFE_TO_INSERT_TATWEEL` and is not produced with it.
+        const PRODUCE_UNSAFE_TO_CONCAT_BEYOND_PAIRS = 0x0000_0100;
         /// All currently defined flags
-        const DEFINED = 0x0000_00FF;
+        const DEFINED = 0x0000_01FF;
     }
 }
 

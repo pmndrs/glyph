@@ -179,25 +179,50 @@ impl ParagraphState {
         if affected_shapes.next().is_some() {
             return Ok(false);
         }
-        let sparse_scope = build_sparse_shape_windows(
-            &self.text_edits,
-            self.shape.committed(),
-            affected_shape,
-            old_run,
-            &mut self.shape_window_scratch,
-        )?;
-        #[cfg(test)]
-        let sparse_scope = sparse_scope && !self.force_whole_run_shape;
-        if !sparse_scope {
-            set_whole_shape_window(
-                &mut self.shape_window_scratch,
-                affected_shape,
-                old_run,
-                new_run,
-            )?;
-        }
-        let mut verify_boundaries = sparse_scope;
+        let single_edit = match *self.text_edits {
+            [edit] => Some(edit),
+            _ => None,
+        };
+        // One edit's window widens at the ends a fresh shape refuses, a bounded number of
+        // times; after that, and for anything else a fresh shape refuses, the run is reshaped
+        // whole.
+        let mut widen = (0, 0);
+        let mut whole_run = false;
         loop {
+            let windowed = !whole_run
+                && match single_edit {
+                    Some(edit) => build_edit_shape_window(
+                        edit,
+                        self.shape.committed(),
+                        affected_shape,
+                        old_run,
+                        new_run,
+                        widen,
+                        &mut self.shape_window_scratch,
+                    )?,
+                    None => build_sparse_shape_windows(
+                        &self.text_edits,
+                        self.shape.committed(),
+                        affected_shape,
+                        old_run,
+                        &mut self.shape_window_scratch,
+                    )?,
+                };
+            #[cfg(test)]
+            let windowed = windowed && !self.force_whole_run_shape;
+            let verify = match (windowed, single_edit) {
+                (false, _) => {
+                    set_whole_shape_window(
+                        &mut self.shape_window_scratch,
+                        affected_shape,
+                        old_run,
+                        new_run,
+                    )?;
+                    VerifyWindows::No
+                }
+                (true, Some(_)) => VerifyWindows::Edit,
+                (true, None) => VerifyWindows::Sparse,
+            };
             match self.prepare_incremental_shape_scope(
                 shaper,
                 old_run_index,
@@ -206,19 +231,18 @@ impl ParagraphState {
                 affected_shape_index,
                 affected_shape,
                 fallback,
-                verify_boundaries,
+                verify,
             )? {
                 ShapeAttempt::Prepared => break,
-                ShapeAttempt::RetryWholeRun if verify_boundaries => {
-                    set_whole_shape_window(
-                        &mut self.shape_window_scratch,
-                        affected_shape,
-                        old_run,
-                        new_run,
-                    )?;
-                    verify_boundaries = false;
+                ShapeAttempt::Widen { start, end } if widen.0 + widen.1 < WINDOW_WIDENINGS => {
+                    widen = (widen.0 + u8::from(start), widen.1 + u8::from(end));
                 }
-                ShapeAttempt::RetryWholeRun | ShapeAttempt::NeedsFallback => return Ok(false),
+                ShapeAttempt::RetryWholeRun | ShapeAttempt::Widen { .. }
+                    if verify != VerifyWindows::No =>
+                {
+                    whole_run = true;
+                }
+                _ => return Ok(false),
             }
         }
         for span in self.fallback_spans.iter().copied() {
@@ -387,14 +411,14 @@ impl ParagraphState {
                     features: styles.resolved_features(run.style),
                     direction: run.direction,
                     cluster_level: 0,
-                    flags: 0x40,
+                    flags: SHAPE_FLAGS,
                 },
                 ShapeRangeRef {
                     item_start: run.text_start,
                     item_end: run.text_end,
                     context_start: run.text_start,
                     context_end: run.text_end,
-                    flags: 0x40,
+                    flags: SHAPE_FLAGS,
                 },
                 |shaped| {
                     scratch.append(
@@ -720,7 +744,7 @@ fn shape_fallback_spans(
                     features: styles.resolved_features(run.style),
                     direction: run.direction,
                     cluster_level: 0,
-                    flags: 0x40,
+                    flags: SHAPE_FLAGS,
                 },
                 |shaped| {
                     output.append(
