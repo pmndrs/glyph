@@ -89,7 +89,8 @@ const textBoundsGeometry = new THREE.BufferGeometry();
 export type TextSpan<Format extends RasterFormatMetadata> = Omit<ParagraphSpan<Format>, 'font'> &
   Readonly<{ font?: FontSelection<Format>; material?: ThreeTextMaterial }>;
 
-type TextBaseProperties<Format extends RasterFormatMetadata> = Omit<ParagraphBaseProperties<Format>, 'font'> &
+// Three orders paint by the scene graph and `renderOrder`; the core paragraph `order` is derived from traversal.
+type TextBaseProperties<Format extends RasterFormatMetadata> = Omit<ParagraphBaseProperties<Format>, 'font' | 'order'> &
   Readonly<{ font: FontSelection<Format> }>;
 
 type TextContentProperties<Format extends RasterFormatMetadata> = Readonly<{ text: TextInput<Format> }>;

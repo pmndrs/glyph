@@ -18,7 +18,7 @@ generated:
 # Issue 06: `order` on Three text properties is typed but never read
 
 - **Severity:** should-fix (a typed option that silently does nothing)
-- **Status:** open
+- **Status:** fixed — Three `TextProperties` omit `order`; the type test expects an error for it
 
 ## What happens
 

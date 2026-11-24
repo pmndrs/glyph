@@ -183,6 +183,7 @@ export interface ParagraphBaseProperties<Format extends RasterFormatMetadata> {
   /** Explicit sequential 2D regions and exclusions; replaces generated columns when present. */
   readonly flow?: TextFlow;
   readonly rasterPixelRatio?: number;
+  /** Paint order among an integration's paragraphs, where that integration exposes it; Three derives it from the scene. */
   readonly order?: number;
 }
 
