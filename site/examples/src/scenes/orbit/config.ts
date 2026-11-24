@@ -131,23 +131,17 @@ export function ringFit(
 }
 
 /**
- * Justification, done at placement rather than in the box: a running count of
- * the word spaces before each source index, and the arc each one has to grow
- * by for the copies to close the circle exactly.
- *
- * The engine's own `align: 'justify'` wants a box to justify into, and a ring
- * has no box — its line is placed by arc, and `wrap: 'none'` lets an
- * overlong line run straight past the seam and onto its own head. Spreading
- * the shortfall over the word spaces here is the same arithmetic justify
- * does, with the circle as the measure. Only the spaces grow: every glyph
- * keeps the advance the shaper gave it, kerning and all.
+ * Word spaces before each drawable glyph. A split copy indexes drawable glyphs densely, so a space has no entry of
+ * its own; the phrases are unligated Latin, one glyph per character that is not a space.
  */
 export function ringSpacing(text: string): Int32Array {
-  const spacesBefore = new Int32Array(text.length + 1);
-  for (let index = 0; index < text.length; index += 1) {
-    spacesBefore[index + 1] = (spacesBefore[index] ?? 0) + (text[index] === ' ' ? 1 : 0);
+  const spacesBefore: number[] = [];
+  let spaces = 0;
+  for (const character of text) {
+    if (character === ' ') spaces += 1;
+    else spacesBefore.push(spaces);
   }
-  return spacesBefore;
+  return Int32Array.from(spacesBefore);
 }
 
 /** How many word spaces one copy of the phrase carries; what `ringFit` spreads the difference over. */

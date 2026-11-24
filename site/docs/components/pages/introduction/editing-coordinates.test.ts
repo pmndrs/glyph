@@ -1,40 +1,19 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import {
-  caretCenterAfterBoundary,
-  caretRectAtTextOffset,
-  isTextLayoutCommitted,
-  selectionAtTextEnd,
-  setProxyPointNdc,
-} from './editing-coordinates';
+import { caretCenterAfterBoundary, orderedRange, positionAtTextEnd, setProxyPointNdc } from './editing-coordinates';
 
 describe('editing caret coordinates', () => {
-  it('starts with a collapsed UTF-16 selection at the text end', () => {
-    expect(selectionAtTextEnd('A😀')).toEqual([3, 3]);
+  it('starts with a collapsed UTF-16 position at the text end', () => {
+    expect(positionAtTextEnd('A😀')).toEqual({ offset: 3, affinity: 'upstream' });
   });
 
-  it('places the visible caret after rather than across its shaped boundary', () => {
+  it('orders a backwards drag, because the range queries reject a reversed range', () => {
+    expect(orderedRange(7, 2)).toEqual([2, 7]);
+    expect(orderedRange(2, 7)).toEqual([2, 7]);
+  });
+
+  it('places the visible caret after rather than across its boundary', () => {
     expect(caretCenterAfterBoundary(10, 2)).toBe(11);
-  });
-
-  it('does not read a stale layout while an edited value is still pending', () => {
-    expect(isTextLayoutCommitted('edit glyphs', 'edit glyph', 'committed')).toBe(false);
-    expect(isTextLayoutCommitted('edit glyph', 'edit glyph', 'pending')).toBe(false);
-    expect(isTextLayoutCommitted('edit glyph', 'edit glyph', 'committed')).toBe(true);
-  });
-
-  it('resolves the text end from the last shaped advance instead of a far-right point hit', () => {
-    const caretAt = vi.fn();
-    const selectionRects = vi.fn(() => [{ x: 10, y: 2, width: 7, height: 12 }]);
-
-    expect(caretRectAtTextOffset({ caretAt, selectionRects }, 3, 3)).toEqual({
-      x: 17,
-      y: 2,
-      width: 0,
-      height: 12,
-    });
-    expect(selectionRects).toHaveBeenCalledWith(2, 3);
-    expect(caretAt).not.toHaveBeenCalled();
   });
 });
 

@@ -10,7 +10,7 @@ import { INTER } from '../../fonts';
  * in `Glyphs`-local space — no world-space round trip is needed when the
  * ring itself is what moves.
  */
-const TEXT = 'one matrix per glyph * breakApart() * one matrix per glyph * breakApart() * ';
+const TEXT = 'one matrix per glyph * split() * one matrix per glyph * split() * ';
 
 export async function mount(scene: Scene): Promise<() => void> {
   await glyph.init();
@@ -30,7 +30,7 @@ export async function mount(scene: Scene): Promise<() => void> {
   glyph.shape();
 
   const radius = line.measure().contentWidth / (Math.PI * 2);
-  const [glyphs, decorations] = line.breakApart();
+  const [glyphs, decorations] = line.split();
   scene.add(glyphs);
   if (decorations !== undefined) scene.add(decorations);
   line.visible = false;

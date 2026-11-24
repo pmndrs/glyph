@@ -26,7 +26,7 @@ export async function mount(scene: Scene): Promise<() => void> {
   scene.add(word);
   glyph.shape(); // the copy needs a committed paragraph to copy from
 
-  const [glyphs, decorations] = word.breakApart();
+  const [glyphs, decorations] = word.split();
   scene.add(glyphs);
   if (decorations !== undefined) scene.add(decorations);
   word.visible = false;

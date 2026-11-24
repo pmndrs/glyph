@@ -1,24 +1,18 @@
-import type { LayoutBox, RasterFormatMetadata, msdf } from '@pmndrs/glyph';
+import type { LayoutBox, RasterFormatMetadata, TextPosition, msdf } from '@pmndrs/glyph';
 import { Text, useFont } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame, useThree } from '@react-three/fiber/webgpu';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Mesh, Plane, Quaternion, Raycaster, Vector2, Vector3 } from 'three';
 
 import type { GlyphSceneProps } from '../../explainer';
-import {
-  caretCenterAfterBoundary,
-  caretRectAtTextOffset,
-  isTextLayoutCommitted,
-  selectionAtTextEnd,
-  setProxyPointNdc,
-} from './editing-coordinates';
+import { caretCenterAfterBoundary, orderedRange, positionAtTextEnd, setProxyPointNdc } from './editing-coordinates';
 import { MSDF_FONT } from './fonts';
 import { paragraphTopFromCenter } from './scene-layout';
 import { useSceneReady } from './use-scene-ready';
 
 const INITIAL_TEXT = 'edit glyphs with a caret';
-const INITIAL_SELECTION = selectionAtTextEnd(INITIAL_TEXT);
+const INITIAL_POSITION = positionAtTextEnd(INITIAL_TEXT);
 
 export function EditingScene({ inputs, onReady }: GlyphSceneProps) {
   const font = useFont(MSDF_FONT.src, { format: MSDF_FONT.format });
@@ -27,13 +21,11 @@ export function EditingScene({ inputs, onReady }: GlyphSceneProps) {
   const camera = useThree((state) => state.camera);
   const text = useRef<ThreeText<typeof msdf>>(null);
   const caretMesh = useRef<Mesh>(null);
-  const dragging = useRef<number | undefined>(undefined);
-  const selectionRef = useRef<readonly [number, number]>(INITIAL_SELECTION);
-  const valueRef = useRef(INITIAL_TEXT);
-  const pendingCaret = useRef<Readonly<{ text: string; offset: number }> | undefined>({
-    text: INITIAL_TEXT,
-    offset: INITIAL_SELECTION[1],
-  });
+  // The selection is two positions; the application owns it, the text only answers geometry.
+  const anchor = useRef<TextPosition>(INITIAL_POSITION);
+  const focus = useRef<TextPosition>(INITIAL_POSITION);
+  const dragging = useRef(false);
+  const placed = useRef(false);
   const blinkElapsed = useRef(0);
   const [value, setValue] = useState(INITIAL_TEXT);
   const [selectionRects, setSelectionRects] = useState<readonly LayoutBox[]>([]);
@@ -51,93 +43,78 @@ export function EditingScene({ inputs, onReady }: GlyphSceneProps) {
     [fontSize, viewport.width],
   );
   const caretWidth = Math.max(viewport.width * 0.0025, 0.015);
-  const select = useCallback((anchor: number, focus: number) => {
-    const next: [number, number] = [anchor, focus];
-    selectionRef.current = next;
-    setSelectionRects(text.current?.selectionRects(anchor, focus) ?? []);
-  }, []);
   useFrame((_state, delta) => {
     const currentText = text.current;
-    if (currentText !== null) {
-      for (const input of inputs.drain()) {
-        if (
-          (input.type === 'pointerdown' || input.type === 'pointermove' || input.type === 'pointerup') &&
-          input.x !== undefined &&
-          input.y !== undefined &&
-          (input.type !== 'pointermove' || dragging.current !== undefined)
-        ) {
-          const local = proxyPointToTextLocal(
-            input.x,
-            input.y,
-            canvasSize.width,
-            canvasSize.height,
-            camera,
-            currentText,
-            raycaster,
-            plane,
-            ndc,
-            worldPoint,
-            planePoint,
-            planeNormal,
-          );
-          if (local !== undefined) {
-            const caret = currentText.caretAt(local.x, -local.y);
-            if (caret !== undefined) {
-              if (input.type === 'pointerdown') dragging.current = caret.offset;
-              const anchor = dragging.current ?? caret.offset;
-              select(anchor, caret.offset);
-              setCaretRect(caret.rect);
-              blinkElapsed.current = 0;
-            }
-          }
-          if (input.type === 'pointerup') dragging.current = undefined;
-          continue;
-        }
-        if (input.type === 'pointercancel') {
-          dragging.current = undefined;
-          continue;
-        }
-        if (input.type !== 'keydown' || input.value === undefined) continue;
-        const [anchor, focus] = selectionRef.current;
-        const left = Math.min(anchor, focus);
-        const right = Math.max(anchor, focus);
-        if (input.value === 'ArrowLeft' || input.value === 'ArrowRight') {
-          const direction = input.value === 'ArrowLeft' ? -1 : 1;
-          const offset = Math.max(0, Math.min(valueRef.current.length, (direction < 0 ? left : right) + direction));
-          select(offset, offset);
-          pendingCaret.current = { text: valueRef.current, offset };
-        } else if (input.value === 'Backspace') {
-          const start = left === right ? Math.max(0, left - 1) : left;
-          const nextValue = valueRef.current.slice(0, start) + valueRef.current.slice(right);
-          valueRef.current = nextValue;
-          setValue(nextValue);
-          select(start, start);
-          pendingCaret.current = { text: nextValue, offset: start };
-          setCaretRect(undefined);
-        } else if (input.value.length === 1) {
-          const nextValue = valueRef.current.slice(0, left) + input.value + valueRef.current.slice(right);
-          valueRef.current = nextValue;
-          setValue(nextValue);
-          const offset = left + input.value.length;
-          select(offset, offset);
-          pendingCaret.current = { text: nextValue, offset };
-          setCaretRect(undefined);
-        }
-        blinkElapsed.current = 0;
-      }
-      const pending = pendingCaret.current;
-      if (
-        pending !== undefined &&
-        isTextLayoutCommitted(currentText.text, pending.text, currentText.commitState().status)
-      ) {
-        const next = caretRectAtTextOffset(currentText, pending.offset, pending.text.length);
-        if (next !== undefined) {
-          setCaretRect(next);
-          pendingCaret.current = undefined;
-        }
-      }
-    } else {
+    if (currentText === null) {
       inputs.drain();
+      return;
+    }
+    // Every query prepares the text first, so the answer after an edit is the edited layout.
+    const place = (nextAnchor: TextPosition, nextFocus: TextPosition) => {
+      anchor.current = nextAnchor;
+      focus.current = nextFocus;
+      const [start, end] = orderedRange(nextAnchor.offset, nextFocus.offset);
+      setSelectionRects(start === end ? [] : currentText.rangeRects(start, end));
+      setCaretRect(currentText.caret(nextFocus).rect);
+      blinkElapsed.current = 0;
+      placed.current = true;
+    };
+    const edit = (start: number, end: number, insert: string) => {
+      currentText.replace(start, end, insert);
+      setValue(currentText.text);
+      const position: TextPosition = { offset: start + insert.length, affinity: 'upstream' };
+      place(position, position);
+    };
+    if (!placed.current) place(anchor.current, focus.current);
+    for (const input of inputs.drain()) {
+      if (
+        (input.type === 'pointerdown' || input.type === 'pointermove' || input.type === 'pointerup') &&
+        input.x !== undefined &&
+        input.y !== undefined &&
+        (input.type !== 'pointermove' || dragging.current)
+      ) {
+        const local = proxyPointToTextLocal(
+          input.x,
+          input.y,
+          canvasSize.width,
+          canvasSize.height,
+          camera,
+          currentText,
+          raycaster,
+          plane,
+          ndc,
+          worldPoint,
+          planePoint,
+          planeNormal,
+        );
+        if (local !== undefined && (input.type === 'pointerdown' || dragging.current)) {
+          // Text-local coordinates are +Y down; the Three object is +Y up.
+          const position = currentText.hitTest({ x: local.x, y: -local.y });
+          if (input.type === 'pointerdown') dragging.current = true;
+          place(input.type === 'pointerdown' ? position : anchor.current, position);
+        }
+        if (input.type === 'pointerup') dragging.current = false;
+        continue;
+      }
+      if (input.type === 'pointercancel') {
+        dragging.current = false;
+        continue;
+      }
+      if (input.type !== 'keydown' || input.value === undefined) continue;
+      const [start, end] = orderedRange(anchor.current.offset, focus.current.offset);
+      if (input.value === 'ArrowLeft' || input.value === 'ArrowRight') {
+        const direction = input.value === 'ArrowLeft' ? 'left' : 'right';
+        const position =
+          start === end
+            ? currentText.move(focus.current, direction, 'grapheme').position
+            : ({ offset: direction === 'left' ? start : end, affinity: 'downstream' } as const);
+        place(position, position);
+      } else if (input.value === 'Backspace') {
+        if (start !== end) edit(start, end, '');
+        else if (start > 0) edit(currentText.move(focus.current, 'backward', 'grapheme').position.offset, end, '');
+      } else if (input.value.length === 1) {
+        edit(start, end, input.value);
+      }
     }
     blinkElapsed.current += delta;
     if (caretMesh.current) caretMesh.current.visible = Math.floor(blinkElapsed.current / 0.5) % 2 === 0;

@@ -9,7 +9,7 @@ import { PLAYWRITE } from '../../fonts';
 import { PAPER } from '../../theme';
 
 /**
- * Explode, tumble, settle, repeat. Once the word is committed, `breakApart()`
+ * Explode, tumble, settle, repeat. Once the word is committed, `split()`
  * copies its glyphs into a `Glyphs` object with one matrix per glyph; the
  * source stays live and hidden, and the copy is animated back to each glyph's
  * `originalMatrix`, which `measurements` remembers.
@@ -39,7 +39,7 @@ export default function BreakApart() {
     // Break apart once the renderer has committed the paragraph.
     if (detached.current === undefined) {
       if (source.commitState().status !== 'committed') return;
-      const [glyphs, decorations] = source.breakApart();
+      const [glyphs, decorations] = source.split();
       source.parent?.add(glyphs); // a sibling overlays the source exactly
       if (decorations !== undefined) source.parent?.add(decorations);
       source.visible = false;

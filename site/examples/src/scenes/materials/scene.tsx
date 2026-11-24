@@ -73,7 +73,6 @@ export default function Materials() {
         layout={{ align: 'center', wrap: 'none' }}
         constraints={{ width: { mode: 'exact', size: 9 } }}
         position={[-4.5, 0.72, 0]}
-        onError={console.error}
       >
         Metal
       </Text>

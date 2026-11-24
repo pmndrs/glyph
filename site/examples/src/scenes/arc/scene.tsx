@@ -10,12 +10,12 @@ import { PAPER } from '../../theme';
 
 /**
  * Text on a circle. The paragraph is laid out on one straight line; once it
- * commits, `breakApart()` gives one matrix per glyph and each glyph's advance
+ * commits, `split()` gives one matrix per glyph and each glyph's advance
  * along the line becomes an angle. The radius comes from `measure().contentWidth`
  * — the advance extent of the line, not the box the constraint resolved — so the
  * ring closes on itself whatever the text.
  */
-const TEXT = 'one matrix per glyph * breakApart() * one matrix per glyph * breakApart() * ';
+const TEXT = 'one matrix per glyph * split() * one matrix per glyph * split() * ';
 const TILT = 0.32;
 
 export default function Arc() {
@@ -39,7 +39,7 @@ export default function Arc() {
     if (ring.current === undefined) {
       if (source.commitState().status !== 'committed') return;
       const radius = source.measure().contentWidth / (Math.PI * 2);
-      const [glyphs, decorations] = source.breakApart();
+      const [glyphs, decorations] = source.split();
       source.parent?.add(glyphs);
       if (decorations !== undefined) source.parent?.add(decorations);
       source.visible = false;

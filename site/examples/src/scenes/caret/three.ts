@@ -1,4 +1,4 @@
-import { glyph, type GlyphCaret, type LayoutBox, msdf } from '@pmndrs/glyph';
+import { glyph, type TextPosition, type LayoutBox, msdf } from '@pmndrs/glyph';
 import { ThreeConfig } from '@pmndrs/glyph/three';
 import { Raycaster, Vector2, Vector3, type Camera, type Scene } from 'three/webgpu';
 
@@ -30,29 +30,26 @@ export async function mount(scene: Scene, camera: Camera, canvas: HTMLCanvasElem
   const raycaster = new Raycaster();
   const ndc = new Vector2();
   const hit = new Vector3();
-  const caretFrom = (event: PointerEvent): GlyphCaret | undefined => {
+  const positionFrom = (event: PointerEvent): TextPosition => {
     const rect = canvas.getBoundingClientRect();
     ndc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -(((event.clientY - rect.top) / rect.height) * 2 - 1));
     raycaster.setFromCamera(ndc, camera);
     const { origin, direction } = raycaster.ray;
     hit.copy(origin).addScaledVector(direction, -origin.z / direction.z); // where the ray crosses z = 0
     const local = text.worldToLocal(hit);
-    return text.caretAt(local.x, -local.y); // undefined until the renderer has accepted the text
+    return text.hitTest({ x: local.x, y: -local.y }); // prepares the text first; never undefined
   };
 
   let anchor: number | undefined;
   let rects: readonly LayoutBox[] = [];
   const down = (event: PointerEvent) => {
-    const caret = caretFrom(event);
-    if (caret === undefined) return;
-    anchor = caret.offset;
+    anchor = positionFrom(event).offset;
     rects = [];
   };
   const move = (event: PointerEvent) => {
     if (anchor === undefined || (event.buttons & 1) === 0) return;
-    const caret = caretFrom(event);
-    if (caret === undefined) return;
-    rects = text.selectionRects(anchor, caret.offset) ?? []; // one line-clipped box per line
+    const head = positionFrom(event).offset; // text.caret(position).rect is where to draw the caret
+    rects = text.rangeRects(Math.min(anchor, head), Math.max(anchor, head)); // a reversed range throws
   };
   const up = () => {
     anchor = undefined;

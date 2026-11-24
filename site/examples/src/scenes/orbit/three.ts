@@ -96,7 +96,7 @@ export async function mount(scene: Scene, renderer: Renderer): Promise<() => voi
   });
   glyph.shape(); // the fitted bands commit here, so they can be copied
   const copies = fitted.map((entry) => {
-    const [glyphs] = entry.band.breakApart();
+    const [glyphs] = entry.band.split();
     glyphs.traverse((object) => {
       object.castShadow = true;
       // Its bounding volume is from the pre-wrap straight line; setMatrixAt moves instances onto
@@ -130,7 +130,7 @@ export async function mount(scene: Scene, renderer: Renderer): Promise<() => voi
         // One shaped unit of advance is one unit of arc, so every glyph keeps what the shaper gave
         // it; the circle is closed by growing the word spaces before it, never the letters.
         const advance = rest.originalMatrix.elements[12] ?? 0;
-        const s = advance + (spacesBefore[rest.sourceIndex] ?? 0) * extra + elapsed * ring.speed;
+        const s = advance + (spacesBefore[rest.index] ?? 0) * extra + elapsed * ring.speed;
         glyphs.setMatrixAt(i, placeOnPath(path, s, 0, 0, rest.originalMatrix, m));
       }
     }

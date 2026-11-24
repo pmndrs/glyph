@@ -1,4 +1,4 @@
-import type { GlyphCaret, LayoutBox, msdf } from '@pmndrs/glyph';
+import type { LayoutBox, TextCaret, TextPosition, msdf } from '@pmndrs/glyph';
 import { Text, useMsdf } from '@pmndrs/glyph/react';
 import type { Text as ThreeText } from '@pmndrs/glyph/three';
 import { useFrame } from '@react-three/fiber/webgpu';
@@ -14,11 +14,13 @@ import { BLINK, CARET_WIDTH, FONT_SIZE, PASSAGE, SEED_WORD, TOP, WIDTH } from '.
  * A caret and a selection from pointer input. The host hands the scene its
  * pointer events in frame pixels; each becomes a world point on the text's
  * plane, then a paragraph-local one — y flipped, paragraph space is y-down —
- * and `caretAt` answers with the nearest cluster edge. `selectionRects`
- * covers the range from the anchor to the head, one box per line.
+ * and `hitTest` answers with the nearest caret stop, `caret` with where to
+ * draw it. `rangeRects` covers the range from the anchor to the head, one box
+ * per run of the range on its line.
  */
 interface Placement {
-  readonly caret: GlyphCaret;
+  readonly position: TextPosition;
+  readonly caret: TextCaret;
   readonly rects: readonly LayoutBox[];
 }
 
@@ -37,22 +39,24 @@ export default function Caret() {
   useFrame(({ camera, elapsed, size }) => {
     const text = ref.current;
     if (text === null) return;
-    const place = (caret: GlyphCaret, from: number) => {
-      setPlacement({ caret, rects: text.selectionRects(from, caret.offset) ?? [] });
+    // Every query prepares the text first, so none of them waits for a frame.
+    const place = (position: TextPosition, from: number) => {
+      const start = Math.min(from, position.offset);
+      const end = Math.max(from, position.offset);
+      setPlacement({
+        position,
+        caret: text.caret(position),
+        rects: start === end ? [] : text.rangeRects(start, end),
+      });
       placedAt.current = elapsed;
     };
 
-    // Until the reader touches it: one word selected, the caret at its end. The
-    // queries answer `undefined` until the renderer has accepted the text.
+    // Until the reader touches it: one word selected, the caret at its end.
     if (!seeded.current) {
       const start = PASSAGE.indexOf(SEED_WORD);
-      const end = text.selectionRects(start, start + SEED_WORD.length)?.at(-1);
-      const caret = end === undefined ? undefined : text.caretAt(end.x + end.width, end.y + end.height / 2);
-      if (caret !== undefined) {
-        seeded.current = true;
-        anchor.current = start;
-        place(caret, start);
-      }
+      seeded.current = true;
+      anchor.current = start;
+      place({ offset: start + SEED_WORD.length, affinity: 'upstream' }, start);
     }
 
     for (const input of inputs?.drain() ?? []) {
@@ -64,14 +68,12 @@ export default function Caret() {
       if (input.type === 'pointermove' && !dragging.current) continue;
       const point = pointerToWorld(input.x, input.y, size, camera, world.current);
       const local = text.worldToLocal(point);
-      const caret = text.caretAt(local.x, -local.y);
-      if (caret === undefined) continue;
+      const position = text.hitTest({ x: local.x, y: -local.y });
       if (input.type === 'pointerdown') {
-        anchor.current = caret.offset;
+        anchor.current = position.offset;
         dragging.current = true;
-        seeded.current = true;
       }
-      place(caret, anchor.current ?? caret.offset);
+      place(position, anchor.current ?? position.offset);
     }
 
     const mesh = caretMesh.current;
@@ -80,8 +82,8 @@ export default function Caret() {
 
   const summary =
     placement === undefined
-      ? 'waiting for the first accepted frame'
-      : `caret at offset ${placement.caret.offset}, line ${placement.caret.line + 1}; ${placement.rects.length} selection rectangle${placement.rects.length === 1 ? '' : 's'}`;
+      ? 'waiting for the text'
+      : `caret at offset ${placement.position.offset} (${placement.position.affinity}), line ${placement.caret.line + 1}; ${placement.rects.length} selection rectangle${placement.rects.length === 1 ? '' : 's'}`;
 
   return (
     <group position={[-WIDTH / 2, TOP, 0]}>

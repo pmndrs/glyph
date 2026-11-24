@@ -10,7 +10,7 @@ import { ribbonInk, ribbonMaterial } from './materials';
 
 /**
  * The imperative twin: a flat band on an open curve facing the camera, one
- * line of text shaped once, copied out with `breakApart()` on commit, and
+ * line of text shaped once, copied out with `split()` on commit, and
  * every frame each glyph is laid across the band by its advance plus time.
  */
 export async function mount(scene: Scene): Promise<() => void> {
@@ -43,7 +43,7 @@ export async function mount(scene: Scene): Promise<() => void> {
     elapsed += 1 / 60;
     stage.rotation.y = Math.sin(elapsed * 0.3) * RIBBON.sway;
     if (glyphs === undefined && line.commitState().status === 'committed') {
-      [glyphs] = line.breakApart();
+      [glyphs] = line.split();
       width = line.measure().contentWidth;
       line.visible = false;
       stage.add(glyphs);

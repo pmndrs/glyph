@@ -289,8 +289,8 @@ export function PhysicsScene({ inputs, onReady }: GlyphSceneProps) {
         let titleGlyphs: Glyphs | undefined;
         let paragraphGlyphs: Glyphs | undefined;
         try {
-          [titleGlyphs] = title.breakApart();
-          [paragraphGlyphs] = paragraph.breakApart();
+          [titleGlyphs] = title.split();
+          [paragraphGlyphs] = paragraph.split();
           // Source visibility and detached ownership change in one synchronous scene-graph
           // mutation. No promise, React commit, or retained-publication swap sits in this path.
           title.parent.add(titleGlyphs);

@@ -10,7 +10,7 @@ import { placeOnPath, type Path } from '../../lib/paths';
 /**
  * A line of text that flows along a path. The line is shaped once as an
  * ordinary paragraph; once it commits, its glyphs are copied out with
- * `breakApart()` and, every frame, each copy is placed on the path by its
+ * `split()` and, every frame, each copy is placed on the path by its
  * advance — arc length — plus `speed × elapsed`. The path's frame decides
  * which way the letters stand.
  */
@@ -60,7 +60,7 @@ export function TextOnPath<Technique extends RasterFormatMetadata>({
     const text = source.current;
     if (copy.current === undefined) {
       if (text === null || text.commitState().status !== 'committed') return;
-      const [glyphs] = text.breakApart();
+      const [glyphs] = text.split();
       if (castShadow) glyphs.traverse((object) => void (object.castShadow = true));
       text.parent?.add(glyphs);
       text.visible = false;

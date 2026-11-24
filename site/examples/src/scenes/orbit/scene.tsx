@@ -25,7 +25,7 @@ import { ringInk, sphereMaterial } from './materials';
 
 /**
  * Text in orbit. Two rings of Slug type circle a matte sphere, each shaped
- * once, copied out with `breakApart()` and placed by matrix on a circle —
+ * once, copied out with `split()` and placed by matrix on a circle —
  * fixed text, so the rings are already whole and casting shadows on the
  * first frame. Two lights, spread apart, so between them most of the
  * sphere's front carries light and a ring crossing it can cast a shadow.
@@ -107,7 +107,7 @@ function Ring({ ring, font }: { readonly ring: (typeof RINGS)[number]; readonly 
    * slightly differently, and the fit would flip between two counts and never settle.
    */
   const pitch = useRef<number | undefined>(undefined);
-  /** The copied glyphs, the word spaces before each source index, and the arc each one grows by. */
+  /** The copied glyphs, the word spaces before each drawable glyph, and the arc each one grows by. */
   const placed = useRef<{
     readonly glyphs: Glyphs;
     readonly spacesBefore: Int32Array;
@@ -141,7 +141,7 @@ function Ring({ ring, font }: { readonly ring: (typeof RINGS)[number]; readonly 
         setRepeats(fit.repeats);
         return;
       }
-      const [glyphs] = paragraph.breakApart();
+      const [glyphs] = paragraph.split();
       glyphs.traverse((object) => {
         object.castShadow = true;
         // Its bounding volume is from the pre-wrap straight line; setMatrixAt moves instances onto
@@ -158,7 +158,7 @@ function Ring({ ring, font }: { readonly ring: (typeof RINGS)[number]; readonly 
       // One shaped unit of advance is one unit of arc, so every glyph keeps what the shaper gave
       // it; the circle is closed by growing the word spaces before it, never the letters.
       const advance = rest.originalMatrix.elements[12] ?? 0;
-      const s = advance + (spacesBefore[rest.sourceIndex] ?? 0) * extra + elapsed * ring.speed;
+      const s = advance + (spacesBefore[rest.index] ?? 0) * extra + elapsed * ring.speed;
       glyphs.setMatrixAt(i, placeOnPath(path, s, 0, 0, rest.originalMatrix, scratch));
     }
   });
