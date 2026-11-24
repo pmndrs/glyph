@@ -18,7 +18,7 @@ generated:
 # Issue 04: `Pixi3DText` throws `TypeError`/`RangeError` instead of `GlyphInputError`
 
 - **Severity:** should-fix (documented error contract; `instanceof GlyphInputError` handling breaks on one renderer)
-- **Status:** open
+- **Status:** fixed — construction and `update()` wrap caller-input validation in `GlyphInputError`; the Pixi3D editing test checks each path
 
 ## What happens
 
