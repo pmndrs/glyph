@@ -1,5 +1,7 @@
 //! Root lifecycle (create, reset, invalidate, dispose) and the read-only views of one root's planner.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 impl TextEngine {
@@ -141,11 +143,11 @@ impl TextEngine {
             .ok_or(EngineError::RootMissing)?;
         planner
             .preflight_text_candidates
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
         planner
             .preflight_edit_scratch
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
         if let Some(paragraph) = planner.spare_paragraph.as_mut() {
             paragraph.reserve_text(capacity)?;

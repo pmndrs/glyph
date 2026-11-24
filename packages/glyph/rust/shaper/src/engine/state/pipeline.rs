@@ -1,5 +1,7 @@
 //! One paragraph's stage pipeline: reuse, staged preparation and the commit of every stage.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 /// Stage ownership once, reserving publication-frontier growth before semantic mutation.
@@ -17,10 +19,10 @@ pub(super) fn admit_preparation_owner(
         .checked_add(1)
         .ok_or(EngineError::ResultTooLarge)?;
     unpublished
-        .try_reserve(additional)
+        .try_reserve_cold(additional)
         .map_err(|_| EngineError::ResultTooLarge)?;
     staged
-        .try_reserve(1)
+        .try_reserve_cold(1)
         .map_err(|_| EngineError::ResultTooLarge)?;
     staged.insert(index, id);
     Ok(())

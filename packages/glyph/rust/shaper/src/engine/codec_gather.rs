@@ -1,5 +1,7 @@
 //! Codec-directed gather from semantic layout and normalized font bindings.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 use core::ops::Range;
 
@@ -1157,7 +1159,7 @@ fn binding_row(row: u32) -> Result<usize, GatherError> {
 fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), GatherError> {
     if values.capacity() < capacity {
         values
-            .try_reserve_exact(capacity.saturating_sub(values.len()))
+            .try_reserve_exact_cold(capacity.saturating_sub(values.len()))
             .map_err(|_| GatherError::AllocationFailed)?;
     }
     Ok(())

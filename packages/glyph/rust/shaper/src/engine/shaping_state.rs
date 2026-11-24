@@ -1,3 +1,4 @@
+use crate::cold_growth::ColdGrowth as _;
 use alloc::vec::Vec;
 
 use crate::{
@@ -275,7 +276,7 @@ impl ShapingRunArena {
             return Ok(());
         }
         self.runs
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.runs.push(run);
         Ok(())

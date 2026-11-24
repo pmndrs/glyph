@@ -1,11 +1,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "256"]
+use crate::cold_growth::ColdGrowth as _;
 
 extern crate alloc;
 
 mod abi_contract;
 pub(crate) mod ascii_anchor_policy;
 pub mod bidi;
+mod cold_growth;
 pub mod engine;
 mod language_tags;
 pub mod line_break;
@@ -215,10 +217,12 @@ impl ShaperRegistry {
             return Err(STATUS_RESULT_TOO_LARGE);
         }
         self.context_codepoints
-            .try_reserve_exact(HARFRUST_CONTEXT_LIMIT.saturating_sub(self.context_codepoints.len()))
+            .try_reserve_exact_cold(
+                HARFRUST_CONTEXT_LIMIT.saturating_sub(self.context_codepoints.len()),
+            )
             .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
         self.shape_features
-            .try_reserve_exact(DEFAULT_SHAPE_FEATURE_CAPACITY)
+            .try_reserve_exact_cold(DEFAULT_SHAPE_FEATURE_CAPACITY)
             .map_err(|_| STATUS_RESULT_TOO_LARGE)
     }
 
@@ -746,7 +750,7 @@ fn shape_features(
 ) -> Result<(), u32> {
     output.clear();
     output
-        .try_reserve(run.features.len())
+        .try_reserve_cold(run.features.len())
         .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
     output.extend(run.features.iter().map(|feature| {
         let global = feature.start <= range.item_start && feature.end >= range.item_end;
@@ -881,7 +885,7 @@ fn decode_context_range_into(
     let units = text.get(start..end).ok_or(STATUS_INVALID_REQUEST)?;
     decoded.clear();
     decoded
-        .try_reserve_exact(HARFRUST_CONTEXT_LIMIT.min(units.len()))
+        .try_reserve_exact_cold(HARFRUST_CONTEXT_LIMIT.min(units.len()))
         .map_err(|_| STATUS_RESULT_TOO_LARGE)?;
 
     let selected_start = match direction {

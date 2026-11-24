@@ -1,5 +1,7 @@
 //! Appending fresh rows: from layout sources, as columns or flat rows, and decorations.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 impl CodecGatherWorkspace {
@@ -318,7 +320,7 @@ impl CodecGatherWorkspace {
             return Ok(true);
         }
         self.dirty_mask_ranges
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| GatherError::AllocationFailed)?;
         let base = self.glyphs.len();
         reserve(&mut self.glyphs, decoration_count)?;

@@ -1,5 +1,7 @@
 //! Candidate text assembled before preparation: its buffers and the Unicode facts it can reuse.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 /// The retained buffers a preflight text candidate may write into instead of its own.
@@ -21,7 +23,7 @@ impl PreflightTextSources<'_> {
         edit_scratch: &mut Vec<TextEdit>,
     ) -> Result<usize, EngineError> {
         candidates
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
         let index = candidates.len();
         candidates.push(PreflightTextCandidate::default());

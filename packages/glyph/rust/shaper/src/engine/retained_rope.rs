@@ -13,6 +13,8 @@
 //! it converts records to bytes on the way in and borrows leaves as `&[T]` on the read
 //! paths (iteration, cursors, point lookup), which stay specialised per record type.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::{sync::Arc, vec::Vec};
 #[cfg(test)]
 use core::fmt;
@@ -160,7 +162,7 @@ impl Leaf {
     fn reserve_exact(&mut self, additional: usize) -> Result<(), ()> {
         let words = self.words_for(self.len.checked_add(additional).ok_or(())?)?;
         self.words
-            .try_reserve_exact(words.saturating_sub(self.words.len()))
+            .try_reserve_exact_cold(words.saturating_sub(self.words.len()))
             .map_err(|_| ())
     }
 

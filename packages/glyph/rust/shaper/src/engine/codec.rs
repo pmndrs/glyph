@@ -3,6 +3,8 @@
 //! Policies are intentionally straight-line. The engine owns record iteration, so a codec cannot
 //! allocate, loop, branch backward, address arbitrary memory, or mutate semantic layout.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 
 pub const MAX_PROGRAMS: usize = 32;
@@ -301,7 +303,7 @@ impl ValidatedCodec {
         validate_codec(&descriptor)?;
         let mut execution = Vec::new();
         execution
-            .try_reserve_exact(descriptor.programs.len())
+            .try_reserve_exact_cold(descriptor.programs.len())
             .map_err(|_| CodecError::AllocationFailed)?;
         for program in &descriptor.programs {
             execution.push(ExecutableProgram::new(program)?);
@@ -667,16 +669,16 @@ impl ExecutableProgram {
         let mut buffer_f32_input_masks = Vec::new();
         let mut buffer_u32_input_masks = Vec::new();
         store_buffer_indices
-            .try_reserve_exact(program.operations.len())
+            .try_reserve_exact_cold(program.operations.len())
             .map_err(|_| CodecError::AllocationFailed)?;
         buffer_dependency_masks
-            .try_reserve_exact(program.buffers.len())
+            .try_reserve_exact_cold(program.buffers.len())
             .map_err(|_| CodecError::AllocationFailed)?;
         buffer_f32_input_masks
-            .try_reserve_exact(program.buffers.len())
+            .try_reserve_exact_cold(program.buffers.len())
             .map_err(|_| CodecError::AllocationFailed)?;
         buffer_u32_input_masks
-            .try_reserve_exact(program.buffers.len())
+            .try_reserve_exact_cold(program.buffers.len())
             .map_err(|_| CodecError::AllocationFailed)?;
         buffer_dependency_masks.resize(program.buffers.len(), 0);
         buffer_f32_input_masks.resize(program.buffers.len(), 0);
@@ -724,7 +726,7 @@ impl ExecutableProgram {
 fn operation_buffer_masks(program: &ProgramDescriptor) -> Result<Vec<u32>, CodecError> {
     let mut masks = Vec::new();
     masks
-        .try_reserve_exact(program.operations.len())
+        .try_reserve_exact_cold(program.operations.len())
         .map_err(|_| CodecError::AllocationFailed)?;
     masks.resize(program.operations.len(), 0);
     let mut register_consumers = [0_u32; MAX_REGISTERS];

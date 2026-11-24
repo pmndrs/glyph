@@ -4,6 +4,8 @@
 //! scans physical buffers to discover changes. Preparation writes only scratch state and can be
 //! aborted; committed CPU mirrors change only after the immutable plan has been serialized.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::retained_rope::{
     LEAF_CAPACITY, RetainedRope, RopeCursor, RopeEditError, RopeRange, RopeRecord, RopeSummary,
 };
@@ -423,7 +425,7 @@ fn range(start: u32, count: u32) -> Result<core::ops::Range<usize>, OrderedPlanE
 
 fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), OrderedPlanError> {
     values
-        .try_reserve(additional)
+        .try_reserve_cold(additional)
         .map_err(|_| OrderedPlanError::AllocationFailed)
 }
 

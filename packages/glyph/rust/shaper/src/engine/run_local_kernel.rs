@@ -17,6 +17,8 @@
 //! of a zero extremum cannot reach an anchor (`min + (max - min) * 0.5` is `+0.0` for any pair
 //! of zeros).
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 
 use super::run_local::{NumericBlock, NumericBlockSpan, RowLanes, RunLocalBuildError};
@@ -809,6 +811,6 @@ fn narrow_block(
 
 fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), RunLocalBuildError> {
     values
-        .try_reserve(additional)
+        .try_reserve_cold(additional)
         .map_err(|_| RunLocalBuildError::AllocationFailed)
 }

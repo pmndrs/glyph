@@ -1,5 +1,7 @@
 //! Retaining the previous gather's rows: walking owners and their clean sources.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 impl CodecGatherWorkspace {
@@ -73,7 +75,7 @@ impl CodecGatherWorkspace {
                             None => owner.input.len(),
                         };
                         self.dirty_mask_ranges
-                            .try_reserve(reserve)
+                            .try_reserve_cold(reserve)
                             .map_err(|_| GatherError::AllocationFailed)?;
                         state.source_cursor = owner.range.start.source;
                         state.record_cursor = owner.range.start.record;
@@ -201,7 +203,7 @@ impl CodecGatherWorkspace {
                 })
                 .ok_or(GatherError::InvalidSemanticShape)?;
             self.dirty_mask_ranges
-                .try_reserve(reserve)
+                .try_reserve_cold(reserve)
                 .map_err(|_| GatherError::AllocationFailed)?;
             state.source_cursor = owner.range.start.source;
             state.record_cursor = owner.range.start.record;

@@ -1,5 +1,7 @@
 //! The scope of an incremental reshape: sparse windows bounded by safe boundaries.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 impl ParagraphState {
@@ -254,7 +256,7 @@ pub(super) fn build_sparse_shape_windows(
         previous_end = edit.old_end;
     }
     windows
-        .try_reserve(edits.len())
+        .try_reserve_cold(edits.len())
         .map_err(|_| EngineError::ResultTooLarge)?;
     let (glyph_start, glyph_end) = shaped_run_glyph_range(shape, shaped_run)?;
     let rtl = match source_run.direction {
@@ -438,7 +440,7 @@ impl SparseWindowBuilder<'_> {
             return Ok(());
         }
         self.windows
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.windows.push(ShapeWindow {
             old_start: start,
@@ -469,7 +471,7 @@ pub(super) fn set_whole_shape_window(
         .ok_or(EngineError::InvalidRequest)?;
     windows.clear();
     windows
-        .try_reserve(1)
+        .try_reserve_cold(1)
         .map_err(|_| EngineError::ResultTooLarge)?;
     windows.push(ShapeWindow {
         old_start: old_run.text_start,

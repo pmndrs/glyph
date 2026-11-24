@@ -1,5 +1,7 @@
 //! Shared glyph primitive and draw-record emission.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 
 use super::{
@@ -56,7 +58,7 @@ pub fn push_glyph_draw(
     let resource_start =
         u32::try_from(emission.resource_start).map_err(|_| PlanDrawError::ArithmeticOverflow)?;
     primitives
-        .try_reserve(1)
+        .try_reserve_cold(1)
         .map_err(|_| PlanDrawError::AllocationFailed)?;
     primitives.push(PrimitiveRecord {
         id: emission.glyph.stable_id,
@@ -80,7 +82,7 @@ pub fn push_glyph_draw(
     });
 
     draws
-        .try_reserve(1)
+        .try_reserve_cold(1)
         .map_err(|_| PlanDrawError::AllocationFailed)?;
     draws.push(DrawRecord {
         id: emission.glyph.stable_id,

@@ -5,6 +5,8 @@
 //! file owns the storage, the source-order outline index and the staged writer that feeds the
 //! kernel for clients that hand over glyphs one at a time.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 use core::ops::Range;
 
@@ -1247,7 +1249,7 @@ fn copy_lane<T: Copy>(lane: &mut Vec<T>, source: &[T]) -> Result<(), RunLocalBui
 
 fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), RunLocalBuildError> {
     values
-        .try_reserve(additional)
+        .try_reserve_cold(additional)
         .map_err(|_| RunLocalBuildError::AllocationFailed)
 }
 

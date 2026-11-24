@@ -1,3 +1,4 @@
+use crate::cold_growth::ColdGrowth as _;
 use alloc::vec::Vec;
 use unicode_bidi::{
     BidiClass, BidiDataSource, LTR_LEVEL, RTL_LEVEL, data_source::BidiMatchedOpeningBracket,
@@ -491,7 +492,7 @@ impl BidiAnalysis {
 fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), BidiError> {
     if values.capacity() < capacity {
         values
-            .try_reserve_exact(capacity.saturating_sub(values.len()))
+            .try_reserve_exact_cold(capacity.saturating_sub(values.len()))
             .map_err(|_| BidiError::ResultTooLarge)?;
     }
     Ok(())
@@ -501,7 +502,7 @@ fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), BidiError> {
 fn grow<T>(values: &mut Vec<T>) -> Result<(), BidiError> {
     if values.len() == values.capacity() {
         values
-            .try_reserve(1)
+            .try_reserve_cold(1)
             .map_err(|_| BidiError::ResultTooLarge)?;
     }
     Ok(())

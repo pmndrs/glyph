@@ -1,5 +1,7 @@
 //! Gathered fields: aligned storage, change masks and the per-field source reads.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 pub(super) fn known_semantic_f32(field: u8) -> bool {
@@ -144,7 +146,7 @@ impl CodecGatherWorkspace {
             }
         }
         self.dirty_mask_ranges
-            .try_reserve(runs)
+            .try_reserve_cold(runs)
             .map_err(|_| GatherError::AllocationFailed)
     }
 
@@ -165,7 +167,7 @@ impl<T: Copy + Default> AlignedField<T> {
         let block_capacity = record_capacity.div_ceil(4);
         if self.blocks.capacity() < block_capacity {
             self.blocks
-                .try_reserve_exact(block_capacity.saturating_sub(self.blocks.len()))
+                .try_reserve_exact_cold(block_capacity.saturating_sub(self.blocks.len()))
                 .map_err(|_| GatherError::AllocationFailed)?;
         }
         Ok(())

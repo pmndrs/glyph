@@ -1,3 +1,4 @@
+use crate::cold_growth::ColdGrowth as _;
 // UAX #14 rule behavior is ported from @cto.af/linebreak 4.0.3. Its MIT license is retained in
 // LICENSES/cto-af-linebreak-MIT.txt; the implementation is specialized to retained no_std Rust storage.
 use alloc::vec::Vec;
@@ -636,7 +637,7 @@ fn decode_scalar(text: &[u16], index: usize) -> Result<(u32, usize), UnicodeErro
 fn reserve<T>(values: &mut Vec<T>, capacity: usize) -> Result<(), UnicodeError> {
     if values.capacity() < capacity {
         values
-            .try_reserve_exact(capacity.saturating_sub(values.len()))
+            .try_reserve_exact_cold(capacity.saturating_sub(values.len()))
             .map_err(|_| UnicodeError::ResultTooLarge)?;
     }
     Ok(())

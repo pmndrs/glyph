@@ -1,5 +1,7 @@
 //! Positioning the clusters of one layout run: pen steps, cut units and decorated runs.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 impl CutUnit {
@@ -453,7 +455,7 @@ impl PositionedGlyphArena {
                 f64::from(size) * scale
             };
             arena
-                .try_reserve(1)
+                .try_reserve_cold(1)
                 .map_err(|_| EngineError::ResultTooLarge)?;
             arena.push(DecorationRecord {
                 flags: flag,

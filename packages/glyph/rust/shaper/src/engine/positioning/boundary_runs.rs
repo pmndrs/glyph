@@ -1,5 +1,7 @@
 //! Replacement runs recomposed across line boundaries and their run-local layouts.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 pub(super) fn boundary_shape_span<'a>(
@@ -57,7 +59,7 @@ pub(super) fn merge_recomposed_glyphs(
         .checked_add(previous.len())
         .ok_or(EngineError::ResultTooLarge)?;
     current
-        .try_reserve(previous.len())
+        .try_reserve_cold(previous.len())
         .map_err(|_| EngineError::ResultTooLarge)?;
     current.resize(merged_len, 0..0);
     let (mut left, mut right) = (current_len, previous.len());
@@ -232,19 +234,19 @@ impl PositionedGlyphArena {
             .checked_mul(2)
             .ok_or(EngineError::ResultTooLarge)?;
         self.replacement_runs
-            .try_reserve(capacity)
+            .try_reserve_cold(capacity)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.replacement_run_boundary_indices
-            .try_reserve(capacity)
+            .try_reserve_cold(capacity)
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.replacement_run_indices
-            .try_reserve(current_shape.records.len())
+            .try_reserve_cold(current_shape.records.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.replacement_current_order
-            .try_reserve(current_shape.records.len())
+            .try_reserve_cold(current_shape.records.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         self.replacement_previous_order
-            .try_reserve(previous_shape.records.len())
+            .try_reserve_cold(previous_shape.records.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         for index in 0..current_shape.records.len() {
             let index = u32::try_from(index).map_err(|_| EngineError::ResultTooLarge)?;

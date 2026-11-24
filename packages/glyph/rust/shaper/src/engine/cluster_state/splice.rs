@@ -17,6 +17,8 @@
 //! The result equals the full build of the same inputs, lane for lane; anything the splice
 //! cannot prove declines it, and the caller builds in full.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 use core::ops::Range;
 
@@ -73,7 +75,7 @@ fn window_texts(
 ) -> Option<Vec<(Range<u32>, Range<u32>)>> {
     let (new_runs, old_runs) = (input.runs, splice.previous_runs);
     let mut texts: Vec<(Range<u32>, Range<u32>)> = Vec::new();
-    texts.try_reserve(splice.windows.len()).ok()?;
+    texts.try_reserve_cold(splice.windows.len()).ok()?;
     let (mut old_at, mut new_at, mut delta) = (0u32, 0u32, 0i64);
     for window in splice.windows {
         let (new, old) = (&window.new, &window.old);
@@ -180,7 +182,7 @@ fn plan_windows(
             .map_or(previous.glyph_ids.len(), |start| *start as usize)
     };
     let mut windows: Vec<Window> = Vec::new();
-    windows.try_reserve(splice.windows.len()).ok()?;
+    windows.try_reserve_cold(splice.windows.len()).ok()?;
     for (window, (old_text, new_text)) in splice.windows.iter().zip(texts) {
         let start = boundaries.binary_search(&new_text.start).ok()?;
         let end = boundaries.binary_search(&new_text.end).ok()?;
@@ -479,7 +481,7 @@ impl ClusterArena {
         // clusters, which map back through the clusters the windows before them added.
         let mut changed = Vec::new();
         changed
-            .try_reserve(flagged.len())
+            .try_reserve_cold(flagged.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         for range in &flagged {
             let old = |cluster: usize| moved(cluster as u32, -plan.cluster_shift_at(cluster));
@@ -491,7 +493,7 @@ impl ClusterArena {
         self.spliced = Some(super::diff::Spliced { changed });
         let mut windows = Vec::new();
         windows
-            .try_reserve(plan.windows.len())
+            .try_reserve_cold(plan.windows.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         for (index, window) in plan.windows.iter().enumerate() {
             let (_, cluster_delta, glyph_delta) = plan.shift(index + 1);

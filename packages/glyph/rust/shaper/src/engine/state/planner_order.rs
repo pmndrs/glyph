@@ -1,5 +1,7 @@
 //! Ordering retained paragraphs: the replacement, retained and semantic work orders of a root.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 pub(super) fn sort_session_placement_rows(
@@ -83,7 +85,7 @@ impl PlannerState {
             .checked_add(self.unpublished_preparation_ids.len())
             .ok_or(EngineError::ResultTooLarge)?;
         self.order_sort_scratch
-            .try_reserve(required)
+            .try_reserve_cold(required)
             .map_err(|_| EngineError::ResultTooLarge)?;
         for id in self
             .pending_preparation_ids
@@ -149,7 +151,7 @@ impl PlannerState {
             .checked_add(self.pending_preparation_ids.len())
             .ok_or(EngineError::ResultTooLarge)?;
         self.order_sort_scratch
-            .try_reserve(required)
+            .try_reserve_cold(required)
             .map_err(|_| EngineError::ResultTooLarge)?;
         for id in self
             .semantic_input_spans

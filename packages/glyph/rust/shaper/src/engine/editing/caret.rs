@@ -1,5 +1,7 @@
 //! Where a caret is drawn, and the rectangles a range covers.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use alloc::vec::Vec;
 
 use super::{
@@ -64,7 +66,7 @@ impl<S: LayoutSource> Editing<S> {
                         && right > left
                     {
                         rects
-                            .try_reserve(1)
+                            .try_reserve_cold(1)
                             .map_err(|_| EditingError::ResultTooLarge)?;
                         rects.push(Rect {
                             x: left,

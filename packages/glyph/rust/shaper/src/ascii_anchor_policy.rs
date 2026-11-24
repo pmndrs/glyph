@@ -1,6 +1,8 @@
 //! Conservative, optional ASCII-anchor font policy for the General raw producer.
 //! Rejection keeps the existing whole-run path as the authoritative result.
 
+use crate::cold_growth::ColdGrowth as _;
+
 #[cfg(test)]
 use super::ShaperRegistry;
 use super::{
@@ -200,7 +202,7 @@ impl FontScreen {
     fn empty() -> PolicyResult<Self> {
         let mut inputs = Vec::new();
         inputs
-            .try_reserve_exact(GLYPH_BITMAP_BYTES)
+            .try_reserve_exact_cold(GLYPH_BITMAP_BYTES)
             .map_err(|_| Unsupported::Resource)?;
         inputs.resize(GLYPH_BITMAP_BYTES, 0);
         if inputs

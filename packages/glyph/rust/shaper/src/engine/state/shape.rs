@@ -1,5 +1,7 @@
 //! The shape stage: whole, incremental and multi-run reshaping of one paragraph.
 
+use crate::cold_growth::ColdGrowth as _;
+
 use super::*;
 
 /// Whether a rebuilt shaping-run list keeps the previous list's positional
@@ -288,7 +290,7 @@ impl ParagraphState {
         let new_runs = self.shaping_runs.active().runs();
         let mut edited: Vec<u32> = Vec::new();
         edited
-            .try_reserve(self.text_edit_parts.len())
+            .try_reserve_cold(self.text_edit_parts.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         for edit in self.text_edit_parts.iter().copied() {
             let Some(run) = edit_run(old_runs, new_runs, edit) else {
@@ -315,7 +317,7 @@ impl ParagraphState {
             .then_some((&self.styles.committed().arena, &self.styles.active().arena));
         let mut shifts: Vec<i64> = Vec::new();
         shifts
-            .try_reserve(old_runs.len())
+            .try_reserve_cold(old_runs.len())
             .map_err(|_| EngineError::ResultTooLarge)?;
         let mut delta = 0_i64;
         for (index, (&old, &new)) in old_runs.iter().zip(new_runs).enumerate() {
@@ -689,7 +691,7 @@ pub(super) fn push_fallback_span(
         return Ok(());
     }
     spans
-        .try_reserve(1)
+        .try_reserve_cold(1)
         .map_err(|_| EngineError::ResultTooLarge)?;
     spans.push(span);
     Ok(())
