@@ -1,7 +1,7 @@
 # HarfRust fork carried by pmndrs/glyph
 
 This directory is the published `harfrust` 0.12.0 crate with four cargo features, one constructor,
-two inlining attributes, three keyed plan-compile sorts, a per-property split of the generated Unicode table and one additive module (`SimpleTextPlan`) added. It is wired into `packages/glyph/rust/shaper` and `packages/glyph/rust/font-baker`
+three inlining attributes, three keyed plan-compile sorts, a per-property split of the generated Unicode table and one additive module (`SimpleTextPlan`) added. It is wired into `packages/glyph/rust/shaper` and `packages/glyph/rust/font-baker`
 with `[patch.crates-io]`, so both manifests still ask for `harfrust = "0.12.0"`.
 
 ## Base
@@ -129,6 +129,8 @@ calls it (directly and through `enable_feature`/`disable_feature`) from dozens o
 complex shapers and `ot_shape`, and every inlined copy carried the `Vec` push. Plans are built
 once per font, script and feature set and cached, so the extra call is off the shaping path. In
 the shipped shaper it removed 6,133 raw / 1,243 gzip / 856 Brotli bytes (measured 2026-11-23).
+`add_pause`, behind `add_gsub_pause`/`add_gpos_pause`, is `#[inline(never)]` for the same reason:
+3,673 raw / 505 gzip / 566 Brotli.
 
 ### Unicode table split per property
 

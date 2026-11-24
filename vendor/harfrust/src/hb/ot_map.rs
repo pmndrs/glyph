@@ -308,6 +308,8 @@ impl<'a> hb_ot_map_builder_t<'a> {
         self.add_pause(TableIndex::GPOS, pause);
     }
 
+    // pmndrs/glyph fork: out of line, for the reason `add_feature` is.
+    #[inline(never)]
     fn add_pause(&mut self, table_index: TableIndex, pause: Option<pause_func_t>) {
         self.stages[table_index].push(stage_info_t {
             index: self.current_stage[table_index],
