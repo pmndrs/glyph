@@ -14,6 +14,14 @@ const initial = codePointSet('General_Category/Initial_Punctuation');
 const final = codePointSet('General_Category/Final_Punctuation');
 const extendedPictographic = codePointSet('Binary_Property/Extended_Pictographic');
 const unassigned = codePointSet('General_Category/Unassigned');
+// `char::is_alphanumeric`: Alphabetic or a General_Category N* value. Editing's word motion reads it
+// here so the module does not link `core`'s own Alphabetic and N tables for that one caller.
+const alphanumeric = new Set([
+  ...codePointSet('Binary_Property/Alphabetic'),
+  ...codePointSet('General_Category/Decimal_Number'),
+  ...codePointSet('General_Category/Letter_Number'),
+  ...codePointSet('General_Category/Other_Number'),
+]);
 
 const values = new Uint16Array(0x11_0000);
 for (let codePoint = 0; codePoint < values.length; codePoint += 1) {
@@ -24,7 +32,8 @@ for (let codePoint = 0; codePoint < values.length; codePoint += 1) {
     (initial.has(codePoint) ? 1 << 8 : 0) |
     (final.has(codePoint) ? 1 << 9 : 0) |
     (EastAsianWidth.get(codePoint) ? 1 << 10 : 0) |
-    (extendedPictographic.has(codePoint) && unassigned.has(codePoint) ? 1 << 11 : 0);
+    (extendedPictographic.has(codePoint) && unassigned.has(codePoint) ? 1 << 11 : 0) |
+    (alphanumeric.has(codePoint) ? 1 << 12 : 0);
 }
 
 if (values.some((value) => value > 0xffff)) throw new Error('line-break property bits no longer fit u16');
@@ -51,6 +60,7 @@ pub const INITIAL_PUNCTUATION: u32 = 1 << 8;
 pub const FINAL_PUNCTUATION: u32 = 1 << 9;
 pub const EAST_ASIAN: u32 = 1 << 10;
 pub const UNASSIGNED_EXTENDED_PICTOGRAPHIC: u32 = 1 << 11;
+pub const ALPHANUMERIC: u32 = 1 << 12;
 
 ${constants}
 
