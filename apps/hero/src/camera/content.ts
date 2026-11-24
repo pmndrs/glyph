@@ -30,7 +30,7 @@ export const SHOTS: Readonly<Record<ShotName, ShotPlan>> = {
     lag: 0.9,
   },
   // The crane's top: the whole spread, tilted away.
-  crane: { position: [0.6, -17, 45.5], target: [0, -1.3, 0], fov: 33, aperture: 0.55, sway: 0.08, shake: 0.1, lag: 0 },
+  crane: { position: [0.6, -15.5, 43], target: [0, -1, 0], fov: 33, aperture: 0.55, sway: 0.08, shake: 0.1, lag: 0 },
   // Over the columns while the gutters are pulled.
   columns: {
     position: [-4.2, -10.5, 25.5],
@@ -56,7 +56,7 @@ export const SHOTS: Readonly<Record<ShotName, ShotPlan>> = {
   // The dive is placed by its own progress. This is where it begins.
   dive: { position: [0, -2.2, 9], target: [0, 0, 0], fov: 30, aperture: 1, sway: 0.01, shake: 0.05, lag: 0 },
   // The visitor's own view: the spread, leaning a little with the pointer.
-  free: { position: [0.3, -15, 44], target: [0, -1.2, 0], fov: 33, aperture: 0.35, sway: 0.05, shake: 0.06, lag: 0 },
+  free: { position: [0.3, -14, 41.5], target: [0, -0.9, 0], fov: 33, aperture: 0.35, sway: 0.05, shake: 0.06, lag: 0 },
 };
 
 /** How far the free shot leans with the pointer, in world units. */

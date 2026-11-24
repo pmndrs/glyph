@@ -239,8 +239,10 @@ export const directorActions = createActions((world) => {
         editor.clickPage(grip.x, grip.y);
       }
     },
-    /** The wheel dives: down toward the drop cap and through it, up back out. */
+    /** The wheel dives: down toward the drop cap and through it, up back out. Returns whether it was used. */
     scrollPage: (amount: number) => {
+      if (amount <= 0 && world.get(Shot)!.diveTarget === 0) return false;
+
       takeOver();
       const shot = world.get(Shot)!;
       const target = Math.min(1, Math.max(0, shot.diveTarget + amount * 0.0011));
@@ -249,6 +251,19 @@ export const directorActions = createActions((world) => {
       else if (target === 0 && shot.name === 'dive') camera.blendTo('free', 1.6);
 
       camera.driveDive(target, 1.6);
+
+      return true;
+    },
+    /**
+     * The page for a visitor who asked for less motion: the finished spread, held still. Nothing plays by itself,
+     * and whatever the visitor moves answers without springs or camera moves.
+     */
+    standStill: () => {
+      takeOver();
+      stone.rewindStone(true);
+      stone.dismissStone();
+      camera.resetDive();
+      camera.blendTo('free', 0);
     },
     /** A key, while the caret is in a text. Returns whether it was used. */
     pressKey: (key: string) => {

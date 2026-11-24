@@ -60,8 +60,8 @@ export function useInput(world: World, isReady: boolean): void {
       director.releasePage();
     };
     const wheel = (event: WheelEvent) => {
-      event.preventDefault();
-      director.scrollPage(event.deltaY);
+      // Scrolling up with nothing to back out of is the document's, so a page that embeds the hero still scrolls.
+      if (director.scrollPage(event.deltaY)) event.preventDefault();
     };
     const key = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;

@@ -89,7 +89,7 @@ export function moveStone(world: World): void {
  * Pull letters out of the text. A letter whose ink comes within reach of the stone's clearance is taken: its
  * character leaves the text by an exact edit, so the paragraph closes the gap, and the letter becomes a rigid body
  * built from its own outline, starting where it was drawn and moving as it was moving. The stone takes a few a
- * frame at most and holds no more loose letters than the tier affords.
+ * frame at most, only while it is on the move, and holds no more loose letters than the tier affords.
  */
 export function captureLetters(world: World): void {
   const stone = world.get(Stone)!;
@@ -97,6 +97,9 @@ export function captureLetters(world: World): void {
   const spread = world.get(Spread)!;
 
   if (!stone.present || stone.presence < 0.6 || stone.rewinding >= 0 || spread.mode !== 'detached') return;
+
+  // A stone at rest has taken what it will. It feeds while it is led or still coasting.
+  if (stone.leadX === undefined && stone.vx * stone.vx + stone.vy * stone.vy < 0.09) return;
 
   const physics = world.get(Physics)!;
   const script = world.get(Script)!;

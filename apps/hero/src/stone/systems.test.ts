@@ -66,7 +66,8 @@ it('takes letters out of the text as bodies, and the rewind gives every one back
   const world = setUp();
 
   try {
-    stoneActions(world).dropStone(BODY_ORIGIN.x + 7, BODY_ORIGIN.y + 5);
+    stoneActions(world).dropStone(BODY_ORIGIN.x + 3, BODY_ORIGIN.y + 5);
+    stoneActions(world).leadStone(BODY_ORIGIN.x + 11, BODY_ORIGIN.y + 5);
     run(world, 2.5);
     const script = world.get(Script)!;
     const letters = world.get(Letterpress)!;
@@ -111,12 +112,25 @@ it('takes letters out of the text as bodies, and the rewind gives every one back
   }
 });
 
+it('takes nothing while it rests', () => {
+  const world = setUp();
+
+  try {
+    stoneActions(world).dropStone(BODY_ORIGIN.x + 7, BODY_ORIGIN.y + 5);
+    run(world, 1.5);
+    expect(world.get(Script)!.removedCount).toBe(0);
+  } finally {
+    world.destroy();
+  }
+});
+
 it('takes nothing while the paragraph is drawn whole for editing', () => {
   const world = setUp();
 
   try {
     pageActions(world).setBodyMode('direct');
-    stoneActions(world).dropStone(BODY_ORIGIN.x + 7, BODY_ORIGIN.y + 5);
+    stoneActions(world).dropStone(BODY_ORIGIN.x + 3, BODY_ORIGIN.y + 5);
+    stoneActions(world).leadStone(BODY_ORIGIN.x + 11, BODY_ORIGIN.y + 5);
     run(world, 1.5);
     expect(world.get(Script)!.removedCount).toBe(0);
   } finally {

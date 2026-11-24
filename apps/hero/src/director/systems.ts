@@ -1,5 +1,6 @@
 import type { World } from 'koota';
 import { Shot } from '../camera/traits';
+import { Quality } from '../quality/traits';
 import { stoneActions } from '../stone/actions';
 import { Stone } from '../stone/traits';
 import { Time } from '../time/traits';
@@ -37,9 +38,15 @@ export function walkStonePath(world: World): void {
   stone.leadStone(endX, endY);
 }
 
-/** A page left alone long enough goes back to its attract loop. */
+/** A page left alone long enough goes back to its attract loop, unless the visitor asked for less motion. */
 export function resumeAttract(world: World): void {
   const mode = world.get(Mode)!;
+
+  if (world.get(Quality)!.reducedMotion) {
+    if (mode.kind === 'attract') directorActions(world).standStill();
+
+    return;
+  }
 
   if (mode.kind !== 'play' || world.get(Grip)!.kind !== 'none' || world.get(Shot)!.diveTarget > 0) return;
 
