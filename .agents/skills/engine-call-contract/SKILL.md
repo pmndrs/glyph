@@ -24,8 +24,8 @@ nothing is left for a caller to get wrong, **so there is no failure to hand back
   only means this package is broken. A deep runtime validator adds the same ceremony inside Glyph. Prove package-owned
   invariants at their producer; if corruption is encountered naturally, let the operation throw.
 - **Never enter a broken state that outlives the call.** A rejected frame must not leave the engine refusing work,
-  recompiling an invalid frame at frame rate, or holding a latch a caller has to clear. Report once, stop, and keep
-  the rest of the scene live: transforms, visibility, and render order belong to the last accepted publication and
+  recompiling an invalid frame at frame rate, or holding a latch a caller has to clear. Throw once from the render that found it, draw
+  nothing for the failed text until its input changes, and keep the rest of the scene live: transforms, visibility, and render order belong to the last accepted publication and
   never entered the frame that was refused.
 
 The distinction that matters, in one line: **a throw is the caller's arithmetic; a persistent failure is our
@@ -58,12 +58,17 @@ its renderer's drawn origins; applications reach caret and selection geometry th
 planner, wire, projection, and binding machinery has no public subpath. Boundary and packed-package tests enforce all
 three facts.
 
-| entry                                | holds                                                                                                                   | audience     |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `.`                                  | `glyph`, fonts, built-in format selection, authoring, layout and measurement values, plus application-encountered types | everyone     |
-| `./core`                             | renderer-neutral construction helpers for integration config, resources, raster formats, and placement snapshots        | integrators  |
-| `./three`, `./react`, `./typegpu`    | one integration's application surface                                                                                   | applications |
-| `./shaders/tsl`, `./shaders/typegpu` | reusable technique shaders, with no engine or scene                                                                     | any host     |
+| entry                                                  | holds                                                                                                                   | audience     |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `.`                                                    | `glyph`, fonts, built-in format selection, authoring, layout and measurement values, plus application-encountered types | everyone     |
+| `./core`                                               | renderer-neutral construction helpers for integration config, resources, raster formats, and placement snapshots        | integrators  |
+| `./three`, `./react`, `./vue`, `./typegpu`, `./pixi3d` | one integration's application surface (`./vue/*` adds per-format composables)                                           | applications |
+| `./three/typegpu`                                      | experimental Three integration over the TypeGPU shaders                                                                 | applications |
+| `./shaders/tsl`, `./shaders/typegpu`                   | reusable technique shaders, with no engine or scene                                                                     | any host     |
+| `./bake`, `./baker`, `./runtime-bake`, `./bakers/*`    | font baking: Node/CLI operations, portable baker definitions, the browser bake Worker host, per-format bakers           | build tools  |
+
+The package's `exports` map is the authority; `.agents/docs/packages/glyph.md` lists every entry with its purpose.
+Every other subpath is blocked (`null`) or internal.
 
 The extension API is **additive to the root, not parallel to it**: an integrator imports application-encountered types
 from the root and construction helpers from `/core`. Keep the core entry as static ESM re-exports of focused
@@ -88,5 +93,7 @@ Ask, in order:
 3. Can only this package cause it? It is a producer defect: add or strengthen the producer/ABI/property test. Do not add a
    runtime scan merely to detect it. If ordinary consumption encounters it naturally, throw and do not build a recovery
    protocol.
-4. Is it a policy the caller asked for, like a fixed glyph budget? Then it is not a failure at all. Define the
-   behaviour, warn in development, expose it for reporting, and let it self-heal.
+4. Is it a policy the caller asked for, like a fixed root capacity? Define the behaviour (what still draws, what
+   waits), throw once from the render that first exceeds it, naming the policy and its owner, and resume on your own
+   once it fits. There is no `onError` channel or error state to read back
+   ([decision](../../docs/planning/decisions/render-time-errors-throw.md)).

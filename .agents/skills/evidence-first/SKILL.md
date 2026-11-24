@@ -1,6 +1,6 @@
 ---
 name: evidence-first
-description: Shape human-facing engineering communication—including chat updates and final answers, reports, reviews, handoffs, debugging or benchmark summaries, PR and issue prose, READMEs, and technical documentation—around clear claims, measured support, explicit gaps, and scoped decisions. Use whenever Codex presents engineering work, evidence, or findings to a human; let document-specific frameworks retain their purpose and structure.
+description: Shape human-facing engineering communication—including chat updates and final answers, reports, reviews, handoffs, debugging or benchmark summaries, PR and issue prose, READMEs, and technical documentation—around clear claims, measured support, explicit gaps, and scoped decisions. Use whenever presenting engineering work, evidence, or findings to a human; let document-specific frameworks retain their purpose and structure.
 ---
 
 # Working orientation
