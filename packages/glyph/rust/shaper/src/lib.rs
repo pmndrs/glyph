@@ -332,6 +332,12 @@ impl ShaperRegistry {
         if self.font_handles.get(last) == Some(&handle) {
             return Some(last);
         }
+        self.search_font_index(handle)
+    }
+
+    // The memo hit above is inlined into every caller; the search is not.
+    #[inline(never)]
+    fn search_font_index(&self, handle: u32) -> Option<usize> {
         let index = self.font_handles.binary_search(&handle).ok()?;
         self.last_font.set(index);
         Some(index)
