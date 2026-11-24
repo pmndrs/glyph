@@ -8,7 +8,7 @@ use core::ops::Range;
 use super::{
     codec::{
         CapabilitySetId, InputScope, MAX_REGISTERS, ProgramDescriptor, ValidatedCodec,
-        f32_input_dependency, low_bits, u32_input_dependency,
+        f32_input_dependency, u32_input_dependency,
     },
     font_binding::{FontRenderBinding, SelectedGlyphBinding},
     frame::{
@@ -27,7 +27,7 @@ use super::{
         PositionedGlyphArena, PositionedSemanticGlyph, PositionedSourceContext, ProjectedSourceRow,
         SEMANTIC_PLACEMENT_SLOT_CHANGE,
     },
-    retained_rope::{LEAF_CAPACITY, RetainedRope, RopeRecord, RopeSummary, RopeUpdate},
+    retained_rope::{RetainedRope, RopeRecord, RopeSummary, RopeUpdate},
     shaping_state::BoundaryShapeArena,
 };
 
@@ -37,11 +37,14 @@ mod fields;
 mod retain;
 mod retain_compare;
 mod retained_update;
+#[cfg(test)]
+use super::{codec::low_bits, retained_rope::LEAF_CAPACITY};
 use fields::*;
 use retained_update::*;
 
 use columns::{CHUNK, ColumnPlan, Lanes, RowSource, Rows, SourceChunk};
 
+#[cfg(test)]
 const POSITION_ONLY_CHANGES: u16 =
     (1 << 0) | (1 << 1) | (1 << 6) | (1 << 7) | SEMANTIC_PLACEMENT_SLOT_CHANGE;
 
@@ -117,6 +120,7 @@ pub struct LayoutGlyph {
     pub block_extent: f32,
 }
 
+#[cfg(test)]
 #[derive(Clone, Copy)]
 pub struct LayoutPlanInput<'a> {
     pub transform_id: u32,
@@ -153,11 +157,13 @@ pub(crate) struct InlinePlanInput<'a> {
 
 #[derive(Clone, Copy)]
 pub(crate) enum GatherInput<'a> {
+    #[cfg(test)]
     Flat(LayoutPlanInput<'a>),
     Projected(ProjectedPlanInput<'a>),
     Inline(InlinePlanInput<'a>),
 }
 
+#[cfg(test)]
 impl<'a> From<LayoutPlanInput<'a>> for GatherInput<'a> {
     fn from(input: LayoutPlanInput<'a>) -> Self {
         Self::Flat(input)
@@ -179,6 +185,7 @@ impl<'a> From<InlinePlanInput<'a>> for GatherInput<'a> {
 impl<'a> GatherInput<'a> {
     fn len(self) -> usize {
         match self {
+            #[cfg(test)]
             Self::Flat(input) => input.glyphs.len(),
             Self::Projected(input) => input.selection.map_or(
                 input.positioned.outlined_count(),
@@ -192,6 +199,7 @@ impl<'a> GatherInput<'a> {
 
     fn transform_id(self) -> u32 {
         match self {
+            #[cfg(test)]
             Self::Flat(input) => input.transform_id,
             Self::Projected(input) => input.transform_id,
             Self::Inline(input) => input.transform_id,
@@ -200,12 +208,14 @@ impl<'a> GatherInput<'a> {
 
     fn masks(self) -> &'a [u16] {
         match self {
+            #[cfg(test)]
             Self::Flat(input) => input.semantic_change_masks,
             Self::Projected(_) | Self::Inline(_) => &[],
         }
     }
 }
 
+#[cfg(test)]
 impl<'a> LayoutPlanInput<'a> {
     fn row(self, index: usize) -> Result<GatherRow<'a>, GatherError> {
         Ok(GatherRow {
@@ -221,6 +231,7 @@ impl<'a> LayoutPlanInput<'a> {
 
 /// One caller-authored Flat row. Prepared owners never build rows: `columns` reads them
 /// a chunk at a time.
+#[cfg(test)]
 #[derive(Clone, Copy)]
 struct GatherRow<'a> {
     input: LayoutPlanInput<'a>,
@@ -228,6 +239,7 @@ struct GatherRow<'a> {
     glyph: LayoutGlyph,
 }
 
+#[cfg(test)]
 impl GatherRow<'_> {
     fn semantic_f32(self, field: usize) -> Result<f32, GatherError> {
         self.input
@@ -507,9 +519,11 @@ struct RetainedGatherCursor<'codec, 'binding> {
     cached_font_handle: Option<u32>,
     cached_binding: Option<&'binding FontRenderBinding>,
     cached_program: Option<(super::codec::TechniqueId, u16, &'codec ProgramDescriptor)>,
+    #[cfg(test)]
     input_plan: Option<ResolvedInputPlan<'codec>>,
 }
 
+#[cfg(test)]
 #[derive(Clone, Copy)]
 struct ResolvedInputPlan<'codec> {
     capability_set: CapabilitySetId,
@@ -524,6 +538,18 @@ struct ResolvedInputPlan<'codec> {
 }
 
 impl<'codec, 'binding> RetainedGatherCursor<'codec, 'binding> {
+    /// Drops the cached font, binding and program before an owner whose font may differ.
+    fn forget_program(&mut self) {
+        self.cached_font_handle = None;
+        self.cached_binding = None;
+        self.cached_program = None;
+        #[cfg(test)]
+        {
+            self.input_plan = None;
+        }
+    }
+
+    #[cfg(test)]
     fn input_plan(
         &mut self,
         codec: &'codec ValidatedCodec,
@@ -581,12 +607,14 @@ impl<'codec, 'binding> RetainedGatherCursor<'codec, 'binding> {
     }
 }
 
+#[cfg(test)]
 struct OwnerRanges<'a, I> {
     owners: I,
     current: Option<RetainedGatherOwner<'a>>,
     interval: usize,
 }
 
+#[cfg(test)]
 impl<'a, I: Iterator<Item = Result<RetainedGatherOwner<'a>, GatherError>>> Iterator
     for OwnerRanges<'a, I>
 {
@@ -635,6 +663,7 @@ impl GatherSource {
         self.selection != u32::MAX
     }
 
+    #[cfg(test)]
     fn same_selection(self, selected: SelectedGlyphBinding) -> bool {
         self.selection == selection_key(selected)
     }
@@ -832,6 +861,7 @@ impl CodecGatherWorkspace {
         Ok(())
     }
 
+    #[cfg(test)]
     pub fn gather<'binding>(
         &mut self,
         codec: &ValidatedCodec,
@@ -888,6 +918,7 @@ impl CodecGatherWorkspace {
         Ok(retained)
     }
 
+    #[cfg(test)]
     pub fn append_retained<'binding>(
         &mut self,
         codec: &ValidatedCodec,
@@ -970,6 +1001,7 @@ impl CodecGatherWorkspace {
         owners: impl Iterator<Item = Result<RetainedGatherOwner<'owner>, GatherError>> + Clone,
         mut binding_for_font: impl FnMut(u32) -> Option<&'binding FontRenderBinding>,
     ) -> Result<Option<RetainedGatherStop>, GatherError> {
+        #[cfg(test)]
         if matches!(
             owners.clone().next(),
             Some(Ok(RetainedGatherOwner {
@@ -1033,6 +1065,7 @@ impl CodecGatherWorkspace {
         &self.correspondence
     }
 
+    #[cfg(test)]
     pub fn append<'binding>(
         &mut self,
         codec: &ValidatedCodec,
@@ -1080,6 +1113,7 @@ impl CodecGatherWorkspace {
         merge_changed_outputs(&mut self.dirty_mask_ranges, records);
     }
 
+    #[cfg(test)]
     fn push_source_chunk(
         &mut self,
         chunk: &mut [GatherSource; LEAF_CAPACITY],
@@ -1145,6 +1179,7 @@ impl GatheredPlanInput<'_> {
     }
 }
 
+#[cfg(test)]
 fn semantic_f32(field: u8, row: GatherRow<'_>) -> Result<f32, GatherError> {
     if let Some(value) = derived_semantic_f32(field, row)? {
         return Ok(value);
@@ -1152,6 +1187,7 @@ fn semantic_f32(field: u8, row: GatherRow<'_>) -> Result<f32, GatherError> {
     row.semantic_f32(usize::from(field))
 }
 
+#[cfg(test)]
 fn binding_row(row: u32) -> Result<usize, GatherError> {
     usize::try_from(row).map_err(|_| GatherError::SourceFieldMissing)
 }

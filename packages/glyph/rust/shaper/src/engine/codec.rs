@@ -443,6 +443,7 @@ impl ValidatedCodec {
         )
     }
 
+    #[cfg(test)]
     pub(crate) fn input_masks_for_changes(
         &self,
         capability_set: CapabilitySetId,
@@ -512,6 +513,7 @@ fn program_index(
         })
 }
 
+#[cfg(test)]
 pub(crate) fn low_bits(count: u8) -> u32 {
     if count == 0 {
         0

@@ -289,6 +289,8 @@ pub(crate) enum RopeEditError<E> {
 pub(crate) enum RopeUpdate<T> {
     Keep,
     Replace(T),
+    // Only the test-only Flat gather stops an update; production callers keep or replace.
+    #[cfg_attr(not(test), allow(dead_code))]
     Stop,
 }
 

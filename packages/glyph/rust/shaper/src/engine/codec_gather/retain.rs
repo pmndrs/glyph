@@ -7,6 +7,7 @@ use super::*;
 impl CodecGatherWorkspace {
     /// Caller-authored Flat owners keep one transactional rope traversal for the whole
     /// stream: a failure in any owner leaves every source row as it was.
+    #[cfg(test)]
     pub(super) fn retain_flat_owners<'owner, 'binding>(
         &mut self,
         codec: &ValidatedCodec,
@@ -175,6 +176,7 @@ impl CodecGatherWorkspace {
             cached_font_handle: None,
             cached_binding: None,
             cached_program: None,
+            #[cfg(test)]
             input_plan: None,
         };
         let mut bound = None;
@@ -207,10 +209,7 @@ impl CodecGatherWorkspace {
                 .map_err(|_| GatherError::AllocationFailed)?;
             state.source_cursor = owner.range.start.source;
             state.record_cursor = owner.range.start.record;
-            state.cached_font_handle = None;
-            state.cached_binding = None;
-            state.cached_program = None;
-            state.input_plan = None;
+            state.forget_program();
             let retained_count = owner.range.source_count().min(source_count);
             let mut rows = RowSource::new(owner.input);
             // Only a paragraph-run glyph is covered by the declaration; the first chunk that

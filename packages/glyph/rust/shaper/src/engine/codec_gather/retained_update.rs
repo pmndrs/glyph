@@ -3,6 +3,7 @@
 use super::*;
 
 impl CodecGatherWorkspace {
+    #[cfg(test)]
     #[allow(clippy::too_many_arguments)]
     pub(super) fn update_retained_source<'codec, 'binding>(
         &mut self,
@@ -202,6 +203,7 @@ impl CodecGatherWorkspace {
         })
     }
 
+    #[cfg(test)]
     #[allow(clippy::too_many_arguments)]
     pub(super) fn update_retained_position_only<'codec, 'binding>(
         &mut self,
@@ -350,6 +352,7 @@ impl CodecGatherWorkspace {
         true
     }
 
+    #[cfg(test)]
     pub(super) fn replace_glyph(&mut self, index: usize, next: PlanGlyph) {
         let previous = self.glyphs[index];
         let changed = previous.semantic_id != next.semantic_id

@@ -62,6 +62,7 @@ use retained_proof::*;
 
 #[cfg(test)]
 pub(crate) const SEMANTIC_F32_BASE_FIELD_COUNT: usize = 6;
+#[cfg(test)]
 pub(crate) const SEMANTIC_F32_FIELD_COUNT: usize = 9;
 #[cfg(test)]
 pub(crate) const SEMANTIC_U32_FIELD_COUNT: usize = 8;
