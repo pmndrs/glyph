@@ -1,0 +1,88 @@
+---
+title: Cull text outside the view
+description: How text draws are frustum culled, how to keep off-screen text drawn, and what a material that moves vertices must declare.
+nav: 503
+sourcecode: packages/glyph/src/three/internal/culling-scope.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="scene" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+Text draws are frustum culled by default: three.js skips a draw whose bound is outside the camera's view. You do nothing to get this. This guide covers the two cases where you step in: text that must be drawn regardless, and a custom material that moves vertices.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="scene-culling" aria-label="Labels drifting out of the frame with a count of submitted draws, and a displaced word that is culled without boundsPadding" aspect="16 / 9" />
+
+At the top, three labels drift out of the frame and back, each in its own draw; the caption counts how many draws three.js would submit. At the bottom, one word is drawn twice by a material that moves every vertex 4 units to the left while its `Text` slides past the right edge: the copy with `boundsPadding: 0` blinks out while it should still be visible, and the copy with `boundsPadding: 4` stays.
+
+## What is culled
+
+Each draw gets a bounding sphere computed from the glyphs and decorations it places, including outlines and shadows. A draw is culled once that sphere is outside the frustum, which can be slightly after its ink has left the frame. The bound follows the text's own transform, its ancestors, edits to the text, and visibility, and it is tested against whichever camera renders.
+
+The unit of culling is the draw, not the text. Texts that share a draw (see [Group and batch text](/guides/scene/group-and-batch)) are culled together: the draw is skipped only when everything in it is out of view, and it is submitted whole when any part is in view.
+
+## Keep a text drawn off-screen
+
+Set three.js's own `frustumCulled = false` on a `Text`, on a `TextGroup` (for every text beneath it), or on a `Glyphs` object from `text.split()`.
+
+```ts
+text.frustumCulled = false; // this text's draws are always submitted
+group.frustumCulled = false; // so are the draws of every text under this group
+
+const [glyphs] = text.split();
+glyphs.frustumCulled = false;
+```
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text font={inter} frustumCulled={false}>
+  Always submitted
+</Text>;
+```
+
+Because the draw is the unit, opting one text out keeps every draw that holds any of its glyphs submitted, including the other texts batched into it. Set the flag back to `true` to cull again. The change is picked up on the object's next matrix update, which three.js runs during every render.
+
+## Declare how far a material moves vertices
+
+The bound is computed from where the engine places the glyphs. A custom material that assigns `positionNode` can move them outside it, and the text is then culled while it is still on screen. Declare the furthest the material moves any vertex, along any axis, as `boundsPadding`. The unit is that of `context.position`.
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+import { sin, time, vec3 } from 'three/tsl';
+
+const RISE = 0.5;
+
+const wave = defineTextMaterial(
+  (context) => {
+    const material = context.createDefaultMaterial();
+    material.positionNode = context.position.add(vec3(0, sin(time).mul(RISE), 0));
+    return material;
+  },
+  { boundsPadding: RISE },
+);
+```
+
+Every draw that uses the material has its bound grown by that distance on every side. `boundsPadding` must be finite and at least `0`; the default `0` is exact for a material that leaves `positionNode` alone.
+
+When no distance bounds the displacement, opt the material out instead. Its draws are then never culled.
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+
+const unbounded = defineTextMaterial((context) => context.createDefaultMaterial(), { frustumCulled: false });
+```
+
+> [!WARNING]
+> A material that moves a vertex further than its `boundsPadding` can have that vertex culled while it is in view. Nothing reports this; the text disappears near the edge of the frame.
+
+## Check the result
+
+Move the camera so the text crosses the edge of the view. A displaced text should stay visible until all of its displaced ink has left the frame. To count what three.js would submit, test each draw mesh under the root's `@pmndrs/glyph:` object against the camera frustum, or read the renderer's draw-call counter while the text is on and off screen.
+
+## See also
+
+- [Write a custom material](/guides/scene/custom-materials)
+- [Group and batch text](/guides/scene/group-and-batch)
+- [Materials reference](/reference/three-materials)
+- [Performance](/guides/project/performance)

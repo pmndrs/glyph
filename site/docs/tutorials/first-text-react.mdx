@@ -1,0 +1,212 @@
+---
+title: Your first text in React
+description: Build a styled, wrapped, centered paragraph in a React Three Fiber canvas, from an empty project to a baked font, a hook, a Text component, constraints and an inline span.
+nav: 20
+sourcecode: packages/glyph/src/react.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="start" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+In this tutorial you put a paragraph of text into a React Three Fiber scene. You start from an empty project, bake a
+font file, load it with a hook, draw it with `<Text>`, then style it, wrap it, center it and color one word. It takes
+about ten minutes. You need Node.js and a browser with WebGPU or WebGL 2.
+
+## 1. Create the project
+
+Create a React project with Vite and install three.js, React Three Fiber and Glyph.
+
+```sh
+npm create vite@latest glyph-first-text -- --template react-ts
+cd glyph-first-text
+npm install @pmndrs/glyph three @react-three/fiber@^10.0.0-alpha.4
+npm install --save-dev @types/three
+```
+
+Make the page a full-window canvas. Replace the contents of `src/index.css` with:
+
+```css
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: #07090f;
+}
+```
+
+## 2. Bake a font
+
+Glyph draws from a baked font file, a `.font.glb`, made once from an ordinary font. Copy a TTF or OTF font into the
+project folder. This tutorial uses `Inter-Regular.ttf`; any font works. Then run:
+
+```sh
+mkdir -p public/fonts
+npx glyph bake --input Inter-Regular.ttf --output public/fonts/inter.font.glb --msdf
+```
+
+You should now have `public/fonts/inter.font.glb`. Vite serves it at `/fonts/inter.font.glb`.
+
+## 3. Add a canvas
+
+Replace the contents of `src/App.tsx` with an empty canvas. Note the `/webgpu` entry: Glyph draws through the
+three.js WebGPU renderer, which falls back to WebGL 2 by itself.
+
+```tsx
+import { Canvas } from '@react-three/fiber/webgpu';
+import { Suspense } from 'react';
+
+export default function App() {
+  return (
+    <Canvas camera={{ position: [0, 0, 10], fov: 50 }}>
+      <Suspense fallback={null}></Suspense>
+    </Canvas>
+  );
+}
+```
+
+Start the dev server with `npm run dev` and open the address it prints. You should see an empty dark page.
+
+## 4. Draw a line of text
+
+Add a component that loads the font with `useMsdf` and draws it with `<Text>`, and put it inside the `Suspense`
+boundary.
+
+```tsx
+import { Text, useMsdf } from '@pmndrs/glyph/react';
+import { Canvas } from '@react-three/fiber/webgpu';
+import { Suspense } from 'react';
+
+function Paragraph() {
+  const inter = useMsdf('/fonts/inter.font.glb');
+  return (
+    <Text font={inter} style={{ fontSize: 0.6 }}>
+      Hello world
+    </Text>
+  );
+}
+
+export default function App() {
+  return (
+    <Canvas camera={{ position: [0, 0, 10], fov: 50 }}>
+      <Suspense fallback={null}>
+        <Paragraph />
+      </Suspense>
+    </Canvas>
+  );
+}
+```
+
+You should see "Hello world" in white. It starts at the center of the canvas and extends to the right and down,
+because a text's origin is the top-left corner of its box unless you say otherwise.
+
+`useMsdf` suspended the component until the font was loaded, which is why the `Suspense` boundary is there.
+`fontSize` is in scene units: `0.6` means letters about 0.6 units tall in the same space as every mesh in the scene.
+
+## 5. Style it
+
+`style` holds how the text looks. Change the `<Text>` element in `Paragraph`:
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text font={inter} style={{ fontSize: 0.6, color: '#ffd166', letterSpacing: 0.02 }}>
+  Hello world
+</Text>;
+```
+
+The line is now yellow with slightly wider spacing. Colors are `#rrggbb` or `#rrggbbaa` strings.
+
+## 6. Wrap and center it
+
+Give the text a longer sentence and three more things:
+
+- `layout` says how the paragraph flows: wrap at word boundaries, center each line.
+- `constraints.width` says how wide the paragraph may be: at most 6 units.
+- `constraints.anchor` says which point of the paragraph box sits at the object's position: its center.
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text
+  font={inter}
+  style={{ fontSize: 0.6, color: '#ffd166', letterSpacing: 0.02 }}
+  layout={{ wrap: 'word', align: 'center' }}
+  constraints={{ width: { mode: 'at-most', size: 6 }, anchor: { x: 'center', y: 'middle' } }}
+>
+  The quick brown fox jumps over the lazy dog
+</Text>;
+```
+
+You should see the sentence broken into three centered lines in the middle of the canvas, like this:
+
+<glyph-proxy fit="cover" root="scenes" data-scene="first-text" aria-label="A yellow sentence wrapped into three centered lines" aspect="16 / 9" />
+
+Change `size` to `4` and save. The paragraph wraps into more lines and stays centered.
+
+## 7. Color one word
+
+A `<Text>` inside a `<Text>` is an inline span. It styles part of the paragraph and inherits everything it does not
+set. Wrap one word:
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text
+  font={inter}
+  style={{ fontSize: 0.6, color: '#ffd166', letterSpacing: 0.02 }}
+  layout={{ wrap: 'word', align: 'center' }}
+  constraints={{ width: { mode: 'at-most', size: 6 }, anchor: { x: 'center', y: 'middle' } }}
+>
+  The quick brown <Text style={{ color: '#70d6ff' }}>fox</Text> jumps over the lazy dog
+</Text>;
+```
+
+The word "fox" turns blue. The line breaks do not move: the span changed a color, not the layout.
+
+## The finished file
+
+`src/App.tsx` now reads:
+
+```tsx
+import { Text, useMsdf } from '@pmndrs/glyph/react';
+import { Canvas } from '@react-three/fiber/webgpu';
+import { Suspense } from 'react';
+
+function Paragraph() {
+  const inter = useMsdf('/fonts/inter.font.glb');
+  return (
+    <Text
+      font={inter}
+      style={{ fontSize: 0.6, color: '#ffd166', letterSpacing: 0.02 }}
+      layout={{ wrap: 'word', align: 'center' }}
+      constraints={{ width: { mode: 'at-most', size: 6 }, anchor: { x: 'center', y: 'middle' } }}
+    >
+      The quick brown <Text style={{ color: '#70d6ff' }}>fox</Text> jumps over the lazy dog
+    </Text>
+  );
+}
+
+export default function App() {
+  return (
+    <Canvas camera={{ position: [0, 0, 10], fov: 50 }}>
+      <Suspense fallback={null}>
+        <Paragraph />
+      </Suspense>
+    </Canvas>
+  );
+}
+```
+
+You baked a font, loaded it with a hook, and drew a paragraph whose look (`style`), flow (`layout`) and box
+(`constraints`) are three separate props.
+
+## See also
+
+- [Your first text in three.js](/tutorials/first-text-three)
+- [Use Glyph with React Three Fiber](/guides/renderers/react-three-fiber)
+- [Style text](/guides/text/style-text)
+- [Size a paragraph](/guides/layout/size-a-paragraph)
+- [Bake fonts](/guides/fonts/bake-fonts)

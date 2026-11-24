@@ -1,0 +1,337 @@
+---
+title: Materials
+description: Reference for defineTextMaterial, ThreeTextMaterial and the material context each raster format passes to a factory in @pmndrs/glyph/three.
+nav: 725
+sourcecode: packages/glyph/src/three/material.ts
+---
+
+A text material is a factory: a function that receives the TSL nodes of one draw and returns a three.js
+`NodeMaterial`. This page lists `defineTextMaterial`, the `ThreeTextMaterial` value it returns, the context passed to
+the factory for decorations and for each built-in raster format, and the places a material can be assigned. All names
+are exported from `@pmndrs/glyph/three`.
+
+## defineTextMaterial()
+
+Creates a frozen `ThreeTextMaterial` from a factory and its culling options.
+
+```ts
+import { defineTextMaterial, type ThreeTextMaterial } from '@pmndrs/glyph/three';
+
+const material: ThreeTextMaterial = defineTextMaterial(
+  (context) => {
+    const created = context.createDefaultMaterial();
+    created.depthTest = true;
+    return created;
+  },
+  { boundsPadding: 0, frustumCulled: true },
+);
+```
+
+Signature:
+`defineTextMaterial(create: (context: ThreeTextMaterialContext) => NodeMaterial, options?: { frustumCulled?: boolean; boundsPadding?: number }): ThreeTextMaterial`.
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `create` | `(context: ThreeTextMaterialContext) => NodeMaterial` | required | The factory. See [The factory](#the-factory). |
+| `options.frustumCulled` | `boolean` | `true` | Whether draws using this material are frustum culled. `false` submits them whatever the camera sees. |
+| `options.boundsPadding` | `number` | `0` | The furthest the material's vertex stage moves any vertex along any axis, in the units of the context's `position`. Each draw's culling bound grows by this much on every side. Finite and `>= 0`. |
+
+A material that assigns `positionNode` to anything other than the context's `position` must declare how far it
+displaces with `boundsPadding`, or pass `frustumCulled: false` when no distance bounds the displacement. A vertex
+moved further than the declared padding can be culled while it is on screen. See
+[Cull text outside the view](/guides/scene/culling).
+
+### Return value
+
+A frozen `ThreeTextMaterial`. Its identity matters: draws are separated by material object, so define a material once
+and reuse the value. Two calls with the same factory return two different materials.
+
+### Exceptions
+
+| Error | When |
+| --- | --- |
+| `TypeError` | `create` is not a function; `options` is not an object; `frustumCulled` is not a boolean. |
+| `RangeError` | `boundsPadding` is not a finite number `>= 0`. |
+
+## ThreeTextMaterial
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `create` | `(context: ThreeTextMaterialContext) => NodeMaterial` | The factory passed to `defineTextMaterial`. |
+| `frustumCulled` | `boolean` | Read-only. See the option above. |
+| `boundsPadding` | `number` | Read-only. See the option above. |
+
+All three members are required, so an object literal `{ create }` does not satisfy the type. Build the value with
+`defineTextMaterial`.
+
+## The factory
+
+The renderer calls `create` while it realizes draws, during a publication: inside `glyph.shape()` or the render that
+publishes, and inside `text.split()` for the copy's own materials.
+
+- It must return synchronously.
+- It must return a `NodeMaterial` created during that call. Returning a material that an earlier call returned, or a
+  value that is not a `NodeMaterial`, throws `TypeError`. The one exception is `undefined` or `null`, which the
+  renderer replaces with `createDefaultMaterial()`; the type does not allow it, so return the default explicitly.
+- It is called once per realized draw material, not once per text. One material value can be called for a
+  decoration draw and for each raster format, font resource and MSDF effect combination (fill, outline, shadow) it is
+  used with. Branch on `context.kind` and `context.format`.
+- When instance buffers grow, the existing material is kept and pointed at the new buffers; the factory is not called
+  again for it.
+- It must not change or query text. Calling a setter such as `text.set()` from inside the factory throws.
+- The returned material is owned by the renderer, which disposes it.
+
+Animate a material with uniforms captured in the factory's closure rather than by redefining the material.
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+import { uniform } from 'three/tsl';
+
+const fade = uniform(1);
+
+const faded = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  material.opacityNode = context.shader.opacity.mul(fade);
+  return material;
+});
+
+fade.value = 0.5; // every draw using `faded` follows
+```
+
+## ThreeTextMaterialContext
+
+The argument of `create`: a union of one context per draw kind. `ThreeTextMaterialContextMap` is the interface that
+maps each key to its context, and `ThreeTextMaterialContext` is the union of its values.
+
+| Map key | `kind` | `format` | `shader` type |
+| --- | --- | --- | --- |
+| `decoration` | `'decoration'` | absent | `TslDecorationShaderOutput` |
+| `pmndrs.bitmap` | `'glyph'` | `'pmndrs.bitmap'` | `TslBitmapShaderOutput` |
+| `pmndrs.msdf` | `'glyph'` | `'pmndrs.msdf'` | `TslMsdfShaderOutput` |
+| `pmndrs.slug` | `'glyph'` | `'pmndrs.slug'` | `TslSlugShaderOutput` |
+
+Narrow with `kind` first, then `format`:
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+
+const material = defineTextMaterial((context) => {
+  const created = context.createDefaultMaterial();
+  if (context.kind === 'decoration') return created;
+  switch (context.format) {
+    case 'pmndrs.bitmap':
+      created.opacityNode = context.shader.coverage.mul(0.5);
+      break;
+    case 'pmndrs.msdf':
+      created.opacityNode = context.shader.fillCoverage.mul(0.5);
+      break;
+    case 'pmndrs.slug':
+      created.opacityNode = context.shader.coverage.mul(0.5);
+      break;
+  }
+  return created;
+});
+```
+
+### Fields common to every context
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `kind` | `'glyph' \| 'decoration'` | Whether the draw holds glyphs or decoration rectangles. |
+| `shader` | per context | The TSL output nodes of that draw's shader. See the tables below. |
+| `position` | `Node<'vec3'>` | The final draw-local vertex position: the value the default material assigns to `positionNode`. |
+| `paragraphPosition` | `Node<'vec3'>` | The vertex position in unanchored paragraph-local space, +X right and +Y up. |
+| `root` | `ThreeRootContext` | The root this draw belongs to. |
+| `createDefaultMaterial()` | `() => NodeMaterial` | Builds the built-in material for this draw. Each call returns a new material. |
+
+### position and paragraphPosition
+
+Both nodes are evaluated once per vertex and reach a fragment node as their interpolated value. Either may be read
+from any node, in either stage, any number of times.
+
+| Node | Space | Includes | Use it for |
+| --- | --- | --- | --- |
+| `position` | Draw-local | The anchor offset, detached-glyph matrices, and in `indexed` transform mode the transform of the `Text` and its ancestors. | Assigning `positionNode`, with or without a displacement added. |
+| `paragraphPosition` | Paragraph-local, +X right, +Y up: the space of `text.glyphs()` ink boxes with y negated | Nothing but layout. No anchor offset, no detached-glyph matrix, no `Text` or ancestor transform. | Effects that depend on where a vertex is in the paragraph: gradients across a line, a wave along the reading direction. |
+
+`position` differs between the two [transform modes](/reference/three-config) for the same world-space glyph: in
+`direct` mode the `Text` and ancestor transform stays on the draw mesh's matrix. It is not comparable with paragraph
+or Text-local bounds. `paragraphPosition` is the same in both modes.
+
+A displacement assigns `positionNode` from `position`. Fragment reads of `position` still see the undisplaced value.
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+import { sin, uniform, vec3 } from 'three/tsl';
+
+const time = uniform(0);
+const AMPLITUDE = 0.2;
+
+const wave = defineTextMaterial(
+  (context) => {
+    const material = context.createDefaultMaterial();
+    const lift = sin(context.paragraphPosition.x.mul(2).add(time)).mul(AMPLITUDE);
+    material.positionNode = context.position.add(vec3(0, lift, 0));
+    return material;
+  },
+  { boundsPadding: AMPLITUDE },
+);
+```
+
+### ThreeRootContext
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `name` | `string \| undefined` | The root's name; `undefined` for a handle's anonymous root and for a `split()` copy. |
+| `scene` | `Scene \| undefined` | The `Scene` the root is bound to, if any. `undefined` for a `split()` copy. |
+| `renderObject` | `Object3D` | The object that parents the renderer-owned meshes of this publication: the root's private object, or the `Glyphs` or `Decorations` object for a copy. |
+
+### createDefaultMaterial()
+
+Returns a `MeshBasicNodeMaterial` with these settings:
+
+| Setting | Value |
+| --- | --- |
+| `blending` | `NormalBlending` |
+| `transparent` | `true` |
+| `depthTest` | `false` |
+| `depthWrite` | `false` |
+| `side` | `DoubleSide` |
+| `forceSinglePass` | `true` |
+| `positionNode` | the context's `position` |
+| `colorNode` | `shader.color` |
+| `opacityNode` | `shader.opacity` |
+| `vertexNode` | Bitmap only: `shader.clipPosition` |
+
+A material built from another class must keep the same contract to draw text correctly: assign `positionNode` from
+`context.position`, and for Bitmap also assign `vertexNode` from `shader.clipPosition`.
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+import { DoubleSide, MeshPhysicalNodeMaterial, NormalBlending } from 'three/webgpu';
+
+const physical = defineTextMaterial((context) => {
+  if (context.kind !== 'glyph' || context.format !== 'pmndrs.msdf') return context.createDefaultMaterial();
+  const material = new MeshPhysicalNodeMaterial({
+    blending: NormalBlending,
+    depthTest: false,
+    depthWrite: false,
+    side: DoubleSide,
+    transparent: true,
+  });
+  material.positionNode = context.position;
+  material.colorNode = context.shader.color;
+  material.opacityNode = context.shader.opacity;
+  return material;
+});
+```
+
+## Decoration context
+
+`kind: 'decoration'`. One draw of underline, overline and line-through rectangles. There is no `format` field.
+
+| `shader` node | Type | Description |
+| --- | --- | --- |
+| `position` | `Node<'vec3'>` | Vertex position of the rectangle in paragraph-local space, +Y up, before the draw transform. |
+| `color` | `Node<'vec3'>` | The decoration color, linear. |
+| `opacity` | `Node<'float'>` | The decoration alpha. |
+
+## Bitmap context
+
+`kind: 'glyph'`, `format: 'pmndrs.bitmap'`.
+
+| `shader` node | Type | Description |
+| --- | --- | --- |
+| `position` | `Node<'vec3'>` | Vertex position of the glyph quad before the draw transform. |
+| `clipPosition` | `Node<'vec4'>` | Clip-space vertex position, snapped to physical pixels when the text has `pixelSnapping`. Assign it to `material.vertexNode`. |
+| `atlasUv` | `Node<'vec2'>` | The atlas coordinate the page is sampled at, in the page's top-down texel space. |
+| `coverage` | `Node<'float'>` | Sampled glyph coverage before paint alpha. |
+| `color` | `Node<'vec3'>` | The glyph color. |
+| `opacity` | `Node<'float'>` | Paint alpha multiplied by coverage. |
+
+## MSDF context
+
+`kind: 'glyph'`, `format: 'pmndrs.msdf'`.
+
+| `shader` node | Type | Description |
+| --- | --- | --- |
+| `position` | `Node<'vec3'>` | Vertex position of the glyph quad before the draw transform. |
+| `atlasUv` | `Node<'vec2'>` | The unclamped atlas coordinate the glyph cell is sampled at. |
+| `fillDistance` | `Node<'float'>` | Corner-preserving median distance in normalized atlas units: negative outside, zero on the edge. |
+| `trueDistance` | `Node<'float'>` | Smooth distance in the same units, for glows and bevels. Limited by the baked field range. |
+| `pixelRange` | `Node<'float'>` | Screen pixels per normalized distance unit. Multiply either distance by it for signed screen pixels. |
+| `fillCoverage` | `Node<'float'>` | Antialiased fill coverage. |
+| `outlineCoverage` | `Node<'float'>` | Outline ring coverage with the fill already subtracted. |
+| `shadowCoverage` | `Node<'float'>` | Coverage of the displaced fill; zero when the shadow color is fully transparent. |
+| `color` | `Node<'vec3'>` | Unpremultiplied composite of fill, outline and shadow. |
+| `opacity` | `Node<'float'>` | Alpha of that composite. |
+
+## Slug context
+
+`kind: 'glyph'`, `format: 'pmndrs.slug'`.
+
+| `shader` member | Type | Description |
+| --- | --- | --- |
+| `position` | `Node<'vec3'>` | Dilated glyph-quad position before the draw transform. |
+| `renderCoordinate` | `Node<'vec2'>` | The interpolated em-space coordinate the coverage is evaluated at. |
+| `coverage` | `Node<'float'>` | Analytic fill coverage before paint alpha, at `renderCoordinate`. |
+| `coverageAt(coordinate)` | `(coordinate: Node<'vec2'>) => Node<'float'>` | Analytic coverage at another em-space coordinate, clipped to the existing quad. Each call evaluates a full integral. Call it outside divergent fragment control flow. |
+| `color` | `Node<'vec3'>` | The glyph color. |
+| `opacity` | `Node<'float'>` | Paint alpha multiplied by coverage. |
+
+`coverage` and the vertex position are two halves of one graph: a material that uses Slug coverage must drive
+`positionNode` from the context's `position`.
+
+## Where a material is set
+
+A material can be assigned at five levels. For each run of text the first one that is set wins:
+
+| Order | Where | How |
+| --- | --- | --- |
+| 1 | A span | `span(material, …)` from `@pmndrs/glyph/three`, or `material` on a nested `<Text>` in React |
+| 2 | A `Text` | `createText({ material })`, `text.material`, `text.set({ material })` |
+| 3 | The nearest enclosing `TextGroup` that sets one | `createTextGroup({ material })`, `group.material` |
+| 4 | The root | `root.material` |
+| 5 | The config | `defineThreeConfig({ material })` |
+
+With none set, every draw uses `createDefaultMaterial()`. Assigning `undefined` at a level clears it and the next
+level applies.
+
+```ts
+import { glyph, txt } from '@pmndrs/glyph';
+import { defineTextMaterial, defineThreeConfig, span } from '@pmndrs/glyph/three';
+
+const glow = defineTextMaterial((context) => context.createDefaultMaterial());
+
+root.createText({ font: inter, text: txt`Status ${span(glow, { color: '#4ade80' })`online`}` }); // one run
+root.createText({ font: inter, text: 'Whole text', material: glow }); // one text
+root.createTextGroup({ material: glow }); // every descendant text
+root.material = glow; // every text on this root
+glyph.handle('glowing', defineThreeConfig({ material: glow })); // every root of a handle
+```
+
+### span() with a material
+
+The `span` exported from `@pmndrs/glyph/three` accepts a `ThreeTextMaterial` among its arguments, alongside a font and
+style objects. A span may name at most one material; a second throws `TypeError`. The `span` exported from
+`@pmndrs/glyph` does not accept materials. See [Formatted text](/reference/formatted-text).
+
+## Custom raster formats
+
+`ThreeTextMaterialContextMap` is an open interface. A package that adds a raster format to the three.js renderer
+augments it with the format's key and context, and registers the format's draw program with
+`registerThreeRasterProgram`. That function, `threeCodecAbi`, and the types `ThreeRasterProgram`,
+`ThreeRasterVariant`, `ThreeRasterMaterialContext`, `ThreeRasterProgramBuffer`, `ThreeRasterBufferCapability`,
+`ThreeRasterBufferCapabilities`, `ThreeRasterResourceCapability`, `ThreeRasterResourceCapabilities` and
+`ThreeCodecAbi` are exported from `@pmndrs/glyph/three` for that purpose. They are described in
+[Add a custom raster format](/guides/project/custom-format).
+
+## See also
+
+- [Write a custom material](/guides/scene/custom-materials)
+- [Cull text outside the view](/guides/scene/culling)
+- [Three config](/reference/three-config)
+- [Shaders](/reference/shaders)
+- [Glyphs and Decorations](/reference/three-glyphs)

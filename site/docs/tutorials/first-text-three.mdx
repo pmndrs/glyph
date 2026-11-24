@@ -1,0 +1,229 @@
+---
+title: Your first text in three.js
+description: Build a styled, wrapped, centered paragraph in a plain three.js scene - the renderer, glyph.init, a handle, a baked font, createText, constraints and an inline span.
+nav: 21
+sourcecode: packages/glyph/src/three.ts
+---
+
+In this tutorial you put a paragraph of text into a plain three.js scene. You start from an empty project, bake a
+font file, start the engine, create a text object, then style it, wrap it, center it and color one word. The result is
+the same paragraph as in [Your first text in React](/tutorials/first-text-react), written imperatively. It takes about
+ten minutes. You need Node.js and a browser with WebGPU or WebGL 2.
+
+## 1. Create the project
+
+Create a TypeScript project with Vite and install three.js and Glyph.
+
+```sh
+npm create vite@latest glyph-first-text -- --template vanilla-ts
+cd glyph-first-text
+npm install @pmndrs/glyph three
+npm install --save-dev @types/three
+```
+
+Make the page a full-window canvas. Replace the contents of `src/style.css` with:
+
+```css
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #07090f;
+}
+```
+
+## 2. Bake a font
+
+Glyph draws from a baked font file, a `.font.glb`, made once from an ordinary font. Copy a TTF or OTF font into the
+project folder. This tutorial uses `Inter-Regular.ttf`; any font works. Then run:
+
+```sh
+mkdir -p public/fonts
+npx glyph bake --input Inter-Regular.ttf --output public/fonts/inter.font.glb --msdf
+```
+
+You should now have `public/fonts/inter.font.glb`. Vite serves it at `/fonts/inter.font.glb`.
+
+## 3. Set up the renderer
+
+Replace the contents of `src/main.ts` with a renderer, a scene, a camera and a render loop. Import three.js from
+`three/webgpu`: Glyph draws through the WebGPU renderer, which falls back to WebGL 2 by itself.
+
+```ts
+import './style.css';
+import { PerspectiveCamera, Scene, WebGPURenderer } from 'three/webgpu';
+
+const renderer = new WebGPURenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.replaceChildren(renderer.domElement);
+await renderer.init();
+
+const scene = new Scene();
+const camera = new PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.z = 10;
+
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+});
+
+renderer.setAnimationLoop(() => {
+  renderer.render(scene, camera);
+});
+```
+
+Start the dev server with `npm run dev` and open the address it prints. You should see an empty dark page. The
+`resize` listener keeps the canvas the size of the window.
+
+## 4. Start the engine and create a handle
+
+Add these lines just above `renderer.setAnimationLoop`. From here on, every new block goes in that same place, below
+the previous one, with its `import` lines moved to the top of the file.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+
+await glyph.init();
+const three = glyph.handle('app', ThreeConfig);
+three.attach(scene);
+```
+
+`glyph.init()` loads the layout engine; call it once. `glyph.handle` creates a handle: the object that creates text
+and owns what draws it. `'app'` is a name you choose, and `ThreeConfig` is the default configuration. `attach` tells
+the handle which scene its text will be in.
+
+Nothing changes on screen yet.
+
+## 5. Load the font and draw a line of text
+
+Declare the font, wait for it to load, create a text object and add it to the scene.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+
+const Inter = glyph.fontFace('/fonts/inter.font.glb');
+await Inter.load();
+
+const text = three.createText({
+  font: Inter,
+  text: 'Hello world',
+  style: { fontSize: 0.6 },
+});
+scene.add(text);
+```
+
+You should see "Hello world" in white. It starts at the center of the canvas and extends to the right and down,
+because a text's origin is the top-left corner of its box unless you say otherwise.
+
+The text object is a three.js `Object3D`, so `text.position`, `text.rotation` and `scene.add` work as for a
+mesh. `fontSize` is in scene units: `0.6` means letters about 0.6 units tall in the same space as every mesh in the
+scene. You did not tell Glyph to draw: `renderer.render` lays out and draws changed text as part of each frame.
+
+## 6. Style it
+
+`style` holds how the text looks. Assign a new one below the code from step 5:
+
+```ts
+text.style = { fontSize: 0.6, color: '#ffd166', letterSpacing: 0.02 };
+```
+
+The line is now yellow with slightly wider spacing. Colors are `#rrggbb` or `#rrggbbaa` strings. A setter records the
+new value, and the next frame draws it.
+
+## 7. Wrap and center it
+
+Give the text a longer sentence and three more things, in one call to `set`:
+
+- `layout` says how the paragraph flows: wrap at word boundaries, center each line.
+- `constraints.width` says how wide the paragraph may be: at most 6 units.
+- `constraints.anchor` says which point of the paragraph box sits at the object's position: its center.
+
+```ts
+text.set({
+  text: 'The quick brown fox jumps over the lazy dog',
+  layout: { wrap: 'word', align: 'center' },
+  constraints: { width: { mode: 'at-most', size: 6 }, anchor: { x: 'center', y: 'middle' } },
+});
+```
+
+You should see the sentence broken into three centered lines in the middle of the canvas.
+
+Change `size` to `4` and save. The paragraph wraps into more lines and stays centered.
+
+## 8. Color one word
+
+A span styles part of a paragraph and inherits everything it does not set. Build the text with the `txt` template
+tag and a `span`:
+
+```ts
+import { span, txt } from '@pmndrs/glyph';
+
+const blue = span({ color: '#70d6ff' });
+text.text = txt`The quick brown ${blue`fox`} jumps over the lazy dog`;
+```
+
+The word "fox" turns blue. The line breaks do not move: the span changed a color, not the layout.
+
+## The finished file
+
+With the steps folded into the creation call, `src/main.ts` reads:
+
+```ts
+import './style.css';
+import { glyph, span, txt } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+import { PerspectiveCamera, Scene, WebGPURenderer } from 'three/webgpu';
+
+const renderer = new WebGPURenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.replaceChildren(renderer.domElement);
+await renderer.init();
+
+const scene = new Scene();
+const camera = new PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.z = 10;
+
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+});
+
+await glyph.init();
+const three = glyph.handle('app', ThreeConfig);
+three.attach(scene);
+
+const Inter = glyph.fontFace('/fonts/inter.font.glb');
+await Inter.load();
+
+const blue = span({ color: '#70d6ff' });
+const text = three.createText({
+  font: Inter,
+  text: txt`The quick brown ${blue`fox`} jumps over the lazy dog`,
+  style: { fontSize: 0.6, color: '#ffd166', letterSpacing: 0.02 },
+  layout: { wrap: 'word', align: 'center' },
+  constraints: { width: { mode: 'at-most', size: 6 }, anchor: { x: 'center', y: 'middle' } },
+});
+scene.add(text);
+
+renderer.setAnimationLoop(() => {
+  renderer.render(scene, camera);
+});
+```
+
+You baked a font, started the engine, and drew a paragraph whose look (`style`), flow (`layout`) and box
+(`constraints`) are three separate properties of one scene object.
+
+## See also
+
+- [Use Glyph with three.js](/guides/renderers/three)
+- [Text](/reference/three-text)
+- [Your first text in React](/tutorials/first-text-react)
+- [Style text](/guides/text/style-text)
+- [Bake fonts](/guides/fonts/bake-fonts)

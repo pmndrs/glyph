@@ -1,0 +1,417 @@
+---
+title: Text
+description: Reference for the three.js Text object - every property, set, measure, glyphs, readGlyphs, measureGlyphs, boundingBox, commitState, onLayout, split and dispose.
+nav: 722
+sourcecode: packages/glyph/src/three/text.ts
+---
+
+`Text` is one paragraph in a three.js scene. It is an `Object3D`: it has a transform, a parent and `visible`, and it
+holds the paragraph's desired state (font, content, style, layout, constraints). It has no mesh of its own; the root
+that created it draws it. This page lists every member. `Text` is exported from `@pmndrs/glyph/three`; the React and
+Vue `<Text>` components create the same object and hand it to you through a ref.
+
+## Creating a Text
+
+```ts
+import type { msdf } from '@pmndrs/glyph';
+import type { Text } from '@pmndrs/glyph/three';
+
+const label: Text<typeof msdf> = root.createText({
+  font: inter,
+  text: 'Hello world',
+  style: { fontSize: 0.5 },
+});
+scene.add(label);
+```
+
+A `Text` is created with [`root.createText(properties)`](/reference/three-root#createtext) and belongs to that root
+for life. Calling `new Text(...)` yourself throws a `TypeError`. The type parameter is the raster format of the
+font (`typeof msdf`, `typeof slug`, `typeof bitmap`); it types `font` and the spans the text accepts.
+
+## How setters and reads behave
+
+- A setter validates the value, records it and marks the text dirty. It makes no engine call. A value that is not
+  valid input throws a [`GlyphInputError`](/reference/errors) from the setter, and the text keeps its previous value.
+- A read (`measure`, `glyphs`, `readGlyphs`, `measureGlyphs`, `boundingBox`, `split`, the editing methods) lays the
+  text out first if a setter left it dirty. A read is never stale and never returns `undefined` for "not ready".
+- The next render draws the new state. A failure the engine or renderer finds then is thrown from
+  `renderer.render()`, once. See [Handle errors](/guides/project/handle-errors).
+
+[When layout runs](/explanation/when-layout-runs) explains the model.
+
+## Members at a glance
+
+The declaration below lists every member this page documents, with its signature. `Format` is `typeof msdf` here.
+
+```ts
+import type {
+  BorrowedGlyphLayout,
+  Constraints,
+  FontSelection,
+  FormattedText,
+  GlyphLayoutInspection,
+  LayoutBox,
+  LayoutPoint,
+  msdf,
+  ParagraphLayout,
+  ParagraphLayoutSummary,
+  PropertyList,
+  TextCaret,
+  TextDirection,
+  TextFlow,
+  TextMovement,
+  TextPosition,
+  TextRange,
+  TextStyle,
+  TextUnit,
+} from '@pmndrs/glyph';
+import type {
+  Decorations,
+  Glyphs,
+  TextCommitState,
+  TextGroup,
+  TextLayoutCallback,
+  TextUpdate,
+  ThreeGlyphMeasurement,
+  ThreeTextMaterial,
+} from '@pmndrs/glyph/three';
+import type { Box3, Object3D } from 'three/webgpu';
+
+type Format = typeof msdf;
+
+declare class TextMembers {
+  // desired state
+  get font(): FontSelection<Format>;
+  set font(value: FontSelection<Format>);
+  get text(): string;
+  set text(value: string | FormattedText<Format>);
+  get style(): TextStyle;
+  set style(value: PropertyList<TextStyle>);
+  get layout(): ParagraphLayout;
+  set layout(value: PropertyList<ParagraphLayout>);
+  get constraints(): Constraints;
+  set constraints(value: PropertyList<Constraints>);
+  get flow(): TextFlow | undefined;
+  set flow(value: TextFlow | undefined);
+  get rasterPixelRatio(): number;
+  set rasterPixelRatio(value: number);
+  get material(): ThreeTextMaterial | undefined;
+  set material(value: ThreeTextMaterial | undefined);
+  set(update: TextUpdate<Format>): void;
+
+  // read-only state
+  get textGroup(): TextGroup | undefined;
+  get pixelSnapping(): boolean;
+  get bound(): boolean;
+  get disposed(): boolean;
+  get gpuBytes(): number;
+  get boundingBox(): Box3;
+  commitState(): TextCommitState;
+
+  // reads
+  measure(): ParagraphLayoutSummary;
+  glyphs(): GlyphLayoutInspection;
+  readGlyphs<Result>(read: (glyphs: BorrowedGlyphLayout) => Result): Result;
+  measureGlyphs(): readonly ThreeGlyphMeasurement[] | undefined;
+  computeBoundingBox(): Box3;
+  split(): readonly [glyphs: Glyphs, decorations: Decorations | undefined];
+
+  // editing, see the Editing reference
+  caret(position: TextPosition): TextCaret;
+  hitTest(point: LayoutPoint): TextPosition;
+  move(position: TextPosition, direction: TextDirection, unit: TextUnit, goalX?: number): TextMovement;
+  boundary(position: TextPosition, unit: TextUnit): TextRange;
+  rangeRects(start: number, end: number): readonly LayoutBox[];
+  replace(start: number, end: number, insert: string): void;
+
+  // lifecycle
+  onLayout: TextLayoutCallback | undefined;
+  dispose(): void;
+}
+
+// `Text` is an Object3D and has every member above.
+const members: TextMembers & Object3D = text;
+```
+
+## Desired-state properties
+
+Each of these has a getter and a setter. Assigning one is the same as calling [`set`](#set) with that key.
+
+| Property | Getter returns | Setter accepts | Description |
+| --- | --- | --- | --- |
+| `font` | `FontSelection<Format>` | `FontSelection<Format>` | The loaded font or font stack. A text created from a `FontFace` or a family name returns the loaded `Font` it resolved to. See [FontStack](/reference/font-stack). |
+| `text` | `string` | `string` or formatted text | The content. The getter returns the plain string exactly as assigned. Assigning a plain string removes any spans. See [Formatted text](/reference/formatted-text). |
+| `style` | `TextStyle` | `PropertyList<TextStyle>` | Size, color, spacing, features, decoration, outline, shadow, inherited by spans. See [TextStyle](/reference/text-style). |
+| `layout` | `ParagraphLayout` | `PropertyList<ParagraphLayout>` | Wrapping, alignment, overflow, line limit, columns, drop cap. See [ParagraphLayout](/reference/paragraph-layout). |
+| `constraints` | `Constraints` | `PropertyList<Constraints>` | Width, height and anchor. See [Constraints](/reference/constraints). |
+| `flow` | `TextFlow \| undefined` | `TextFlow \| undefined` | Regions and exclusions. `undefined` clears it. See [TextFlow](/reference/text-flow). |
+| `rasterPixelRatio` | `number` | `number` | Raster density used to pick a Bitmap strike for a font size. Positive and finite. Default `1`. |
+| `material` | `ThreeTextMaterial \| undefined` | `ThreeTextMaterial \| undefined` | The material for this text. `undefined` falls back to the enclosing `TextGroup`, the root, then the config. See [Materials](/reference/three-materials). |
+
+A `PropertyList` is one object, or a nested array of objects merged left to right in which `false`, `null` and
+`undefined` entries are skipped. The getter returns the merged, frozen result. A setter replaces the whole property:
+to change one field, spread the current value.
+
+```ts
+text.text = 'Updated';
+text.style = { ...text.style, color: '#ffd166' };
+text.constraints = { width: { mode: 'exact', size: 4 } };
+```
+
+Assigning a value equal to the current one changes nothing and requests no frame.
+
+## Read-only properties
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `textGroup` | `TextGroup \| undefined` | The nearest enclosing [`TextGroup`](/reference/three-text-group), as of the last time the root resolved it. |
+| `pixelSnapping` | `boolean` | The value given at creation. An enclosing `TextGroup` that sets `pixelSnapping` overrides it when drawing. |
+| `bound` | `boolean` | `true` while the text is registered with its root for publication. `false` after `dispose()`. |
+| `disposed` | `boolean` | `true` after `dispose()`. |
+| `gpuBytes` | `number` | The GPU bytes held by the root this text publishes through. It is the root's total, not this text's share. |
+| `boundingBox` | `Box3` | The ink bounds. See [boundingBox](#boundingbox). |
+
+## Object3D properties with a text meaning
+
+`Text` inherits everything from `Object3D`. These inherited properties affect how it is drawn:
+
+| Property | Effect |
+| --- | --- |
+| `position`, `rotation`, `quaternion`, `scale`, `matrix` | The text's transform. A change is picked up by the next render and does not lay the text out again. |
+| `visible` | `false` hides the text. Its own value and every ancestor's are honored. |
+| `renderOrder` | For a text outside a `TextGroup`: three.js draw order of its draws. Inside a `TextGroup`: the paragraph's rank within the group's shared draws; a higher rank is painted later. Must be finite. See [Group and batch text](/guides/scene/group-and-batch). |
+| `frustumCulled` | `false` submits every draw that holds this text's glyphs whatever the camera sees. Default `true`. See [Cull text outside the view](/guides/scene/culling). |
+
+The text's draws are meshes owned by its root, not children of the `Text`, so per-mesh properties set on the `Text`
+itself (such as `castShadow`) do not reach them.
+
+## set()
+
+Replaces several desired-state properties in one call.
+
+```ts
+text.set({
+  text: 'Resized',
+  style: { fontSize: 0.8, color: '#70d6ff' },
+  constraints: { width: { mode: 'at-most', size: 6 } },
+});
+```
+
+| Key of `update` | Type |
+| --- | --- |
+| `font`, `text`, `style`, `layout`, `constraints`, `rasterPixelRatio` | As the setters above. A key that is absent keeps its value. |
+| `material`, `flow` | As the setters above. A key present with the value `undefined` clears it. |
+
+The update is validated as a whole before anything is recorded, so a call that throws changes nothing. An empty
+object is a no-op.
+
+| Error | When |
+| --- | --- |
+| `GlyphInputError` (`code: 'invalid-input'`) | A value is not valid: `update` is not an object, a property fails validation, the text is longer than `maxTextUnits`, a named font was disposed. `path` names the property, for example `['style']`; `cause` is the validator's `TypeError` or `RangeError`. |
+| `GlyphLayoutPhaseError` | Called from inside an `onLayout` callback with a change to a layout input. |
+| `Error` | The text or its root is disposed, or the call is made from inside a material factory. |
+
+## measure()
+
+Returns the paragraph's size, baselines, line metrics and ink bounds.
+
+```ts
+const layout = text.measure();
+layout.width; // resolved box width
+layout.height; // resolved box height
+layout.lineCount;
+layout.inkBounds; // { x, y, width, height } of what is drawn
+layout.anchorOffset; // { x, y } translation applied for constraints.anchor
+```
+
+Takes no parameters. Returns a `ParagraphLayoutSummary`; see [Measurement](/reference/measurement) for every field.
+
+Coordinates are paragraph-local: origin at the top-left of the paragraph box, +X right, +Y down, in the units of
+`fontSize`. They do not include the anchor; `anchorOffset` carries it separately. To convert a point to the text's
+three.js local space, add `anchorOffset` and negate Y.
+
+Throws `Error` when the text or its root is disposed. See [Measure text](/guides/inspect/measure-text).
+
+## glyphs()
+
+Returns a copy of every positioned glyph and line as typed-array columns, plus everything `measure()` returns.
+
+```ts
+const inspection = text.glyphs();
+for (let index = 0; index < inspection.glyphCount; index += 1) {
+  inspection.x[index]; // pen x, paragraph-local
+  inspection.y[index]; // pen y (baseline), paragraph-local, +Y down
+  inspection.glyphAdvances[index];
+}
+```
+
+Takes no parameters. Returns a `GlyphLayoutInspection` in the same paragraph-local space as `measure()`. The copy
+stays valid after the text changes. Throws `Error` when the text or its root is disposed. See
+[Read glyphs](/guides/inspect/read-glyphs) and [Measurement](/reference/measurement).
+
+## readGlyphs()
+
+Runs a callback with a borrowed view of the positioned glyphs, without copying the layout.
+
+```ts
+const widest = text.readGlyphs((glyphs) => {
+  let advance = 0;
+  for (let index = 0; index < glyphs.glyphCount; index += 1) {
+    advance = Math.max(advance, glyphs.glyphAt(index).advance);
+  }
+  return advance;
+});
+```
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `read` | `(glyphs: BorrowedGlyphLayout) => Result` | Called synchronously, once. |
+
+Returns what `read` returns. The view has `glyphCount`, `glyphAt(index)` and `outlineAt(index, target?)`, and expires
+when `read` returns: copy out the numbers you need and do not keep the view or the objects it hands out. See
+[Read glyphs](/guides/inspect/read-glyphs).
+
+## measureGlyphs()
+
+Returns one measurement per layout glyph in the text's three.js local space.
+
+```ts
+const measurements = text.measureGlyphs();
+const first = measurements?.[0];
+first?.localInkBounds; // Box3, Text-local, +Y up
+first?.anchorPoint({ x: 'center', y: 'min' }); // Vector3
+```
+
+Takes no parameters. Returns `readonly ThreeGlyphMeasurement[]`, or `undefined` when the root is disposed. Coordinates
+are Text-local: +X right, +Y up, anchor included, so they can be used directly as positions of children of the text.
+See [Glyphs and Decorations](/reference/three-glyphs#threeglyphmeasurement) for the fields.
+
+## boundingBox
+
+The ink bounds of the text as a three.js `Box3`, in Text-local coordinates (+X right, +Y up, anchor included). It
+excludes the text's own transform and its ancestors'.
+
+```ts
+import { Vector3 } from 'three/webgpu';
+
+const size = text.boundingBox.getSize(new Vector3());
+```
+
+Reading it lays the text out if needed. An empty text has an empty box (`box.isEmpty()` is `true`). The
+returned `Box3` is the text's own object and is updated in place: once the box has been read, later layouts keep it
+current; before the first read nothing computes it. `computeBoundingBox()` does the same and returns the same box.
+
+Because `Text` has a `boundingBox`, `new Box3().setFromObject(text)` works and returns the ink bounds in world space.
+
+## commitState()
+
+Reports whether the text's current input is what the renderer draws.
+
+```ts
+const state = text.commitState();
+if (state.status === 'committed') state.revision;
+```
+
+Takes no parameters. Returns a `TextCommitState`:
+
+| `status` | Meaning |
+| --- | --- |
+| `'unbound'` | The text is disposed or has no parent. |
+| `'pending'` | The current input is not drawn yet: a setter ran since the last frame, the text is not laid out yet, it is held for its layout callback, or the engine refused it. |
+| `'committed'` | The current input is drawn. `revision` is a number that increases with each recorded change. |
+
+There is no failed status. A text the engine refused stays `'pending'` and draws nothing until its input changes; the
+render that found the refusal threw it. You do not need `'committed'` before a read or `split()`.
+
+## onLayout
+
+A callback that runs when the text's layout is new, before the frame that draws it.
+
+```ts
+import type { Mesh } from 'three/webgpu';
+
+declare const panel: Mesh;
+
+text.onLayout = (laidOut, layout) => {
+  panel.scale.set(layout.width, layout.height, 1);
+  laidOut.position.x = -layout.width / 2;
+};
+```
+
+| Argument | Type | Description |
+| --- | --- | --- |
+| `text` | `Text` | The text. |
+| `layout` | `ParagraphLayoutSummary` | What `measure()` returns. |
+
+It is called after the text is first laid out and whenever that summary changes, during a frame or
+`glyph.prepare()`, never from a read. A change of color or transform does not call it. Inside it you may read
+anything and write transforms, visibility, color, opacity and materials. Writing a layout input of any text throws
+`GlyphLayoutPhaseError` from that setter. An exception thrown by the callback is thrown from the end of the render,
+with the callback's error as `cause`.
+
+Assign `undefined` to remove it. Assigning anything that is not a function throws `TypeError`. The type of the
+callback is exported as `TextLayoutCallback`. See [React to layout](/guides/inspect/react-to-layout).
+
+## split()
+
+Copies the text's drawable glyphs and decorations into two independent objects you can animate.
+
+```ts
+const [glyphs, decorations] = text.split();
+text.parent?.add(glyphs);
+if (decorations !== undefined) text.parent?.add(decorations);
+text.visible = false;
+```
+
+Takes no parameters. Returns a frozen tuple `[glyphs: Glyphs, decorations: Decorations | undefined]`. `decorations`
+is `undefined` when the text draws no underline, overline or line-through. Both objects start with the text's local
+transform, so adding them to the text's parent overlays the source exactly. They are not added to the scene for you,
+and they are yours to dispose. Later changes to the text do not reach them.
+
+`split()` lays the text out if needed and copies its current input, whether or not that input has been drawn yet.
+
+| Error | When |
+| --- | --- |
+| `Error` | The text has no drawable glyph (it is empty or only whitespace), or the text or its root is disposed. |
+
+See [Glyphs and Decorations](/reference/three-glyphs) and [Animate individual glyphs](/guides/scene/animate-glyphs).
+
+## Editing methods
+
+`caret(position)`, `hitTest(point)`, `move(position, direction, unit, goalX?)`, `boundary(position, unit)`,
+`rangeRects(start, end)` and `replace(start, end, insert)` give caret and selection geometry and one exact edit.
+Offsets are UTF-16 code units of `text.text` on grapheme boundaries; coordinates are Text-local with +X right and +Y
+down, anchor included. They are documented in [Editing](/reference/editing).
+
+## dispose()
+
+```ts
+text.removeFromParent();
+text.dispose();
+```
+
+Unregisters the text from its root, so it is no longer drawn, and releases the font lease it took if it was created
+from a `FontFace` or a family name. It does not remove the object from its parent; remove it yourself. After it,
+`disposed` is `true`, `commitState()` reports `'unbound'`, and setters and reads throw `Error`. Calling it twice is
+safe.
+
+## Types
+
+| Type | Description |
+| --- | --- |
+| `TextProperties<Format>` | The desired state: `font`, `text`, and optional `style`, `layout`, `constraints`, `flow`, `rasterPixelRatio`, `material`. |
+| `StandaloneTextProperties<Format>` | `TextProperties` plus optional `pixelSnapping`. What `createText` accepts. |
+| `TextUpdate<Format>` | What `set` accepts. |
+| `TextCommitState` | What `commitState` returns. |
+| `TextLayoutCallback` | The type of `onLayout`. |
+
+`TextProperties` also types an `order` field, inherited from the shared paragraph properties. The three.js `Text`
+does not read it; order paragraphs with `renderOrder`.
+
+## See also
+
+- [ThreeHandle and ThreeRoot](/reference/three-root)
+- [TextGroup](/reference/three-text-group)
+- [Editing](/reference/editing)
+- [Measurement](/reference/measurement)
+- [Glyphs and Decorations](/reference/three-glyphs)

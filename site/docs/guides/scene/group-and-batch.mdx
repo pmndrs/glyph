@@ -1,0 +1,148 @@
+---
+title: Group and batch text
+description: Put texts under a TextGroup, control where their draws may merge with batching, and order overlapping text with renderOrder.
+nav: 502
+sourcecode: packages/glyph/src/three/text.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="scene" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+A scene with hundreds of labels should not cost hundreds of draw calls. Texts created from one root already share buffers; a `TextGroup` adds a common parent with shared presentation and decides where draws may merge. This guide groups labels, checks how many draws they produce, and orders text that overlaps.
+
+## 1. Create a group and add texts
+
+A `TextGroup` is an `Object3D` created from the same root as its texts. Adding a text from a different root throws.
+
+```tsx
+import { Text, TextGroup } from '@pmndrs/glyph/react';
+
+<TextGroup position={[0, 1, 0]}>
+  <Text font={inter}>Title</Text>
+  <Text font={inter} position={[0, -0.6, 0]}>
+    Body
+  </Text>
+</TextGroup>;
+```
+
+```ts
+const title = root.createText({ font: inter, text: 'Title' });
+const body = root.createText({ font: inter, text: 'Body' });
+body.position.y = -0.6;
+
+const panel = root.createTextGroup();
+panel.position.y = 1;
+panel.add(title, body);
+scene.add(panel);
+```
+
+The group gives its descendants:
+
+- one transform and one `visible` flag, like any three.js parent;
+- a shared `material`, used by every descendant text that does not set its own;
+- `pixelSnapping` for Bitmap text, set once at creation;
+- one `renderOrder` for the group's draws.
+
+Texts do not have to be direct children. A text anywhere beneath the group belongs to it.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="groups" aria-label="Forty-eight labels in one rotating TextGroup, with a count of the draws they produce" aspect="1 / 1" />
+
+The ring is one `TextGroup` that rotates as a unit; the caption in the middle counts the draws its labels produce.
+
+## 2. Know when draws merge
+
+Glyphs from different texts end up in one draw when all of these hold:
+
+- the texts belong to the same root and the same batching scope (see step 3);
+- they use the same font resource and format;
+- they resolve to the same material object;
+- they are in the same paint layer (decorations under the glyphs, glyph ink, and decorations over the glyphs are separate layers);
+- the handle uses the default `transformMode: 'indexed'`. In `'direct'` mode each text's transform is its draw mesh's matrix, so draws split per text; see [Three config](/reference/three-config).
+
+Order matters too. Texts are planned in sequence, and a change of material between neighbors ends the current draw.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="batching" aria-label="The same thirty labels twice: materials interleaved on the left, sorted by material on the right, each with its draw count" aspect="16 / 9" />
+
+Both sides hold the same thirty labels and the same two materials; compare the draw counts when the materials alternate and when each material is one contiguous run.
+
+To get the lower count, create or add texts so that those sharing a material are adjacent, and reuse one material object instead of defining an equal one per text.
+
+## 3. Choose a batching scope
+
+`batching` sets where the draws of a group's descendants may merge. Set it at creation or assign `group.batching` later.
+
+| Value | Behavior |
+| --- | --- |
+| `'auto'` | Default. A top-level `TextGroup` owns a boundary; an `'auto'` group nested inside another group inherits the outer boundary. |
+| `'shared'` | The group joins the nearest boundary above it, or the root's own pool when there is none. Its texts can merge with texts outside the group. |
+| `'group'` | The group owns a boundary even when nested. |
+
+```ts
+const hud = root.createTextGroup({ batching: 'shared' }); // may merge with ungrouped text on this root
+const tooltip = root.createTextGroup({ batching: 'group' }); // always its own draws
+```
+
+Hiding a group always hides its descendants. When the group owns a boundary, its draws are skipped as a unit and its buffers are kept. Use `'shared'` when merging across groups matters more than that.
+
+## 4. Order overlapping text
+
+The default material does not test or write depth, so overlapping texts are painted in draw order. `renderOrder` controls it, and its meaning depends on where the text is:
+
+| Object | What `renderOrder` does |
+| --- | --- |
+| A `Text` outside any group | Base three.js draw order of that text's draws, compared with every other object in the scene. A text that needs several draws numbers them upward from this value. |
+| A `TextGroup` | Base three.js draw order for the draws of every text beneath it. A nested group that sets its own value overrides it for its descendants. |
+| A `Text` inside a group | Rank of that paragraph among the group's texts: a higher rank is painted later, on top. It does not split draws. |
+
+```ts
+const behind = root.createText({ font: inter, text: 'behind', style: { opacity: 0.6 } });
+const front = root.createText({ font: inter, text: 'in front', style: { opacity: 0.6 } });
+front.position.set(0.3, 0.2, 0);
+
+const stack = root.createTextGroup({ renderOrder: 5 }); // against the rest of the scene
+stack.add(front, behind);
+front.renderOrder = 1; // within the group: painted after `behind`
+scene.add(stack);
+```
+
+In React, `renderOrder` is a prop on both components.
+
+```tsx
+import { Text, TextGroup } from '@pmndrs/glyph/react';
+
+<TextGroup renderOrder={5}>
+  <Text font={inter} renderOrder={1} style={{ opacity: 0.6 }}>
+    in front
+  </Text>
+  <Text font={inter} style={{ opacity: 0.6 }}>
+    behind
+  </Text>
+</TextGroup>;
+```
+
+`renderOrder` must be finite. Within one paragraph the order is fixed: underlines and overlines, then glyphs, then line-through.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="scene-draw-order" aria-label="Three overlapping translucent words whose stacking follows renderOrder, grouped in one draw and ungrouped in three" aspect="16 / 9" />
+
+The same three `renderOrder` values rotate over the three words on both sides, and the bottom caption names the current order; the last word named is painted on top. On the left the words are children of one `TextGroup` and stay one draw. On the right they are ungrouped, and each distinct `renderOrder` is a draw of its own.
+
+## Check the result
+
+Count the meshes under the root's draw object, which three.js names `@pmndrs/glyph:<root name>` (`@pmndrs/glyph:anonymous` for a handle's own root). Each child is one draw.
+
+```ts
+let draws = 0;
+scene.traverse((object) => {
+  if (object.name.startsWith('@pmndrs/glyph:')) draws += object.children.length;
+});
+console.info(draws);
+```
+
+## See also
+
+- [TextGroup reference](/reference/three-text-group)
+- [ThreeConfig reference](/reference/three-config)
+- [Cull text outside the view](/guides/scene/culling)
+- [Performance](/guides/project/performance)
+- [Render plan](/explanation/render-plan)

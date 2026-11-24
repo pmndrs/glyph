@@ -1,0 +1,215 @@
+---
+title: Three config
+description: Reference for ThreeConfig, defineThreeConfig and every ThreeConfigOptions field of @pmndrs/glyph/three.
+nav: 720
+sourcecode: packages/glyph/src/three/internal/define-config.ts
+---
+
+A config describes how a three.js handle renders text: how instance storage grows, how transforms reach the GPU, which
+raster format a font uses by default, and the material used when nothing else sets one. You pass a config to
+`glyph.handle(name, config)`. This page lists `ThreeConfig`, `defineThreeConfig` and every option. All names are
+exported from `@pmndrs/glyph/three`.
+
+## ThreeConfig
+
+The built-in config with every option at its default. It is the value of `defineThreeConfig()`.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+
+await glyph.init();
+const three = glyph.handle('app', ThreeConfig);
+```
+
+A config holds no state. Several handles can be created from the same config value, and each handle owns its own
+buffers, materials and roots.
+
+## defineThreeConfig()
+
+Creates a config from options.
+
+```ts
+import type { ThreeConfigOptions, ThreeGlyphConfig } from '@pmndrs/glyph/three';
+
+declare function defineThreeConfig(options?: ThreeConfigOptions): ThreeGlyphConfig;
+```
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
+
+await glyph.init();
+const dense = glyph.handle(
+  'dense',
+  defineThreeConfig({
+    capacity: { size: 16_384, policy: 'chunk' },
+    defaultFontFormat: 'slug',
+  }),
+);
+```
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `options` | `ThreeConfigOptions` | `{}` | See [ThreeConfigOptions](#threeconfigoptions). |
+
+### Return value
+
+A `ThreeGlyphConfig` to pass to `glyph.handle(name, config)`. See [glyph](/reference/glyph) for `handle`.
+
+### Exceptions
+
+`defineThreeConfig` validates `options`, `msdfAtlas` and `capacity` when it is called. The other options are validated
+when a handle is created from the config.
+
+| Error | Thrown by | When |
+| --- | --- | --- |
+| `TypeError` | `defineThreeConfig` | `options` is not an object; `msdfAtlas` is not `'msdf'` or `'sdf'`; `capacity` is not an object or its `policy` is not `'grow'`, `'chunk'` or `'fixed'`. |
+| `RangeError` | `defineThreeConfig` | `capacity.size` is not a positive safe integer. |
+| `TypeError` | `glyph.handle` | `transformMode` is not `'indexed'` or `'direct'`; `defaultFontFormat` is not `'bitmap'`, `'msdf'` or `'slug'`. |
+| `RangeError` | `glyph.handle` | `maxTextUnits` is not a positive 32-bit unsigned integer. |
+
+## ThreeConfigOptions
+
+Every field is optional.
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `capacity` | `GlyphBufferCapacity` | `{ size: 4096, policy: 'chunk' }` | How each root's instance storage is sized. See [capacity](#capacity). |
+| `transformMode` | `'indexed' \| 'direct'` | `'indexed'` | How a text's transform reaches its draws. See [transformMode](#transformmode). |
+| `defaultFontFormat` | `'bitmap' \| 'msdf' \| 'slug'` | `'msdf'` | The raster format used when a text names a `FontFace` or a family without choosing a format. See [defaultFontFormat](#defaultfontformat). |
+| `material` | `ThreeTextMaterial` | none | The material for every text of every root of the handle that sets no other. See [material](#material). |
+| `msdfAtlas` | `'msdf' \| 'sdf'` | `'msdf'` | What the GPU atlas keeps of an MSDF font. See [msdfAtlas](#msdfatlas). |
+| `maxTextUnits` | `number` | `65536` | The most UTF-16 code units one `Text` may hold. See [maxTextUnits](#maxtextunits). |
+
+Options apply to the handle and to every root selected from it. A workload that needs different options uses a second
+handle.
+
+### capacity
+
+```ts
+import type { GlyphBufferCapacity } from '@pmndrs/glyph/three';
+
+const capacity: GlyphBufferCapacity = { size: 8192, policy: 'grow' };
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `size` | `number` | A positive safe integer. The initial size, the growth step, or the limit, depending on `policy`. |
+| `policy` | `'grow' \| 'chunk' \| 'fixed'` | What happens when a root needs more than `size`. |
+
+| Policy | Behavior |
+| --- | --- |
+| `'grow'` | Storage is resized to fit. |
+| `'chunk'` | Storage is resized in multiples of `size`. |
+| `'fixed'` | Storage never exceeds `size`. An update that needs more is rejected and the last complete frame stays visible. |
+
+With `'fixed'`, a root compares `size` with the total number of UTF-16 code units in the text of all its `Text`
+objects. While the total is larger, nothing new is drawn, and the render that finds it throws a `RangeError` once:
+`Three root "name" capacity is fixed at 4096 text units and 5000 are needed; nothing new is drawn until it fits`. Reads
+such as `measure()` still answer. Drawing resumes when the text fits again.
+
+When storage grows, materials are kept and pointed at the new buffers. A material factory is not called again.
+
+### transformMode
+
+| Value | Behavior |
+| --- | --- |
+| `'indexed'` | Each glyph carries an index into a table of transforms. Texts with different positions, rotations and scales can share one draw. In a custom material, `context.position` includes the transform of the `Text` and its ancestors. |
+| `'direct'` | Draws are split by transform and each draw mesh carries the transform in its own matrix. In a custom material, `context.position` does not include that transform. |
+
+Layout, measurement and editing results are the same in both modes. Frustum culling works in both. A material that
+needs a position that is the same in both modes reads `context.paragraphPosition`; see
+[Materials](/reference/three-materials).
+
+### defaultFontFormat
+
+A `Text` can name its font three ways: a loaded `Font`, a `FontFace` (or one of its format members such as
+`Inter.slug`), or a family name string. A `FontFace` without a chosen member and a family name are resolved with
+`defaultFontFormat`. The format must be loaded on that face, or `createText` throws a `GlyphFontError` with the code
+`resource-unavailable`.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
+
+const slugFirst = glyph.handle('slug-first', defineThreeConfig({ defaultFontFormat: 'slug' }));
+await Inter.slug.load();
+
+const label = slugFirst.createText({ font: Inter, text: 'Drawn with Slug' });
+```
+
+The three keys are the fields of `ThreeFontFormats`, which holds the built-in format values: `bitmap`, `msdf` and
+`slug`.
+
+### material
+
+The last fallback in material resolution. A material set on a span, a `Text`, an enclosing `TextGroup` or the root
+wins over it. See [Materials](/reference/three-materials) for the order and
+[Write a custom material](/guides/scene/custom-materials) for writing one.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { defineTextMaterial, defineThreeConfig } from '@pmndrs/glyph/three';
+
+const depthTested = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  material.depthTest = true;
+  return material;
+});
+
+const world = glyph.handle('world', defineThreeConfig({ material: depthTested }));
+```
+
+### msdfAtlas
+
+| Value | Behavior |
+| --- | --- |
+| `'msdf'` | The atlas keeps all four channels of the baked field. |
+| `'sdf'` | The atlas keeps only the true distance: a quarter of the atlas memory. Corners are rounded where the multi-channel field keeps them sharp, which shows at large sizes. |
+
+The option affects MSDF fonts only and changes no layout result.
+
+### maxTextUnits
+
+A positive integer. Assigning a text with more UTF-16 code units throws a `GlyphInputError` from the setter (or from
+`createText`), with `path` `['text']`, and the previous text stays. The default of 65,536 keeps one paragraph under
+roughly a hundred megabytes of engine memory.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
+
+const longForm = glyph.handle('long-form', defineThreeConfig({ maxTextUnits: 262_144 }));
+```
+
+## ThreeFontFormats
+
+A frozen object holding the built-in raster formats by key, and the type of that object.
+
+```ts
+import { ThreeFontFormats } from '@pmndrs/glyph/three';
+
+const { bitmap, msdf, slug } = ThreeFontFormats;
+```
+
+These are the same values the package root exports as `bitmap`, `msdf` and `slug`. See
+[Raster formats](/reference/formats).
+
+## Related types
+
+`@pmndrs/glyph/three` also exports the types a renderer integration reads: `ThreeGlyphConfig`, `ThreeCodec`,
+`ThreeBindings` and the binding types it is made of (`ThreeBatchBinding`, `ThreeBufferBinding`,
+`ThreeInstanceBinding`, `ThreeInstanceSpanBinding`, `ThreeMaterialBinding`, `ThreeProgramBinding`,
+`ThreePortableResource`, `ThreeResolvedMaterialBinding`, `ThreeResolvedResourceBinding`). Application code does not
+construct them. See [How a renderer integration works](/explanation/renderer-integration).
+
+## See also
+
+- [ThreeHandle and ThreeRoot](/reference/three-root)
+- [glyph](/reference/glyph)
+- [Materials](/reference/three-materials)
+- [Use Glyph with three.js](/guides/renderers/three)
+- [Performance](/guides/project/performance)

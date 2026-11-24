@@ -1,0 +1,106 @@
+---
+title: Place text in 3D
+description: Position, rotate and parent text like any scene object, choose its units, and decide whether scene geometry hides it.
+nav: 500
+sourcecode: packages/glyph/src/three/text.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="scene" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+A `Text` is a three.js `Object3D`. It takes a position, a rotation, a scale and a parent like a mesh does, and the scene camera projects it like any other geometry. This guide places a paragraph in a perspective scene, sizes it in scene units, and makes it respect depth.
+
+## Transform it like any object
+
+Set `position`, `rotation` and `scale`, or parent the text to another object. Moving a text, or any of its ancestors, does not lay the paragraph out again.
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<group rotation={[0, 0.6, 0]}>
+  <Text font={inter} position={[-2, 1, 0]} style={{ fontSize: 0.5 }}>
+    A sign on a wall
+  </Text>
+</group>;
+```
+
+```ts
+import { Group } from 'three/webgpu';
+
+const wall = new Group();
+wall.rotation.y = 0.6;
+
+const sign = root.createText({ font: inter, text: 'A sign on a wall', style: { fontSize: 0.5 } });
+sign.position.set(-2, 1, 0);
+wall.add(sign);
+scene.add(wall);
+```
+
+## Size it in scene units
+
+`fontSize` and every other length (`letterSpacing`, a constraint `size`, an outline `width`) are in the units of the text's local space. Under a perspective camera where one unit is one metre, `fontSize: 0.5` is a half-metre em. Under a pixel-unit orthographic camera, `fontSize: 16` is sixteen pixels. Prefer setting `fontSize` over scaling the object, so the lengths you read back from `measure()` are in the units you authored.
+
+## Choose the origin
+
+The text's own origin is the top-left corner of its paragraph box: the paragraph extends to the right (+X) and downward (-Y in three.js axes). To place a different point of the box at the object's position, set `constraints.anchor`.
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text font={inter} constraints={{ anchor: { x: 'center', y: 'middle' } }} position={[0, 2, 0]}>
+  Centered on (0, 2, 0)
+</Text>;
+```
+
+[Anchor text](/guides/layout/anchor-text) lists the anchor values, and [Coordinate spaces](/explanation/coordinate-spaces) explains which reads are +Y down and which are +Y up.
+
+## Decide whether geometry hides it
+
+The default material is transparent, double-sided, and has `depthTest: false` and `depthWrite: false`. Text therefore draws over everything, which suits overlays and labels that must stay readable. For text that is a surface in the world, turn the depth test on with a custom material.
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+
+const inScene = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  material.depthTest = true; // geometry in front now hides the text
+  return material;
+});
+
+const occluded = root.createText({ font: inter, text: 'occluded', material: inScene });
+const overlaid = root.createText({ font: inter, text: 'overlaid' });
+scene.add(occluded, overlaid);
+```
+
+Leave `depthWrite` off. A glyph is drawn as a quad that is transparent outside its ink, so writing depth would cut a rectangle into whatever is drawn behind it afterwards.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="depth" aria-label="A ball sliding in front of two words: it hides the depth-tested word and passes under the default one" aspect="3 / 2" />
+
+Watch the ball cross both words at the same depth: it covers the word on the left, which has `depthTest: true`, and the word on the right draws over it.
+
+With the depth test off, the order in which overlapping texts are drawn is decided by `renderOrder`; see [Group and batch text](/guides/scene/group-and-batch).
+
+## View it at an angle
+
+Nothing changes when the camera looks at text obliquely: the paragraph is geometry and perspective applies to it. What changes is how the edges hold up. Slug evaluates the glyph outline per pixel, so it is the format to choose for text read at a grazing angle or at widely varying distances. MSDF samples an atlas texture, and Bitmap is drawn from strikes rasterized at fixed sizes, so both suit text that mostly faces the camera. [Formats](/explanation/formats) compares them.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="off-axis" aria-label="A Slug paragraph swinging away from the camera in perspective" aspect="4 / 3" />
+
+The paragraph is a child of a rotating group; look at the far edge of the lines as the panel turns away.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="orbit" aria-label="Two rings of type circling a sphere and casting letter-shaped shadows on it" aspect="16 / 9" />
+
+Here the letters themselves are placed in 3D, one matrix per glyph, around a sphere; [Animate individual glyphs](/guides/scene/animate-glyphs) shows how.
+
+## Check the result
+
+Orbit the camera or move an object across the text. Text with the default material stays on top of everything; text with a depth-tested material is hidden by nearer geometry and stays where you put it in the world.
+
+## See also
+
+- [Labels over objects](/guides/scene/labels)
+- [Group and batch text](/guides/scene/group-and-batch)
+- [Write a custom material](/guides/scene/custom-materials)
+- [Text reference](/reference/three-text)
+- [Coordinate spaces](/explanation/coordinate-spaces)

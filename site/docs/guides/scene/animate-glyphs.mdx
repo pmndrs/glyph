@@ -1,0 +1,187 @@
+---
+title: Animate individual glyphs
+description: Copy a paragraph's glyphs out with text.split(), move each one with its own matrix, and dispose of the copy.
+nav: 506
+sourcecode: packages/glyph/src/three/glyphs.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="motion" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+Layout places glyphs; it does not animate them. To move letters independently, `text.split()` copies the paragraph's drawable glyphs into a `Glyphs` object that holds one matrix per glyph. You write the matrices; the source text is not affected.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="break-apart" aria-label="A word whose letters fly apart, tumble and return to their places" aspect="1 / 1" />
+
+Each letter leaves its place, spins, and returns to the matrix it started with.
+
+## 1. Split the text
+
+`split()` returns the glyphs and, when the text has underlines, overlines or line-through, a `Decorations` object. Add both next to the source and hide the source.
+
+```ts
+const [glyphs, decorations] = text.split();
+
+text.parent?.add(glyphs); // as a sibling, the copy overlays the source exactly
+if (decorations !== undefined) text.parent?.add(decorations);
+text.visible = false;
+```
+
+Both objects start with the source's local transform, so as siblings of the source they draw where it drew. `split()` reads the text's current input, laying it out first if a setter changed it; it does not need a rendered frame. It throws when the text has no drawable glyph (an empty string, or only spaces).
+
+In React, take the three.js object from a `ref` and split it in a frame callback or an effect.
+
+```tsx
+import type { msdf } from '@pmndrs/glyph';
+import { Text } from '@pmndrs/glyph/react';
+import type { Glyphs, Text as ThreeText } from '@pmndrs/glyph/three';
+import { useFrame } from '@react-three/fiber/webgpu';
+import { useEffect, useRef } from 'react';
+
+export function Burst() {
+  const source = useRef<ThreeText<typeof msdf>>(null);
+  const copy = useRef<Glyphs | undefined>(undefined);
+
+  useEffect(
+    () => () => {
+      copy.current?.dispose();
+      copy.current = undefined;
+    },
+    [],
+  );
+
+  useFrame(() => {
+    const text = source.current;
+    if (text === null || copy.current !== undefined) return;
+    const [glyphs] = text.split();
+    text.parent?.add(glyphs);
+    text.visible = false;
+    copy.current = glyphs;
+  });
+
+  return (
+    <Text ref={source} font={inter} style={{ fontSize: 1 }}>
+      glyph
+    </Text>
+  );
+}
+```
+
+## 2. Read where each glyph started
+
+`glyphs.count` is the number of drawable glyphs. Spaces and other glyphs that draw nothing are left out, and indices are dense from `0` to `count - 1`. `glyphs.measurements[i]` describes glyph `i` as it was laid out; its `originalMatrix` is the rest pose.
+
+```ts
+import { Quaternion, Vector3 } from 'three/webgpu';
+
+const [glyphs] = text.split();
+const home = new Vector3();
+const rotation = new Quaternion();
+const scale = new Vector3();
+
+for (let i = 0; i < glyphs.count; i += 1) {
+  glyphs.measurements[i]!.originalMatrix.decompose(home, rotation, scale);
+  // home is the glyph's pen origin on its baseline
+}
+```
+
+All of these values are in the `Glyphs` object's local space: +X right, +Y up, with the text's anchor already applied. `glyphs.glyphAt(i)` gives the glyph's line, word, cluster and font size, for staggering by word or by line.
+
+## 3. Write a matrix per glyph
+
+`setMatrixAt(index, matrix)` replaces the glyph's whole transform, in the same local space. Start from the rest pose and change what you animate.
+
+```ts
+import { Matrix4, Quaternion, Vector3 } from 'three/webgpu';
+
+const [glyphs] = text.split();
+const matrix = new Matrix4();
+const home = new Vector3();
+const rotation = new Quaternion();
+const scale = new Vector3();
+const spin = new Quaternion();
+const axis = new Vector3(0, 0, 1);
+
+function update(elapsed: number): void {
+  for (let i = 0; i < glyphs.count; i += 1) {
+    glyphs.measurements[i]!.originalMatrix.decompose(home, rotation, scale);
+    home.y += Math.sin(elapsed * 2 + i * 0.4) * 0.2;
+    spin.setFromAxisAngle(axis, Math.sin(elapsed + i) * 0.3);
+    glyphs.setMatrixAt(i, matrix.compose(home, rotation.multiply(spin), scale));
+  }
+}
+```
+
+The glyph rotates and scales about its pen origin. `getMatrixAt(index, target)` reads back the current matrix. Writing matrices does not lay anything out; call it every frame.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="arc" aria-label="A line of text bent into a turning ring" aspect="1 / 1" />
+
+One straight line of text, with each glyph's x position along the line turned into an angle around a circle.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="ribbon" aria-label="Words running along a ribbon that curves through the scene" aspect="16 / 9" />
+
+The same idea on an arbitrary curve: each glyph is placed by its advance along the path.
+
+## 4. Write world-space matrices
+
+When positions come from something that works in world space, such as a physics engine, use `setWorldMatrixAt`. It updates and inverts the object's world matrix on every call, so for many glyphs convert once and use `worldToLocalMatrix`.
+
+```ts
+import { worldToLocalMatrix } from '@pmndrs/glyph/three';
+import { Matrix4 } from 'three/webgpu';
+
+const [glyphs] = text.split();
+scene.add(glyphs);
+declare const bodies: readonly Matrix4[]; // one world matrix per glyph
+
+const inverse = new Matrix4();
+const local = new Matrix4();
+
+function sync(): void {
+  glyphs.updateWorldMatrix(true, false);
+  inverse.copy(glyphs.matrixWorld).invert();
+  for (let i = 0; i < glyphs.count; i += 1) {
+    glyphs.setMatrixAt(i, worldToLocalMatrix(inverse, bodies[i]!, local));
+  }
+}
+```
+
+`localToWorldMatrix(glyphs.matrixWorld, local, target)` goes the other way, and `getWorldMatrixAt` reads one glyph's world matrix.
+
+## 5. Change how the copy looks
+
+`glyphs.materials` and `decorations.materials` are material instances owned by the copy. Changing them does not affect the source text or another copy.
+
+```ts
+const [glyphs, decorations] = text.split();
+for (const material of glyphs.materials) material.opacity = 0.65;
+for (const material of decorations?.materials ?? []) material.opacity = 0.65;
+```
+
+A `Decorations` object has no per-glyph matrices: it moves as one object through its own `position`, `rotation` and `scale`.
+
+## 6. Dispose of the copy
+
+The copy is independent of its source. Later changes to the source text do not reach it, and it stays valid after the source text or its font is disposed. Nothing removes it for you.
+
+```ts
+const [glyphs, decorations] = text.split();
+
+// later
+glyphs.dispose(); // also removes it from its parent
+decorations?.dispose();
+text.visible = true;
+```
+
+To follow a text change, dispose of the copy and split again. After `dispose()`, the matrix and material accessors throw.
+
+## Check the result
+
+With the source hidden and no matrices written, the copy is indistinguishable from the original text. Once you write matrices, each glyph moves on its own and returns exactly to its place when you write its `originalMatrix` back.
+
+## See also
+
+- [Glyphs reference](/reference/three-glyphs)
+- [Text reference](/reference/three-text)
+- [Read glyphs](/guides/inspect/read-glyphs)
+- [Cull text outside the view](/guides/scene/culling)

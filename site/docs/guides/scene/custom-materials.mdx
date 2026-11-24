@@ -1,0 +1,210 @@
+---
+title: Write a custom material
+description: Change how text is shaded with defineTextMaterial, pick the right position node, declare displacement for culling, and apply a material to a span, a text, a group or a root.
+nav: 504
+sourcecode: packages/glyph/src/three/material.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="scene" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+A text material is a factory: a function that receives the shader nodes of one draw and returns a three.js `NodeMaterial`. `defineTextMaterial` wraps the factory in the value you pass as `material`. This guide starts from the default material, changes its shading, moves its vertices, and applies it at the scope you want.
+
+## 1. Start from the default material
+
+`context.createDefaultMaterial()` returns the material the renderer would have used. Change what you need and return it.
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+
+const inScene = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  material.depthTest = true;
+  return material;
+});
+
+const sign = root.createText({ font: inter, text: 'Exit', material: inScene });
+```
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+
+const inScene = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  material.depthTest = true;
+  return material;
+});
+
+<Text font={inter} material={inScene}>
+  Exit
+</Text>;
+```
+
+Define a material once, at module scope, and reuse the same object. Draws are split by material identity, so two equal factories defined separately never share a draw.
+
+The renderer calls the factory while it builds draws, once for each material it needs: per kind of draw, format, font resource and MSDF effect combination. Return a new material from every call, synchronously, and do not change text from inside it: a text setter called there throws.
+
+## 2. Branch on what is being drawn
+
+One material can be asked for glyphs of any format and for decoration rectangles (underline, overline, line-through). `context.kind` and `context.format` tell them apart, and narrow `context.shader` to that format's nodes.
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+import { color, mix } from 'three/tsl';
+
+const tinted = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  if (context.kind === 'decoration') return material; // leave underlines as they are
+  switch (context.format) {
+    case 'pmndrs.msdf':
+      // fillCoverage, outlineCoverage and shadowCoverage are available here
+      material.colorNode = mix(color('#70d6ff'), context.shader.color, context.shader.outlineCoverage);
+      break;
+    case 'pmndrs.bitmap':
+    case 'pmndrs.slug':
+      material.colorNode = color('#70d6ff');
+      break;
+  }
+  return material;
+});
+```
+
+Every context has `shader.color` (the styled color) and `shader.opacity` (for glyphs, the style's alpha multiplied by glyph coverage). The [materials reference](/reference/three-materials) lists the nodes of each format.
+
+## 3. Replace the material class
+
+To light text, return a different node material and wire the three nodes the default uses: position, color and opacity. Keep the default's base settings unless you mean to change them: normal blending, transparent, double-sided, no depth write.
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+import { float } from 'three/tsl';
+import { DoubleSide, MeshPhysicalNodeMaterial, NormalBlending } from 'three/webgpu';
+
+const metal = defineTextMaterial((context) => {
+  if (context.kind !== 'glyph' || context.format !== 'pmndrs.msdf') return context.createDefaultMaterial();
+  const material = new MeshPhysicalNodeMaterial({
+    blending: NormalBlending,
+    depthTest: false,
+    depthWrite: false,
+    side: DoubleSide,
+    transparent: true,
+  });
+  material.positionNode = context.position;
+  material.colorNode = context.shader.color;
+  material.opacityNode = context.shader.opacity;
+  material.metalnessNode = float(0.88);
+  material.roughnessNode = float(0.16);
+  return material;
+});
+```
+
+<glyph-proxy fit="cover" root="scenes" data-scene="materials" aria-label="The word Metal shaded by a physical material under moving lights" aspect="4 / 3" />
+
+The word is one MSDF text whose factory returns a `MeshPhysicalNodeMaterial`; the highlights move as the lights do.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="relief" aria-label="A word raised from a stone slab and lit by a circling light" aspect="16 / 9" />
+
+Here text is rendered to a texture on a second root, and a slab's material reads that texture as height.
+
+## 4. Pick the right position
+
+Every context carries two position nodes. Both can be read from vertex or fragment nodes.
+
+| Node | Space | Use it for |
+| --- | --- | --- |
+| `context.position` | Final draw-local position: what the default material assigns to `positionNode`. | Displacement. Add an offset to it and assign the result to `material.positionNode`. |
+| `context.paragraphPosition` | Paragraph-local, +X right and +Y up, before the anchor and before any transform of the text. | Effects that belong to the paragraph: a gradient across its width, a reveal by line, a pattern that travels with the text. |
+
+`position` depends on the config's `transformMode`: in the default `'indexed'` mode it already includes the transform of the text and its ancestors, in `'direct'` mode it does not. Do not compare it with measurements. `paragraphPosition` is the same in both modes and matches `text.glyphs()` coordinates with Y negated.
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+import { color, mix } from 'three/tsl';
+
+const WIDTH = 6; // the paragraph's width, from text.measure().width
+
+const gradient = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  if (context.kind !== 'glyph') return material;
+  const across = context.paragraphPosition.x.div(WIDTH).clamp(0, 1);
+  material.colorNode = mix(color('#ff4dc4'), color('#70d6ff'), across);
+  return material;
+});
+```
+
+<glyph-proxy fit="cover" root="scenes" data-scene="scene-material-positions" aria-label="Two moving paragraphs colored in bands, one from paragraphPosition and one from position" aspect="16 / 9" />
+
+Both paragraphs bob and tilt the same way, and both are colored in bands one line tall. On the left the bands come from `paragraphPosition`, so every line keeps its color however the text moves. On the right they come from `position`, which in the default indexed transform mode includes the text's transform, so the bands stay level in space and cut across the tilted lines.
+
+## 5. Move vertices, and say how far
+
+Assign `positionNode` from `context.position` plus your offset. Then declare the furthest any vertex moves as `boundsPadding`, so frustum culling keeps the text while its displaced ink is on screen.
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+import { sin, time, vec3 } from 'three/tsl';
+
+const RISE = 0.16;
+
+const wave = defineTextMaterial(
+  (context) => {
+    const material = context.createDefaultMaterial();
+    if (context.kind !== 'glyph' || context.format !== 'pmndrs.msdf') return material;
+    const swell = sin(time.mul(1.9).add(context.paragraphPosition.x.mul(1.15)));
+    material.positionNode = context.position.add(vec3(0, swell.mul(RISE), 0));
+    return material;
+  },
+  { boundsPadding: RISE },
+);
+```
+
+Fragment reads of `position` and `paragraphPosition` still see the undisplaced values. [Cull text outside the view](/guides/scene/culling) covers `boundsPadding` and the `frustumCulled: false` alternative.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="ripple" aria-label="A passage typing itself out while a wave travels along its lines" aspect="16 / 9" />
+
+The text is edited every few frames and the wave never restarts: the displacement runs on the GPU and does not depend on what the text says.
+
+## 6. Apply it at the right scope
+
+A material can be set in five places. The most specific one wins.
+
+```ts
+import { glyph, txt } from '@pmndrs/glyph';
+import { defineTextMaterial, defineThreeConfig, span } from '@pmndrs/glyph/three';
+
+const glow = defineTextMaterial((context) => context.createDefaultMaterial());
+
+root.createText({ font: inter, text: txt`Status ${span(glow, { color: '#4ade80' })`online`}` }); // 1. one span
+root.createText({ font: inter, text: 'Whole text', material: glow }); // 2. one text
+root.createTextGroup({ material: glow }); // 3. every text under a group
+root.material = glow; // 4. every text on a root
+glyph.handle('app', defineThreeConfig({ material: glow })); // 5. every root of a handle
+```
+
+The order of fallback is: the span's material, then the text's, then the nearest enclosing `TextGroup` that has one, then the root's, then the config's, then the built-in default. In React, `material` is a prop on `<Text>`, on a nested `<Text>` (a span) and on `<TextGroup>`.
+
+`text.material`, `group.material` and `root.material` can be reassigned at any time; assign `undefined` to fall back to the next scope.
+
+## Material studies
+
+<glyph-proxy fit="cover" root="scenes" data-scene="card-cycle" aria-label="Two playing cards with lit text and pips, turning when clicked" aspect="16 / 9" role="application" tabindex="0" />
+
+Text and icon glyphs on lit card surfaces; click to turn the top card.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="marble-type" aria-label="A line of text stamped into procedural marble as it is typed" aspect="16 / 9" role="textbox" tabindex="0" />
+
+Type to stamp letters into the stone.
+
+## Check the result
+
+The text renders with your shading on every draw it produces: glyphs, and decorations if you handled that branch. If text with a displacing material vanishes near the edge of the frame, its `boundsPadding` is too small.
+
+## See also
+
+- [Materials reference](/reference/three-materials)
+- [Cull text outside the view](/guides/scene/culling)
+- [Place text in 3D](/guides/scene/place-text-in-3d)
+- [Rich text](/guides/text/rich-text)
+- [Outline and shadow](/guides/text/outline-and-shadow)

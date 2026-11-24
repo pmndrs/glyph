@@ -1,0 +1,249 @@
+---
+title: Use Glyph with three.js
+description: Set up @pmndrs/glyph/three in a plain three.js app - the renderer, a handle, fonts, the render loop, rendering on demand, disposal, and the WebGL 2 fallback.
+nav: 600
+sourcecode: packages/glyph/src/three.ts
+---
+
+`@pmndrs/glyph/three` draws text in a three.js scene. A `Text` is an `Object3D` you add to the scene; the meshes that
+draw it are created and owned by Glyph. This guide sets up a plain three.js app, shows what happens in a frame, and
+covers rendering on demand, several scenes, and disposal. For a first paragraph on screen, step by step, follow
+[Your first text in three.js](/tutorials/first-text-three).
+
+## Install
+
+```sh
+npm install @pmndrs/glyph three
+```
+
+`three` is an optional peer of `@pmndrs/glyph`; the three.js entry needs version `0.185.0` or newer.
+
+## Create the renderer
+
+Text is drawn with three.js node materials, so use `WebGPURenderer` from `three/webgpu`, and import every three.js
+class from `three/webgpu` as well.
+
+```ts
+import { PerspectiveCamera, Scene, WebGPURenderer } from 'three/webgpu';
+
+const renderer = new WebGPURenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.append(renderer.domElement);
+await renderer.init();
+
+const scene = new Scene();
+const camera = new PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.z = 10;
+```
+
+## Start the engine and make a handle
+
+1. Call `glyph.init()` once and wait for it. It loads the layout engine.
+2. Create a handle with a name of your choice and a config. `ThreeConfig` is the default config.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+
+await glyph.init();
+const handle = glyph.handle('app', ThreeConfig);
+```
+
+The handle creates text and owns the GPU resources that draw it. Change the defaults with
+`defineThreeConfig({ ... })`; see [Three config](/reference/three-config).
+
+## Load a font and create text
+
+3. Declare the font with `glyph.fontFace(url)` and wait for `load()`.
+4. Create the text with `createText` and add it to the scene.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+
+const Inter = glyph.fontFace('/fonts/inter.font.glb');
+await Inter.load();
+
+const text = handle.createText({
+  font: Inter,
+  text: 'Hello world',
+  style: { fontSize: 0.6, color: '#ffd166' },
+  constraints: { anchor: { x: 'center', y: 'middle' } },
+});
+scene.add(text);
+```
+
+`createText` throws if the font's format is not loaded yet, so await `load()` first. The `.font.glb` file comes from
+`glyph bake`; see [Bake fonts](/guides/fonts/bake-fonts) and [Load a font](/guides/fonts/load-a-font).
+
+A `Text` is positioned like any object (`text.position`, `text.rotation`, parenting). `fontSize` and every other
+length are in scene units.
+
+## Render
+
+5. Render the scene. That is all a frame needs.
+
+```ts
+renderer.setAnimationLoop(() => {
+  renderer.render(scene, camera);
+});
+```
+
+`renderer.render(scene, camera)` does the text work while three.js updates the scene's matrices:
+
+1. It lays out every text a setter left dirty, in one engine call.
+2. It runs `onLayout` callbacks whose layout is new.
+3. It publishes the result as draw meshes under the root's own object in the scene.
+4. three.js then draws those meshes with everything else.
+
+An unchanged text costs a few comparisons per frame. Moving, rotating, scaling or hiding a text does not lay it out
+again.
+
+You should now see the text in the middle of the canvas.
+
+### Publishing without rendering
+
+`glyph.shape()` performs steps 1 to 3 immediately, for every handle, without drawing. Call it when you need the draw
+meshes to exist without rendering, for example in a test that has no renderer. `glyph.prepare()` performs
+step 1 only; call it before reading `measure()` on many texts between frames, so they are laid out in one engine call
+instead of one each. Neither call is required for ordinary rendering. See
+[When layout runs](/explanation/when-layout-runs).
+
+## Update text
+
+Assign properties, or several at once with `set`. Setters validate and record; the next render draws the change.
+
+```ts
+text.text = 'Updated';
+text.set({ style: { fontSize: 0.8, color: '#70d6ff' }, layout: { wrap: 'word' } });
+text.position.y = 1;
+```
+
+A value that is not valid input throws a `GlyphInputError` from the setter and leaves the text unchanged. See
+[Text](/reference/three-text) for every property.
+
+## Catch failures found while rendering
+
+A failure the engine or renderer finds while preparing a frame is thrown from `renderer.render()`, after the frame
+was drawn and once per failure. The failed text draws nothing until its input changes; other texts draw normally.
+
+```ts
+function report(error: unknown): void {
+  console.error(error);
+}
+
+renderer.setAnimationLoop(() => {
+  try {
+    renderer.render(scene, camera);
+  } catch (error) {
+    report(error);
+  }
+});
+```
+
+See [Handle errors](/guides/project/handle-errors).
+
+## Render on demand
+
+To render only when something changed, drop the animation loop and request a frame from `onInvalidate`. The root
+calls it when a text is created, when a setter records a changed value, and when a text is disposed.
+
+```ts
+let scheduled = false;
+
+function requestFrame(): void {
+  if (scheduled) return;
+  scheduled = true;
+  requestAnimationFrame(() => {
+    scheduled = false;
+    renderer.render(scene, camera);
+  });
+}
+
+handle.onInvalidate = requestFrame;
+
+text.text = 'Drawn by the next frame'; // calls requestFrame for you
+text.position.x = 2; // a three.js property: request the frame yourself
+requestFrame();
+```
+
+`onInvalidate` does not fire for changes that are plain three.js state or that the root only observes while
+rendering: transforms, `visible`, `renderOrder`, adding or moving a text in the scene, `root.material`, and
+`TextGroup` settings. Call your `requestFrame` after those, as you do for any other object in the scene.
+
+Each root has its own `onInvalidate`. If you use named roots, set it on each one.
+
+To check it: with the loop removed, `text.text = 'x'` in the console changes the canvas, and no frames run while
+nothing changes.
+
+## Use several scenes
+
+One root publishes into one scene. The handle is a root, and calling the handle with a name gives another one that
+shares the handle's config and fonts.
+
+```ts
+import { Scene } from 'three/webgpu';
+
+const overlay = new Scene();
+const hud = handle('hud');
+overlay.add(hud.createText({ font: Inter, text: 'HP 100', style: { fontSize: 0.3 } }));
+
+renderer.setAnimationLoop(() => {
+  renderer.autoClear = true;
+  renderer.render(scene, camera);
+  renderer.autoClear = false;
+  renderer.render(overlay, camera);
+});
+```
+
+Texts of one root placed under two scenes throw an error that names the root. Optionally call `root.attach(scene)`
+after creating a root to tell it its scene before the first render; see
+[ThreeHandle and ThreeRoot](/reference/three-root#attach).
+
+## What Glyph adds to your scene
+
+Each root that draws into a scene adds two objects to it: `@pmndrs/glyph-prepare`, kept as the scene's first child,
+and `@pmndrs/glyph:<root name>` (`@pmndrs/glyph:anonymous` for the handle itself), whose children are the draw meshes.
+Leave both where they are, and skip them in code that walks `scene.children` by index. A `Text` has no mesh
+children. To find what is under a pointer, use `text.hitTest` (see
+[Caret and selection](/guides/editing/caret-and-selection)).
+
+## Dispose
+
+Dispose in this order when the text or the app goes away:
+
+```ts
+text.removeFromParent();
+text.dispose(); // stops drawing it
+
+Inter.dispose(); // releases the font once no text uses it
+handle.dispose(); // every root of the handle and its GPU resources
+renderer.dispose();
+```
+
+`text.dispose()` does not remove the object from its parent, and `handle.dispose()` does not dispose the texts
+created from it. After the handle is disposed its name can be reused.
+
+## WebGPU and the WebGL 2 fallback
+
+`WebGPURenderer` uses WebGPU where the browser provides it and its WebGL 2 backend everywhere else. Text draws on
+both with the same code and the same layout. To test the fallback, force it:
+
+```ts
+import { WebGPURenderer } from 'three/webgpu';
+
+const fallback = new WebGPURenderer({ antialias: true, forceWebGL: true });
+await fallback.init();
+```
+
+Browsers expose WebGPU only in a secure context (`https://` or `localhost`), so a page opened over plain `http://` on
+a LAN address runs on the fallback. Glyph is tested with `WebGPURenderer` on both of its backends; use it
+rather than the classic `WebGLRenderer` from the `three` entry.
+
+## See also
+
+- [Your first text in three.js](/tutorials/first-text-three)
+- [ThreeHandle and ThreeRoot](/reference/three-root)
+- [Text](/reference/three-text)
+- [Place text in 3D](/guides/scene/place-text-in-3d)
+- [Use Glyph with React Three Fiber](/guides/renderers/react-three-fiber)

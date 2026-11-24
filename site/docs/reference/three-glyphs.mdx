@@ -1,0 +1,346 @@
+---
+title: Glyphs and Decorations
+description: Reference for the detached objects returned by Text.split() in @pmndrs/glyph/three, their per-glyph matrices and measurements, and the matrix helpers.
+nav: 724
+sourcecode: packages/glyph/src/three/glyphs.ts
+---
+
+`text.split()` copies the drawable content of a `Text` into two independent three.js objects: a `Glyphs` with one
+matrix per glyph, and a `Decorations` holding the paragraph's underlines, overlines and line-throughs. This page lists
+every member of both, the measurement types they expose, and the two matrix helpers. All names are exported from
+`@pmndrs/glyph/three`.
+
+## Obtaining the objects
+
+```ts
+const [glyphs, decorations] = text.split();
+
+text.parent?.add(glyphs);
+if (decorations !== undefined) text.parent?.add(decorations);
+text.visible = false;
+```
+
+`split()` returns a frozen tuple `readonly [glyphs: Glyphs, decorations: Decorations | undefined]`. `decorations` is
+`undefined` when the paragraph draws no decoration. Neither class has a public constructor; calling one throws
+`TypeError`.
+
+- The copy is taken from the text's desired state. `split()` prepares the paragraph first if a setter left it dirty,
+  and does not publish the source: a `pending` source stays `pending`.
+- Both objects copy the source's local transform (`position`, `quaternion`, `scale`, `matrixAutoUpdate`) at the moment
+  of the call. Neither is added to a scene. Add them to the source's parent to draw them where the source draws.
+- The copies are independent of the source. Later changes to the source `Text` do not reach them, and their matrices
+  never reach the source.
+- `split()` throws `Error` when the text is disposed, when it has no drawable glyph (for example only spaces), or
+  when its root has been disposed.
+
+See [Text](/reference/three-text) for `split()` itself.
+
+## Coordinate space
+
+Every local coordinate on this page is **Glyphs-local**: the local space of the `Glyphs` object, which equals the
+source Text's local space at the time of the split. +X is right and +Y is up, in the units of `fontSize`. The
+paragraph's anchor offset (`Constraints.anchor`) is already included once in every matrix and measurement, so a glyph
+drawn with its rest matrix lands where the source drew it.
+
+## Glyphs
+
+```ts
+import type { GlyphOutlineContour } from '@pmndrs/glyph';
+import type { DetachedGlyph, Glyphs, ThreeGlyphMeasurement } from '@pmndrs/glyph/three';
+import type { Matrix4, NodeMaterial, Object3D } from 'three/webgpu';
+
+declare class GlyphsMembers {
+  get count(): number;
+  get measurements(): readonly ThreeGlyphMeasurement[];
+  get materials(): readonly NodeMaterial[];
+  getMatrixAt(index: number, target: Matrix4): void;
+  setMatrixAt(index: number, matrix: Matrix4): void;
+  getWorldMatrixAt(index: number, target: Matrix4): void;
+  setWorldMatrixAt(index: number, matrixWorld: Matrix4): void;
+  glyphAt(index: number): DetachedGlyph;
+  outlineAt(index: number): GlyphOutlineContour[];
+  dispose(): void;
+}
+
+declare const glyphs: Glyphs;
+// `Glyphs` is an Object3D and has every member above.
+const members: GlyphsMembers & Object3D = glyphs;
+```
+
+A `Glyphs` is an `Object3D` whose children are the draws of the copied glyphs. Only glyphs that draw something are
+included: spaces and other blank glyphs are left out. Every index on this class is a **dense drawable index** in
+`0 <= index < count`; there is no mapping back to the source layout's glyph indices.
+
+### Properties
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `count` | `number` | Number of drawable glyphs. Read-only. |
+| `measurements` | `readonly ThreeGlyphMeasurement[]` | One frozen measurement per glyph, in index order, describing the glyph as it was at the split. It does not follow `setMatrixAt`. Read-only. |
+| `materials` | `readonly NodeMaterial[]` | The material instances this copy draws with. They are owned by the copy and may be mutated (for example `opacity`). Throws `Error` after `dispose()`. |
+| `frustumCulled` | `boolean` | Inherited from `Object3D`, default `true`. Set to `false` to submit every draw of this copy whatever the camera sees. See [Cull text outside the view](/guides/scene/culling). |
+
+Each draw's culling bound follows the instance matrices, so a glyph moved with `setMatrixAt` is not culled while it
+is on screen.
+
+### getMatrixAt()
+
+```ts
+import type { Glyphs } from '@pmndrs/glyph/three';
+import { Matrix4 } from 'three/webgpu';
+
+declare const glyphs: Glyphs;
+const matrix = new Matrix4();
+glyphs.getMatrixAt(0, matrix);
+```
+
+Signature: `getMatrixAt(index: number, target: Matrix4): void`.
+
+Copies glyph `index`'s current instance matrix into `target`. The matrix maps glyph-pen-local coordinates (origin at
+the glyph's pen origin on the baseline, +Y up) to Glyphs-local coordinates. Until written, it is a translation to the
+glyph's drawn pen origin, equal to `measurements[index].originalMatrix`.
+
+Throws `Error` after `dispose()` and `RangeError` when `index` is not an integer in `0 <= index < count`.
+
+### setMatrixAt()
+
+```ts
+import type { Glyphs } from '@pmndrs/glyph/three';
+import { Matrix4 } from 'three/webgpu';
+
+declare const glyphs: Glyphs;
+const matrix = new Matrix4();
+glyphs.getMatrixAt(0, matrix);
+matrix.elements[13] += 0.4; // raise the glyph 0.4 units
+glyphs.setMatrixAt(0, matrix);
+```
+
+Signature: `setMatrixAt(index: number, matrix: Matrix4): void`.
+
+Replaces glyph `index`'s instance matrix. Supply the complete Glyphs-local transform, not a delta: the glyph's pen
+origin is the pivot, so a rotation or scale in the matrix turns the glyph about its own baseline origin. The write
+takes effect on the next render; no layout runs.
+
+Throws `Error` after `dispose()` and `RangeError` for an index out of range.
+
+### getWorldMatrixAt() and setWorldMatrixAt()
+
+```ts
+import type { Glyphs } from '@pmndrs/glyph/three';
+import { Matrix4 } from 'three/webgpu';
+
+declare const glyphs: Glyphs;
+const world = new Matrix4();
+glyphs.getWorldMatrixAt(0, world);
+glyphs.setWorldMatrixAt(0, world);
+```
+
+Signatures: `getWorldMatrixAt(index: number, target: Matrix4): void` and
+`setWorldMatrixAt(index: number, matrixWorld: Matrix4): void`.
+
+The same matrices in world space, through the `Glyphs` object's own transform and its ancestors. Each call updates
+the object's world matrix (ancestors included), and `setWorldMatrixAt` also inverts it. To write many glyphs per
+frame, invert once and use [`worldToLocalMatrix`](#worldtolocalmatrix) with `setMatrixAt`.
+
+Both throw `Error` after `dispose()` and `RangeError` for an index out of range.
+
+### glyphAt()
+
+Signature: `glyphAt(index: number): DetachedGlyph`.
+
+Returns the frozen identity and grouping record of glyph `index`. It still answers after `dispose()`. Throws
+`RangeError` for an index out of range.
+
+### outlineAt()
+
+```ts
+import type { Glyphs } from '@pmndrs/glyph/three';
+
+declare const glyphs: Glyphs;
+const { fontSize } = glyphs.glyphAt(0);
+for (const contour of glyphs.outlineAt(0)) {
+  for (const [x0, y0, cx, cy, x1, y1, isLine] of contour) {
+    // Glyph-pen-local point: (x0 * fontSize, -y0 * fontSize)
+  }
+}
+```
+
+Signature: `outlineAt(index: number): GlyphOutlineContour[]`.
+
+Returns glyph `index`'s outline as closed contours of `[x0, y0, cx, cy, x1, y1, isLine]` curves in em units, +Y
+down, with the origin at the glyph's pen origin. To draw the outline where this object draws the glyph, multiply each
+coordinate by `DetachedGlyph.fontSize`, negate y, and apply the glyph's matrix. The outlines were captured when
+`split()` ran, so this still reads after the source re-lays out and after the font or this object is disposed.
+
+Throws `RangeError` for an index out of range and `TypeError` when the glyph's font was baked without outlines. See
+[Read glyph outlines](/guides/inspect/glyph-outlines).
+
+### dispose()
+
+Signature: `dispose(): void`.
+
+Releases the copy's draws, instance storage and materials, and removes the object from its parent. Calling it again
+does nothing. After it, `materials` and the matrix methods throw `Error`; `count`, `measurements`, `glyphAt` and
+`outlineAt` still read. The source `Text` is not affected and may be disposed before or after its copies.
+
+## DetachedGlyph
+
+The frozen record `glyphAt(index)` returns.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `index` | `number` | The dense drawable index, accepted by every `Glyphs` method. |
+| `key` | `GlyphKey` | Identity of the glyph within its paragraph: a branded string. It survives a reflow that only moves glyphs and changes when the text is reshaped. |
+| `fontHandle` | `number` | Identifies the font that shaped this glyph. A plain number that is never reused and retains nothing. |
+| `glyphId` | `number` | The glyph's index in that font. Not a Unicode code point. Equal `fontHandle` and `glyphId` mean an equal outline. |
+| `cluster` | `number` | UTF-16 offset in the source text of the cluster this glyph belongs to. |
+| `line` | `number` | Index of the line the glyph was on. |
+| `word` | `number` | Index of the word the glyph was in. |
+| `fontSize` | `number` | The glyph's em size, in Glyphs-local units. |
+| `advance` | `number` | The shaped advance: how far the pen moved. Not the ink width. |
+
+## Decorations
+
+An `Object3D` holding an independent copy of the paragraph's decoration draws. It has no per-decoration matrices:
+move, rotate or hide it as one object.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `materials` | `readonly NodeMaterial[]` | The material instances this copy draws with, owned by the copy. Throws `Error` after `dispose()`. |
+| `dispose()` | `(): void` | Releases the copy and removes it from its parent. Calling it again does nothing. |
+
+When both objects are added to the same parent, underlines and overlines draw beneath the glyphs and line-throughs
+above them: `split()` assigns the `renderOrder` of each draw so the source's paint order is kept.
+
+## ThreeGlyphMeasurement
+
+One frozen record per glyph, from `Glyphs.measurements` or from `text.measureGlyphs()`. On a `Glyphs` object the
+records describe the glyphs at the moment of the split; they are the rest pose an animation returns to. All vectors,
+boxes and the matrix are in owner-local three.js coordinates (+X right, +Y up) with the anchor included, where the
+owner is the `Glyphs` object or the `Text`.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `key` | `GlyphKey` | The glyph's identity, as in `DetachedGlyph.key`. |
+| `index` | `number` | Index in the array that holds this record. On a `Glyphs` object this is the dense drawable index. |
+| `shapedOrigin` | `Vector3` | The pen origin the shaper produced. |
+| `drawnOrigin` | `Vector3` | The pen origin the glyph is drawn at. |
+| `originalMatrix` | `Matrix4` | A translation to `drawnOrigin`: maps glyph-pen-local coordinates to owner-local coordinates. It does not follow `setMatrixAt`. |
+| `localQuad` | `readonly [Vector3, Vector3, Vector3, Vector3]` | The corners of `localInkBounds` at its minimum z: bottom-left, bottom-right, top-right, top-left. |
+| `localInkBounds` | `Box3` | The glyph's ink box. |
+| `localAdvanceBounds` | `Box3` | The glyph's advance box: from the drawn x across the advance, and the height of its line. |
+| `geometry` | `ThreeGlyphGeometrySource` | The geometry the glyph is drawn on, in its own coordinates. Not owner-local. |
+| `anchorPoint` | `(anchor: GlyphAnchor, bounds?: 'ink' \| 'advance') => Vector3` | A point of the ink or advance box. |
+
+### anchorPoint()
+
+```ts
+import type { Glyphs } from '@pmndrs/glyph/three';
+
+declare const glyphs: Glyphs;
+const measurement = glyphs.measurements[0];
+const baseCenter = measurement?.anchorPoint({ x: 'center', y: 'min' });
+const advanceEnd = measurement?.anchorPoint({ x: 'max', y: 'center' }, 'advance');
+```
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `anchor` | `GlyphAnchor` | required | Which point of the box, per axis. |
+| `bounds` | `'ink' \| 'advance'` | `'ink'` | Which box: `localInkBounds` or `localAdvanceBounds`. |
+
+Returns a new `Vector3` in owner-local coordinates. The boxes are flat, so z is `0` whatever `anchor.z` is.
+
+### GlyphAnchor and GlyphAnchorAxis
+
+```ts
+import type { GlyphAnchor, GlyphAnchorAxis } from '@pmndrs/glyph/three';
+
+const axis: GlyphAnchorAxis = 'center'; // 'min' | 'center' | 'max'
+const anchor: GlyphAnchor = { x: 'min', y: 'max' };
+```
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `x` | `GlyphAnchorAxis` | required | `'min'` is the left edge, `'max'` the right edge. |
+| `y` | `GlyphAnchorAxis` | required | `'min'` is the bottom edge, `'max'` the top edge (+Y up). |
+| `z` | `GlyphAnchorAxis` | `'center'` | Position along the box's depth. |
+
+### ThreeGlyphGeometrySource
+
+The `geometry` field of a measurement.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `kind` | `'metric-quad' \| 'supplied'` | `'metric-quad'` is the glyph's ink box as a quad. `'supplied'` is geometry provided by the raster format. |
+| `geometryKind` | `'quad' \| 'hull' \| 'custom' \| undefined` | Set only for `'supplied'` geometry. |
+| `coordinates` | `ThreeGlyphGeometryCoordinates` | The space of `positions` and `bounds`: `'glyph-local'`, `'unit-square'` or `'em'`. |
+| `positions` | `readonly Vector3[]` | Vertex positions. |
+| `indices` | `readonly number[]` | Triangle-list indices into `positions`. |
+| `bounds` | `Box3` | Bounding box of the used positions. |
+
+A `'metric-quad'` source always has `coordinates: 'glyph-local'`: +X right, +Y up, relative to the glyph's pen
+origin, with indices `[0, 1, 2, 0, 2, 3]`. A `'supplied'` source uses the coordinates it declares. Neither defines a
+collision body. `text.measureGlyphs()` reports supplied geometry only while the text is `committed`; otherwise it
+reports the metric quad.
+
+## localToWorldMatrix()
+
+```ts
+import { localToWorldMatrix, type Glyphs } from '@pmndrs/glyph/three';
+import { Matrix4 } from 'three/webgpu';
+
+declare const glyphs: Glyphs;
+const matrix = new Matrix4();
+glyphs.updateWorldMatrix(true, false);
+glyphs.getMatrixAt(0, matrix);
+localToWorldMatrix(glyphs.matrixWorld, matrix, matrix);
+```
+
+Signature:
+`localToWorldMatrix(glyphsMatrixWorld: Matrix4, matrixLocal: Matrix4, target: Matrix4): Matrix4`.
+
+| Parameter | Description |
+| --- | --- |
+| `glyphsMatrixWorld` | The `Glyphs` object's current `matrixWorld`. |
+| `matrixLocal` | A Glyphs-local instance matrix, as `getMatrixAt` returns. |
+| `target` | Receives `glyphsMatrixWorld × matrixLocal`. May be the same object as `matrixLocal`. |
+
+Returns `target`. The function does not update any world matrix.
+
+## worldToLocalMatrix()
+
+```ts
+import { worldToLocalMatrix, type Glyphs } from '@pmndrs/glyph/three';
+import { Matrix4 } from 'three/webgpu';
+
+declare const glyphs: Glyphs;
+declare const bodies: readonly Matrix4[]; // one world matrix per glyph
+
+glyphs.updateWorldMatrix(true, false);
+const inverse = glyphs.matrixWorld.clone().invert();
+const local = new Matrix4();
+for (let index = 0; index < glyphs.count; index += 1) {
+  const body = bodies[index];
+  if (body === undefined) continue;
+  glyphs.setMatrixAt(index, worldToLocalMatrix(inverse, body, local));
+}
+```
+
+Signature:
+`worldToLocalMatrix(glyphsMatrixWorldInverse: Matrix4, matrixWorld: Matrix4, target: Matrix4): Matrix4`.
+
+| Parameter | Description |
+| --- | --- |
+| `glyphsMatrixWorldInverse` | The inverse of the `Glyphs` object's `matrixWorld`, computed by the caller. |
+| `matrixWorld` | A world-space instance matrix. |
+| `target` | Receives `glyphsMatrixWorldInverse × matrixWorld`. May be the same object as `matrixWorld`. |
+
+Returns `target`. This is the bulk form of `setWorldMatrixAt`: one inversion for all glyphs.
+
+## See also
+
+- [Animate individual glyphs](/guides/scene/animate-glyphs)
+- [Text](/reference/three-text)
+- [Materials](/reference/three-materials)
+- [Measurement](/reference/measurement)
+- [Cull text outside the view](/guides/scene/culling)

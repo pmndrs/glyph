@@ -1,0 +1,325 @@
+---
+title: Use Glyph with React Three Fiber
+description: Draw text in a React Three Fiber canvas with @pmndrs/glyph/react - the canvas, font hooks and Suspense, Text and TextGroup, refs, GlyphProvider, error boundaries and frameloop="demand".
+nav: 601
+sourcecode: packages/glyph/src/react.ts
+---
+
+`@pmndrs/glyph/react` is a React layer over the three.js integration. Its `<Text>` and `<TextGroup>` create the same
+objects that `@pmndrs/glyph/three` exports, inside a React Three Fiber canvas, and its hooks load fonts through
+Suspense. This guide covers the setup and the parts that are specific to React. For a first paragraph on screen, step
+by step, follow [Your first text in React](/tutorials/first-text-react).
+
+## Install
+
+```sh
+npm install @pmndrs/glyph three @react-three/fiber@^10.0.0-alpha.4 react react-dom
+```
+
+The React entry needs `react` `>=19.0.0 <19.3`, `three` `>=0.185.0`, and `@react-three/fiber` `>=9.7.0 <10` or
+`>=10.0.0-alpha.4 <11`. All are optional peers of `@pmndrs/glyph`, so you install them yourself.
+
+## Create the canvas
+
+Text is drawn with three.js node materials, which need the `WebGPURenderer`. React Three Fiber 10 provides a canvas
+for it on the `/webgpu` entry. Import `Canvas`, `useFrame` and `useThree` from that entry, and three.js classes from
+`three/webgpu`.
+
+```tsx
+import { Canvas } from '@react-three/fiber/webgpu';
+import { Suspense, type ReactNode } from 'react';
+
+export function App({ children }: { readonly children: ReactNode }) {
+  return (
+    <Canvas camera={{ position: [0, 0, 10], fov: 50 }}>
+      <color attach="background" args={['#07090f']} />
+      <Suspense fallback={null}>{children}</Suspense>
+    </Canvas>
+  );
+}
+```
+
+The renderer uses WebGPU where the browser provides it and its WebGL 2 backend elsewhere; text draws on both.
+
+With React Three Fiber 9, import from `@react-three/fiber` and give `Canvas` an initialized `WebGPURenderer` through
+its asynchronous `gl` factory instead.
+
+No provider and no `glyph.init()` call are needed. The first `Text` or font hook starts the engine, suspends until it
+is ready, and uses a default handle with one root per canvas.
+
+## Load a font
+
+A font hook declares the font, loads one raster format of it, and suspends the component until it is ready.
+
+```tsx
+import { Text, useMsdf } from '@pmndrs/glyph/react';
+
+// Optional: start the load before the first render asks for it.
+void useMsdf.preload('/fonts/inter.font.glb');
+
+export function Title() {
+  const inter = useMsdf('/fonts/inter.font.glb');
+  return <Text font={inter}>Hello world</Text>;
+}
+```
+
+| Hook | Loads |
+| --- | --- |
+| `useMsdf(source, options?)` | The MSDF format. |
+| `useSlug(source, options?)` | The Slug format. |
+| `useBitmap(source, { strikes })` | The Bitmap format at the strikes the file was baked with. |
+| `useFont(source, { format })` | Any format, including a custom one. |
+
+Calling a hook again with the same source and options returns the same font and fetches nothing. The font stays
+loaded while a component that called the hook is mounted. See [Load a font](/guides/fonts/load-a-font) for sources
+and formats, and [Raster formats](/explanation/formats) for choosing one.
+
+Because hooks suspend, put a `<Suspense>` boundary inside the canvas, as above, around the components that load
+fonts. Everything inside the boundary appears when its fonts are ready.
+
+## Draw text
+
+`<Text>` is one paragraph. Its children are the content; `style`, `layout` and `constraints` are separate props; any
+`Object3D` prop positions it.
+
+```tsx
+import { Text, useMsdf } from '@pmndrs/glyph/react';
+
+export function Paragraph() {
+  const inter = useMsdf('/fonts/inter.font.glb');
+  return (
+    <Text
+      font={inter}
+      style={{ fontSize: 0.5, color: '#e7ecf6' }}
+      layout={{ wrap: 'word', align: 'center' }}
+      constraints={{ width: { mode: 'at-most', size: 6 }, anchor: { x: 'center', y: 'middle' } }}
+      position={[0, 1, 0]}
+    >
+      Text is an object in the scene, <Text style={{ color: '#ffd166' }}>styled inline</Text>.
+    </Text>
+  );
+}
+```
+
+A `<Text>` inside a `<Text>` is an inline span: it creates no object and accepts only `children`, `font`, `style` and
+`material`. Any other prop on a nested `<Text>` throws. See [Rich text](/guides/text/rich-text).
+
+Changing a prop updates the same object. Props are applied in a layout effect and the next frame draws them; no
+engine call happens while React renders.
+
+## Group texts
+
+`<TextGroup>` is a scene parent for texts. It moves and hides them as one and gives them a shared `material`,
+`renderOrder` and batching boundary.
+
+```tsx
+import { Text, TextGroup, useMsdf } from '@pmndrs/glyph/react';
+
+export function Hud() {
+  const inter = useMsdf('/fonts/inter.font.glb');
+  return (
+    <TextGroup position={[-4, 3, 0]} renderOrder={10}>
+      <Text font={inter} style={{ fontSize: 0.3 }}>
+        HP 100
+      </Text>
+      <Text font={inter} style={{ fontSize: 0.3 }} position={[0, -0.45, 0]}>
+        MP 40
+      </Text>
+    </TextGroup>
+  );
+}
+```
+
+See [Group and batch text](/guides/scene/group-and-batch).
+
+## Read and write through a ref
+
+The ref of `<Text>` is the three.js `Text` object, with every method on [Text](/reference/three-text). Reads lay the
+text out first if needed, so they are current as soon as the ref is set.
+
+```tsx
+import type { msdf } from '@pmndrs/glyph';
+import { Text, useMsdf } from '@pmndrs/glyph/react';
+import type { Text as ThreeText } from '@pmndrs/glyph/three';
+import { useEffect, useRef } from 'react';
+
+export function Measured() {
+  const inter = useMsdf('/fonts/inter.font.glb');
+  const ref = useRef<ThreeText<typeof msdf>>(null);
+
+  useEffect(() => {
+    const text = ref.current;
+    if (text === null) return;
+    const { width, height, lineCount } = text.measure();
+    console.info(width, height, lineCount);
+  }, []);
+
+  return (
+    <Text ref={ref} font={inter} style={{ fontSize: 0.5 }}>
+      Measure me
+    </Text>
+  );
+}
+```
+
+To size or place other objects from a text's layout, use `onLayout`. It runs before the frame that draws the text,
+so the first frame is already correct.
+
+```tsx
+import { Text, useMsdf } from '@pmndrs/glyph/react';
+import { useRef } from 'react';
+import type { Mesh } from 'three/webgpu';
+
+export function Badge() {
+  const inter = useMsdf('/fonts/inter.font.glb');
+  const backdrop = useRef<Mesh>(null);
+  return (
+    <>
+      <mesh ref={backdrop} position={[0, 0, -0.01]}>
+        <planeGeometry />
+        <meshBasicMaterial color="#1b2333" />
+      </mesh>
+      <Text
+        font={inter}
+        style={{ fontSize: 0.4 }}
+        constraints={{ anchor: { x: 'center', y: 'middle' } }}
+        onLayout={(_text, layout) => backdrop.current?.scale.set(layout.width + 0.4, layout.height + 0.2, 1)}
+      >
+        Sized by its text
+      </Text>
+    </>
+  );
+}
+```
+
+Inside `onLayout`, move and scale objects imperatively. Changing a layout input of any text there throws; `setState`
+re-renders after the frame. See [React to layout](/guides/inspect/react-to-layout).
+
+## Name fonts and choose a handle with GlyphProvider
+
+`<GlyphProvider>` is optional. Use it for two things.
+
+Give font faces names, so that `font="Inter"` works in the subtree:
+
+```tsx
+import { GlyphProvider, Text } from '@pmndrs/glyph/react';
+
+const FONT_FACES = { Inter: '/fonts/inter.font.glb' };
+
+export function Labels() {
+  return (
+    <GlyphProvider fontFaces={FONT_FACES} fallback={null}>
+      <Text font="Inter">Named font</Text>
+    </GlyphProvider>
+  );
+}
+```
+
+Select a handle or root you created, for a config other than the default or for content in a second scene:
+
+```tsx
+import { glyph } from '@pmndrs/glyph';
+import { GlyphProvider, Text, useSlug } from '@pmndrs/glyph/react';
+import { defineThreeConfig } from '@pmndrs/glyph/three';
+import { use, type ReactNode } from 'react';
+
+const denseHandle = glyph
+  .init()
+  .then(() => glyph.handle('dense', defineThreeConfig({ capacity: { size: 16_384, policy: 'chunk' } })));
+
+export function Dense({ children }: { readonly children: ReactNode }) {
+  return <GlyphProvider handle={use(denseHandle)}>{children}</GlyphProvider>;
+}
+
+export function DenseLabel() {
+  const inter = useSlug('/fonts/inter.font.glb');
+  return <Text font={inter}>On the dense handle</Text>;
+}
+```
+
+A handle needs the engine, so the example creates it after `glyph.init()` and suspends on the promise. One root
+draws into one scene: content rendered into another scene with `createPortal` needs
+`<GlyphProvider handle={handle('name')}>` around it. `handle` and `fontFaces` cannot change after the first render;
+remount the provider with a `key` to replace them. See [React](/reference/react#glyphprovider).
+
+## Handle errors
+
+Three kinds of failure reach React in three places.
+
+| Failure | Where it surfaces | What to do |
+| --- | --- | --- |
+| A prop that is not valid input, for example a negative `fontSize` | Thrown while React commits, to the nearest error boundary. Without a boundary inside the canvas, the canvas unmounts. | Wrap text in `<GlyphErrorBoundary>` inside the canvas. |
+| A font that fails to load | Thrown by the hook or `<Text>` as a `GlyphFontError`. | Give a `<GlyphProvider>` an `errorFallback`, or catch it with your own boundary. |
+| A failure found while rendering, for example text the engine refused or an exception from `onLayout` | Thrown from the frame's render, once. The failed text draws nothing; the others draw. | Report it from your global error handler. |
+
+```tsx
+import { GlyphErrorBoundary, Text, useMsdf } from '@pmndrs/glyph/react';
+
+export function SafeLabel({ size }: { readonly size: number }) {
+  const inter = useMsdf('/fonts/inter.font.glb');
+  return (
+    <GlyphErrorBoundary fallback={null} onError={(error) => console.error(error)}>
+      <Text font={inter} style={{ fontSize: size }}>
+        Never unmounts the canvas
+      </Text>
+    </GlyphErrorBoundary>
+  );
+}
+```
+
+`fallback` is rendered inside the canvas, so it must be canvas elements or `null`. A function fallback receives the
+error and a `reset` that mounts the children again. See [Handle errors](/guides/project/handle-errors).
+
+## Render on demand
+
+`frameloop="demand"` works without extra code. While a `<Text>` is mounted, a prop change and a write through a ref
+both invalidate the canvas.
+
+```tsx
+import type { msdf } from '@pmndrs/glyph';
+import { Text, useMsdf } from '@pmndrs/glyph/react';
+import type { Text as ThreeText } from '@pmndrs/glyph/three';
+import { Canvas } from '@react-three/fiber/webgpu';
+import { Suspense, useEffect, useRef } from 'react';
+
+function Clock() {
+  const inter = useMsdf('/fonts/inter.font.glb');
+  const ref = useRef<ThreeText<typeof msdf>>(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (ref.current !== null) ref.current.text = new Date().toLocaleTimeString();
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <Text ref={ref} font={inter}>
+      --:--:--
+    </Text>
+  );
+}
+
+export function OnDemand() {
+  return (
+    <Canvas frameloop="demand">
+      <Suspense fallback={null}>
+        <Clock />
+      </Suspense>
+    </Canvas>
+  );
+}
+```
+
+A change that is not a text setter, such as moving the object through its ref, is three.js state: call
+`invalidate()` from `useThree` after it, as for any other object.
+
+To check it: the clock redraws once a second, and React Three Fiber renders no frames in between.
+
+## See also
+
+- [Your first text in React](/tutorials/first-text-react)
+- [React](/reference/react)
+- [Text](/reference/three-text)
+- [Use Glyph with three.js](/guides/renderers/three)
+- [Handle errors](/guides/project/handle-errors)

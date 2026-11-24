@@ -1,0 +1,255 @@
+---
+title: ThreeHandle and ThreeRoot
+description: Reference for the three.js handle and its roots - creation, named roots, attach, onInvalidate, createText, createTextGroup, material, counters and disposal.
+nav: 721
+sourcecode: packages/glyph/src/three/text.ts
+---
+
+A handle is what `glyph.handle(name, ThreeConfig)` returns. It owns the renderer-side state for one config: fonts bound
+for drawing, materials and GPU buffers. A root is one stream of text published into one three.js `Scene`. The handle is
+itself a root (the anonymous root), and calling the handle with a name selects a named root. This page lists both.
+The types are exported from `@pmndrs/glyph/three`.
+
+## Creating a handle
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { ThreeConfig, type ThreeHandle } from '@pmndrs/glyph/three';
+
+await glyph.init();
+const three: ThreeHandle = glyph.handle('app', ThreeConfig);
+```
+
+`glyph.handle(name, config)` takes a non-empty name that is unique among live handles and a config from
+[`ThreeConfig` or `defineThreeConfig`](/reference/three-config). It throws an `Error` when `glyph.init()` has not
+resolved or when a live handle already has that name, and a `TypeError` for an empty name or an invalid config. After
+`handle.dispose()` the name can be used again. See [glyph](/reference/glyph).
+
+## ThreeHandle
+
+A `ThreeHandle` has every member of [`ThreeRoot`](#threeroot), acting on the anonymous root, and is also a function.
+
+```ts
+import type { ThreeHandle, ThreeRoot } from '@pmndrs/glyph/three';
+
+declare const three: ThreeHandle;
+
+const hud: ThreeRoot = three('hud');
+```
+
+### handle(name)
+
+Returns the root with that name, creating it on first use. The same name returns the same root for as long as that
+root is not disposed.
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `name` | `string` | The root's name. It appears in error messages and in the name of the root's scene object. |
+
+Returns a `ThreeRoot` whose `name` is the string and whose `handle` is this handle.
+
+### Members that differ from a named root
+
+| Member | Value on the handle |
+| --- | --- |
+| `name` | `undefined`. The handle is the anonymous root. |
+| `handle` | The handle itself. |
+| `dispose()` | Disposes the anonymous root, every named root, and the handle. See [dispose](#dispose). |
+
+### When to use a named root
+
+- One root publishes into at most one `Scene`. A second scene (a portal, a render target scene) needs its own root.
+- `root.material` and the draw objects are per root, so a named root isolates a set of texts for a material fallback
+  or for counting its draws.
+
+Roots of one handle share the handle's config and loaded fonts.
+
+## ThreeRoot
+
+```ts
+import type { RasterFormatMetadata } from '@pmndrs/glyph';
+import type {
+  StandaloneTextProperties,
+  Text,
+  TextGroup,
+  TextGroupOptions,
+  ThreeHandle,
+  ThreeTextMaterial,
+} from '@pmndrs/glyph/three';
+import type { Scene } from 'three/webgpu';
+
+declare class ThreeRootMembers {
+  readonly name: string | undefined;
+  readonly handle: ThreeHandle;
+  readonly disposed: boolean;
+  readonly textCount: number;
+  readonly gpuBytes: number;
+  material: ThreeTextMaterial | undefined;
+  onInvalidate: (() => void) | undefined;
+  attach(scene: Scene): void;
+  createText<Format extends RasterFormatMetadata>(properties: StandaloneTextProperties<Format>): Text<Format>;
+  createTextGroup(options?: TextGroupOptions): TextGroup;
+  dispose(): void;
+}
+
+// A ThreeRoot has every member above.
+const members: ThreeRootMembers = root;
+```
+
+`createText` has a second overload that accepts a `FontFace`, a format member of one, or a family name as `font`, and
+returns a `Text` typed by that selection's format.
+
+### Properties
+
+| Property | Type | Access | Description |
+| --- | --- | --- | --- |
+| `name` | `string \| undefined` | read | The root's name, or `undefined` for the anonymous root. |
+| `handle` | `ThreeHandle` | read | The handle that owns this root. |
+| `disposed` | `boolean` | read | `true` after `dispose()`. |
+| `textCount` | `number` | read | The number of `Text` objects created by this root and not yet disposed, whether or not they are in a scene. |
+| `gpuBytes` | `number` | read | Bytes of instance buffers, the transform table and font textures (Bitmap pages, MSDF atlases, Slug pages) held for this root's draws. `0` before the first publication. |
+| `material` | `ThreeTextMaterial \| undefined` | read, write | The material for texts of this root that set none on a span, the `Text` or an enclosing `TextGroup`. `undefined` falls back to the config's `material`, then to the default. Assigning it updates every affected text on the next frame. |
+| `onInvalidate` | `(() => void) \| undefined` | read, write | Called when a text of this root needs a new frame. See [onInvalidate](#oninvalidate). |
+
+### createText()
+
+Creates a [`Text`](/reference/three-text) that belongs to this root. The text is not in any scene until you add it.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+import { ThreeConfig } from '@pmndrs/glyph/three';
+
+const three = glyph.handle('app', ThreeConfig);
+const label = three.createText({
+  font: inter,
+  text: 'Hello world',
+  style: { fontSize: 0.5, color: '#ffd166' },
+  layout: { wrap: 'word' },
+  constraints: { width: { mode: 'at-most', size: 6 } },
+});
+scene.add(label);
+```
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `font` | `Font`, font stack, `FontFace`, a format member such as `Inter.slug`, or a family name `string` | required | The font. A `FontFace` or family name resolves to the config's `defaultFontFormat`, which must already be loaded. See [Load a font](/guides/fonts/load-a-font). |
+| `text` | `string` or formatted text from `txt` | required | The content. See [Formatted text](/reference/formatted-text). |
+| `style` | `PropertyList<TextStyle>` | `{}` | Size, color, spacing, features, decoration, outline, shadow. See [TextStyle](/reference/text-style). |
+| `layout` | `PropertyList<ParagraphLayout>` | `{}` | Wrapping, alignment, overflow, columns. See [ParagraphLayout](/reference/paragraph-layout). |
+| `constraints` | `PropertyList<Constraints>` | `{}` | The box and the anchor. See [Constraints](/reference/constraints). |
+| `flow` | `TextFlow` | none | Regions and exclusions. See [TextFlow](/reference/text-flow). |
+| `rasterPixelRatio` | `number` | `1` | Raster density used to pick a Bitmap strike for a font size. Positive and finite. |
+| `material` | `ThreeTextMaterial` | none | A material for this text. See [Materials](/reference/three-materials). |
+| `pixelSnapping` | `boolean` | `false` | Snap Bitmap vertices to physical pixels. Fixed at creation. |
+
+Returns a `Text` typed by the font's raster format.
+
+Creating a text validates and records its properties. It makes no engine call and allocates no GPU storage; layout
+runs on the first read or the first frame. See [When layout runs](/explanation/when-layout-runs).
+
+| Error | When |
+| --- | --- |
+| `GlyphInputError` | A property is not valid input, or the text is longer than the config's `maxTextUnits`. `path` names the property. |
+| `GlyphFontError` (`code: 'resource-unavailable'`) | A `FontFace` or family name whose selected format is not loaded, or a family name that no `FontFace` declares. |
+| `Error` | The root is disposed. |
+
+### createTextGroup()
+
+Creates a [`TextGroup`](/reference/three-text-group) for texts of this root.
+
+```ts
+const panel = three.createTextGroup({ renderOrder: 2 });
+panel.add(text);
+scene.add(panel);
+```
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `options` | `TextGroupOptions` | `{}` | `batching`, `renderOrder`, `material`, `pixelSnapping`. See [TextGroup](/reference/three-text-group). |
+
+Throws `TypeError` for options that are not an object, an invalid `batching` or a non-boolean `pixelSnapping`,
+`RangeError` for a `renderOrder` that is not finite, and `Error` when the root is disposed.
+
+### attach()
+
+Tells the root which `Scene` its text lives in before the first render discovers it.
+
+```ts
+three.attach(scene);
+```
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `scene` | `Scene` | The scene this root's texts are, or will be, added to. |
+
+Calling it is optional. A root finds its scene on the first traversal that visits one of its texts. With `attach`,
+the root's preparation object is already the scene's first child on that first frame, so an
+[`onLayout`](/guides/inspect/react-to-layout) callback that moves other objects costs no second matrix pass. The
+React and Vue components call it for you.
+
+If the root already publishes into a different scene, `attach` leaves it there. Throws `Error` when the root is
+disposed.
+
+### onInvalidate
+
+A callback the root calls when one of its texts needs a new frame: a `Text` is created, a `Text` setter records a
+changed value, or a `Text` is disposed. An on-demand render loop requests a frame here.
+
+```ts
+let scheduled = false;
+
+three.onInvalidate = () => {
+  if (scheduled) return;
+  scheduled = true;
+  requestAnimationFrame(() => {
+    scheduled = false;
+    renderer.render(scene, camera);
+  });
+};
+```
+
+It is called once per change, so coalesce as above. Assigning a value equal to the current one does not call it. An
+exception thrown by the callback is swallowed.
+
+It is not called for changes the root only observes during a render: `position`, `rotation`, `scale`, `visible` and
+`renderOrder` of a text or an ancestor, adding a text to the scene or moving it, `root.material`, and `TextGroup`
+`material` or `batching`. After one of those, request the frame yourself. See
+[Use Glyph with three.js](/guides/renderers/three#render-on-demand).
+
+### dispose()
+
+```ts
+handle('hud').dispose(); // one named root
+handle.dispose(); // the anonymous root, every named root, and the handle
+```
+
+Disposing a root releases its GPU storage and removes its private objects from the scene. It does not dispose the
+root's `Text` and `TextGroup` objects, and it does not remove them from the scene graph; after it, their methods throw
+`Error: Three root "name" has been disposed`. Dispose the texts first, or drop them with the root.
+
+Disposing a named root leaves the handle usable. Selecting the same name again returns a new root. Calling `dispose()`
+twice is safe.
+
+## A root in the scene
+
+A root adds two objects of its own to the scene it publishes into:
+
+| Object name | Role |
+| --- | --- |
+| `@pmndrs/glyph:anonymous` or `@pmndrs/glyph:<root name>` | The publication object. Its children are the draw meshes, one per draw. Material factories receive it as `context.root.renderObject`. |
+| `@pmndrs/glyph-prepare` | The preparation object, kept as the scene's first child. Visiting it prepares dirty text and runs layout callbacks before any other matrix is computed. |
+
+Do not move, remove or reorder them, and skip them in code that walks `scene.children` by index. A `Text` holds
+content and a transform; it has no mesh children. The draws for all texts of a root live under the publication object.
+
+A root that has texts under two different scenes throws
+`Error: Three root "name" spans more than one Scene; select a different handle root for each Scene` from the traversal
+or the `glyph.shape()` that finds it.
+
+## See also
+
+- [Three config](/reference/three-config)
+- [Text](/reference/three-text)
+- [TextGroup](/reference/three-text-group)
+- [Use Glyph with three.js](/guides/renderers/three)
+- [glyph](/reference/glyph)

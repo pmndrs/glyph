@@ -1,0 +1,498 @@
+---
+title: React
+description: Reference for every export of @pmndrs/glyph/react, the React Three Fiber components and font hooks, with props tables and exact behavior.
+nav: 730
+sourcecode: packages/glyph/src/react.ts
+---
+
+`@pmndrs/glyph/react` is the React Three Fiber binding of the three.js renderer. It exports four components (`Text`,
+`TextGroup`, `GlyphProvider`, `GlyphErrorBoundary`), four font hooks (`useFont`, `useMsdf`, `useSlug`, `useBitmap`)
+and their types. The components create and update the objects described in [Text](/reference/three-text) and
+[TextGroup](/reference/three-text-group); this page lists what the React layer adds.
+
+```tsx
+import { Text, TextGroup, useMsdf } from '@pmndrs/glyph/react';
+
+function Labels() {
+  const font = useMsdf('/fonts/inter.font.glb');
+  return (
+    <TextGroup renderOrder={1}>
+      <Text font={font} style={{ fontSize: 0.5 }} constraints={{ width: { mode: 'at-most', size: 6 } }}>
+        Hello <Text style={{ color: '#ffd166' }}>world</Text>
+      </Text>
+    </TextGroup>
+  );
+}
+```
+
+All components and hooks must render inside a React Three Fiber `<Canvas>`.
+
+## Exports
+
+| Name | Kind | Summary |
+| --- | --- | --- |
+| [`Text`](#text) | component | One paragraph. |
+| [`TextGroup`](#textgroup) | component | A scene parent and batching boundary for texts. |
+| [`GlyphProvider`](#glyphprovider) | component | Selects a handle or root and names font faces for a subtree. |
+| [`GlyphErrorBoundary`](#glypherrorboundary) | component | An error boundary to place inside the canvas. |
+| [`useFont`](#usefont) | hook | Loads a font in any format. |
+| [`useMsdf`](#usemsdf) | hook | Loads the MSDF format of a font. |
+| [`useSlug`](#useslug) | hook | Loads the Slug format of a font. |
+| [`useBitmap`](#usebitmap) | hook | Loads the Bitmap format of a font. |
+| `R3fTextProps`, `R3fTextChild`, `R3fTextGroupProps` | types | Props of `Text` and `TextGroup`. |
+| `GlyphProviderProps`, `GlyphProviderFontFace`, `GlyphErrorBoundaryProps` | types | Props of the provider and the boundary. |
+| `UseFont`, `UseMsdf`, `UseSlug`, `UseBitmap` | types | The hooks' call signatures. |
+
+## Text
+
+Renders one paragraph as a three.js [`Text`](/reference/three-text) object. Its children are the paragraph's content.
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text
+  font={inter}
+  style={{ fontSize: 0.4, color: '#e7ecf6' }}
+  layout={{ wrap: 'word', align: 'center' }}
+  constraints={{ width: { mode: 'exact', size: 6 } }}
+  position={[0, 1, 0]}
+>
+  A paragraph in the scene
+</Text>;
+```
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `font` | `Font`, `FontStack`, `FontFace`, a face's format selection, or `string` | required on an outer `Text` | The font. See [The font prop](#the-font-prop). |
+| `children` | `R3fTextChild` | none | Strings, numbers, nested `<Text>` elements, `null`, `false`, and arrays of these. |
+| `style` | `PropertyList<TextStyle>` | `{}` | Shaping and presentation, inherited by nested `Text`. See [TextStyle](/reference/text-style). |
+| `layout` | `PropertyList<ParagraphLayout>` | `{}` | Wrapping, alignment and line limits. Outer `Text` only. See [ParagraphLayout](/reference/paragraph-layout). |
+| `constraints` | `PropertyList<Constraints>` | `{}` | The box and anchor. Outer `Text` only. See [Constraints](/reference/constraints). |
+| `flow` | `TextFlow` | none | Flow regions and exclusions. Outer `Text` only. See [TextFlow](/reference/text-flow). |
+| `rasterPixelRatio` | `number` | none | Raster density override. Finite and `> 0`. |
+| `material` | `ThreeTextMaterial` | none | A custom material. See [Materials](/reference/three-materials). |
+| `pixelSnapping` | `boolean` | `false` | Snap Bitmap vertices to physical pixels. Fixed at construction: changing it between `true` and not `true` remounts the object. |
+| `onLayout` | `(text, layout: ParagraphLayoutSummary) => void` | none | The layout callback. See [onLayout](#onlayout). |
+| `ref` | `Ref<Text>` | none | Receives the three.js `Text` from `@pmndrs/glyph/three`. |
+| other `Object3D` props | | | `position`, `rotation`, `scale`, `visible`, `renderOrder`, `frustumCulled`, `name` and the rest are passed to the object. A `Text` has no geometry of its own, so pointer event props on it receive nothing; put them on a mesh. |
+
+`Text` does not accept a `handle` prop; passing one throws `TypeError`. Select a handle with
+[`GlyphProvider`](#glyphprovider).
+
+A `PropertyList` is a value, `false`, `null`, `undefined`, or a nested array of these, merged left to right.
+
+### Updates
+
+When a prop changes, the component applies the new desired state to the object in a layout effect and calls the
+canvas `invalidate()` if anything differed. Setting a prop makes no engine call: the text is prepared and published by
+the next frame. Props that are equal in value to the previous ones cause no update.
+
+An invalid value (for example a negative `fontSize`) throws `GlyphInputError` from the object's setter while React
+commits. The error reaches the nearest error boundary; without one inside the canvas, the canvas unmounts. See
+[`GlyphErrorBoundary`](#glypherrorboundary).
+
+### Nested Text
+
+A `<Text>` inside another `<Text>` is an inline span. It creates no three.js object; the outer `Text` flattens its
+children into one string with formatted spans.
+
+| Prop on a nested `Text` | Effect |
+| --- | --- |
+| `children` | The span's content. May nest further. |
+| `font` | The font for the span. Inherited by deeper spans. |
+| `style` | Merged over the enclosing style, property by property. |
+| `material` | The material for the span. Inherited by deeper spans. |
+| any other prop | Throws `TypeError` naming the prop, for example `layout`, `constraints`, `position` or `ref`. |
+
+A child that is a React element other than this package's `Text` throws `TypeError`. A nested `Text` with no content
+adds no span.
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text font={inter} style={{ fontSize: 0.4 }}>
+  Status: <Text style={{ color: '#4ade80', decoration: { underline: true } }}>online</Text>
+</Text>;
+```
+
+### The font prop
+
+| Value | Behavior |
+| --- | --- |
+| A `Font` from a hook, or a `FontStack` | Used as is. Never suspends. |
+| A `FontFace` or one of its format selections (`Inter`, `Inter.slug`) | Used if that format is already loaded on the handle. Otherwise the load starts and the component suspends until it finishes. The `Text` holds the loaded font while it is mounted. |
+| A `string` | Looked up in the nearest provider's `fontFaces`, then among the live `FontFace` declarations by family. The face found is then treated as above. An unknown name throws `GlyphFontError` with `reason: 'FONT_FACE_NOT_FOUND'`. |
+| omitted on an outer `Text` | Throws `TypeError`. |
+
+A `FontFace` with no format selected uses the handle's default format, `msdf` unless the config says otherwise.
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+import { Suspense } from 'react';
+
+<Suspense fallback={null}>
+  <Text font={Inter}>Suspends until Inter is loaded</Text>
+</Suspense>;
+```
+
+### onLayout
+
+Called with the three.js `Text` and what its `measure()` returns, after the text is first prepared and whenever that
+summary changes, before the frame that draws it. Move other objects from it imperatively and the first frame is
+exact. Calling `setState` from it re-renders after that frame. Writing a layout input of any text from inside it
+throws `GlyphLayoutPhaseError`. An exception thrown by the callback is rethrown from the render. See
+[React to layout](/guides/inspect/react-to-layout).
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+import { useRef } from 'react';
+import type { Mesh } from 'three/webgpu';
+
+function Panel() {
+  const backdrop = useRef<Mesh>(null);
+  return (
+    <>
+      <mesh ref={backdrop}>
+        <planeGeometry />
+      </mesh>
+      <Text font={inter} onLayout={(_text, layout) => backdrop.current?.scale.set(layout.width, layout.height, 1)}>
+        Sized by its text
+      </Text>
+    </>
+  );
+}
+```
+
+### The ref
+
+The ref is the three.js object, so every method of [`Text`](/reference/three-text) is available: `measure()`,
+`glyphs()`, `split()`, the editing methods, and the setters. It is assigned after the object is created, in a layout
+effect. Writing through the ref (`ref.current.text = 'new'`) requests a frame, so it also draws under
+`frameloop="demand"`. A later prop change overwrites what was written through the ref.
+
+## TextGroup
+
+Renders a three.js [`TextGroup`](/reference/three-text-group): an `Object3D` parent that moves and hides its
+descendant texts as one and sets where their draws may merge.
+
+```tsx
+import { Text, TextGroup } from '@pmndrs/glyph/react';
+
+<TextGroup batching="group" renderOrder={2} position={[0, 2, 0]}>
+  <Text font={inter}>Title</Text>
+  <Text font={inter} position={[0, -0.6, 0]}>
+    Body
+  </Text>
+</TextGroup>;
+```
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `batching` | `'auto' \| 'shared' \| 'group'` | `'auto'` | Where compatible draws of descendants may merge. See [Group and batch text](/guides/scene/group-and-batch). |
+| `renderOrder` | `number` | `0` | The three.js render order of the group's draws. Finite. |
+| `material` | `ThreeTextMaterial` | none | The material for descendants that set none. |
+| `pixelSnapping` | `boolean` | none | Snap Bitmap vertices of descendants to physical pixels. Fixed at construction: changing it between `true` and not `true` remounts the group and its children. |
+| `children` | `ReactNode` | none | `Text`, nested `TextGroup`, and any other scene elements. |
+| `ref` | `Ref<TextGroup>` | none | Receives the three.js `TextGroup`. |
+| other `Object3D` props | | | Passed to the object. |
+
+`batching`, `material` and `renderOrder` are complete desired state: removing one of these props resets it to its
+default. A change calls the canvas `invalidate()`. `TextGroup` does not accept a `handle` prop; passing one throws
+`TypeError`.
+
+## GlyphProvider
+
+Selects the handle and root that descendant `Text`, `TextGroup` and font hooks use, and gives font faces names for
+the `font` prop. It is optional: without one, components use a default handle and a root of their canvas.
+
+```tsx
+import { GlyphProvider, Text } from '@pmndrs/glyph/react';
+
+const FONT_FACES = { Inter: '/fonts/inter.font.glb' };
+
+<GlyphProvider fontFaces={FONT_FACES} fallback={null}>
+  <Text font="Inter">HP 100</Text>
+</GlyphProvider>;
+```
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `handle` | `ThreeHandle \| ThreeRoot \| string` | none | Which root descendants draw on. See below. |
+| `fontFaces` | `Record<string, GlyphProviderFontFace>` | none | Names for `font="Name"` in this subtree. |
+| `fallback` | `ReactNode` | none | Suspense fallback shown while descendants load fonts. |
+| `errorFallback` | `ReactNode \| ((error: GlyphFontError, dismiss: () => void) => ReactNode)` | none | Rendered in place of the children when a font fails to load. |
+| `children` | `ReactNode` | none | The subtree. |
+
+### handle
+
+| Value | Root used |
+| --- | --- |
+| omitted | The canvas's default root on the default handle. See [The default handle and root](#the-default-handle-and-root). |
+| a `string` | The named root `defaultHandle(name)` on the default handle. |
+| a `ThreeHandle` | That handle's anonymous root. |
+| a `ThreeRoot` from `handle(name)` | That root, on its own handle. |
+
+A root can live in only one `Scene`. Content rendered into another scene, for example through `createPortal`, needs
+its own named root:
+
+```tsx
+import { GlyphProvider, Text } from '@pmndrs/glyph/react';
+import { createPortal } from '@react-three/fiber/webgpu';
+import type { Scene } from 'three/webgpu';
+
+function Overlay({ overlayScene }: { readonly overlayScene: Scene }) {
+  return createPortal(
+    <GlyphProvider handle={handle('overlay')}>
+      <Text font={inter}>In the other scene</Text>
+    </GlyphProvider>,
+    overlayScene,
+  );
+}
+```
+
+The provider does not own the handle or root it is given and never disposes them. A disposed handle or root throws
+`Error`.
+
+### fontFaces
+
+Each entry maps a name to one of:
+
+| `GlyphProviderFontFace` form | Meaning |
+| --- | --- |
+| A font source: URL `string`, `URL`, `Blob` or `SerializedFontFace` | The provider declares a face for it with `glyph.fontFace(source)`. |
+| `{ src, format? }` | The provider declares a face with `glyph.fontFace(src, { format })`. |
+| A `FontFace` | Used as is. The provider does not own it. |
+
+Faces the provider declares are disposed after the last provider using that table unmounts. Names must be nonempty.
+Nothing loads until a descendant `Text` names the face.
+
+### Immutability
+
+`handle` and `fontFaces` are read on the first render. Rendering the provider again with a different `handle`, or a
+`fontFaces` table that declares different faces, throws `Error`. A new object literal that declares the same faces is
+accepted. To change either, remount the provider, for example with a `key`.
+
+### fallback and errorFallback
+
+When `fontFaces` or `fallback` is given, the provider wraps its children in a `Suspense` boundary with `fallback`
+(`null` if omitted). Otherwise it adds no boundary and a suspending descendant suspends to the nearest one above.
+
+When `errorFallback` is given, the provider wraps its children in an error boundary that catches `GlyphFontError`
+only; any other error is rethrown to the next boundary. A function fallback receives the error and `dismiss`, which
+mounts the children again. Call `dismiss` only after repairing the cause, or the same error is thrown again.
+
+```tsx
+import { GlyphProvider, Text } from '@pmndrs/glyph/react';
+
+<GlyphProvider
+  fallback={null}
+  errorFallback={(error, dismiss) => (
+    <mesh onClick={dismiss} name={error.reason}>
+      <planeGeometry />
+    </mesh>
+  )}
+>
+  <Text font={Inter}>Guarded</Text>
+</GlyphProvider>;
+```
+
+## The default handle and root
+
+Without a provider (or with a provider that has no `handle`):
+
+| Item | Value |
+| --- | --- |
+| Engine | The first component calls `glyph.init()` if the application has not, and suspends until it resolves. If `glyph` is already initialized nothing suspends. |
+| Handle | `glyph.handle('@pmndrs/glyph/react:default', ThreeConfig)`, created on first use and shared by every canvas. |
+| Root | One named root per canvas, `@pmndrs/glyph/react:root:N`. Two canvases never share a root. |
+| Root lifetime | Kept while any `Text`, `TextGroup`, provider or font hook of that canvas uses it; disposed a microtask after the last one unmounts. |
+
+To use a config other than `ThreeConfig`, create a handle with `glyph.handle(name, defineThreeConfig(...))` and pass
+it to a `GlyphProvider`.
+
+## Frames and on-demand rendering
+
+While a `Text` is mounted, its root is joined to the canvas:
+
+- The root is attached to the canvas `Scene` with `root.attach(scene)`.
+- A job registered before the canvas `render` prepares dirty text and runs layout callbacks, so layout is finished
+  before the renderer traverses the scene.
+- The root's `onInvalidate` calls the canvas `invalidate()`. With `frameloop="demand"`, a prop change and an
+  imperative write through a ref both draw a frame. An `onInvalidate` already set on the root is still called.
+
+A failure found while rendering, such as text the engine refused or an exception from `onLayout`, is thrown from the
+render, once. See [Handle errors](/guides/project/handle-errors).
+
+## GlyphErrorBoundary
+
+An error boundary for use inside the canvas, around `Text`. An invalid prop throws while React commits; with this
+boundary only the wrapped subtree is replaced.
+
+```tsx
+import { GlyphErrorBoundary, Text } from '@pmndrs/glyph/react';
+
+function Label({ size }: { readonly size: number }) {
+  return (
+    <GlyphErrorBoundary fallback={null} onError={(error) => console.error(error)}>
+      <Text font={inter} style={{ fontSize: size }}>
+        Label
+      </Text>
+    </GlyphErrorBoundary>
+  );
+}
+```
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `fallback` | `ReactNode \| ((error: unknown, reset: () => void) => ReactNode)` | required | Rendered instead of the failed subtree: canvas elements or `null`. `reset` mounts the children again. |
+| `onError` | `(error: unknown) => void` | none | Called once when an error is caught. |
+| `children` | `ReactNode` | none | The guarded subtree. |
+
+It catches every error thrown by its subtree during render or commit, not only this package's. It does not catch
+failures thrown from the render loop.
+
+## useFont
+
+Loads a font through the handle selected for the calling component and returns the loaded `Font`. The component
+suspends while the font loads; a font that is already loaded returns without suspending.
+
+```tsx
+import { msdf } from '@pmndrs/glyph';
+import { Text, useFont } from '@pmndrs/glyph/react';
+
+function Title() {
+  const font = useFont('/fonts/inter.font.glb', { format: msdf });
+  return <Text font={font}>Title</Text>;
+}
+```
+
+Signatures:
+
+- `useFont(input: FontFaceSource): Font`
+- `useFont(input: FontFaceSource, config: { format }): Font<Format>`
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `input` | `FontFaceSource` | A URL `string`, `URL`, `Blob` or `SerializedFontFace`: what `glyph.fontFace` accepts. |
+| `config.format` | a raster format or format request | Which format to load, for example `msdf`, `slug`, `bitmap({ strikes: [32] })`. Omitted, the handle's default format is used and the returned font's format type is not narrowed. |
+
+Returns a `Font` that stays valid while the calling component is mounted. Calls with the same source and format on
+the same handle share one font face and one load; the face is released a microtask after its last user unmounts. A
+load that fails throws `GlyphFontError` to the nearest error boundary, and a later mount or `preload` tries again.
+
+### useFont.preload()
+
+`useFont.preload(input, config?): Promise<void>` starts the same load before any component asks for it, on the
+default handle, calling `glyph.init()` first if needed. The promise resolves when the font is loaded and rejects if
+the load fails. Calling it again with the same arguments returns the same promise. A preloaded font is kept until a
+component mounts it or `clear` is called.
+
+### useFont.clear()
+
+`useFont.clear(input, config?): void` drops the cached load for that source and format on the default handle. Fonts
+held by mounted components stay valid; the face is released when the last one unmounts. The next call loads again.
+
+`preload` and `clear` act on the default handle only. Inside a `GlyphProvider` with its own handle, the hook loads
+through that handle.
+
+## useMsdf
+
+`useMsdf(input: FontFaceSource, options?: MsdfOptions): Font<typeof msdf>`. Equivalent to
+`useFont(input, { format: options === undefined ? msdf : msdf(options) })`, with `useMsdf.preload(input, options?)`
+and `useMsdf.clear(input, options?)`.
+
+| `MsdfOptions` field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `emSize` | `number` | `64` | Atlas texels per font em. |
+| `pixelRange` | `number` | `8` | Encoded signed-distance range in atlas pixels. |
+| `coverage` | `RasterCoverage` | none | Which glyphs the raster holds. |
+
+The options identify a raster: they must match what the font file was baked with.
+
+```tsx
+import { Text, useMsdf } from '@pmndrs/glyph/react';
+
+void useMsdf.preload('/fonts/inter.font.glb');
+
+function Body() {
+  const font = useMsdf('/fonts/inter.font.glb');
+  return <Text font={font}>Body</Text>;
+}
+```
+
+## useSlug
+
+`useSlug(input: FontFaceSource, options?: SlugOptions): Font<typeof slug>`. Equivalent to
+`useFont(input, { format: options === undefined ? slug : slug(options) })`, with `useSlug.preload` and
+`useSlug.clear`.
+
+| `SlugOptions` field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `cubicSubdivisions` | `number` | `4` | Quadratic curves per CFF cubic. |
+
+## useBitmap
+
+`useBitmap(input: FontFaceSource, options: BitmapFormatOptions): Font<typeof bitmap>`. Equivalent to
+`useFont(input, { format: bitmap(options) })`, with `useBitmap.preload` and `useBitmap.clear`. `options` is required.
+
+| `BitmapFormatOptions` field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `strikes` | `readonly [number, ...number[]]` | required | The pixel sizes the raster holds, for example `[16, 32]`. |
+| `coverage` | `RasterCoverage` | none | Which glyphs the raster holds. |
+
+```tsx
+import { Text, useBitmap } from '@pmndrs/glyph/react';
+
+function Hud() {
+  const font = useBitmap('/fonts/inter.font.glb', { strikes: [32] });
+  return (
+    <Text font={font} pixelSnapping style={{ fontSize: 32 }}>
+      SCORE 0000
+    </Text>
+  );
+}
+```
+
+## Types
+
+| Type | Description |
+| --- | --- |
+| `R3fTextProps<Format>` | Props of `Text` for one raster format. |
+| `R3fTextChild<Format>` | What `Text` accepts as children: `string`, `number`, `null`, `false`, a `Text` element, or a read-only array of these. |
+| `R3fTextGroupProps` | Props of `TextGroup`: `Object3D` props, `TextGroupOptions`, `children` and `ref`. |
+| `GlyphProviderProps` | Props of `GlyphProvider`. |
+| `GlyphProviderFontFace` | One `fontFaces` entry. |
+| `GlyphErrorBoundaryProps` | Props of `GlyphErrorBoundary`. |
+| `UseFont`, `UseMsdf`, `UseSlug`, `UseBitmap` | The call signature of each hook with its `preload` and `clear` members. |
+
+The `Text` component infers its raster format from the `font` prop, so a ref can be typed to match:
+
+```tsx
+import type { msdf } from '@pmndrs/glyph';
+import { Text } from '@pmndrs/glyph/react';
+import type { Text as ThreeText } from '@pmndrs/glyph/three';
+import { useRef } from 'react';
+
+function Measured() {
+  const ref = useRef<ThreeText<typeof msdf>>(null);
+  return (
+    <Text ref={ref} font={inter}>
+      Measured
+    </Text>
+  );
+}
+```
+
+## See also
+
+- [Use Glyph with React Three Fiber](/guides/renderers/react-three-fiber)
+- [Your first text in React](/tutorials/first-text-react)
+- [Text](/reference/three-text)
+- [TextGroup](/reference/three-text-group)
+- [Errors](/reference/errors)

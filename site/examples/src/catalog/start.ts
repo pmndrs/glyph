@@ -4,7 +4,7 @@ import type { ExampleEntry } from './types';
 export const START = {
   'first-text': {
     title: 'Your first text',
-    page: '/docs/getting-started/your-first-text',
+    page: '/docs/tutorials/first-text-react',
     stage: {},
     load: () => import('../scenes/first-text/scene'),
   },

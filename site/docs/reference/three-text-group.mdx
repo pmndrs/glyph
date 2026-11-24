@@ -1,0 +1,185 @@
+---
+title: TextGroup
+description: Reference for the three.js TextGroup object - options, batching modes, renderOrder, material, pixelSnapping, textCount and disposal.
+nav: 723
+sourcecode: packages/glyph/src/three/text.ts
+---
+
+`TextGroup` is an `Object3D` that parents `Text` objects. It moves and hides its texts as one, gives them a shared
+material, pixel snapping and render order, and marks where their draws may merge. It creates no engine state of its
+own: its texts still belong to the root that created them. `TextGroup` is exported from `@pmndrs/glyph/three`; the
+React and Vue `<TextGroup>` components create the same object.
+
+## Creating a TextGroup
+
+```ts
+import type { TextGroup } from '@pmndrs/glyph/three';
+
+const panel: TextGroup = root.createTextGroup({ renderOrder: 2 });
+const title = root.createText({ font: inter, text: 'Title' });
+const body = root.createText({ font: inter, text: 'Body' });
+panel.add(title, body);
+scene.add(panel);
+```
+
+A group is created with [`root.createTextGroup(options)`](/reference/three-root#createtextgroup) and accepts only
+texts of that root. Calling `new TextGroup(...)` yourself throws a `TypeError`.
+
+Texts do not need a group. Texts added straight to the scene are drawn by their root and can still share draws; a
+group adds the shared settings below and a batching boundary.
+
+## TextGroupOptions
+
+Every field is optional.
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `batching` | `'auto' \| 'shared' \| 'group'` | `'auto'` | Where the draws of descendant texts may merge. See [batching](#batching). |
+| `renderOrder` | `number` | not stated | three.js draw order for the draws of descendant texts. Finite. See [renderOrder](#renderorder). |
+| `material` | `ThreeTextMaterial` | none | The material for descendant texts that set none themselves. |
+| `pixelSnapping` | `boolean` | not stated | Snap Bitmap vertices to physical pixels for every descendant text, overriding each text's own `pixelSnapping`. Fixed at creation. |
+
+| Error | When |
+| --- | --- |
+| `TypeError` | `options` is not an object; `batching` is not one of the three values; `pixelSnapping` is not a boolean. |
+| `RangeError` | `renderOrder` is not finite. |
+
+## Members at a glance
+
+```ts
+import type { TextGroupBatching, ThreeTextMaterial } from '@pmndrs/glyph/three';
+import type { Object3D } from 'three/webgpu';
+
+declare class TextGroupMembers {
+  get batching(): TextGroupBatching;
+  set batching(value: TextGroupBatching);
+  get material(): ThreeTextMaterial | undefined;
+  set material(value: ThreeTextMaterial | undefined);
+  get pixelSnapping(): boolean | undefined;
+  get textCount(): number;
+  get gpuBytes(): number;
+  get disposed(): boolean;
+  add(...objects: Object3D[]): this;
+  dispose(): void;
+}
+
+// `TextGroup` is an Object3D and has every member above.
+const members: TextGroupMembers & Object3D = group;
+```
+
+## Properties
+
+| Property | Type | Access | Description |
+| --- | --- | --- | --- |
+| `batching` | `TextGroupBatching` | read, write | See [batching](#batching). Assigning an invalid value throws `TypeError`. |
+| `material` | `ThreeTextMaterial \| undefined` | read, write | The group's material. `undefined` lets descendants fall back to an outer group, the root, then the config. |
+| `pixelSnapping` | `boolean \| undefined` | read | The value given at creation, or `undefined` when none was given. |
+| `textCount` | `number` | read | The number of `Text` objects under the group at any depth that are not disposed. |
+| `gpuBytes` | `number` | read | The GPU bytes held by the group's root. It is the root's total, not this group's share. |
+| `disposed` | `boolean` | read | `true` after `dispose()`. |
+
+A text resolves each shared setting from its nearest enclosing group that states it. With nested groups, an inner
+group's `material` wins over an outer group's, and an inner group that states no material inherits the outer one.
+
+### Inherited Object3D properties
+
+| Property | Effect |
+| --- | --- |
+| `position`, `rotation`, `quaternion`, `scale` | Move every descendant text. No text is laid out again. |
+| `visible` | `false` hides every descendant text. When the group owns a batching boundary, its draws are skipped and their buffers kept. |
+| `renderOrder` | See [renderOrder](#renderorder). |
+| `frustumCulled` | `false` opts every descendant text out of frustum culling. Default `true`. See [Cull text outside the view](/guides/scene/culling). |
+
+## batching
+
+`batching` decides which group owns a batching boundary. Glyphs of texts inside one boundary can share a draw when
+they also share a font resource and format, a material and a paint layer. Glyphs of texts in different boundaries
+never share a draw.
+
+| Value | Behavior |
+| --- | --- |
+| `'auto'` | A top-level group owns a boundary. A nested `'auto'` group owns none and inherits. |
+| `'shared'` | The group owns no boundary, at any depth. |
+| `'group'` | The group owns a boundary of its own, also when it is nested. |
+
+A text's boundary is resolved in this order:
+
+1. its nearest enclosing group whose `batching` is `'group'`;
+2. otherwise its outermost enclosing group, when that group's `batching` is `'auto'`;
+3. otherwise the root's own pool, which it shares with the root's texts outside any group.
+
+```ts
+const hud = root.createTextGroup(); // 'auto': one boundary for everything inside
+const tooltip = root.createTextGroup({ batching: 'group' }); // its own boundary inside hud
+hud.add(tooltip);
+
+tooltip.batching = 'shared'; // merge with hud again
+```
+
+Use `'group'` when a nested group is shown and hidden on its own, so that hiding it skips whole draws. Use `'shared'`
+when merging draws across groups matters more than that.
+
+`batching` does not create another root, and it does not change layout, measurement or the order texts are painted in.
+
+## renderOrder
+
+Draw order involves two numbers:
+
+| Where it is set | Meaning |
+| --- | --- |
+| `group.renderOrder` | three.js `renderOrder` of the draw meshes for the group's texts, compared with every other object in the scene. A nested group that states its own value overrides an outer one; a group that never states one uses `0`. |
+| `text.renderOrder` of a text inside a group | The paragraph's rank within the group. Glyphs of a higher rank are painted after glyphs of a lower rank, also when they share one draw. Equal ranks keep creation order. |
+| `text.renderOrder` of a text outside any group | three.js `renderOrder` of that text's draw meshes. |
+
+A group states its `renderOrder` through the option or by assigning the property later. The change is picked up by the
+next render.
+
+```ts
+const stack = root.createTextGroup({ renderOrder: 10 }); // drawn after renderOrder 0..9
+const under = root.createText({ font: inter, text: 'under' });
+const over = root.createText({ font: inter, text: 'over' });
+stack.add(under, over);
+
+under.renderOrder = 0;
+over.renderOrder = 1; // painted on top of `under`
+```
+
+Within one text, underlines and overlines are painted first, then glyphs, then line-through.
+
+## add()
+
+`add(...objects)` is `Object3D.add` with validation. The objects may be `Text` objects, nested `TextGroup` objects, or
+any `Object3D` subtree that contains them.
+
+| Error | When |
+| --- | --- |
+| `TypeError` | A `Text` in the added objects belongs to a different root, or is disposed. |
+| `Error` | The group is disposed. |
+
+`clone()` and `copy()` throw `Error`: a `TextGroup` cannot be cloned or copied.
+
+## dispose()
+
+```ts
+group.removeFromParent();
+group.dispose();
+```
+
+Retires the group: its settings no longer apply to the texts under it, which are then presented as if the group were
+a plain `Object3D`. It does not dispose its texts and does not remove itself from its parent. After it, `add` and the
+`batching` and `material` setters throw `Error`. Calling it twice is safe.
+
+## Types
+
+| Type | Description |
+| --- | --- |
+| `TextGroupOptions` | The options of `createTextGroup`. |
+| `TextGroupBatching` | `'auto' \| 'shared' \| 'group'`. |
+
+## See also
+
+- [Group and batch text](/guides/scene/group-and-batch)
+- [Text](/reference/three-text)
+- [ThreeHandle and ThreeRoot](/reference/three-root)
+- [Materials](/reference/three-materials)
+- [React](/reference/react)

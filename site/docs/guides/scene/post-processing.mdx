@@ -1,0 +1,94 @@
+---
+title: Apply post-processing to text
+description: Run text through a post-processing pipeline such as bloom, in React Three Fiber and in plain three.js.
+nav: 505
+sourcecode: packages/glyph/src/three/text.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="scene" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+Text is drawn in the scene pass as ordinary meshes, so a post-processing effect sees it as pixels and needs no text-specific setup. This guide adds bloom over a scene that contains text.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="bloom" aria-label="A line of dim words with one bright word that glows through bloom" aspect="4 / 3" />
+
+Bloom thresholds on brightness: the dim words are unchanged and only the bright span glows, with a strength that pulses.
+
+## 1. Make the text bright enough
+
+Bloom keeps what is above its threshold. Give the text, or a span of it, a color brighter than the threshold and keep the rest below it.
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text font={inter} style={{ fontSize: 1.1, color: '#4b5568' }}>
+  words that <Text style={{ color: '#fff3c4' }}>shine</Text>
+</Text>;
+```
+
+## 2. Add the effect in React Three Fiber
+
+`useRenderPipeline` from `@react-three/fiber/webgpu` hands you the scene pass. Build the bloom node from its texture and assign the pipeline's output.
+
+```tsx
+import { useFrame, useRenderPipeline } from '@react-three/fiber/webgpu';
+import { useRef } from 'react';
+import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
+import type { UniformNode } from 'three/webgpu';
+
+export function Glow() {
+  const strength = useRef<UniformNode<'float', number> | null>(null);
+
+  useRenderPipeline(({ passes, renderPipeline }) => {
+    if (renderPipeline === null) return;
+    const scene = passes.scenePass.getTextureNode();
+    const glow = bloom(scene, 0.9, 0.4, 0.55); // strength, radius, threshold
+    strength.current = glow.strength;
+    renderPipeline.outputNode = scene.add(glow);
+  });
+
+  useFrame(({ elapsed }) => {
+    // A uniform: animating it does not rebuild the pipeline.
+    if (strength.current !== null) strength.current.value = 0.75 + Math.sin(elapsed * 1.4) * 0.45;
+  });
+
+  return null;
+}
+```
+
+Mount `<Glow />` anywhere inside the canvas.
+
+## 3. Add the effect in plain three.js
+
+Replace `renderer.render(scene, camera)` with a `RenderPipeline` whose output reads a scene pass.
+
+```ts
+import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
+import { pass } from 'three/tsl';
+import { RenderPipeline } from 'three/webgpu';
+
+const scenePass = pass(scene, camera);
+const glow = bloom(scenePass.getTextureNode(), 0.9, 0.4, 0.55);
+const post = new RenderPipeline(renderer);
+post.outputNode = scenePass.getTextureNode().add(glow);
+
+function frame(): void {
+  void post.render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+```
+
+The scene pass traverses the scene like a direct render does, so text that changed since the last frame is laid out and published on the way. See [Use Glyph with three.js](/guides/renderers/three) for the render loop.
+
+## Check the result
+
+The bright text has a soft halo and the dim text does not. If nothing glows, the text color is below the threshold (the third argument to `bloom`). If everything glows, lower the colors of the text that should stay flat or raise the threshold.
+
+## See also
+
+- [Write a custom material](/guides/scene/custom-materials)
+- [Style text](/guides/text/style-text)
+- [Use Glyph with three.js](/guides/renderers/three)
+- [Use Glyph with React Three Fiber](/guides/renderers/react-three-fiber)

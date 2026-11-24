@@ -1,0 +1,132 @@
+---
+title: Labels over objects
+description: Attach a label to a moving object, keep it facing the camera, center it above the object, and choose whether nearer geometry hides it.
+nav: 501
+sourcecode: packages/glyph/src/three/text.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="scene" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+A label is a `Text` parented to the object it names. The package has no billboard component: facing the camera is a one-line transform that your application owns. This guide builds a label that follows an object, faces the viewer and sits centered above it.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="labels" aria-label="Three moons orbiting a planet, each with a label that follows it and faces the camera" aspect="4 / 3" />
+
+Each label follows its body around the orbit, stays upright toward the camera, and disappears while a nearer body is in front of it.
+
+## 1. Parent the label to the object
+
+A child inherits its parent's position, so the label follows without any per-frame code.
+
+## 2. Face the camera
+
+Put the label in a group and copy the camera's orientation onto that group every frame.
+
+```tsx
+import { useFrame } from '@react-three/fiber/webgpu';
+import { useRef, type ReactNode } from 'react';
+import type { Group } from 'three/webgpu';
+
+export function Billboard({ offset = 0, children }: { readonly offset?: number; readonly children: ReactNode }) {
+  const group = useRef<Group>(null);
+  useFrame(({ camera }) => {
+    group.current?.quaternion.copy(camera.quaternion);
+  });
+  return (
+    <group ref={group} position={[0, offset, 0]}>
+      {children}
+    </group>
+  );
+}
+```
+
+Copying the camera quaternion is exact while the group's ancestors are not rotated. Under a rotated parent, cancel the parent's world rotation first, as you would for any three.js billboard.
+
+## 3. Center the label on its anchor point
+
+By default a text's origin is the top-left corner of its paragraph box. Set `constraints.anchor` so the bottom center of the box is the origin, then lift the group above the object.
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+import type { ReactNode } from 'react';
+
+declare function Billboard(props: { readonly offset?: number; readonly children: ReactNode }): ReactNode;
+
+const RADIUS = 0.3;
+
+<mesh>
+  <sphereGeometry args={[RADIUS, 32, 24]} />
+  <meshStandardNodeMaterial color="#f4d68a" />
+  <Billboard offset={RADIUS + 0.12}>
+    <Text
+      font={inter}
+      style={{ fontSize: 0.24 }}
+      layout={{ align: 'center', wrap: 'none' }}
+      constraints={{ anchor: { x: 'center', y: 'bottom' } }}
+    >
+      Io
+    </Text>
+  </Billboard>
+</mesh>;
+```
+
+The same in plain three.js:
+
+```ts
+import { Group, Mesh, MeshStandardNodeMaterial, SphereGeometry } from 'three/webgpu';
+
+const RADIUS = 0.3;
+const body = new Mesh(new SphereGeometry(RADIUS, 32, 24), new MeshStandardNodeMaterial({ color: '#f4d68a' }));
+
+const holder = new Group();
+holder.position.y = RADIUS + 0.12;
+const label = root.createText({
+  font: inter,
+  text: 'Io',
+  style: { fontSize: 0.24 },
+  layout: { align: 'center', wrap: 'none' },
+  constraints: { anchor: { x: 'center', y: 'bottom' } },
+});
+holder.add(label);
+body.add(holder);
+scene.add(body);
+
+function frame(): void {
+  holder.quaternion.copy(camera.quaternion);
+  renderer.render(scene, camera);
+}
+```
+
+## 4. Choose whether geometry hides the label
+
+The default material ignores depth, so a label stays readable in front of everything. To let nearer objects hide it, give it a depth-tested material.
+
+```ts
+import { defineTextMaterial } from '@pmndrs/glyph/three';
+
+const inScene = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  material.depthTest = true;
+  return material;
+});
+
+text.material = inScene;
+```
+
+A text material is a three.js node material, so scene fog applies to it as it does to any other material.
+
+## 5. Keep many labels cheap
+
+Labels created from the same root, with the same font and material, can share draws. When labels are spread across the scene graph as children of the objects they name, they are not inside one `TextGroup`; they still belong to one root. [Group and batch text](/guides/scene/group-and-batch) covers when draws merge and how to order overlapping labels.
+
+## Check the result
+
+Move the camera around the object. The label keeps its size in world units, stays centered above the object, and always reads left to right.
+
+## See also
+
+- [Place text in 3D](/guides/scene/place-text-in-3d)
+- [Anchor text](/guides/layout/anchor-text)
+- [Group and batch text](/guides/scene/group-and-batch)
+- [Write a custom material](/guides/scene/custom-materials)
