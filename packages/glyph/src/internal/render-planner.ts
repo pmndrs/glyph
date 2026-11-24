@@ -475,6 +475,16 @@ interface RetainedTextState {
    * next read asks for glyph facts up front instead of leaving them for a second engine call.
    */
   observedFacts: DeferredGlyphFacts | undefined;
+  /**
+   * Deferred glyph facts whose preparation an engine restart discarded, with the desired state they measured,
+   * leased until they are re-derived. They are re-derived before this paragraph is prepared again.
+   */
+  orphanedFacts: OrphanedGlyphFacts | undefined;
+}
+
+interface OrphanedGlyphFacts {
+  readonly facts: DeferredGlyphFacts;
+  readonly measured: ResolvedTextOptions;
 }
 
 interface CommittedFlowRegion {
@@ -837,6 +847,7 @@ class RenderPlannerImpl {
       measurementRead: false,
       inspection: undefined,
       deferredFacts: undefined,
+      orphanedFacts: undefined,
       observedFacts: undefined,
     };
     try {
@@ -1219,6 +1230,7 @@ class RenderPlannerImpl {
   _disposeText(state: RetainedTextState): void {
     if (state.disposed) return;
     this.#assertPublicationMutationAllowed();
+    this.#settleOrphanedFacts(state);
     this.#settleGlyphFacts(state);
     state.disposed = true;
     state.styleIds.length = 0;
@@ -1312,6 +1324,8 @@ class RenderPlannerImpl {
       throw new Error('render planner is already staged');
     }
     if (this.#unprepared.size === 0) return undefined;
+    // Orphaned glyph facts are re-derived by their own requests, before this one is collected.
+    for (const state of [...this.#unprepared]) this.#settleOrphanedFacts(state);
     if (this.#isolateNextPreparation) {
       this.#prepareIsolated(measureAll);
       return undefined;
@@ -1608,7 +1622,10 @@ class RenderPlannerImpl {
   dispose(): void {
     if (this.#disposed) return;
     this.#assertPublicationMutationAllowed();
-    for (const state of this.#texts) this.#settleGlyphFacts(state);
+    for (const state of this.#texts) {
+      this.#settleOrphanedFacts(state);
+      this.#settleGlyphFacts(state);
+    }
     this.#disposed = true;
     this.#transforms = undefined;
     this.#dirtyListener = undefined;
@@ -1808,6 +1825,7 @@ class RenderPlannerImpl {
    * that is already prepared only has its summary serialized when the read needs one.
    */
   #prepareTextCandidate(state: RetainedTextState, includeMeasurement: boolean, glyphFacts = false): boolean {
+    this.#settleOrphanedFacts(state);
     const preparation = this.#paragraphPreparation(state);
     const removals = this.#preparationRemovals.size === 0 ? EMPTY_REQUEST_ITEMS : [...this.#preparationRemovals];
     const preparationChanged = preparation.changed || removals.length !== 0;
@@ -2292,14 +2310,63 @@ class RenderPlannerImpl {
     }
   }
 
-  #resolveGlyphFactsAfterRestart(state: RetainedTextState, measured: ResolvedTextOptions | undefined): GlyphFacts {
-    if (measured === undefined || state.desired !== measured || state.disposed) {
-      throw new Error(
-        'the engine was restarted and the text changed before this layout summary’s glyph facts were read',
-      );
+  /**
+   * Re-derives glyph facts an engine restart orphaned by preparing the desired state they measured, which gives the
+   * layout that preparation had (incremental equals cold). A text edited since is prepared at its measured value for
+   * this one request and restated at its desired value by its next preparation.
+   */
+  #rederiveOrphanedFacts(state: RetainedTextState): GlyphFacts {
+    this.#assertMutable();
+    this.#ensureEngineRebuilt();
+    // A withheld paragraph is never restated: preparing it would put it back into the publication it broke.
+    if (this.#withheld.has(state)) throw this.#withheld.get(state);
+    const { facts, measured } = state.orphanedFacts!;
+    state.orphanedFacts = undefined;
+    const desired = state.desired;
+    const observed = state.observedFacts;
+    const edited = measured !== desired;
+    try {
+      if (edited) {
+        state.desired = measured;
+        state.geometryDirty = true;
+      }
+      this.#prepareAlone(state, true, true);
+      return glyphFactsOf(requirePreparedMeasurement(state));
+    } catch (error) {
+      // Nothing holds the measured state any more, so a later read reports this failure.
+      facts.lose(error instanceof Error ? error : new Error(String(error)));
+      throw error;
+    } finally {
+      if (edited) {
+        state.desired = desired;
+        state.geometryDirty = true;
+        state.measurement = undefined;
+        state.inspection = undefined;
+        // A refusal of the measured state is not one of the desired state.
+        state.refusal = undefined;
+        state.dirty = true;
+        this.#pendingTexts.add(state);
+        this.#unprepared.add(state);
+        this.#dirtyListener?.();
+      }
+      state.observedFacts = observed;
+      releaseResolvedText(measured);
     }
-    this.#assertTextQueryable(state, true);
-    return glyphFactsOf(requirePreparedMeasurement(state));
+  }
+
+  /** Re-derives orphaned glyph facts before the paragraph is prepared again or retired; a failure is kept for them. */
+  #settleOrphanedFacts(state: RetainedTextState): void {
+    const orphaned = state.orphanedFacts;
+    if (orphaned === undefined) return;
+    try {
+      orphaned.facts.resolve();
+    } catch (error) {
+      // Refused before it took the measured state (a withheld paragraph): nothing can re-derive them now.
+      if (state.orphanedFacts === undefined) return;
+      state.orphanedFacts = undefined;
+      orphaned.facts.lose(error instanceof Error ? error : new Error(String(error)));
+      releaseResolvedText(orphaned.measured);
+    }
   }
 
   /** Answers deferred summaries from the summaries a publication returned for the paragraphs it positioned. */
@@ -2446,17 +2513,20 @@ class RenderPlannerImpl {
       state.pendingFlowExclusions = new Map();
       state.measurement = undefined;
       state.inspection = undefined;
-      // The restarted engine holds nothing of the measured preparation. While the text still wants what was
-      // measured, a fresh preparation of it is the same layout (incremental equals cold), so the facts are read
-      // from that; once the text has changed they are gone.
-      const measured = state.preparedDesired;
-      state.deferredFacts?.bind(() => this.#resolveGlyphFactsAfterRestart(state, measured));
+      // The restarted engine holds nothing of the measured preparation: the facts keep its desired state, and the
+      // lease on it, to re-derive them from.
+      const facts = state.deferredFacts;
       state.deferredFacts = undefined;
+      const orphaned = facts?.pending === true && prepared !== undefined;
+      if (orphaned) {
+        state.orphanedFacts = { facts, measured: prepared };
+        facts.bind(() => this.#rederiveOrphanedFacts(state));
+      }
       state.dirty = true;
       state.lifecycleDirty = true;
       state.geometryDirty = true;
       state.orderDirty = true;
-      if (prepared !== undefined) releaseResolvedText(prepared);
+      if (prepared !== undefined && !orphaned) releaseResolvedText(prepared);
       if (this.#withheld.has(state)) {
         // Never restated: the engine does not hold it, and no preparation or publication names it.
         state.refusal = this.#withheld.get(state);

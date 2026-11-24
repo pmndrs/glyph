@@ -867,7 +867,10 @@ preparation of the paragraph settle it with the eager inputs, so retention, plac
 equal an eager positioning
 ([decision](../planning/decisions/summary-only-reads-defer-positioning.md)). Its measurement carries no glyph facts
 (`GLYPHS_DEFERRED`); the TypeScript summary computes them on first read, from a later read, the prior facts the next
-preparation of that paragraph returns first, or the publication that positions it. Two exceptions keep that off hot
+preparation of that paragraph returns first, or the publication that positions it. An engine restart discards the
+measured preparation, so the planner keeps a lease on the measured desired state and re-derives the facts by preparing
+it (incremental equals cold) on first read, before that paragraph is prepared again, or before it is disposed; a text
+edited since is restated at its desired value by its next preparation. Two exceptions keep that off hot
 paths: TypeScript reads also set `availableGlyphFacts`, so a paragraph positioned once preparation ends (an inline leaf,
 or a width whose lines positioning already describes) carries its facts at no cost; and a text whose caller read the
 facts of its last summary asks for them up front (`glyphFacts`) on its next read, observing again whether they are read.
