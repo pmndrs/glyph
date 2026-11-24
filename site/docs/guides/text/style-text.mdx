@@ -1,0 +1,173 @@
+---
+title: Style text
+description: Set font size, line height, letter and word spacing, color and opacity on a paragraph with TextStyle, and know which units each one uses.
+nav: 200
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="styling" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+The `style` property of a text is a `TextStyle`: a plain object that sets how the paragraph is shaped and painted.
+This guide sets the six properties every text needs: `fontSize`, `lineHeight`, `letterSpacing`, `wordSpacing`,
+`color` and `opacity`. Every field is optional, and a field you leave out keeps its default.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="text-style-basics" aria-label="One row per style property against an unstyled row, and the same three lines at two line heights" aspect="16 / 9" />
+
+Each row on the left changes one property against the first row. The two paragraphs on the right differ only in
+`lineHeight`.
+
+## Pass a style
+
+Give `style` when you create the text. In three.js:
+
+```ts
+const heading = three.createText({
+  font: Inter,
+  text: 'Quartz sphinx 123',
+  style: { fontSize: 0.3, color: '#e7ecf6' },
+});
+scene.add(heading);
+```
+
+In React, `style` is a prop of `<Text>`:
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text font={Inter} style={{ fontSize: 0.3, color: '#e7ecf6' }}>
+  Quartz sphinx 123
+</Text>;
+```
+
+Vue names the same prop `textStyle`; see [Vue](/reference/vue).
+
+## Choose the size and its unit
+
+`fontSize` is the em size of the text, in the units of the space the text is drawn in. Under the perspective camera
+of a 3D scene that is world units, so `fontSize: 0.3` is a line of type about 0.3 units tall. Under an orthographic
+camera set up in pixels it is pixels. The default is `16`.
+
+Every other length in a style is in the same unit as `fontSize`, not a multiple of it. A `letterSpacing` of `0.05`
+next to a `fontSize` of `0.3` adds 0.05 units after each character; it does not scale when you change the size.
+`lineHeight` is the one exception: it is a multiple.
+
+```ts
+three.createText({
+  font: Inter,
+  text: 'Quartz sphinx 123',
+  style: {
+    fontSize: 0.3, // em size, in scene units
+    letterSpacing: 0.05, // added after every character, in scene units; may be negative
+    wordSpacing: 0.3, // added to every word space, in scene units; may be negative
+  },
+});
+```
+
+`letterSpacing` is added after each grapheme cluster (what a reader counts as one character). It does not break up
+ligatures: a ligature keeps its shape and receives the spacing of every character it stands for.
+
+## Set the line height
+
+`lineHeight` is a multiple of `fontSize`: `lineHeight: 1.5` with `fontSize: 0.3` makes each line 0.45 units tall.
+Leave it out and each line uses the font's own ascender, descender and line gap, which is what the font's designer
+intended for body text.
+
+```ts
+three.createText({
+  font: Inter,
+  text: 'Line height is a\nmultiple of the\nfont size.',
+  style: { fontSize: 0.3, lineHeight: 1.8 },
+});
+```
+
+A value below what the glyphs need is allowed. The lines move closer and their ink may overlap; nothing is clipped.
+When a span changes the size of part of a line, that part asks for its own `fontSize × lineHeight`, and the line
+takes the tallest request.
+
+## Set the color
+
+`color` takes one of two forms:
+
+- A hex string, `'#rrggbb'` or `'#rrggbbaa'`, read as sRGB like a CSS color.
+- A tuple `[r, g, b, a]` of linear RGBA channels, each from 0 to 1. Use it when the value comes from shader or
+  color-management code that already works in linear light.
+
+```ts
+import type { ColorInput } from '@pmndrs/glyph';
+
+const fromCss: ColorInput = '#ffd166';
+const halfTransparent: ColorInput = '#ffd16680';
+const linear: ColorInput = [0, 0.4, 1, 1];
+
+text.style = { fontSize: 0.3, color: linear };
+```
+
+Named colors, three-digit hex, `rgb()` and `hsl()` are not accepted. Convert them first; three.js can do it:
+
+```ts
+import { Color } from 'three/webgpu';
+
+const hex = `#${new Color('hsl(200, 80%, 60%)').getHexString()}`;
+text.style = { fontSize: 0.3, color: hex };
+```
+
+The default color is opaque white.
+
+## Fade with opacity
+
+`opacity` is a number from 0 to 1 that multiplies the alpha of `color`. It is a separate property so that you can
+fade text without knowing its color, and so that spans inherit the two independently: a span that changes `color`
+keeps the paragraph's `opacity`, and a span that changes `opacity` keeps the paragraph's `color`.
+
+```ts
+text.style = { fontSize: 0.3, color: '#e7ecf6', opacity: 0.4 };
+```
+
+`opacity` fades the glyph fill and a decoration that uses the text color. It does not fade an outline, a shadow, or a
+decoration that has its own `color`; give those colors an alpha of their own.
+
+Changing only `color` or `opacity` repaints the text without laying it out again, so animating them every frame is
+cheap.
+
+## Change a style later
+
+Assign `text.style`, or include `style` in `text.set()`. The new value replaces the whole style; it is not merged
+with the previous one.
+
+```ts
+text.style = { fontSize: 0.3, color: '#ffd166' };
+text.set({ text: 'Updated', style: { fontSize: 0.42 } }); // color is back to the default
+```
+
+To change one field and keep the rest, compose the style from parts. See [Reuse styles](/guides/text/reuse-styles).
+
+## Check the result
+
+A value the engine cannot accept throws `GlyphInputError` from the call that received it, and the text keeps its
+previous style. The message names the field:
+
+```ts
+import { GlyphInputError } from '@pmndrs/glyph';
+
+try {
+  text.style = { color: 'gold' };
+} catch (error) {
+  if (error instanceof GlyphInputError) {
+    console.log(error.path); // ['style']
+    console.log(error.message); // 'Text style color must be #rrggbb, #rrggbbaa, or linear RGBA'
+  }
+}
+```
+
+To confirm sizes numerically, read `text.measure()`: `contentWidth` and `contentHeight` are in the same units as
+`fontSize`. See [Measure text](/guides/inspect/measure-text).
+
+## See also
+
+- [TextStyle reference](/reference/text-style)
+- [Reuse styles](/guides/text/reuse-styles)
+- [Rich text](/guides/text/rich-text)
+- [Coordinate spaces](/explanation/coordinate-spaces)
+- [Handle errors](/guides/project/handle-errors)

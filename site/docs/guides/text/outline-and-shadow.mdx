@@ -1,0 +1,177 @@
+---
+title: Outline and shadow
+description: Add an outline or a hard shadow to MSDF text with TextStyle, keep both inside the reach of the baked distance field, and know what other formats do.
+nav: 203
+sourcecode: packages/glyph/src/raster/msdf.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="styling" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+`TextStyle.outline` draws a band of color around each glyph and `TextStyle.shadow` draws a displaced copy behind it.
+Both are effects of the MSDF raster format: they are computed in the glyph's own shader from the distance field,
+with no extra draw. This guide adds each one, sizes it so that it renders cleanly, and covers the formats that do not
+support them.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="text-outline-shadow" aria-label="Three words on a panel: one with a yellow outline, one with a dark shadow down and to the right, one with both" aspect="16 / 9" />
+
+The outline follows the glyph edge at a constant width. The shadow has a hard edge and falls down and to the right
+because both offsets are positive.
+
+## Use an MSDF font
+
+Outline and shadow need a font loaded in the `msdf` format. `bitmap` and `slug` fonts do not support them.
+
+```ts
+import { glyph, msdf } from '@pmndrs/glyph';
+
+const Display = glyph.fontFace('/fonts/inter.font.glb', { format: msdf });
+await Display.load();
+```
+
+In React, load the font with `useMsdf`.
+
+## Add an outline
+
+`outline` takes a `color` and a `width`. Both are required. `width` is how far the band extends outward from the
+glyph edge, in the same units as `fontSize`.
+
+```ts
+three.createText({
+  font: Inter.msdf,
+  text: 'Outline',
+  style: {
+    fontSize: 0.95,
+    color: '#10131a',
+    outline: { color: '#ffd166', width: 0.03 },
+  },
+});
+```
+
+The outline is drawn outside the fill, so it does not thin the letters. `width: 0` draws no outline; use it on a span
+to switch off an outline the paragraph set.
+
+## Add a shadow
+
+`shadow` takes a `color` and an `offset` of two numbers, `[x, y]`, in the same units as `fontSize`. The offset is in
+the paragraph's own space: positive `x` moves the shadow toward the right of the text and positive `y` moves it
+toward the bottom, however the text is rotated in the scene.
+
+```tsx
+import { Text, useMsdf } from '@pmndrs/glyph/react';
+
+function Title() {
+  const display = useMsdf('/fonts/inter.font.glb');
+  return (
+    <Text font={display} style={{ fontSize: 0.95, shadow: { color: '#000000cc', offset: [0.04, 0.04] } }}>
+      Shadow
+    </Text>
+  );
+}
+```
+
+The shadow is hard-edged: there is no blur radius. It is a displaced copy of the glyph fill, composited behind the
+fill and the outline. Give the shadow color an alpha (`'#rrggbbaa'` or the fourth tuple channel) to soften it.
+
+`outline` and `shadow` can be set together. The shadow is cast by the fill, not by the outline.
+
+## Stay inside the field's reach
+
+An MSDF glyph stores distances only up to a fixed range around its edge, chosen when the font is baked. An outline
+or a shadow cannot reach farther than half that range:
+
+| Limit | Value |
+| --- | --- |
+| Largest outline `width`, and largest shadow offset per axis | `fontSize × pixelRange / (2 × emSize)` |
+| With the default bake (`emSize: 64`, `pixelRange: 8`) | `0.0625 × fontSize` |
+| With `emSize: 32`, `pixelRange: 12` | `0.1875 × fontSize` |
+
+Past the limit nothing throws, but the result is wrong: an outline fills the glyph's whole rectangle, and a shadow is
+cut off at the rectangle's edge. Artifacts appear as a value approaches the limit, so stay well under it. In the
+scene above, `fontSize` is 0.95 and the font uses the default bake, so the limit is about 0.059; the outline is 0.03
+wide and the shadow is offset by 0.04.
+
+If a design needs more, bake the font with a larger `pixelRange`, and request the same options when you load it:
+
+```sh
+glyph bake --input Inter-Regular.ttf --output inter-wide.font.glb --msdf em-size=32,pixel-range=12
+```
+
+```ts
+import { glyph, msdf } from '@pmndrs/glyph';
+
+const Wide = glyph.fontFace('/fonts/inter-wide.font.glb', { format: msdf({ emSize: 32, pixelRange: 12 }) });
+```
+
+See [Bake fonts](/guides/fonts/bake-fonts) for the bake options.
+
+## Know what other formats do
+
+Support is declared per raster format in its `textEffects` list, and checked when the style is set.
+
+| Format | `textEffects` | `outline` | `shadow` |
+| --- | --- | --- | --- |
+| `msdf` | `['outline', 'shadow']` | Drawn | Drawn |
+| `bitmap` | `[]` | Throws | Throws |
+| `slug` | `[]` | Throws | Throws |
+
+A style with an unsupported effect throws `GlyphInputError` from `createText` or from the setter. The text is not
+drawn without the effect and the previous style stays in place.
+
+```ts
+import { GlyphInputError } from '@pmndrs/glyph';
+
+try {
+  three.createText({
+    font: Inter.slug,
+    text: 'Outline',
+    style: { outline: { color: '#ffd166', width: 0.03 } },
+  });
+} catch (error) {
+  if (error instanceof GlyphInputError) {
+    console.log(error.message); // 'raster format pmndrs.slug does not support outline in Text style'
+  }
+}
+```
+
+The check covers every font the style can reach. A paragraph-level outline also throws when any span of that
+paragraph uses a font in a format without outlines, and a span's own effect is checked against the span's font. To
+test a format yourself, read its list:
+
+```ts
+import { msdf, slug } from '@pmndrs/glyph';
+
+console.log(msdf.textEffects.includes('outline')); // true
+console.log(slug.textEffects.includes('outline')); // false
+```
+
+For an outline on a `slug` or `bitmap` font, or for a blurred shadow, write a material instead. See
+[Custom materials](/guides/scene/custom-materials).
+
+## Combine with opacity and spans
+
+- `opacity` fades the fill only. The outline and the shadow keep the alpha of their own colors, so fade those colors
+  as well when you fade text out.
+- A span inherits the paragraph's `outline` and `shadow`. A span that states one replaces that whole object for its
+  range.
+- Changing `outline` or `shadow` is a style change like any other: assign `text.style` again.
+
+```ts
+function fade(alpha: number) {
+  text.style = {
+    fontSize: 0.95,
+    opacity: alpha,
+    outline: { color: [1, 0.64, 0.13, alpha], width: 0.03 },
+    shadow: { color: [0, 0, 0, 0.8 * alpha], offset: [0.04, 0.04] },
+  };
+}
+```
+
+## See also
+
+- [TextStyle reference](/reference/text-style)
+- [Raster formats](/explanation/formats)
+- [Formats reference](/reference/formats)
+- [Bake fonts](/guides/fonts/bake-fonts)
+- [Custom materials](/guides/scene/custom-materials)

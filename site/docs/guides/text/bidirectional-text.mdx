@@ -1,0 +1,185 @@
+---
+title: Bidirectional text
+description: Set right-to-left and mixed-direction text with TextStyle.direction, and know how alignment, the ellipsis and spans follow the base direction.
+nav: 207
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="styling" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+Arabic and Hebrew run right to left, and a line that mixes them with Latin text or numbers has runs in both
+directions. The engine orders such lines with the Unicode Bidirectional Algorithm. The one thing it cannot always
+know is the base direction: the direction of the paragraph as a whole. This guide sets it with
+`TextStyle.direction` and shows what follows from it.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="text-bidi" aria-label="One mixed Latin and Arabic string set three times with direction auto, ltr and rtl in the same box, then a truncated left-to-right line with its ellipsis on the right and a truncated right-to-left line with its ellipsis on the left" aspect="16 / 9" />
+
+The top three rows are the same string with `align: 'start'`. Under `rtl` the runs appear in the opposite order and
+the text moves to the right edge. In the bottom rows the ellipsis is on the right for `ltr` and on the left for
+`rtl`.
+
+## Let the text decide
+
+`direction` has three values. The default is `'auto'`.
+
+| Value | Base direction |
+| --- | --- |
+| `'auto'` | Taken from the first strong character of the paragraph: left to right if it is a Latin, Greek, Cyrillic or CJK letter, right to left if it is an Arabic or Hebrew letter. Digits, spaces and punctuation are skipped. |
+| `'ltr'` | Left to right, whatever the text contains. |
+| `'rtl'` | Right to left, whatever the text contains. |
+
+With `'auto'`, a text that is entirely Arabic or Hebrew needs nothing from you:
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+
+const Amiri = glyph.fontFace('/fonts/amiri.font.glb');
+
+three.createText({
+  font: Amiri,
+  text: 'مرحبا بالعالم',
+  style: { fontSize: 0.4 },
+  constraints: { width: { mode: 'exact', size: 5.6 } },
+});
+```
+
+The letters are joined and ordered right to left, and with the default `align: 'start'` the line sits against the
+right edge of the box.
+
+A text with line breaks is several paragraphs. Under `'auto'` each one gets its own base direction from its own
+first strong character.
+
+## Set the base direction explicitly
+
+`'auto'` picks the wrong direction when the first strong character is not in the paragraph's main language. An
+Arabic sentence that starts with a Latin product name is the usual case. State the direction:
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+
+const Amiri = glyph.fontFace('/fonts/amiri.font.glb');
+
+three.createText({
+  font: Amiri,
+  text: 'glyph: مرحبا بالعالم (hello)',
+  style: { fontSize: 0.4, direction: 'rtl' },
+  layout: { align: 'start' },
+  constraints: { width: { mode: 'exact', size: 5.6 } },
+});
+```
+
+```tsx
+import { Text, useSlug } from '@pmndrs/glyph/react';
+
+function Greeting() {
+  const amiri = useSlug('/fonts/amiri.font.glb');
+  return (
+    <Text
+      font={amiri}
+      style={{ fontSize: 0.4, direction: 'rtl' }}
+      constraints={{ width: { mode: 'exact', size: 5.6 } }}
+    >
+      glyph: مرحبا بالعالم (hello)
+    </Text>
+  );
+}
+```
+
+The base direction changes three things on a mixed line, all visible in the scene:
+
+- **Run order.** Runs are laid out starting from the base direction's start edge. Under `rtl`, `glyph:` is the first
+  run and therefore the rightmost.
+- **Neutral characters.** Spaces and punctuation between runs of different directions take the base direction. The
+  colon after `glyph` moves to the left of the word under `rtl`.
+- **Paired brackets.** Brackets are mirrored where needed so that `(hello)` still reads as an enclosed word.
+
+The direction inside each run does not change: Arabic letters always run right to left and Latin letters left to
+right.
+
+## Align to start and end
+
+`align: 'start'` and `align: 'end'` are relative to the base direction, so the same layout works for both.
+
+| `direction` | `align: 'start'` | `align: 'end'` |
+| --- | --- | --- |
+| `'ltr'` | Left edge | Right edge |
+| `'rtl'` | Right edge | Left edge |
+
+There are no `'left'` and `'right'` values. To pin right-to-left text to the left edge, use `align: 'end'`.
+
+Alignment needs a box to align in. With no width constraint the box is as wide as the text and every alignment
+looks the same. See [Wrap and align](/guides/layout/wrap-and-align).
+
+## Truncate on the correct side
+
+With `overflow: 'ellipsis'`, the ellipsis replaces the end of the line in reading order. That is the right edge for
+a left-to-right paragraph and the left edge for a right-to-left one.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+
+const Amiri = glyph.fontFace('/fonts/amiri.font.glb');
+
+three.createText({
+  font: Amiri,
+  text: 'مرحبا بالعالم بحر رمل ملح علم حلم عمل',
+  style: { fontSize: 0.4, direction: 'rtl' },
+  layout: { wrap: 'none', overflow: 'ellipsis', maxLines: 1 },
+  constraints: { width: { mode: 'exact', size: 3.4 } },
+});
+```
+
+The font must contain the ellipsis character (U+2026). Without it the font's missing-glyph box is drawn in its
+place, so include U+2026 when you subset. See [Truncate](/guides/layout/truncate).
+
+## Force a direction on a span
+
+On a span, `direction` is stronger than on a paragraph. `'ltr'` or `'rtl'` forces every character of the span to
+run in that direction, ignoring the characters' own direction, like a Unicode directional override. Use it for
+strings that must be shown in storage order, such as a code sample that contains right-to-left letters.
+
+```ts
+import { glyph, txt } from '@pmndrs/glyph';
+import { span } from '@pmndrs/glyph/three';
+
+const Amiri = glyph.fontFace('/fonts/amiri.font.glb');
+const forced = span({ direction: 'ltr' });
+
+three.createText({
+  font: Amiri,
+  text: txt`glyph ${forced`مرحبا`} glyph`, // the Arabic letters are laid out left to right
+  style: { fontSize: 0.4 },
+});
+```
+
+A span cannot set a base direction for part of a paragraph. `'auto'` on a span leaves its characters alone.
+
+## Cover the script
+
+Right-to-left text needs a font with the script. A subset bake of an Arabic font must include every letter you
+draw; the bake then adds the initial, medial, final and ligature forms those letters need. See
+[Subset coverage](/guides/fonts/subset-coverage) and [Languages and scripts](/guides/text/languages-and-scripts).
+
+## Check the result
+
+`glyphs()` reports the resolved embedding level of every glyph. Even levels run left to right and odd levels right
+to left; a left-to-right paragraph starts at level 0 and a right-to-left one at level 1.
+
+```ts
+const levels = text.glyphs().glyphBidiLevels;
+const hasRightToLeft = levels.some((level) => level % 2 === 1);
+console.log(hasRightToLeft ? 'contains right-to-left runs' : 'left to right only');
+```
+
+Carets and selections in mixed text follow the same levels. See
+[Caret and selection](/guides/editing/caret-and-selection).
+
+## See also
+
+- [Languages and scripts](/guides/text/languages-and-scripts)
+- [Wrap and align](/guides/layout/wrap-and-align)
+- [Truncate](/guides/layout/truncate)
+- [Caret and selection](/guides/editing/caret-and-selection)
+- [TextStyle reference](/reference/text-style)

@@ -1,0 +1,186 @@
+---
+title: OpenType features
+description: Turn OpenType features such as ligatures, small capitals and old-style figures on or off with TextStyle.features, for a whole text or a range of it.
+nav: 205
+sourcecode: packages/glyph/src/font-feature.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="styling" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+An OpenType feature is a named set of glyph substitutions or position adjustments that a font carries, identified
+by a four-character tag: `liga` for ligatures, `smcp` for small capitals, `onum` for old-style figures. This guide
+turns features on and off with `TextStyle.features`, limits one to part of the text, and makes sure the baked font
+still contains the feature.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="text-opentype-features" aria-label="Six rows of the same string set twice in Source Serif, with a feature off on the left and on on the right: ligatures, small capitals, old-style figures, slashed zero, fractions, and small capitals on one word" aspect="16 / 9" />
+
+Each row is the same string twice. Only `features` differs between the two columns.
+
+## Turn a feature on
+
+`features` is an array of `FontFeature` objects. `tag` is required; `value` defaults to `1`, which means on.
+
+```ts
+three.createText({
+  font: Inter,
+  text: 'Office hours 0123456789',
+  style: {
+    fontSize: 0.5,
+    features: [{ tag: 'smcp' }, { tag: 'onum' }],
+  },
+});
+```
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text font={Inter} style={{ fontSize: 0.5, features: [{ tag: 'zero' }] }}>
+  2026
+</Text>;
+```
+
+Common tags:
+
+| Tag | Effect | On by default |
+| --- | --- | --- |
+| `liga` | Standard ligatures, such as "ffi" drawn as one glyph | Yes |
+| `kern` | Kerning between pairs of glyphs | Yes |
+| `calt` | Contextual alternates | Yes |
+| `smcp` | Small capitals for lowercase letters | No |
+| `onum` | Old-style figures | No |
+| `tnum` | Tabular (fixed-width) figures | No |
+| `zero` | Slashed zero | No |
+| `frac` | Fractions built from "1/2" | No |
+| `ss01` to `ss20` | Stylistic sets defined by the font | No |
+
+The tags are the font's, not this library's. Any four printable ASCII characters are accepted, and which tags do
+anything depends on the font. Its specimen or documentation lists them.
+
+## Turn a default feature off
+
+Features the shaper applies by default, such as `liga` and `kern`, are turned off with `value: 0`.
+
+```ts
+three.createText({
+  font: Inter,
+  text: 'office',
+  style: { fontSize: 0.5, features: [{ tag: 'liga', value: 0 }] },
+});
+```
+
+For features with several alternates, such as `salt` or a character variant `cv01`, `value` selects the alternate:
+`1` is the first, `2` the second, and so on, as the font defines them.
+
+## Apply a feature to part of the text
+
+`start` and `end` limit a feature to a range of UTF-16 code units of the text, `start` inclusive and `end`
+exclusive. Left out, they cover the whole text.
+
+```ts
+three.createText({
+  font: Inter,
+  text: 'Office Office',
+  style: {
+    fontSize: 0.5,
+    features: [{ tag: 'smcp', start: 7, end: 13 }], // the second word only
+  },
+});
+```
+
+The range must lie inside the text. `end` beyond the text length, or `end` before `start`, throws
+`GlyphInputError` (`Text style feature 0 (smcp) must stay inside [0, 13)`). Because the check runs against the
+current text, shortening the text below a range also throws; set the text and the style together with `text.set()`
+when both change.
+
+When the range is a styled run anyway, a span is usually simpler than counting offsets:
+
+```ts
+import { txt } from '@pmndrs/glyph';
+import { span } from '@pmndrs/glyph/three';
+
+const smallCaps = span({ features: [{ tag: 'smcp' }] });
+
+three.createText({
+  font: Inter,
+  text: txt`Office ${smallCaps`Office`}`,
+  style: { fontSize: 0.5 },
+});
+```
+
+A span that states `features` replaces the paragraph's list for its range; the two lists are not merged. Repeat in
+the span any paragraph feature it should keep.
+
+## Make sure the font has the feature
+
+A feature the font does not contain does nothing. No error is thrown, because the tag is valid and the font simply
+has no rule for it. Two things decide whether the rule is there.
+
+**The source font.** Not every font has small capitals or old-style figures. Check the font's documentation.
+
+**The bake.** Baking with a code-point subset (`--unicodes` on the command line, `unicodeRanges` in `bakeFont`) removes
+unused glyphs and, with them, layout features outside a default set. A subset bake keeps the features a shaper
+applies without being asked, including `liga`, `kern`, `calt`, `locl`, `ccmp`, `mark`, `mkmk`, `rlig`, and also
+`frac`, `numr` and `dnom`. It drops discretionary features such as `smcp`, `onum`, `tnum`, `zero` and the stylistic
+sets. A bake without a code-point subset keeps every feature.
+
+| Bake | `liga`, `kern`, `frac` | `smcp`, `onum`, `zero`, `ss01` |
+| --- | --- | --- |
+| `glyph bake --input Font.ttf --msdf` | Kept | Kept |
+| `glyph bake --input Font.ttf --unicodes U+0020-007E --msdf` | Kept | Removed |
+
+To keep discretionary features and still ship a small file, bake the whole font and narrow only the raster with the
+format's `coverage` option, which `msdf` and `bitmap` support. The scene above does this: Source Serif 4 is baked
+without a subset, and its MSDF atlas holds only the 40 glyphs the rows use. Coverage is part of the raster's
+identity, so the same value is passed when the font is loaded.
+
+```ts
+import { bakeFont } from '@pmndrs/glyph/bake';
+import { msdfBaker } from '@pmndrs/glyph/bakers/msdf';
+
+// Glyph IDs of the source font: every glyph the text shapes to, with and without its features.
+const coverage = { glyphIds: [0, 1, 16, 30, 32, 33, 36, 42, 422, 1115, 1117, 1118, 1121] };
+
+await bakeFont({
+  input: 'SourceSerif4-Regular.ttf',
+  output: 'public/fonts/serif.font.glb',
+  font: { fontFaceIndex: 0 },
+  rasters: [{ baker: msdfBaker, packaging: { artifact: 'embedded' }, options: { coverage } }],
+});
+```
+
+```ts
+import { glyph, msdf } from '@pmndrs/glyph';
+
+const coverage = { glyphIds: [0, 1, 16, 30, 32, 33, 36, 42, 422, 1115, 1117, 1118, 1121] };
+const Serif = glyph.fontFace('/fonts/serif.font.glb', { format: msdf({ coverage }) });
+```
+
+Coverage by `glyphIds` is needed because a substituted glyph, such as a small capital, has no code point of its
+own. Keep the list complete: a glyph outside the coverage has no raster and cannot be drawn. See
+[Subset coverage](/guides/fonts/subset-coverage) for the other ways to state coverage.
+
+## Check the result
+
+Compare the glyph IDs with and without the feature. If the feature applied, at least one ID differs.
+
+```ts
+const before = Array.from(text.glyphs().glyphIds);
+text.style = { ...text.style, features: [{ tag: 'smcp' }] };
+const after = Array.from(text.glyphs().glyphIds);
+
+const applied = before.length !== after.length || before.some((id, index) => id !== after[index]);
+console.log(applied ? 'smcp applied' : 'the font has no smcp for this text');
+```
+
+`glyphs()` prepares the text if a setter left it dirty, so the second read reflects the new style. This is also how
+to collect the glyph IDs for a `coverage` list.
+
+## See also
+
+- [TextStyle reference](/reference/text-style)
+- [Bake fonts](/guides/fonts/bake-fonts)
+- [Subset coverage](/guides/fonts/subset-coverage)
+- [Languages and scripts](/guides/text/languages-and-scripts)
+- [Read glyphs](/guides/inspect/read-glyphs)

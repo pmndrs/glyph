@@ -1,0 +1,259 @@
+---
+title: Formatted text
+description: Reference for txt, span, FormattedText and the related span types used to style ranges inside one paragraph.
+nav: 714
+sourcecode: packages/glyph/src/formatted-text.ts
+---
+
+Formatted text is a string together with the spans that style ranges of it. It is built with two template tags,
+`txt` and `span`, and passed wherever a text accepts its `text`. This page lists both tags, the `/three` variant of
+`span` that also takes a material, and the types they produce.
+
+| Export | Kind | `@pmndrs/glyph` | `@pmndrs/glyph/three` |
+| --- | --- | --- | --- |
+| [`txt`](#txt) | Template tag | Yes | No |
+| [`span`](#span) | Function returning a template tag | Yes: fonts and styles | Yes: fonts, styles and one material |
+| [`FormattedText`](#formattedtext), `TextInput`, `TextLiteral`, `TextSpanFragment`, `ParagraphSpan`, `SpanStyle`, `SpanFormat`, `SpanTag`, `UnboundSpanTag` | Types | Yes | No |
+
+```ts
+import { txt } from '@pmndrs/glyph';
+import { span } from '@pmndrs/glyph/three';
+
+const ok = span({ color: '#4ade80' });
+
+three.createText({ font: Inter, text: txt`Status: ${ok`online`}` });
+```
+
+In React and Vue, nested `<Text>` elements produce the same value; see [React](/reference/react) and
+[Vue](/reference/vue).
+
+## txt
+
+A template tag that joins its strings and interpolated values into one `TextLiteral`.
+
+```ts
+import { span, txt } from '@pmndrs/glyph';
+
+const strong = span({ color: '#ffd166' });
+const count = 3;
+
+const message = txt`${count} files changed, ${strong`1 conflict`}`;
+// message.text  === '3 files changed, 1 conflict'
+// message.spans === [{ start: 17, end: 27, style: { color: '#ffd166' } }]
+```
+
+Signature:
+`txt<Format = never>(strings: TemplateStringsArray, ...values: readonly TextTemplateValue<Format>[]): TextLiteral<Format>`.
+
+### Interpolated values
+
+| Value | Contributes |
+| --- | --- |
+| `string` | Its characters. |
+| `number` | `String(value)`. |
+| `TextSpanFragment` (the result of a `span` tag) | Its text, one span over that text, and its nested spans. |
+| `TextLiteral` (the result of `txt`) | Its text and its spans, with no span of its own. |
+
+The type allows only these four. A value of another type that reaches `txt` in untyped code is converted with
+`String()`.
+
+### Return value
+
+A frozen `TextLiteral`: `{ text, spans }`. `spans` is a frozen array of [`ParagraphSpan`](#paragraphspan) in
+document order, an enclosing span before the spans it contains. A span over empty text is left out.
+
+### Exceptions
+
+| Error | When |
+| --- | --- |
+| `RangeError: span style feature <n> (<tag>) must stay inside [<start>, <end>)` | A span's style has a feature whose explicit `start` or `end` leaves the span's range in the joined text. |
+
+## span
+
+Returns a template tag that marks its template as one span with the given font, style and, from
+`@pmndrs/glyph/three`, material.
+
+```ts
+import { defineTextMaterial, span } from '@pmndrs/glyph/three';
+
+const tint = defineTextMaterial((context) => context.createDefaultMaterial());
+
+const accent = span({ color: '#ffd166' }); // a style
+const spaced = span({ color: '#ffd166' }, { letterSpacing: 0.04 }); // styles merge left to right
+const code = span(inter, { letterSpacing: 0.01 }); // a font, then styles
+const tinted = span(tint, { opacity: 0.8 }); // /three only: a material
+```
+
+Signatures of `span` from `@pmndrs/glyph`:
+
+- `span(...styles: readonly [SpanStyle, ...SpanStyle[]]): UnboundSpanTag`
+- `span<Format>(font: FontSelection<Format>, ...formats: readonly SpanFormat<Format>[]): SpanTag<Format>`
+
+Signatures of `span` from `@pmndrs/glyph/three`:
+
+- `span(...formats: readonly [SpanStyle | ThreeTextMaterial, ...(SpanStyle | ThreeTextMaterial)[]]): UnboundSpanTag`
+- `span<Format>(font: FontSelection<Format>, ...formats: readonly (SpanFormat<Format> | ThreeTextMaterial)[]): SpanTag<Format>`
+
+### Parameters
+
+At least one argument is required. Arguments may come in any order at run time; the types put a font first.
+
+| Argument | Type | Description |
+| --- | --- | --- |
+| Style | `SpanStyle` (`Readonly<TextStyle>`) | Fields the span changes. Several style arguments merge left to right, field by field; fields whose value is `undefined` are dropped. A style with no fields adds nothing. |
+| Font | `FontSelection<Format>`: a loaded `Font<Format>` or a `FontStack` | The font for the span. When several are given, the last one is used. |
+| Material | `ThreeTextMaterial` | `/three` only. The material for the span's glyphs and decorations. At most one. |
+
+What each property means on a span:
+
+| Property | Effect on the span's range |
+| --- | --- |
+| `style` | Applied over the inherited style. See [Inheritance in spans](/reference/text-style#inheritance-in-spans). |
+| `font` | Replaces the inherited font selection. |
+| `material` | Replaces the inherited material. Precedence, nearest first: span, text, text group, root, config. See [Materials](/reference/three-materials). |
+
+### Return value
+
+A span tag: a template tag accepting the same interpolated values as [`txt`](#txt) and returning a frozen
+`TextSpanFragment`. A fragment is only meaningful interpolated into `txt` or into another span tag; it is not a
+`TextInput`. The tag is reusable.
+
+`UnboundSpanTag` (no font) can be used in a text of any raster format. `SpanTag<Format>` carries the raster format
+of its font, and the `txt` value that contains it can be given only to a text whose font has that format.
+
+### Exceptions
+
+| Error | When |
+| --- | --- |
+| `TypeError` or `RangeError` from [style validation](/reference/text-style#validation-errors), labeled `span style` | A style argument is invalid. Thrown by `span()`, before any template is tagged. |
+| `TypeError: one structural span cannot declare more than one Three material` | Two materials are passed to `span` from `/three`. |
+
+`outline` and `shadow` on a span are checked against the span's font (or the paragraph's, if the span has none)
+when the value is given to a text. That check throws `GlyphInputError` with `path`
+`['text', 'spans', index, 'style']`.
+
+## Nesting and inheritance
+
+Spans nest by interpolating one fragment into another tag's template. Tags can only produce spans that are nested
+or disjoint; partial overlap cannot be written.
+
+```ts
+import { span, txt } from '@pmndrs/glyph';
+
+const blue = span({ color: '#70d6ff' });
+const large = span({ fontSize: 0.5 });
+
+const value = txt`${blue`outer ${large`inner`} outer`} plain`;
+// value.spans === [
+//   { start: 0, end: 17, style: { color: '#70d6ff' } },
+//   { start: 6, end: 11, style: { fontSize: 0.5 } },
+// ]
+```
+
+Each position in the text takes the paragraph's properties, then those of every span covering it from the
+outermost in. A span states only what it changes; everything else is inherited.
+
+## Span boundaries
+
+Offsets are UTF-16 code units of the joined text, `start` inclusive and `end` exclusive. They are derived where
+fragments join; you never write them.
+
+The engine styles whole grapheme clusters. A boundary that falls inside a cluster, for example between a base
+letter and a combining mark that came from the next fragment, moves forward to the end of that cluster. A span left
+with no cluster of its own styles nothing.
+
+## Using a value
+
+| Operation | Behavior |
+| --- | --- |
+| `createText({ text: value })` | Sets the text and its spans. |
+| `text.text = value`, `text.set({ text: value })` | Replaces the text and its spans. |
+| `text.text = 'plain string'` | Replaces the text and removes all spans. |
+| `text.text` (getter) | Returns the string only. |
+| `text.replace(start, end, insert)` | Edits the range and rebases the spans. See below. |
+| `createText({ spans })`, `text.set({ spans })` | Throws `TypeError: … cannot declare raw spans; compose formatted text with txt and span`. |
+
+### Spans under replace()
+
+`text.replace(start, end, insert)` keeps the spans and moves their boundaries with the edit. Inserted text takes the
+style of the grapheme before it:
+
+| Span boundary before the edit | After the edit |
+| --- | --- |
+| Before `start` | Unchanged. |
+| A span start at `start`, when `start` is 0 | Unchanged: at the beginning of the text the insertion takes the style of what follows. |
+| A span start from `start` to `end` | Moves to the end of the inserted text. |
+| A span end from `start` to `end` | Moves to the end of the inserted text, so a span ending at or inside the replaced range grows over the insertion. |
+| After `end` | Shifts by `insert.length − (end − start)`. |
+
+A span left empty is removed. See [Editing](/reference/editing) for `replace` itself.
+
+## Types
+
+### FormattedText
+
+`type FormattedText<Format> = TextLiteral<Format> | TextLiteral<never>`. The value `txt` returns, as accepted by a
+text whose font has raster format `Format`.
+
+### TextInput
+
+`type TextInput<Format> = string | FormattedText<Format>`. The type of the `text` property.
+
+### TextLiteral
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `text` | `string` | The joined text. |
+| `spans` | `readonly ParagraphSpan<Format>[]` | The spans, frozen. |
+
+### TextSpanFragment
+
+The result of a span tag. It has the members of `TextLiteral` and:
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `properties` | `{ font?, style?, material? }` | What the enclosing span applies to `text`. |
+
+### ParagraphSpan
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `start` | `number` | First UTF-16 code unit of the span. |
+| `end` | `number` | One past its last code unit. |
+| `font` | `FontSelection<Format>` | Present when the span sets a font. |
+| `style` | `TextStyle` | Present when the span sets style fields. Frozen. |
+
+Spans made with `span` from `/three` may also carry `material`.
+
+### SpanStyle, SpanFormat, SpanTag, UnboundSpanTag
+
+| Type | Definition |
+| --- | --- |
+| `SpanStyle` | `Readonly<TextStyle>` |
+| `SpanFormat<Format>` | `FontSelection<Format> \| SpanStyle` |
+| `SpanTag<Format>` | `(strings, ...values) => TextSpanFragment<Format>` |
+| `UnboundSpanTag` | `<Format = never>(strings, ...values) => TextSpanFragment<Format>` |
+
+## Nested Text in React and Vue
+
+A nested `<Text>` is the component form of a span tag.
+
+| Nested prop | Equivalent |
+| --- | --- |
+| `children` | The template: strings, numbers, arrays, and further nested `<Text>`. `null` and `false` are skipped. |
+| `style` (React), `textStyle` (Vue) | Style arguments. Accepts a `PropertyList<TextStyle>`. |
+| `font` | The font argument. |
+| `material` | The material argument. |
+
+In React, any other prop on a nested `<Text>` throws
+`TypeError: nested R3F Text cannot use the box property <name>`, and a child that is not text, a number, an array
+or a `<Text>` element throws
+`TypeError: R3F Text children must be text, numbers, arrays, or nested Text elements`.
+
+## See also
+
+- [Rich text](/guides/text/rich-text)
+- [TextStyle](/reference/text-style)
+- [Editing](/reference/editing)
+- [Materials](/reference/three-materials)
+- [Font stack](/reference/font-stack)

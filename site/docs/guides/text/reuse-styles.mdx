@@ -1,0 +1,237 @@
+---
+title: Reuse styles
+description: Name style rules once with TextStyle.create, combine them with property lists and conditions, and know what a span inherits.
+nav: 201
+sourcecode: packages/glyph/src/property-list.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="styling" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+An application rarely writes a style inline more than once. This guide names styles as rules, combines rules in a
+list, switches one on a condition, and applies the same pattern to layout and constraints. The model is React
+Native's style arrays: a value or a list of values, merged left to right.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="text-style-composition" aria-label="One rule, two rules in a list, a conditional rule that toggles, an inline override, and a dim paragraph with two spans" aspect="16 / 9" />
+
+The third row toggles `active` every 1.2 seconds. In the last paragraph, the colored span stays dim and the opaque
+span keeps the paragraph's color.
+
+## Name your rules
+
+`TextStyle.create` takes an object of named rules and returns the same names, each validated and frozen.
+
+```ts
+import { TextStyle } from '@pmndrs/glyph';
+
+export const styles = TextStyle.create({
+  body: { fontSize: 0.34, color: '#e7ecf6' },
+  emphasis: { color: '#ffd166', letterSpacing: 0.04 },
+  caption: { fontSize: 0.15, color: '#97a1b4', letterSpacing: 0.02 },
+});
+
+three.createText({ font: Inter, text: 'Reuse a rule', style: styles.body });
+```
+
+Validation happens inside `create`, so a mistake is reported where the rule is written, with the rule's name in the
+message:
+
+```ts
+import { TextStyle } from '@pmndrs/glyph';
+
+try {
+  TextStyle.create({ title: { fontSize: -1 } });
+} catch (error) {
+  console.log(String(error)); // RangeError: TextStyle.create rule "title" fontSize must be positive
+}
+```
+
+A rule does not have to be complete. `emphasis` above sets no `fontSize`; it is meant to be combined with a rule
+that does.
+
+## Combine rules in a list
+
+Wherever a `TextStyle` is accepted, a list is accepted too. The type is `PropertyList<TextStyle>`: an object, or an
+array of property lists. Entries merge left to right, and a later entry wins field by field.
+
+```ts
+import { TextStyle } from '@pmndrs/glyph';
+
+const styles = TextStyle.create({
+  body: { fontSize: 0.34, color: '#e7ecf6' },
+  emphasis: { color: '#ffd166', letterSpacing: 0.04 },
+});
+
+// fontSize 0.34 from body; color and letterSpacing from emphasis; opacity from the inline object.
+three.createText({
+  font: Inter,
+  text: 'Reuse a rule',
+  style: [styles.body, styles.emphasis, { opacity: 0.4 }],
+});
+```
+
+The merge is shallow. A nested object such as `decoration`, `outline` or `shadow` is replaced as a whole by a later
+entry that states it, and so is the `features` array. To change one field of a nested object, spread it:
+
+```ts
+import { TextStyle } from '@pmndrs/glyph';
+
+const styles = TextStyle.create({
+  link: { decoration: { underline: true, color: '#70d6ff' } },
+});
+
+const thick = [styles.link, { decoration: { ...styles.link.decoration, thickness: 0.04 } }];
+three.createText({ font: Inter, text: 'Read more', style: thick });
+```
+
+## Switch a rule on a condition
+
+`false`, `null` and `undefined` entries are skipped, so a condition can sit directly in the list.
+
+```tsx
+import { TextStyle } from '@pmndrs/glyph';
+import { Text } from '@pmndrs/glyph/react';
+
+const styles = TextStyle.create({
+  body: { fontSize: 0.34, color: '#e7ecf6' },
+  emphasis: { color: '#ffd166', letterSpacing: 0.04 },
+});
+
+function Label({ active, children }: { active: boolean; children: string }) {
+  return (
+    <Text font={Inter} style={[styles.body, active && styles.emphasis]}>
+      {children}
+    </Text>
+  );
+}
+```
+
+In three.js, assign the list again when the condition changes. The setter merges and validates it, and records the
+result; layout runs on the next `glyph.shape()` or render.
+
+```ts
+import { TextStyle } from '@pmndrs/glyph';
+
+const styles = TextStyle.create({
+  body: { fontSize: 0.34, color: '#e7ecf6' },
+  emphasis: { color: '#ffd166', letterSpacing: 0.04 },
+});
+
+function setActive(active: boolean) {
+  text.style = [styles.body, active && styles.emphasis];
+}
+```
+
+Lists nest, which lets a helper return a list without the caller flattening it:
+
+```ts
+import { TextStyle, type PropertyList } from '@pmndrs/glyph';
+
+const styles = TextStyle.create({
+  body: { fontSize: 0.34, color: '#e7ecf6' },
+  emphasis: { color: '#ffd166' },
+  disabled: { opacity: 0.4 },
+});
+
+function labelStyle(active: boolean, disabled: boolean): PropertyList<TextStyle> {
+  return [styles.body, active && styles.emphasis, disabled && styles.disabled];
+}
+
+text.style = [labelStyle(true, false), { letterSpacing: 0.02 }];
+```
+
+## Build a rule from other rules
+
+A rule passed to `create` may itself be a list. It is merged once, when the rule is created, and the result is a
+single frozen object.
+
+```ts
+import { TextStyle } from '@pmndrs/glyph';
+
+const base = TextStyle.create({ body: { fontSize: 0.34, color: '#e7ecf6' } });
+
+const styles = TextStyle.create({
+  body: base.body,
+  heading: [base.body, { fontSize: 0.6, letterSpacing: -0.01 }],
+});
+
+console.log(styles.heading); // { fontSize: 0.6, color: '#e7ecf6', letterSpacing: -0.01 }
+```
+
+## Do the same for layout and constraints
+
+`ParagraphLayout.create` and `Constraints.create` work the same way for the `layout` and `constraints` properties,
+and both properties accept lists.
+
+```ts
+import { Constraints, ParagraphLayout } from '@pmndrs/glyph';
+
+const layouts = ParagraphLayout.create({
+  body: { wrap: 'word', align: 'start' },
+  oneLine: { wrap: 'none', overflow: 'ellipsis', maxLines: 1 },
+});
+const boxes = Constraints.create({
+  column: { width: { mode: 'exact', size: 4 } },
+  centered: { anchor: { x: 'center', y: 'middle' } },
+});
+
+declare const compact: boolean;
+
+three.createText({
+  font: Inter,
+  text: 'A paragraph that may be cut to one line',
+  layout: [layouts.body, compact && layouts.oneLine],
+  constraints: [boxes.column, boxes.centered],
+});
+```
+
+`anchor` is replaced as a whole, like any nested object: an entry that states only `{ anchor: { x: 'center' } }`
+resets `y` to its default.
+
+## Know what a span inherits
+
+An inline span inside the paragraph starts from the paragraph's style and changes only the fields it states. Each
+field is inherited on its own:
+
+- `color` and `opacity` are separate fields. A span that sets `color` keeps the paragraph's `opacity`; a span that
+  sets `opacity` keeps the paragraph's `color`.
+- `decoration`, `outline`, `shadow` and `features` are each inherited or replaced as a whole. A span that states
+  `features` does not add to the paragraph's features; it replaces them for its range.
+- A span nested in another span inherits from the outer span first.
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text font={Inter} style={{ fontSize: 0.3, color: '#e7ecf6', opacity: 0.4 }}>
+  The paragraph is dim, <Text style={{ color: '#ffd166' }}>a colored span stays dim</Text>,{' '}
+  <Text style={{ opacity: 1 }}>an opaque span keeps the color</Text>.
+</Text>;
+```
+
+Property lists and spans are two different mechanisms. A list is merged into one style object before the text sees
+it. Spans are resolved by the engine, per range of text. See [Rich text](/guides/text/rich-text) for spans.
+
+## Check the result
+
+Read `text.style` back: it returns the merged, frozen object the text is using.
+
+```ts
+import { TextStyle } from '@pmndrs/glyph';
+
+const styles = TextStyle.create({
+  body: { fontSize: 0.34, color: '#e7ecf6' },
+  emphasis: { color: '#ffd166' },
+});
+
+text.style = [styles.body, false, styles.emphasis];
+console.log(text.style); // { fontSize: 0.34, color: '#ffd166' }
+```
+
+## See also
+
+- [TextStyle reference](/reference/text-style)
+- [Style text](/guides/text/style-text)
+- [Rich text](/guides/text/rich-text)
+- [ParagraphLayout reference](/reference/paragraph-layout)
+- [Constraints reference](/reference/constraints)

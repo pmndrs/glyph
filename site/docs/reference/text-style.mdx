@@ -1,0 +1,346 @@
+---
+title: TextStyle
+description: Reference for the TextStyle object, its nested types, TextStyle.create, PropertyList, and every validation error a style can raise.
+nav: 710
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+`TextStyle` describes how text is shaped and painted: size, spacing, language, direction, OpenType features,
+decoration, color, opacity, outline and shadow. It is the type of the `style` property of a text and of an inline
+span. `TextStyle` is also a value with one method, `create`, for naming reusable rules. Both are exported from
+`@pmndrs/glyph` and `@pmndrs/glyph/three`.
+
+```ts
+import { TextStyle } from '@pmndrs/glyph';
+
+const style: TextStyle = {
+  fontSize: 0.5,
+  lineHeight: 1.25,
+  letterSpacing: 0.01,
+  wordSpacing: 0,
+  language: 'en',
+  direction: 'auto',
+  features: [{ tag: 'tnum' }],
+  decoration: { underline: true },
+  color: '#f4f7ff',
+  opacity: 0.9,
+  outline: { color: '#0a0c12', width: 0.02 },
+  shadow: { color: [0, 0, 0, 0.5], offset: [0.02, 0.02] },
+};
+```
+
+## Where a style is accepted
+
+| Place | Property | Accepts |
+| --- | --- | --- |
+| `root.createText(properties)` | `style` | `PropertyList<TextStyle>` |
+| `text.style = value`, `text.set({ style })` | `style` | `PropertyList<TextStyle>`. Replaces the whole style. |
+| `text.style` (getter) | | The merged, frozen `TextStyle`. |
+| React `<Text style>` | `style` | `PropertyList<TextStyle>`, on the paragraph and on nested spans. |
+| Vue `<Text :text-style>` | `textStyle` | `PropertyList<TextStyle>` |
+| `span(...styles)` | arguments | One or more `TextStyle` objects. See [Formatted text](/reference/formatted-text). |
+
+Lengths (`fontSize`, `letterSpacing`, `wordSpacing`, `decoration.thickness`, `decoration.offset`, `outline.width`,
+`shadow.offset`) are in paragraph-local units: the units of the space the text is drawn in, which are world units
+under a perspective camera. `lineHeight` is a multiple of `fontSize`.
+
+## Fields
+
+Every field is optional.
+
+| Field | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `fontSize` | `number` | `16` | Finite, greater than 0. |
+| `lineHeight` | `number` | The font's line height | Finite, greater than 0. |
+| `letterSpacing` | `number` | `0` | Finite. May be negative. |
+| `wordSpacing` | `number` | `0` | Finite. May be negative. |
+| `language` | `string` | None | A well-formed language tag. |
+| `direction` | `'auto' \| 'ltr' \| 'rtl'` | `'auto'` | |
+| `features` | `readonly FontFeature[]` | None | See [FontFeature](#fontfeature). |
+| `decoration` | `TextDecorationStyle` | None | See [TextDecorationStyle](#textdecorationstyle). |
+| `color` | `ColorInput` | Opaque white | See [ColorInput](#colorinput). |
+| `opacity` | `number` | `1` | Finite, from 0 to 1 inclusive. |
+| `outline` | `{ color: ColorInput; width: number }` | None | MSDF only. Both members required; `width` finite, 0 or greater. |
+| `shadow` | `{ color: ColorInput; offset: readonly [number, number] }` | None | MSDF only. Both members required; `offset` is two finite numbers. |
+
+### fontSize
+
+The em size of the text in paragraph-local units.
+
+### lineHeight
+
+The height of a line as a multiple of `fontSize`. When absent, a line is as tall as the font's ascender plus
+descender plus line gap, taken from the first font of the text's font stack. An explicit value is used as given,
+including values small enough for lines to overlap. On a line with several sizes, each styled run asks for its own
+`fontSize × lineHeight` and the line takes the largest.
+
+### letterSpacing
+
+Extra advance added after each grapheme cluster. Ligatures are kept; a ligature receives the spacing of each
+cluster it stands for.
+
+### wordSpacing
+
+Extra advance added to each word-separating space.
+
+### language
+
+A BCP 47 language tag. It selects the OpenType language system used for shaping, and with it the font's
+language-specific forms. It does not affect line breaking or direction. Validation checks the shape of the tag
+only: a primary subtag of two to eight letters (or a single `x` or `i` followed by at least one more subtag), then
+any number of subtags of one to eight letters or digits, separated by `-`. Tags are not checked against a
+registry. See [Languages and scripts](/guides/text/languages-and-scripts).
+
+### direction
+
+The base direction of the paragraph for the Unicode Bidirectional Algorithm. `'auto'` takes it from the first
+strong character of each paragraph. On an inline span, `'ltr'` and `'rtl'` instead force the direction of the
+span's characters, and `'auto'` has no effect. See [Bidirectional text](/guides/text/bidirectional-text).
+
+### features
+
+OpenType features to apply or disable. A feature the font does not contain is ignored. On an inline span, the
+span's list replaces the inherited list. See [OpenType features](/guides/text/opentype-features).
+
+### decoration
+
+Underline, overline and line-through. See [TextDecorationStyle](#textdecorationstyle).
+
+### color
+
+The fill color of the glyphs.
+
+### opacity
+
+A multiplier on the alpha of `color`. Inherited by spans independently of `color`. It also fades a decoration that
+has no `color` of its own. It does not fade `outline`, `shadow`, or a decoration with its own `color`.
+
+### outline
+
+A band of `color` extending `width` outward from each glyph edge. `width: 0` draws nothing. Supported by the `msdf`
+raster format; `width` is limited by the baked distance field to `fontSize × pixelRange / (2 × emSize)`. See
+[Outline and shadow](/guides/text/outline-and-shadow).
+
+### shadow
+
+A hard-edged copy of the glyph fill, drawn behind the glyph and displaced by `offset`: `[x, y]`, with positive `x`
+toward the right of the paragraph and positive `y` toward its bottom. Supported by the `msdf` raster format; each
+component of `offset` is limited as `outline.width` is.
+
+## ColorInput
+
+```ts
+import type { ColorInput, LinearRgbaInput } from '@pmndrs/glyph';
+
+const hex: ColorInput = '#ffd166';
+const hexWithAlpha: ColorInput = '#ffd16680';
+const linear: LinearRgbaInput = [1, 0.64, 0.13, 1];
+```
+
+`type ColorInput = string | LinearRgbaInput` and `type LinearRgbaInput = readonly [number, number, number, number]`.
+
+| Form | Meaning | Constraints |
+| --- | --- | --- |
+| `string` | sRGB hex, `#rrggbb` or `#rrggbbaa`. Case-insensitive. Alpha defaults to `ff`. | Exactly 6 or 8 hex digits after `#`. No other CSS color syntax. |
+| `LinearRgbaInput` | Linear-light red, green, blue, and alpha. | Exactly four finite numbers, each from 0 to 1. |
+
+Colors are stored with 8 bits per channel.
+
+## FontFeature
+
+```ts
+import type { FontFeature } from '@pmndrs/glyph';
+
+const tabular: FontFeature = { tag: 'tnum' };
+const noLigatures: FontFeature = { tag: 'liga', value: 0 };
+const ranged: FontFeature = { tag: 'smcp', start: 7, end: 13 };
+```
+
+| Field | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `tag` | `string` | Required | Exactly four printable ASCII characters (U+0020 to U+007E). |
+| `value` | `number` | `1` | An unsigned 32-bit integer. `0` disables the feature; `1` enables it; larger values select an alternate where the feature has several. |
+| `start` | `number` | Start of the style's range | An unsigned 32-bit integer: a UTF-16 offset into the text, inclusive. |
+| `end` | `number` | End of the style's range | An unsigned 32-bit integer: a UTF-16 offset into the text, exclusive. Not before `start`. |
+
+`start` and `end` are offsets into the whole text, also when the feature belongs to a span. The range must lie
+inside the range of the style that carries it: `[0, text.length)` for a paragraph style, the span's range for a
+span style.
+
+## TextDecorationStyle
+
+```ts
+import type { TextDecorationStyle } from '@pmndrs/glyph';
+
+const link: TextDecorationStyle = { underline: true, color: '#70d6ff', thickness: 0.02, offset: 0.01 };
+```
+
+| Field | Type | Default | Constraints |
+| --- | --- | --- | --- |
+| `underline` | `boolean` | `false` | |
+| `overline` | `boolean` | `false` | |
+| `lineThrough` | `boolean` | `false` | |
+| `color` | `ColorInput` | The `color` and `opacity` of the same style object; opaque white if it has no `color` | See [ColorInput](#colorinput). |
+| `style` | `'solid' \| 'double' \| 'dotted' \| 'dashed' \| 'wavy'` | `'solid'` | Only `'solid'` is implemented. Any other value throws. |
+| `thickness` | `number` | `0`: the font's thickness | Finite, 0 or greater. Paragraph-local units. |
+| `offset` | `number` | `0` | Finite. Paragraph-local units; positive moves the lines down. |
+
+Line geometry comes from the font metrics kept by the bake, scaled by the `fontSize` in effect where the decoration
+is declared:
+
+| Line | Position | Thickness |
+| --- | --- | --- |
+| Underline | `underlinePosition` | `underlineThickness` |
+| Overline | `ascender` | `underlineThickness` |
+| Line-through | `strikeoutPosition` | `strikeoutSize` |
+
+`thickness`, when greater than 0, replaces the font's thickness for every enabled line. `offset` is added to the
+position of every enabled line. Decorations are supported by every raster format.
+
+## Inheritance in spans
+
+A span's style is applied over the style it inherits, in these groups. A group the span does not state is
+inherited unchanged; a group it states is replaced as a whole.
+
+| Group | Fields |
+| --- | --- |
+| Each on its own | `fontSize`, `lineHeight`, `letterSpacing`, `wordSpacing`, `language`, `direction`, `color`, `opacity` |
+| `features` | The whole array |
+| `decoration` | All fields of `TextDecorationStyle` |
+| `outline` | `color` and `width` |
+| `shadow` | `color` and `offset` |
+
+A property whose value is `undefined` counts as not stated.
+
+## TextStyle.create()
+
+Creates named, validated, frozen style objects.
+
+```ts
+import { TextStyle } from '@pmndrs/glyph';
+
+const styles = TextStyle.create({
+  body: { fontSize: 0.34, color: '#e7ecf6' },
+  heading: [{ fontSize: 0.34, color: '#e7ecf6' }, { fontSize: 0.6 }],
+});
+
+three.createText({ font: Inter, text: 'Title', style: styles.heading });
+```
+
+Signature:
+`TextStyle.create<Rules extends Record<string, PropertyList<TextStyle>>>(rules: Rules): { readonly [Name in keyof Rules]: Readonly<TextStyle> }`.
+
+### Parameters
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `rules` | `Record<string, PropertyList<TextStyle>>` | One entry per rule. A rule that is a list is merged left to right into one object. |
+
+### Return value
+
+A frozen object with the same keys. Each value is the rule's merged `TextStyle`, validated and frozen.
+
+### Exceptions
+
+`create` throws the validator's own `TypeError` or `RangeError`, not `GlyphInputError`. Messages begin with
+`TextStyle.create rule "<name>"`.
+
+| Error | When |
+| --- | --- |
+| `TypeError: TextStyle.create rules must be an object` | `rules` is `null`, an array, or not an object. |
+| `TypeError: TextStyle.create rule "<name>" must be an object or property array` | A rule, or an entry of a rule's list, is a string, number, `true` or function. |
+| Any error in [Validation errors](#validation-errors) | A merged rule has an invalid field. |
+
+`ParagraphLayout.create` and `Constraints.create` have the same shape for their types. See
+[ParagraphLayout](/reference/paragraph-layout) and [Constraints](/reference/constraints).
+
+## PropertyList
+
+```ts
+import type { PropertyList, TextStyle } from '@pmndrs/glyph';
+
+declare const active: boolean;
+const list: PropertyList<TextStyle> = [{ fontSize: 0.34 }, active && { color: '#ffd166' }, [null, { opacity: 0.8 }]];
+```
+
+`type PropertyList<Value> = Value | false | null | undefined | readonly PropertyList<Value>[]`.
+
+A property list is resolved to one object when it is assigned:
+
+- Arrays are flattened depth first, in order.
+- `false`, `null` and `undefined` entries are skipped.
+- The remaining objects are merged left to right with `Object.assign` semantics: a later entry replaces an earlier
+  entry's field, including nested objects and arrays, which are not merged deeply.
+- Any other entry (`true`, a number, a string, a function) throws
+  `TypeError: Text style must be an object or property array`.
+
+An empty list, `false`, `null` and `undefined` all resolve to an empty style.
+
+## Validation errors
+
+A style is validated when it is given to `createText`, a setter, `set()`, a component prop, or `span()`. Text
+methods throw [`GlyphInputError`](/reference/errors) with `path` set to `['style']` (or
+`['text', 'spans', index, 'style']` for an effect check on a span); its `cause` is the `TypeError` or `RangeError`
+listed here. The text keeps its previous style. `TextStyle.create` and `span()` throw the `TypeError` or
+`RangeError` directly.
+
+In the messages, `<label>` is `Text style`, `span style`, `nested Text style` or
+`TextStyle.create rule "<name>"`, depending on where the style was given.
+
+| Message | Cause type | When |
+| --- | --- | --- |
+| `<label> must be an object` | `TypeError` | The style is `null`, an array, or not an object after merging. |
+| `<label> fontSize must be finite` | `RangeError` | `fontSize` is `NaN` or infinite. |
+| `<label> fontSize must be positive` | `RangeError` | `fontSize` is 0 or negative. |
+| `<label> lineHeight must be finite` / `must be positive` | `RangeError` | As for `fontSize`. |
+| `<label> letterSpacing must be finite` | `RangeError` | `letterSpacing` is `NaN` or infinite. |
+| `<label> wordSpacing must be finite` | `RangeError` | `wordSpacing` is `NaN` or infinite. |
+| `<label> language must be a valid language tag` | `TypeError` | `language` is not a string or is malformed. |
+| `<label> direction is invalid` | `TypeError` | `direction` is not `'auto'`, `'ltr'` or `'rtl'`. |
+| `<label> features must be an array` | `TypeError` | `features` is not an array. |
+| `<label> feature <n> must be an object` | `TypeError` | An entry of `features` is not an object. |
+| `<label> feature <n> tag must contain exactly four printable ASCII bytes` | `RangeError` | `tag` is not a four-character printable ASCII string. |
+| `<label> feature <n> value must be a u32` | `RangeError` | `value` is not an integer from 0 to 4294967295. |
+| `<label> feature <n> start must be a u32` / `end must be a u32` | `RangeError` | As for `value`. |
+| `<label> feature <n> end must not precede start` | `RangeError` | `end` is less than `start`. |
+| `<label> feature <n> (<tag>) must stay inside [<start>, <end>)` | `RangeError` | The feature's range leaves the range of its style. Checked again when the text changes length. |
+| `<label> decoration must be an object` | `TypeError` | `decoration` is `null`, an array, or not an object. |
+| `<label> decoration underline must be boolean` (also `overline`, `lineThrough`) | `TypeError` | The flag is present and not a boolean. |
+| `<label> decoration style is invalid` | `TypeError` | `decoration.style` is not one of the five names. |
+| `<label> decoration style '<style>' is not implemented; only 'solid' is supported` | `TypeError` | `decoration.style` is `'double'`, `'dotted'`, `'dashed'` or `'wavy'`. |
+| `<label> decoration thickness must be finite` / `must be nonnegative` | `RangeError` | `thickness` is not finite, or is negative. |
+| `<label> decoration offset must be finite` | `RangeError` | `offset` is `NaN` or infinite. |
+| `<label> color must be #rrggbb, #rrggbbaa, or linear RGBA` | `TypeError` | A string color is not 6 or 8 hex digits after `#`. Also for `decoration color`, `outline color`, `shadow color`. |
+| `<label> color linear RGBA must contain four finite channels in [0, 1]` | `TypeError` | A non-string color is not an array of four finite numbers from 0 to 1. Also for the other colors. |
+| `<label> opacity must be in [0, 1]` | `RangeError` | `opacity` is not finite or is outside 0 to 1. |
+| `<label> outline must be an object` | `TypeError` | `outline` is `null`, an array, or not an object. |
+| `<label> outline width is required` | `TypeError` | `outline.width` is missing. |
+| `<label> outline width must be finite` / `must be nonnegative` | `RangeError` | `outline.width` is not finite, or is negative. |
+| `<label> shadow must be an object` | `TypeError` | `shadow` is `null`, an array, or not an object. |
+| `<label> shadow offset must contain two numbers` | `TypeError` | `shadow.offset` is not an array of length 2. |
+| `<label> shadow offset x is required` / `y is required` | `TypeError` | A component of `shadow.offset` is `undefined`. |
+| `<label> shadow offset x must be finite` / `y must be finite` | `RangeError` | A component of `shadow.offset` is `NaN` or infinite. |
+| `raster format <id> does not support outline in <label>` | `TypeError` | The style has `outline` and a font it applies to is not MSDF. |
+| `raster format <id> does not support shadow in <label>` | `TypeError` | The style has `shadow` and a font it applies to is not MSDF. |
+| `<label> must contain cloneable data` | `TypeError` | The style holds a value that cannot be copied, such as a function. |
+
+Unknown keys are not validated and have no effect. TypeScript reports them on an object literal.
+
+## Renderer support
+
+`TextStyle` is the same type in every renderer integration (`three`, `react`, `vue`, `typegpu`, `pixi3d`). Effect
+support depends on the raster format of the font, not on the renderer:
+
+| Field | `msdf` | `slug` | `bitmap` |
+| --- | --- | --- | --- |
+| `outline` | Yes | Throws | Throws |
+| `shadow` | Yes | Throws | Throws |
+| All other fields | Yes | Yes | Yes |
+
+## See also
+
+- [Style text](/guides/text/style-text)
+- [Reuse styles](/guides/text/reuse-styles)
+- [Formatted text](/reference/formatted-text)
+- [ParagraphLayout](/reference/paragraph-layout)
+- [Errors](/reference/errors)

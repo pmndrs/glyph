@@ -1,0 +1,170 @@
+---
+title: Decorations
+description: Underline, overline and strike through text with TextStyle.decoration, and adjust the color, thickness and position of the lines.
+nav: 204
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="styling" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+`TextStyle.decoration` draws lines along the text: an underline, an overline, a line through the middle, or any
+combination. This guide turns each line on, changes its color, thickness and position, and decorates part of a
+paragraph. Decorations work with every raster format.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="decorations" aria-label="The same line of text with an underline, an overline, a line through, all three, a colored underline, a thick underline, a lowered underline, and an underline with a gradient material" aspect="16 / 9" />
+
+Each row sets one field of `decoration`. The last row gives the line a material of its own.
+
+## Turn a line on
+
+Set `underline`, `overline` or `lineThrough` to `true`. They are independent booleans.
+
+```ts
+three.createText({
+  font: Inter,
+  text: 'Sphinx of black quartz',
+  style: { fontSize: 0.34, color: '#e7ecf6', decoration: { underline: true } },
+});
+```
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text font={Inter} style={{ fontSize: 0.34, decoration: { underline: true, lineThrough: true } }}>
+  Sphinx of black quartz
+</Text>;
+```
+
+Where each line sits and how thick it is come from metrics the font's designer stored in the font, kept by the bake:
+
+| Line | Position | Thickness |
+| --- | --- | --- |
+| `underline` | The font's underline position, below the baseline | The font's underline thickness |
+| `overline` | The font's ascender, above the baseline | The font's underline thickness |
+| `lineThrough` | The font's strikeout position | The font's strikeout size |
+
+All three scale with `fontSize`. Each line runs the full width of the decorated text on its line, across the spaces
+between words, and a decorated paragraph that wraps gets one line segment per line of text.
+
+## Color the line
+
+`decoration.color` takes the same forms as `color`: `'#rrggbb'`, `'#rrggbbaa'` or a linear `[r, g, b, a]` tuple.
+
+```ts
+text.style = {
+  fontSize: 0.34,
+  color: '#e7ecf6',
+  decoration: { underline: true, color: '#ffd166' },
+};
+```
+
+Without `decoration.color`, the line uses the `color` and `opacity` written in the same style object, and white if
+that object has no `color`. Two consequences:
+
+- On a paragraph, where `color` and `decoration` normally sit side by side, the line matches the text.
+- On a span that states only `decoration`, the line is white even when the paragraph is not. State the color in the
+  span.
+
+A line with its own `decoration.color` is not faded by `opacity`. Put the alpha in the color itself.
+
+## Change thickness and position
+
+`thickness` replaces the font's thickness, in the same units as `fontSize`. `offset` moves the lines from where the
+font puts them, in the same units, with positive values moving down.
+
+```ts
+text.style = {
+  fontSize: 0.34,
+  decoration: {
+    underline: true,
+    thickness: 0.05, // default: the font's own thickness
+    offset: 0.1, // 0.1 below the font's underline position
+  },
+};
+```
+
+`0` for `thickness` means "use the font's value", which is also the default. `thickness` and `offset` apply to every
+line the style turns on, so an underline and an overline in the same style move and thicken together.
+
+## Decorate part of a paragraph
+
+Put `decoration` on a span. State the color, as explained above.
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text font={Inter} style={{ fontSize: 0.34, color: '#e7ecf6' }}>
+  Read the <Text style={{ decoration: { underline: true, color: '#e7ecf6' } }}>release notes</Text> first.
+</Text>;
+```
+
+```ts
+import { txt } from '@pmndrs/glyph';
+import { span } from '@pmndrs/glyph/three';
+
+const link = span({ color: '#70d6ff', decoration: { underline: true, color: '#70d6ff' } });
+
+three.createText({
+  font: Inter,
+  text: txt`Read the ${link`release notes`} first.`,
+  style: { fontSize: 0.34, color: '#e7ecf6' },
+});
+```
+
+A span inherits the paragraph's decoration, and a span that states `decoration` replaces it as a whole for its
+range. To remove an inherited underline from a span, state a decoration with the line off:
+
+```ts
+import { txt } from '@pmndrs/glyph';
+import { span } from '@pmndrs/glyph/three';
+
+const plain = span({ decoration: { underline: false } });
+
+three.createText({
+  font: Inter,
+  text: txt`Every word underlined except ${plain`these two`}.`,
+  style: { fontSize: 0.34, decoration: { underline: true } },
+});
+```
+
+A decoration is measured where it is declared. When a decorated paragraph contains a span with a larger `fontSize`,
+the paragraph's underline continues under the larger text at the paragraph's own position and thickness instead of
+jumping.
+
+## Use only solid lines
+
+`decoration.style` exists in the type with five values, but only `'solid'`, the default, is implemented. Any other
+value throws `GlyphInputError`; the line is not drawn solid as a fallback.
+
+```ts
+import { GlyphInputError } from '@pmndrs/glyph';
+
+try {
+  text.style = { decoration: { underline: true, style: 'wavy' } };
+} catch (error) {
+  if (error instanceof GlyphInputError) {
+    console.log(error.message);
+    // "Text style decoration style 'wavy' is not implemented; only 'solid' is supported"
+  }
+}
+```
+
+## Give the line its own material
+
+Decorations are drawn separately from glyphs. A custom material receives them with `context.kind === 'decoration'`,
+so it can paint the line differently from the text, as the last row of the scene does. See
+[Custom materials](/guides/scene/custom-materials).
+
+## Check the result
+
+A decorated text draws its lines in the same frame as its glyphs. If a line is missing, check that the field is
+spelled `lineThrough` (not `strikethrough`): an unknown key is ignored at run time, and only TypeScript reports it.
+
+## See also
+
+- [TextStyle reference](/reference/text-style)
+- [Rich text](/guides/text/rich-text)
+- [Style text](/guides/text/style-text)
+- [Custom materials](/guides/scene/custom-materials)

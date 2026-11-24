@@ -1,0 +1,164 @@
+---
+title: Languages and scripts
+description: Set the language of a text for language-specific glyph forms, shape complex scripts, break lines in Chinese and Japanese, and make sure the font covers what you draw.
+nav: 206
+sourcecode: packages/glyph/src/text-properties.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="styling fonts" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+Text in any script goes through the same engine: it is split into runs by script and direction, shaped with the
+font's OpenType rules, and broken into lines by the Unicode line-breaking algorithm. Most of that needs no
+configuration. This guide covers the parts you control: `TextStyle.language`, the font's coverage, and how lines
+break when the text has no spaces.
+
+## Set the language
+
+`language` is a BCP 47 language tag such as `'en'`, `'tr'`, `'ur'` or `'zh-Hant'`. It tells the shaper which of the
+font's language systems to use, and with it which language-specific glyph forms (the font's `locl` feature) apply.
+The same characters can then be drawn differently:
+
+<glyph-proxy fit="cover" root="scenes" data-scene="text-language-shaping" aria-label="The same four Extended Arabic-Indic digits drawn three times in Amiri, with the Persian, Urdu and Sindhi shapes" aspect="16 / 9" />
+
+All three columns hold the same four code points. Persian, Urdu and Sindhi write these digits with different
+shapes, and only `language` changes between the columns.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+
+const Amiri = glyph.fontFace('/fonts/amiri.font.glb');
+
+const urdu = three.createText({
+  font: Amiri,
+  text: '۴۵۶۷',
+  style: { fontSize: 1.15, language: 'ur' },
+});
+```
+
+```tsx
+import { Text, useSlug } from '@pmndrs/glyph/react';
+
+function SindhiDigits() {
+  const amiri = useSlug('/fonts/amiri.font.glb');
+  return (
+    <Text font={amiri} style={{ fontSize: 1.15, language: 'sd' }}>
+      ۴۵۶۷
+    </Text>
+  );
+}
+```
+
+What `language` does and does not do:
+
+- It changes glyph selection only where the font has rules for that language. A tag the font does not know leaves
+  the text as it is; nothing throws.
+- It is not detected from the text. Without `language`, the font's default forms are used.
+- It does not change line breaking or the direction of the text.
+- It must be well formed: subtags of letters and digits, up to eight characters each, separated by hyphens.
+  `'en-US'` is accepted; `'en_US'` throws `GlyphInputError` (`Text style language must be a valid language tag`).
+
+A subset bake keeps the `locl` feature, so language-specific forms survive baking with `--unicodes`. The alternate
+glyphs are added to the subset automatically.
+
+## Mix languages in one paragraph
+
+`language` is a style property, so a span can set it for part of a paragraph.
+
+```ts
+import { glyph, txt } from '@pmndrs/glyph';
+import { span } from '@pmndrs/glyph/three';
+
+const Amiri = glyph.fontFace('/fonts/amiri.font.glb');
+const urdu = span({ language: 'ur' });
+
+three.createText({
+  font: Amiri,
+  text: txt`۴۵۶۷ / ${urdu`۴۵۶۷`}`,
+  style: { fontSize: 0.6, language: 'fa' },
+});
+```
+
+## Shape complex scripts
+
+Scripts such as Arabic, Devanagari, Bengali, Tamil, Thai and Khmer need more than one glyph per character: letters
+join, reorder, stack and merge into conjuncts. The engine shapes with HarfRust, a Rust port of HarfBuzz, and
+applies these rules from the font automatically. You do not select a script; it is read from the characters.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="shaping" aria-label="Words in eight scripts appearing one grapheme cluster at a time, reshaping as each cluster arrives" aspect="16 / 9" />
+
+Each word arrives one grapheme cluster at a time. Watch a cluster change shape when the next one joins it.
+
+Because shaping merges and reorders characters, one character does not correspond to one glyph. Use grapheme
+clusters, not string indices, when you count or address characters; the editing methods already work in grapheme
+boundaries. See [Caret and selection](/guides/editing/caret-and-selection).
+
+## Cover the characters you draw
+
+A font can only draw the characters it contains. A character the font lacks is drawn as the font's "missing glyph"
+box and counted in `measure().missingGlyphCount`.
+
+```ts
+// Inter has no Devanagari, so every character of this greeting is missing.
+const label = three.createText({ font: Inter, text: 'नमस्ते', style: { fontSize: 0.5 } });
+
+if (label.measure().missingGlyphCount > 0) {
+  console.warn('The font does not cover every character of this text.');
+}
+```
+
+Three ways to get coverage:
+
+- Bake a font that has the script. Latin fonts rarely include Arabic, Indic or CJK characters.
+- When you subset, include every code point the text can contain. For complex scripts, the bake adds the joined
+  forms, ligatures and marks those code points need. See [Subset coverage](/guides/fonts/subset-coverage).
+- Use a font stack so that characters missing from the first font are drawn from the next. See
+  [Fallback stacks](/guides/fonts/fallback-stacks).
+
+## Break lines without spaces
+
+Chinese and Japanese are written without spaces between words. With `layout: { wrap: 'word' }`, wrapping follows the
+Unicode line-breaking algorithm (UAX #14) rather than looking for spaces:
+
+- A line may break between most ideographs and kana.
+- Closing punctuation such as `。` and `、` stays with the character before it, and opening brackets stay with the
+  character after.
+- Latin words and numbers inside the text stay whole and break at their spaces.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="text-cjk-line-breaking" aria-label="Three boxes that widen and narrow: Japanese text with word wrapping, mixed Japanese and Latin text with word wrapping, and the same mixed text with character wrapping" aspect="16 / 9" />
+
+The boxes widen and narrow. In the first two columns a full stop or comma never starts a line and `cat`, `dog` and
+`bird` are never split. The third column uses `wrap: 'character'`, which breaks at any grapheme cluster and ignores
+both rules.
+
+```ts
+import { glyph } from '@pmndrs/glyph';
+
+const Mplus = glyph.fontFace('/fonts/mplus1p-japanese.font.glb');
+
+three.createText({
+  font: Mplus,
+  text: '吾輩は猫である。名前はまだ無い。',
+  style: { fontSize: 0.34, lineHeight: 1.6, language: 'ja' },
+  layout: { wrap: 'word' },
+  constraints: { width: { mode: 'exact', size: 2.6 } },
+});
+```
+
+Use `wrap: 'character'` only when a line must break anywhere, for example to fit a long identifier into a narrow
+box. See [Wrap and align](/guides/layout/wrap-and-align).
+
+## Know the limits
+
+- Hyphenation is not available. Long words break only where UAX #14 allows, or anywhere with `wrap: 'character'`.
+- Vertical writing is not available. CJK text is set in horizontal lines.
+- Right-to-left scripts are covered in [Bidirectional text](/guides/text/bidirectional-text).
+
+## See also
+
+- [Bidirectional text](/guides/text/bidirectional-text)
+- [OpenType features](/guides/text/opentype-features)
+- [Fallback stacks](/guides/fonts/fallback-stacks)
+- [Subset coverage](/guides/fonts/subset-coverage)
+- [TextStyle reference](/reference/text-style)

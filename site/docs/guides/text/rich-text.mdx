@@ -1,0 +1,210 @@
+---
+title: Rich text
+description: Style part of a paragraph with nested Text in React or the txt and span template tags in three.js, and keep those spans through edits.
+nav: 202
+sourcecode: packages/glyph/src/formatted-text.ts
+---
+
+<link rel="stylesheet" href="/docs/assets/explainer.css" />
+<script type="module" src="/docs/assets/explainer.js"></script>
+<glyph-explainer-root id="scenes" data-explainer-page="styling" posters="/examples/thumbnails/" max-slots="2" max-dpr="1.5" opaque />
+
+A paragraph is shaped and wrapped as one unit. A span is a range inside it that changes the style, the font or the
+material and inherits everything else. This guide writes spans in React and in three.js, lists what a span may
+change, and shows how spans survive an edit. You never write a character offset: the range of a span is wherever its
+text ends up in the paragraph.
+
+<glyph-proxy fit="cover" root="scenes" data-scene="text-spans" aria-label="One wrapped paragraph whose spans change color, size, spacing, decoration, opacity and font, with one span nested in another" aspect="16 / 9" />
+
+One `<Text>` draws this paragraph. Each differently styled run is a nested `<Text>`.
+
+## Write spans in React
+
+Nest a `<Text>` inside a `<Text>`. The outer element is the paragraph; an inner element is a span over its children.
+
+```tsx
+import { Text } from '@pmndrs/glyph/react';
+
+<Text font={Inter} style={{ fontSize: 0.4, color: '#e7ecf6' }} constraints={{ width: { mode: 'exact', size: 8 } }}>
+  Status: <Text style={{ color: '#4ade80' }}>online</Text>. Spans nest:{' '}
+  <Text style={{ color: '#70d6ff' }}>
+    the outer span is blue and <Text style={{ fontSize: 0.5 }}>the inner one</Text> inherits it
+  </Text>
+  .
+</Text>;
+```
+
+A nested `<Text>` is not a scene object. It has no transform and creates nothing in the three.js scene graph. It
+accepts only `children`, `font`, `style` and `material`; any other prop throws
+`TypeError: nested R3F Text cannot use the box property …` when the paragraph renders. Children may be strings,
+numbers, arrays of those, and further nested `<Text>` elements.
+
+## Write spans in three.js
+
+Use two template tags. `span(...)` returns a tag that marks its template as one span; `txt` joins strings and spans
+into the value you pass as `text`.
+
+```ts
+import { txt } from '@pmndrs/glyph';
+import { span } from '@pmndrs/glyph/three';
+
+const ok = span({ color: '#4ade80' });
+const blue = span({ color: '#70d6ff' });
+const large = span({ fontSize: 0.5 });
+
+const status = three.createText({
+  font: Inter,
+  text: txt`Status: ${ok`online`}. Spans nest: ${blue`the outer span is blue and ${large`the inner one`} inherits it`}.`,
+  style: { fontSize: 0.4, color: '#e7ecf6' },
+  constraints: { width: { mode: 'exact', size: 8 } },
+});
+scene.add(status);
+```
+
+Create each tag once and reuse it; `ok` above can mark any number of runs in any number of texts. A template may
+interpolate strings, numbers, span fragments and other `txt` values:
+
+```ts
+import { txt } from '@pmndrs/glyph';
+import { span } from '@pmndrs/glyph/three';
+
+const value = span({ color: '#ffd166' });
+const score = 1280;
+
+const line = txt`Score ${value`${score}`}`;
+const panel = txt`${line} / best ${4096}`;
+
+console.log(panel.text); // 'Score 1280 / best 4096'
+```
+
+The result of `txt` is a frozen `{ text, spans }` value of type `FormattedText`. Treat it as opaque and build it
+only with the tags: passing a `spans` array of your own to `createText` or `set` throws.
+
+## Choose what a span changes
+
+| A span may set | How | Notes |
+| --- | --- | --- |
+| Style | A `TextStyle` object: `span({ color })`, `<Text style>` | Any field. Fields the span leaves out are inherited. |
+| Font | A loaded font: `span(font, …)`, `<Text font>` | The run is shaped and drawn with that font. It may use a different raster format from the paragraph in React. |
+| Material | A `defineTextMaterial` value: `span(material, …)` from `@pmndrs/glyph/three`, `<Text material>` | At most one material per span. |
+
+Several arguments combine into one span. Style objects merge left to right:
+
+```ts
+import { defineTextMaterial, span } from '@pmndrs/glyph/three';
+
+const glow = defineTextMaterial((context) => context.createDefaultMaterial());
+const base = { color: '#ffd166' } as const;
+
+const warm = span(base, { letterSpacing: 0.04 }); // two styles
+const lit = span(glow, base); // a material and a style
+const code = span(inter, { letterSpacing: 0.01 }); // a font and a style
+```
+
+Three things to know about span styles:
+
+- `fontSize`, `letterSpacing` and the other lengths are absolute, in the paragraph's units. A span's
+  `fontSize: 0.5` is 0.5 units, not half of the paragraph's size.
+- `decoration`, `outline`, `shadow` and `features` are each replaced as a whole. To add an underline in the text's
+  own color, state the color: `{ decoration: { underline: true, color: '#70d6ff' } }`. See
+  [Decorations](/guides/text/decorations).
+- `direction` on a span forces the direction of its characters instead of setting a base direction. See
+  [Bidirectional text](/guides/text/bidirectional-text).
+
+Paragraph-level properties are not span properties: `layout`, `constraints`, `flow` and the transform belong to the
+outer text only.
+
+## Give a span another font
+
+In React, a nested `<Text>` takes a `font` like the outer one does.
+
+```tsx
+import { Text, useMsdf, useSlug } from '@pmndrs/glyph/react';
+
+function Signature() {
+  const body = useMsdf('/fonts/inter.font.glb');
+  const script = useSlug('/fonts/script.font.glb');
+  return (
+    <Text font={body} style={{ fontSize: 0.4 }}>
+      Signed, <Text font={script}>glyph</Text>
+    </Text>
+  );
+}
+```
+
+With the tags, pass a loaded `Font` (or a `FontStack`) as the first argument of `span`.
+
+```ts
+import { txt } from '@pmndrs/glyph';
+import { span } from '@pmndrs/glyph/three';
+
+const code = span(inter, { letterSpacing: 0.01 });
+
+three.createText({ font: inter, text: txt`Deployed to ${code`us-east-1`}` });
+```
+
+The span's font must cover the characters of the span, as any font must. See
+[Subset coverage](/guides/fonts/subset-coverage).
+
+## Change the text and keep the spans
+
+Assign a new `txt` value to restate the paragraph, spans included:
+
+```ts
+import { txt } from '@pmndrs/glyph';
+import { span } from '@pmndrs/glyph/three';
+
+const ok = span({ color: '#4ade80' });
+const bad = span({ color: '#f87171' });
+
+function showStatus(online: boolean) {
+  text.text = online ? txt`Status: ${ok`online`}` : txt`Status: ${bad`offline`}`;
+}
+```
+
+Assigning a plain string replaces the text and removes every span, because the old ranges would no longer mean
+anything in the new string.
+
+To edit part of a text in place, use `replace(start, end, insert)`. It replaces the UTF-16 range `[start, end)` and
+moves the spans with the edit: inserted text takes the style of the character before it.
+
+```ts
+import { txt } from '@pmndrs/glyph';
+import { span } from '@pmndrs/glyph/three';
+
+const ok = span({ color: '#4ade80' });
+text.text = txt`Status: ${ok`online`}`;
+
+text.replace(14, 14, '!'); // 'Status: online!' — the '!' joins the green span
+text.replace(0, 6, 'State'); // 'State: online!' — the span moves with its word
+```
+
+`start` and `end` must be grapheme boundaries of the current text, or `replace` throws `TextOffsetError` and nothing
+changes. See [Edit text](/guides/editing/edit-text).
+
+## Check the result
+
+`text.text` always returns the plain string. The spans are not readable from the text; keep the `txt` value if you
+need them.
+
+```ts
+import { txt } from '@pmndrs/glyph';
+import { span } from '@pmndrs/glyph/three';
+
+const ok = span({ color: '#4ade80' });
+const value = txt`Status: ${ok`online`}`;
+
+console.log(value.text); // 'Status: online'
+console.log(value.spans); // [{ start: 8, end: 14, style: { color: '#4ade80' } }]
+```
+
+A span boundary never splits a grapheme cluster. If two adjacent spans meet inside one, for example between a
+letter and a combining accent, the boundary moves forward to the end of that cluster.
+
+## See also
+
+- [Formatted text reference](/reference/formatted-text)
+- [TextStyle reference](/reference/text-style)
+- [Reuse styles](/guides/text/reuse-styles)
+- [Custom materials](/guides/scene/custom-materials)
+- [Edit text](/guides/editing/edit-text)
