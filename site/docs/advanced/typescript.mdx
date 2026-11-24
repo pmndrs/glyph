@@ -198,14 +198,15 @@ notes · internals
 
 | Type | Where |
 | --- | --- |
-| `GlyphKey` | `GlyphPlacement.key` on placements read through `caretAt` and `measureGlyphs` |
+| `GlyphKey` | `GlyphPlacement.key` on placements read through `measureGlyphs` |
 | `RasterKey`, `Fingerprint` | raster and content identities produced by Glyph |
 | `FontSlot`, `LocalGlyphId` | plain numbers, exported for readability, not branded |
 
 ```ts
-import type { Fingerprint, GlyphCaret, RasterKey } from '@pmndrs/glyph';
+import type { Fingerprint, RasterKey, TextCaret, TextPosition } from '@pmndrs/glyph';
 
-const caret: GlyphCaret | undefined = text.caretAt(12, -4); // offset, line, leading, rect
+const position: TextPosition = text.hitTest({ x: 12, y: 4 }); // offset, affinity
+const caret: TextCaret = text.caret(position); // rect, line, level, secondary, clipped
 ```
 
 {/*

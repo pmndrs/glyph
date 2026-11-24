@@ -232,11 +232,11 @@ notes · internals
   rejection latch), D-136
 */}
 
-## `caretAt` returns `undefined`
+## A caret query throws `TextOffsetError`
 
 ```ts
-const caret = text.caretAt(12, -4); // undefined until the root has accepted a publication for this revision
-const box = text.measure(); // desired state; always answers
+const position = text.hitTest({ x: 12, y: 4 }); // Text-local, +Y down; always answers with a grapheme boundary
+const caret = text.caret(position); // throws TextOffsetError for an offset inside a grapheme or outside the text
 ```
 
 {/*

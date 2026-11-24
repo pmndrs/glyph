@@ -120,8 +120,10 @@ in the MDX document and bind to the root by id.
 </glyph-scene-control>
 
 Several targets may be visible together: the controller grows its pooled offscreen roots to the page's four-slot cap,
-then recycles idle roots after the TTL. If more than four proxies intersect, the proxies nearest the viewport center keep
-their leases while the farthest retained frame fades out. Scroll to move them in and out of the pool. Click either proxy
+then retires idle roots after the TTL. If more than four proxies intersect, the proxies nearest the viewport center keep
+their leases. A proxy without a lease keeps the last frame it was given, and its scene stays mounted and paused until
+its root is needed for another proxy, so scrolling back resumes it where it stopped. Scroll to move them in and out of
+the pool. Click either proxy
 to send a targeted pointerdown through the root's ordered page-local stream and change only that scene's word color. Pointer motion is
 coalesced to one update per 30 ms; clicks, keys, controls, and scene changes flush immediately in occurrence order.
 
@@ -140,8 +142,9 @@ keeping the Three renderer, font cache, and animation loop outside the docs Reac
 
 ## Explainer scenes
 
-Each feature below is a normal MDX proxy with its own declarative `data-scene`. The root can keep several scenes
-warm, pauses scenes whose proxies leave the viewport, and recycles idle roots when the pool limit is reached.
+Each feature below is a normal MDX proxy with its own declarative `data-scene`. The root keeps several scenes
+warm, pauses scenes whose proxies leave the viewport, and recycles the least recently used idle root when the pool
+limit is reached. A `poster` attribute names an image to show until the scene's first frame arrives.
 
 ### Bitmap, MSDF, and Slug
 
@@ -236,11 +239,12 @@ proxy path while the group rotates slowly.
   aria-label="Animated Font Awesome icon glyphs"
 />
 
-### Editing with `glyphs()`
+### Editing
 
-Focus the proxy and type to edit text. Click to move the caret, or drag across the line to select a range. The proxy
-raycasts the page-space pointer onto the `Text` plane, converts the hit to paragraph-local coordinates, and then uses
-`caretAt()` and `selectionRects()` to paint a line-height caret and selection in the same offscreen scene.
+Focus the proxy and type to edit text. Click to move the caret, or drag across the line to select a range. The scene
+raycasts the pointer onto the `Text` plane, converts the hit to Text-local coordinates, and asks the text itself:
+`hitTest()` for the position, `caret()` and `rangeRects()` for what to draw, `move()` for the arrow keys and
+`replace()` for each keystroke.
 
 <glyph-proxy
   id="introduction-editing-proxy"

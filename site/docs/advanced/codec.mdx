@@ -129,7 +129,7 @@ export function msdfBody() {
   const p = techniqueProgram(msdfSchema, { textEffects: msdf.textEffects });
   const { inlineOrigin, blockOrigin, fontSize, color, outline, shadow } = p.semantics;
   if (outline === undefined || shadow === undefined) throw new Error('MSDF declares outline and shadow');
-  const { bearingX, bearingY, width, height, uvOriginX, uvOriginY, uvSizeX, uvSizeY, uvMaxX, uvMaxY, page } = p.binding;
+  const { bearingX, bearingY, width, height, glyph } = p.binding;
 
   return p.compile({
     rect: [
@@ -138,11 +138,9 @@ export function msdfBody() {
       f32.mul(width, fontSize),
       f32.mul(height, fontSize),
     ],
-    uvRect: [uvOriginX, uvOriginY, uvSizeX, uvSizeY],
-    uvBounds: [uvOriginX, uvOriginY, uvMaxX, uvMaxY],
     color: [color.red, color.green, color.blue, color.alpha],
     effectColor: [outline.color, shadow.color],
-    page: [shadow.offsetXEm, shadow.offsetYEm, outline.widthEm, u32.toF32(page)],
+    effect: [shadow.offsetXEm, shadow.offsetYEm, outline.widthEm, u32.toF32(glyph)], // the shader reads the glyph table by this index
   });
 }
 ```

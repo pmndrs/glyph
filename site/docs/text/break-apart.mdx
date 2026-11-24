@@ -1,6 +1,6 @@
 ---
 title: Break apart
-description: breakApart() copies a committed paragraph into independently owned Glyphs and Decorations you can move, fade, throw, and dispose.
+description: split() copies a committed paragraph into independently owned Glyphs and Decorations you can move, fade, throw, and dispose.
 nav: 28
 sourcecode: packages/glyph/src/three/glyphs.ts
 ---
@@ -16,7 +16,7 @@ reader
   into matrices, write them in local or world space, bend a line onto a path, and dispose the copy.
 
 write · intro
-- Question: what does `breakApart()` give me, and what happens to the text?
+- Question: what does `split()` give me, and what happens to the text?
 - Say: it takes the glyphs the renderer last committed and copies them into a `Glyphs` object with one matrix per
   glyph, plus a `Decorations` object for underlines when there are any. The source keeps shaping; the copies are
   yours — attach them, animate them, hand them to physics, dispose them.
@@ -30,7 +30,7 @@ write · keypoints (pmndrs `<Keypoints>`, four items, one clause each)
 - The source stays live and may be disposed first; you own attachment, motion, reset, disposal.
 
 notes · internals for the page
-- `Text.breakApart()` — `three/text.ts:783–839`; D-292; `.agents/docs/planning/detached-glyph-slice.md`
+- `Text.split()` — `three/text.ts:783–839`; D-292; `.agents/docs/planning/detached-glyph-slice.md`
 - `Glyphs` — `three/glyphs.ts#Glyphs` (`:112`); `Decorations` — `three/decorations.ts#Decorations` (`:46`)
 - the scenes: explode and reset, a ring — `site/examples/src/scenes/break-apart/scene.tsx`, `site/examples/src/scenes/arc/scene.tsx`
 */}
@@ -38,7 +38,7 @@ notes · internals for the page
 ```ts
 import { Matrix4 } from 'three/webgpu';
 
-const [glyphs, decorations] = text.breakApart();
+const [glyphs, decorations] = text.split();
 text.parent!.add(glyphs);                        // sibling attachment overlays the source exactly
 if (decorations !== undefined) text.parent!.add(decorations);
 text.visible = false;
@@ -61,7 +61,7 @@ text.visible = true;
 
 ```ts
 if (text.commitState().status === 'committed') {
-  const [glyphs] = text.breakApart(); // throws before a committed layout, after a failed one, or with no drawable glyph
+  const [glyphs] = text.split(); // throws before a committed layout, after a failed one, or with no drawable glyph
   text.parent!.add(glyphs);
 }
 ```
@@ -118,7 +118,7 @@ notes · internals
 ## Measurements
 
 ```ts
-const [glyphs] = text.breakApart();
+const [glyphs] = text.split();
 const m = glyphs.measurements[0]!;
 m.originalMatrix;                                // where it was, in the source Text's local space
 m.localInkBounds;                                // Box3
@@ -152,7 +152,7 @@ notes · internals
 import { Matrix4, Quaternion, Vector3 } from 'three/webgpu';
 
 const radius = text.measure().contentWidth / (Math.PI * 2); // advance extent, not the resolved box width
-const [glyphs] = text.breakApart();
+const [glyphs] = text.split();
 const m = new Matrix4();
 const home = new Vector3();
 const q = new Quaternion();
@@ -199,7 +199,7 @@ notes · internals
 import { worldToLocalMatrix } from '@pmndrs/glyph/three';
 import { Matrix4 } from 'three/webgpu';
 
-const [glyphs] = text.breakApart();
+const [glyphs] = text.split();
 const bodies: Matrix4[] = []; // one world matrix per glyph, from your physics step
 const scratch = new Matrix4();
 
@@ -231,7 +231,7 @@ notes · internals
 ## Decorations
 
 ```ts
-const [glyphs, decorations] = text.breakApart();
+const [glyphs, decorations] = text.split();
 if (decorations !== undefined) {
   text.parent!.add(decorations);
   decorations.materials[0]!.opacity = 0.5;
