@@ -29,6 +29,7 @@ const roots = [
   'benches/vitexec',
   'packages/glyph/scripts',
   'apps/typegpu-hello-world/scripts',
+  'site/scripts',
 ];
 const workflowPattern = /\/\* @workflow\s+(\{[\s\S]*?\})\s+\*\//g;
 

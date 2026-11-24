@@ -1,3 +1,10 @@
+/* @workflow {
+  "name": "site:capture-thumbnails",
+  "summary": "Capture the gallery posters for the hosted examples from the built site.",
+  "requirements": "A built site/dist and a GPU-enabled Chromium; pass example slugs to capture a subset.",
+  "writes": "Checked-in site/examples/public/thumbnails/<slug>.webp files"
+} */
+
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';

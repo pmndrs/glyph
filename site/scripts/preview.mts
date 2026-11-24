@@ -1,3 +1,10 @@
+/* @workflow {
+  "name": "site:preview",
+  "summary": "Serve the built site as it is deployed: landing at /, docs at /docs/, examples at /examples/.",
+  "requirements": "A built site/dist; PORT selects the port (default 4173).",
+  "writes": "Nothing"
+} */
+
 import { createReadStream, promises as fs } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';

@@ -1,3 +1,10 @@
+/* @workflow {
+  "name": "site:check-snippets",
+  "summary": "Typecheck every ts/tsx fence under site/docs against the workspace @pmndrs/glyph source.",
+  "requirements": "Workspace dependencies.",
+  "writes": "site/.cache/doc-snippets"
+} */
+
 import { spawnSync } from 'node:child_process';
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';

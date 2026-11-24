@@ -1,3 +1,10 @@
+/* @workflow {
+  "name": "site:verify-browser",
+  "summary": "Check the built site in Chromium: one GPU device per page, poster, live and held frames, pool limit and input targeting.",
+  "requirements": "A built site/dist and a GPU-enabled Chromium; pass an output directory for the screenshots.",
+  "writes": "Screenshots under site/.cache/verify-explainers or the given directory"
+} */
+
 import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
