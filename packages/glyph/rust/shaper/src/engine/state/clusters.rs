@@ -68,34 +68,6 @@ impl ParagraphState {
             && usize::try_from(self.shaping_runs.committed().runs()[0].text_end).ok()
                 == Some(self.text.committed().units.len())
             && unicode.grapheme_boundaries().len().saturating_sub(1) == text.len();
-        if let Some(source_run) = self.incremental_shape_source_run
-            && !full_source_run
-            && let Some((cluster_start, cluster_end)) = {
-                let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
-                pending_clusters.rebuild_source_run_if_topology_is_stable(
-                    committed_clusters,
-                    build_input(),
-                    source_run,
-                    self.styles.is_prepared(),
-                    |handle| shaper.font_metrics(handle),
-                )?
-            }
-        {
-            let (pending_clusters, committed_clusters) = self.clusters.derive_mut();
-            if let Err(error) = pending_clusters.assign_stable_glyph_ids_in_range(
-                committed_clusters,
-                cluster_start,
-                cluster_end,
-                &mut self.glyph_identity_index,
-                next_glyph_id,
-            ) {
-                self.discard_clusters_candidate();
-                return Err(error);
-            }
-            return self.finish_cluster_preparation(shaper).map(|()| true);
-        }
-        // One edit that changed the reshaped run's topology: rebuild that run's clusters
-        // between the previous rows. The full build stays the authority for every error.
         // The source runs the shape stage reshaped alone: rebuild their clusters between the
         // previous rows. The full build stays the authority for every error.
         let mut windows: Vec<RunWindow> = Vec::new();

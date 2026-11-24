@@ -7795,7 +7795,6 @@ mod tests {
                 < candidate.text.active().units.len()
         );
         let work = super::super::work_attribution::snapshot();
-        assert_eq!(work.cluster_copied_old_rows, 3);
         assert_eq!(work.cluster_full_builds, 0);
         engine.commit_measure(measured).unwrap();
         let (cold_engine, _) = shaped_inter_engine("e\u{301}bc");
