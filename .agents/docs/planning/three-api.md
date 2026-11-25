@@ -635,6 +635,42 @@ A material on a span overrides the text material; a text material overrides the 
 share identity. Different materials may still share instance buffers—the command buffer determines draw segmentation, while
 the Three executor decides which GPU resources can be shared safely.
 
+### Glyph facts
+
+A handle created with `defineThreeConfig({ glyphFacts: true })` also tells a glyph material which glyph it is drawing.
+The facts are off by default: they are 12 more bytes per glyph instance for every text of the handle, and a material of
+a handle without them throws when it reads one. A decoration context has neither.
+
+| Node          | Value                                                                                                                                                                                                                                                                                   |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `glyphIndex`  | `Node<'uint'>`: the glyph's index in its text's layout order, the index `label.glyphs()` reports it at. Blank glyphs count, so drawn indices have gaps; a right-to-left run counts in drawn order, left to right; a ligature is one glyph; lines, fonts and formats share one sequence. |
+| `glyphOrigin` | `Node<'vec3'>`: the glyph's pen origin on its baseline in `paragraphPosition` space, `(glyphs().x[i], -glyphs().y[i], 0)`. It is the pivot `Glyphs.setMatrixAt` turns a glyph about, not the centre of its quad.                                                                        |
+
+Both are constant across a glyph and safe in either stage, like the position nodes. The index is a position, not an
+identity: an edit before a glyph shifts it, and `split()` is still how an identity is frozen (a `Glyphs` keeps the
+index and origin each glyph had when it was split). To stagger an effect across a text, pass its length as a uniform
+from `label.measure().glyphCount`; no count reaches the shader, because one draw can hold many texts.
+
+```ts
+const wave = defineTextMaterial(
+  (context) => {
+    const material = context.createDefaultMaterial();
+    if (context.kind !== 'glyph') return material;
+    // Each glyph grows and shrinks about its own pen origin, one after the other.
+    const fromOrigin = context.paragraphPosition.sub(context.glyphOrigin);
+    const pulse = float(context.glyphIndex).mul(0.4).add(time).sin().mul(0.25);
+    material.positionNode = context.position.add(fromOrigin.mul(pulse));
+    return material;
+  },
+  { boundsPadding: 8 },
+);
+```
+
+`paragraphPosition.sub(glyphOrigin)` is a paragraph-space offset, and the displacement is added to the draw-local
+`position`. The two spaces agree in direct transform mode, and in indexed mode while the `Text` and its ancestors only
+translate; indexed mode folds their rotation and scale into `position`, so a rotated or scaled text needs direct mode
+for an exact per-glyph turn.
+
 ### MSDF distance fields
 
 When `context.kind === 'glyph'` and `context.format === 'pmndrs.msdf'`, both `/three` and `/three/typegpu` expose

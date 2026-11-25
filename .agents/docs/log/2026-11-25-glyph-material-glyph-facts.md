@@ -1,0 +1,34 @@
+---
+type: Log Entry
+title: 'Tell materials which glyph they draw: glyphIndex and glyphOrigin'
+generated:
+  by: process:docs-new
+  at: '2026-11-25T01:59:45Z'
+---
+
+[Issue 13](../planning/issues-0.2.0/13-per-glyph-material-identity.md): per-letter animation had to `split()` a text
+and drive matrices, because a material could not tell which glyph it was drawing. Materials can now read two facts
+about that glyph in every integration: its index in the text's layout order and its pen origin.
+
+- **Engine.** One new semantic codec input, the glyph's layout index (`semanticU32Fields.glyphIndex`, field 9): the
+  index `glyphs()` reports the glyph at, read from the occurrence spans the gather already walks. A host codec may
+  declare `glyphIndex` and `glyphOrigin` system buffers together; the origin lanes store the pen origin every technique
+  body already loads. A glyph's index can move under a record the gather would otherwise skip (a blank or boundary
+  glyph added before a retained line), so positioning also proves that every retained line kept its first layout
+  index, and a codec that publishes the index gathers the whole paragraph when that proof fails. A codec that does not
+  declare the input gathers and skips exactly as before.
+- **Three** (`/three`, `/three/typegpu`, React, Vue). `defineThreeConfig({ glyphFacts: true })` publishes the two lanes;
+  a glyph material context then carries `glyphIndex: Node<'uint'>` and `glyphOrigin: Node<'vec3'>`, stage-safe like
+  the position nodes. Without the option neither lane exists and reading either fact throws.
+- **TypeGPU.** `transformPosition` and `transformColor` receive `glyphIndex` and `glyphOrigin` as third and fourth
+  parameters. A config publishes the lanes only when one of its callbacks declares them (`callback.length > 2`).
+- **PixiJS 3D.** `definePixi3DConfig({ glyphFacts: true })` publishes the lanes, and a recipe whose bits declare the
+  `aGlyphFacts` attribute (`float32x4`: origin x, origin y, index) carries them.
+
+The facts are opt-in because they are 12 bytes per glyph instance that the engine gathers for every text of a handle.
+Measured on the same machine against `sil-green-71`, a handle that does not ask is unchanged: the same compiled codec
+bytes, the same bytes per instance (bitmap 64, MSDF 68, Slug 48 in Three), byte-identical Three WGSL and GLSL for the
+default material and for a caller material that reads neither fact, and frame times within run-to-run noise on 1,000
+labels and one 24,000-glyph text. The index is a position, not an identity; `split()` remains the way to freeze one.
+The [Glyph concept](../packages/glyph.md) records the boundary and the
+[API summary](../planning/api-summary-for-review.md) the names.

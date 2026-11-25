@@ -1343,6 +1343,19 @@ root policy states draw order.
 
 `materialId` is explicit through the frame ABI and command buffer. Three maps it to a `defineTextMaterial()` factory. Material
 identity may split draws without forcing a second copy of the canonical glyph buffers.
+A material can also be told which glyph it is drawing: the glyph's index in its text's layout order (the index
+`glyphs()` reports it at, counting blanks, in drawn order through a right-to-left run, one per ligature, continuing
+across lines, fonts and formats) and its pen origin on the baseline. Both come from two host system buffers,
+`glyphIndex` and `glyphOrigin`, that a codec declares together; the index is the engine's one semantic input for it,
+and the origin lanes store the pen origin every technique body already loads, relative to the placement slot. They are
+opt-in, because they are 12 bytes per glyph instance gathered for every text of a handle: Three and PixiJS 3D publish
+them for a handle created with `glyphFacts: true`, and TypeGPU for a config whose `transformPosition` or
+`transformColor` declares the two glyph parameters. Three hands a glyph material context `glyphIndex` and
+`glyphOrigin` nodes (the origin in `paragraphPosition` space) through the same stage-selecting node as the positions,
+TypeGPU passes them to its callbacks in the pixels of `position`, and PixiJS 3D gives a recipe whose bits declare it
+the `aGlyphFacts` attribute. A decoration has neither. The index is a position that an edit shifts, never an identity;
+on a detached `Glyphs` both are what `split()` captured. A codec that publishes the index makes the gather visit a
+whole paragraph whenever a retained line's first layout index moved, since no other input of its records changed.
 Built-in Three material contexts expose two stage-safe position nodes: `paragraphPosition` is the unanchored, +Y-up
 paragraph coordinate before detached-glyph and owner transforms, and `position` is the final draw-local coordinate.
 Indexed owner transforms enter `position`; direct owner transforms stay on the draw mesh's matrix. The material

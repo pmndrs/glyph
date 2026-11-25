@@ -18,7 +18,7 @@ generated:
 # Issue 13: no per-glyph identity or per-instance input in the material context
 
 - **Severity:** later (design; public API addition needs Justin's approval)
-- **Status:** approved (Justin, 2026-11-24): add `glyphIndex` and the glyph's origin to the material context. The index is the linear layout order, not an identity; `split()` is how identity is frozen. Not implemented yet
+- **Status:** approved (Justin, 2026-11-24): add `glyphIndex` and the glyph's origin to the material context. The index is the linear layout order, not an identity; `split()` is how identity is frozen. Implemented 2026-11-24 on `experiments/sil-glyphindex` as opt-in glyph facts (see [the log](../../log/2026-11-25-glyph-material-glyph-facts.md))
 
 ## What happens
 
@@ -56,3 +56,15 @@ Option 1 with option 2's documentation: the smallest surface that removes `split
 semantics must be decided with it: layout order shifts on an insert, which suits wave/stagger effects; a stable
 identity across edits would be the stable glyph ID instead. Prove with a shader-compile test on both backends and a
 browser lane comparing a `glyphIndex`-driven wave against the same wave through `split()`.
+
+## What was built
+
+- `glyphIndex` is the index `glyphs()` reports the glyph at; `glyphOrigin` is its pen origin on the baseline. Neither
+  can be derived from what an instance already carried: a draw holds only the inked glyphs of one font, so a record's
+  position in its batch skips blanks and other fonts, and an instance carries its quad's corner, not its pen (Bitmap
+  keeps the bearing on the CPU only). Both are therefore two new lanes, 12 bytes per instance.
+- They are opt-in per handle (`glyphFacts: true` in Three and PixiJS 3D; a callback that declares the glyph parameters
+  in TypeGPU), because the codec that decides what the engine gathers is fixed when a handle is created. A handle that
+  does not ask publishes the same codec bytes as before.
+- No text-level glyph count reaches a shader: Three batches many texts into one draw. Normalise with a uniform set
+  from `text.measure().glyphCount`.
