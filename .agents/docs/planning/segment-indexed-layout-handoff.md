@@ -18,7 +18,7 @@ named below.
 ## 1. Where things stand
 
 - **Integration branch** `experiments/segment-indexed-layout`, worktree `/Volumes/Depot/Developer/glyph-held-rope-wip`,
-  pushed to `origin`. Last verified tag: **`sil-green-76`**. It sits on `experiments/held-rope-ascii-anchor-wip`
+  pushed to `origin`. Last verified tag: **`sil-green-77`**. It sits on `experiments/held-rope-ascii-anchor-wip`
   (`8176a24e0a3f`; draft PRs #292 → #301 → #302 → #310). It ships as **0.2.0**, a breaking release.
 - **Oracle:** 605 frozen cases (~56,400 differential requests) comparing incremental against cold in every
   stage and lane class, natively and in wasm. 0 unlisted divergences. `KNOWN-DIVERGENCES` may only shrink.
