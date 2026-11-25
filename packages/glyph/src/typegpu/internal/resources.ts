@@ -4,7 +4,13 @@ import { bitmapSchema } from '../../raster/bitmap.js';
 import { slugSchema } from '../../raster/slug.js';
 import { SLUG_RESIDENT_BAND_CURVE_WIDTH } from '../../raster/internal/slug-residency.js';
 import { ResidentSlugBands } from './slug-bands.js';
-import { bitmapFragment, bitmapQuadPosition, bitmapAtlasUv } from '../../shaders/typegpu/bitmap-shader.js';
+import {
+  bitmapAtlasUv,
+  bitmapCoverageSlot,
+  bitmapFragment,
+  bitmapPageCoverage,
+  bitmapQuadPosition,
+} from '../../shaders/typegpu/bitmap-shader.js';
 import { slugRender, SlugShaderGlyph } from '../../shaders/typegpu/slug/slug-render.js';
 import { slugDilate } from '../../shaders/typegpu/slug/core/dilate.js';
 import {
@@ -14,7 +20,6 @@ import {
   slugHeaderWidthAccessor,
   slugUnpackHalvesSlot,
 } from '../../shaders/typegpu/slug/slug-texture.js';
-import { bitmapPageAccessor } from '../../shaders/typegpu/bitmap-shader.js';
 import {
   TYPEGPU_GLYPH_FACTS_BUFFER_ID,
   TYPEGPU_PLACEMENT_SLOT_BUFFER_ID,
@@ -109,6 +114,13 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
   const atlas = texture(root, payload);
   try {
     const view = atlas.createView(d.texture2dArray(d.f32));
+    // Linear and clamp-to-edge, as Three and PixiJS 3D read the same pages: a strike drawn between pixels or at
+    // another size is interpolated, and one drawn on its own pixel grid still reads exact texels.
+    const sampler = root.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+    const coverage = (atlasUv: d.v2f, pageLayer: number): number => {
+      'use gpu';
+      return bitmapPageCoverage(view.$, sampler.$, atlasUv, pageLayer);
+    };
     const facts = publishesGlyphFacts(options);
     const vertexIn = {
       index: d.builtin.vertexIndex,
@@ -171,7 +183,7 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
       return colorTransform.$(d.vec4f(result.color, result.opacity), input.position);
     });
     const pipeline = shaderRoot(options)
-      .with(bitmapPageAccessor, view)
+      .with(bitmapCoverageSlot, coverage)
       .createRenderPipeline({
         vertex,
         fragment,

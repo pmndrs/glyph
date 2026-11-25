@@ -16,6 +16,7 @@ See the [0.2 migration guide](./MIGRATION-0.2.md) for before/after examples and 
 - `Text.set()` with state equivalent to the accepted state no longer forces another publication. Assign `font` or `material` explicitly to force resource restaging.
 - `glyph bake` and `bakeFont()` keep only the common OpenType layout features by default, with or without `--unicodes` (0.1.0 kept every feature in a full bake and only the default-on ones in a subset). Discretionary features such as `smcp`, `onum`, `tnum`, `zero`, `ssXX` and `cvXX` and their alternate glyphs are dropped unless `--layout-features` adds them. Rebake fonts whose text enables them.
 - Text whose style or span style enables a layout feature its font's bake dropped throws `GlyphInputError` on creation or update, naming the tag, the font and the `--layout-features` flag to add. `value: 0`, tags the source font never had, and fonts baked before this change never throw.
+- `/shaders/typegpu`'s `TypeGpuBitmapPageLayout` now has a second entry, a filtering `sampler`, and the canonical `bitmapFragment` reads its page through it. A host that binds this layout supplies a linear, clamp-to-edge sampler beside `page`; a host that replaces `bitmapCoverageSlot` is unaffected.
 
 ### Added
 
@@ -41,6 +42,7 @@ See the [0.2 migration guide](./MIGRATION-0.2.md) for before/after examples and 
 - Renamed the private browser module file to `content-digest` so URL filters targeting `fingerprint` do not block font loading or Worker baking. Public fingerprint names and artifact identities are unchanged.
 - Preserved Wasm compilation errors for mixed-case `application/wasm` headers when streaming fails.
 - Detached accepted Vue text-property snapshots from reactive caller data and retained equivalent React nested-font selections.
+- Bitmap text drawn by `@pmndrs/glyph/typegpu`, by `@pmndrs/glyph/three/typegpu` and by the canonical `/shaders/typegpu` fragment is now filtered like `/three` and `/pixi3d` Bitmap text. These three read the strike's nearest texel, so a strike drawn between pixels or at a size other than its own (an 11 px label from a 16 px strike, a 24 px line from a 32 px one) came out aliased and did not match the other renderers. Text on its strike's own pixel grid is unchanged.
 
 ### Changed
 

@@ -4,6 +4,7 @@ import test from 'node:test';
 import tgpu, { d } from 'typegpu';
 
 import { extractBitmapTslShader } from '../support/extract-bitmap-tsl-shader.mjs';
+import { bitmapShader as stableBitmapShader } from '../../dist/shaders/tsl/bitmap-shader.js';
 import {
   bitmapAtlasUv,
   bitmapFragment,
@@ -68,21 +69,24 @@ test('quad placement matches the TSL realization, including the y flip', () => {
   assert.match(gpuFlat, /-\(\(origin\.y\+\(quadPosition\.y\*size\.y\)\)\),0f\)/);
 });
 
-test('coverage is an exact clamped texel fetch on both sides', () => {
-  const tslFetch = flatten(tsl.plain.fragment);
-  assert.match(tslFetch, /fnbitmapPageTexelCoordinate\(/);
-  assert.match(tslFetch, /textureDimensions\(/);
-  assert.match(tslFetch, /floor\(/);
-  assert.match(tslFetch, /clamp\(flooredCoord/);
-  assert.match(tslFetch, /textureLoad\(/);
+test('coverage is one filtered sample of the page in every realization', () => {
+  // The stable `/tsl` graph is the reference: on the renderer's linear page it compiles to a single filtered sample.
+  const stable = flatten(extractBitmapTslShader({ pixelSnapping: false, bitmapShader: stableBitmapShader }).fragment);
+  const pageSample = /textureSample\(nodeUniform\d+,nodeUniform\d+_sampler,[^;]*\)/g;
+  assert.equal(stable.match(pageSample)?.length, 1);
+  assert.doesNotMatch(stable, /textureLoad\(|floor\(/);
 
+  // `/three/typegpu` reads the page the same way; a texel load here draws a strike aliased wherever `/three` filters it.
+  const adapter = flatten(tsl.plain.fragment);
+  assert.equal(adapter.match(pageSample)?.length, 1);
+  assert.doesNotMatch(adapter, /textureLoad\(|floor\(/);
+
+  // The direct TypeGPU stage samples the page's only level through a bound sampler, with no texel-grid arithmetic.
   const gpuFetch = flatten(gpu.fragment);
-  assert.match(gpuFetch, /textureDimensions\(page,0\)/);
-  assert.match(gpuFetch, /floor\(/);
-  assert.match(
-    gpuFetch,
-    /textureLoad\(page,vec2u\(u32\(texelCoordinate\.x\),u32\(texelCoordinate\.y\)\),pageLayer,0\)\.x/,
-  );
+  assert.match(gpuFetch, /varpage:texture_2d_array<f32>;/);
+  assert.match(gpuFetch, /varsampler_1:sampler;/);
+  assert.match(gpuFetch, /textureSampleLevel\(page,sampler_1,atlasUv,pageLayer,0\)\.x/);
+  assert.doesNotMatch(gpuFetch, /textureLoad\(|textureDimensions\(|floor\(/);
 });
 
 test('paint composition scales alpha by coverage identically', () => {

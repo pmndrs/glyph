@@ -11,6 +11,7 @@ import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import { msdfPosition } from '../../dist/shaders/typegpu/msdf-shader.js';
 import { compileNodeMaterialBackends } from '../support/node-material-shaders.mjs';
+import { atlasTextureArray } from '../../dist/three/internal/portable-resource.js';
 import { bitmapShader } from '../../dist/three/typegpu/internal/bitmap-shader.js';
 import { decorationShader } from '../../dist/three/typegpu/internal/decoration-shader.js';
 import { msdfShader } from '../../dist/three/typegpu/internal/msdf-shader.js';
@@ -22,9 +23,9 @@ test('MTSDF placement converts downward paragraph y to upward Three y', () => {
   );
 });
 
-test('the Bitmap Three adapter captures its texture instead of passing it to a GLSL function', () => {
-  const page = new THREE.DataArrayTexture(new Uint8Array(4 * 4), 4, 4, 1);
-  page.format = THREE.RedFormat;
+test('the Bitmap Three adapter samples its page at the Three boundary instead of passing it to a GLSL function', () => {
+  // The renderer's own page: linear, so Three compiles the read to a filtered sample on both backends.
+  const page = atlasTextureArray(new Uint8Array(4 * 4), 4, 4, 1, THREE.RedFormat);
   const output = bitmapShader(
     {
       origin: TSL.vec2(0),
@@ -41,11 +42,10 @@ test('the Bitmap Three adapter captures its texture instead of passing it to a G
     const { fragment } = backends.webgl2;
     assert.doesNotMatch(fragment, /texture_\w+</);
     assert.doesNotMatch(fragment, /bitmapPageCoverage\s*\(/);
-    assert.match(fragment, /texelFetch\s*\([^,]+,\s*ivec3\s*\([^)]+\),\s*int\s*\(\s*0(?:\.0)?\s*\)\s*\)/);
-    assert.doesNotMatch(fragment, /texelFetch\s*\([^,]+,\s*uvec2/);
-    assert.doesNotMatch(fragment, /uvec2\s+\w+\s*=\s*textureSize\s*\(/);
-    assert.doesNotMatch(fragment, /ivec2\s+\w+\s*=\s*item_\w*\s*\(\s*\)/);
-    assert.doesNotMatch(backends.webgpu.fragment, /vec3<u32>\s*\(\s*vec2<f32>\s*\(\s*textureDimensions/);
+    assert.equal(fragment.match(/\btexture\s*\(\s*\w+\s*,\s*vec3\s*\(/g)?.length, 1, 'one filtered layer sample');
+    assert.doesNotMatch(fragment, /texelFetch\s*\(|textureSize\s*\(/);
+    assert.equal(backends.webgpu.fragment.match(/\btextureSample\s*\(/g)?.length, 1, 'one filtered layer sample');
+    assert.doesNotMatch(backends.webgpu.fragment, /textureLoad\s*\(|textureDimensions\s*\(/);
   });
   page.dispose();
 });

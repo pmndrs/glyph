@@ -174,13 +174,10 @@ test('every shipped Bitmap stage resolves to WGSL without consumer-side tooling'
     assert.match(wgsl, new RegExp(`fn ${name}\\(`), `${name} must resolve as a WGSL function`);
   }
   const fragmentWgsl = tgpu.resolve([bitmapFragment]);
-  // Coverage is an exact clamped texel fetch — the read the `/tsl` realization compiles
-  // to for data textures — so no sampler is declared and no filtered sample appears.
+  // Coverage is one filtered sample of the page's only level — the read the `/tsl` realization makes through its
+  // linear page texture — so a sampler is declared and no texel is loaded by index.
   assert.match(fragmentWgsl, /fn bitmapPageCoverage\(/);
-  assert.match(fragmentWgsl, /textureDimensions\(page, 0\)/);
-  assert.match(
-    fragmentWgsl,
-    /textureLoad\(page, vec2u\(u32\(texelCoordinate\.x\), u32\(texelCoordinate\.y\)\), pageLayer, 0\)\.x/,
-  );
-  assert.doesNotMatch(fragmentWgsl, /textureSample|sampler/);
+  assert.match(fragmentWgsl, /var sampler_1: sampler;/);
+  assert.match(fragmentWgsl, /textureSampleLevel\(page, sampler_1, atlasUv, pageLayer, 0\)\.x/);
+  assert.doesNotMatch(fragmentWgsl, /textureLoad|textureDimensions/);
 });

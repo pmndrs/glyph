@@ -1,9 +1,15 @@
 import { attribute } from 'three/tsl';
 import * as THREE from 'three/webgpu';
-import { bitmapShader } from '../../dist/three/typegpu/internal/bitmap-shader.js';
+import { atlasTextureArray } from '../../dist/three/internal/portable-resource.js';
+import { bitmapShader as typegpuBitmapShader } from '../../dist/three/typegpu/internal/bitmap-shader.js';
 
-/** Compiles `/three/typegpu` Bitmap to WGSL without a GPU device. `renderer.hasFeature` is stubbed because data-texture texel loads do not depend on optional filtering. */
-export function extractBitmapTslShader({ pixelSnapping }) {
+/**
+ * Compiles a Three Bitmap realization (`/three/typegpu` unless another is given) to WGSL without a GPU device. The page
+ * is the texture the renderer itself builds, filters included: Three compiles a nearest-filtered page to a texel load
+ * and a linear one to a sample, so a stand-in with other filters would pin a program no draw uses. `renderer.hasFeature`
+ * is stubbed because sampling an 8-bit page depends on no optional feature.
+ */
+export function extractBitmapTslShader({ pixelSnapping, bitmapShader = typegpuBitmapShader }) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0], 3));
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1], 2));
@@ -13,9 +19,7 @@ export function extractBitmapTslShader({ pixelSnapping }) {
   geometry.setAttribute('atlasExtent', new THREE.Float32BufferAttribute([1, 1], 2));
   geometry.setAttribute('paintColor', new THREE.Float32BufferAttribute([1, 1, 1, 1], 4));
 
-  const page = new THREE.DataArrayTexture(new Uint8Array(4), 1, 1, 1);
-  page.format = THREE.RedFormat;
-  page.type = THREE.UnsignedByteType;
+  const page = atlasTextureArray(new Uint8Array(4), 2, 2, 1, THREE.RedFormat);
 
   const shader = bitmapShader(
     {

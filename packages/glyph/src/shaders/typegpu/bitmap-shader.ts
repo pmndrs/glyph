@@ -2,6 +2,7 @@ import tgpu, {
   type TgpuAccessor,
   type TgpuBindGroupLayout,
   type TgpuFn,
+  type TgpuLayoutSampler,
   type TgpuLayoutTexture,
   type TgpuSlot,
   d,
@@ -32,16 +33,18 @@ export const TypeGpuBitmapInstance: d.WgslStruct<{
 });
 export type TypeGpuBitmapInstance = d.InferGPU<typeof TypeGpuBitmapInstance>;
 
-/** Single-channel coverage pages uploaded in the atlas's own top-down row order — flipY-style host settings must stay disabled; read as exact clamped texels, no sampler. */
+/** Single-channel coverage pages uploaded in the atlas's own top-down row order — flipY-style host settings must stay disabled — and the filtering sampler they are read through; bind a linear, clamp-to-edge sampler to draw what `/tsl` draws. */
 export const TypeGpuBitmapPageLayout: TgpuBindGroupLayout<{
   page: TgpuLayoutTexture<d.WgslTexture2dArray<d.F32>> & { visibility?: readonly ['fragment'] };
+  sampler: TgpuLayoutSampler & { visibility?: readonly ['fragment'] };
 }> = /* @__PURE__ */ tgpu.bindGroupLayout({
   page: { texture: /* @__PURE__ */ d.texture2dArray(d.f32), visibility: ['fragment'] },
+  sampler: { sampler: 'filtering', visibility: ['fragment'] },
 });
 
 /**
- * The default Bitmap page source. A direct TypeGPU host can replace it with a texture view, raw WebGPU view, or a
- * function returning either. The Three adapter replaces it with a `DataTexture` bridge from `@typegpu/three`.
+ * The default Bitmap page source. A host can replace it with a texture view, raw WebGPU view, or a function returning
+ * either; the sampler still comes from `TypeGpuBitmapPageLayout`. A host that owns both replaces `bitmapCoverageSlot`.
  */
 export const bitmapPageAccessor: TgpuAccessor<d.WgslTexture2dArray<d.F32>> = /* @__PURE__ */ tgpu.accessor(
   /* @__PURE__ */ d.texture2dArray(d.f32),
@@ -207,23 +210,20 @@ export function bitmapPaintCoverageOpacity(coverage: number, color: d.v4f): d.v2
   return d.vec2f(output.coverage, output.opacity);
 }
 
-/** Coverage of one atlas coordinate: clamped into the page, scaled onto the texel grid, floored, bound-clamped — the same nearest-texel fetch the `/tsl` realization compiles to. */
-export function bitmapPageCoverage(page: d.texture2dArray<d.F32>, atlasUv: d.v2f, pageLayer: number): number {
+/**
+ * Coverage of one atlas coordinate: one filtered sample of the page's only level, the read the `/tsl` realization makes
+ * through its linear, clamp-to-edge page texture. A strike drawn on its own pixel grid reads exact texels; a strike drawn
+ * between pixels or at another size is interpolated instead of aliased.
+ */
+export function bitmapPageCoverage(
+  page: d.texture2dArray<d.F32>,
+  sampler: d.sampler,
+  atlasUv: d.v2f,
+  pageLayer: number,
+): number {
   'use gpu';
 
-  const dimensions = std.textureDimensions(page, 0);
-  const texelCoordinate = bitmapPageTexelCoordinate(d.vec2f(d.f32(dimensions.x), d.f32(dimensions.y)), atlasUv);
-  return std.textureLoad(page, d.vec2u(d.u32(texelCoordinate.x), d.u32(texelCoordinate.y)), pageLayer, 0).x;
-}
-
-/** Resolve a normalized atlas coordinate to a bounded texel without carrying a texture across a function boundary. */
-export function bitmapPageTexelCoordinate(dimensions: d.v2f, atlasUv: d.v2f): d.v2f {
-  'use gpu';
-
-  const clampedUv = d.vec2f(std.clamp(atlasUv.x, 0, 1), std.clamp(atlasUv.y, 0, 1));
-  const scaledCoord = d.vec2f(clampedUv.x * dimensions.x, clampedUv.y * dimensions.y);
-  const flooredCoord = d.vec2f(std.floor(scaledCoord.x), std.floor(scaledCoord.y));
-  return d.vec2f(std.clamp(flooredCoord.x, 0, dimensions.x - 1), std.clamp(flooredCoord.y, 0, dimensions.y - 1));
+  return std.textureSampleLevel(page, sampler, atlasUv, pageLayer, 0).x;
 }
 
 /** Resource-polymorphic coverage lookup used by the canonical fragment stage. */
@@ -231,13 +231,13 @@ export type BitmapCoverageSource = (atlasUv: d.v2f, pageLayer: number) => number
 
 function bitmapAccessorCoverage(atlasUv: d.v2f, pageLayer: number): number {
   'use gpu';
-  return bitmapPageCoverage(bitmapPageAccessor.$, atlasUv, pageLayer);
+  return bitmapPageCoverage(bitmapPageAccessor.$, TypeGpuBitmapPageLayout.$.sampler, atlasUv, pageLayer);
 }
 
-/** Override for procedural or host-indirected coverage; the default reads `bitmapPageAccessor`. */
+/** Override for procedural or host-indirected coverage; the default samples `bitmapPageAccessor` through the layout's sampler. */
 export const bitmapCoverageSlot: TgpuSlot<BitmapCoverageSource> = /* @__PURE__ */ tgpu.slot(bitmapAccessorCoverage);
 
-/** The canonical Bitmap fragment stage: single-channel coverage fetched from the bound page array, then composed with the paint colour. */
+/** The canonical Bitmap fragment stage: single-channel coverage sampled from the bound page array, then composed with the paint colour. */
 export const bitmapFragment: TgpuFn<(input: typeof TypeGpuBitmapFragmentInput) => typeof TypeGpuBitmapFragmentOutput> =
   /* @__PURE__ */ tgpu.fn(
     [TypeGpuBitmapFragmentInput],

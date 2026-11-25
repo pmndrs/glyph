@@ -142,6 +142,23 @@ Three `Text` properties, R3F and Vue `Text` props no longer accept `order`: it w
 paints in scene order with `renderOrder`. `glyph bake` no longer accepts `--yes`: the CLI never prompts. Delete both.
 `glyph bake --check` against a missing output now fails with `STALE_OUTPUT` instead of a Node `ENOENT` stack.
 
+## Bind a sampler with the TypeGPU Bitmap page
+
+Only hosts that compose `@pmndrs/glyph/shaders/typegpu` themselves and bind `TypeGpuBitmapPageLayout` are affected;
+`@pmndrs/glyph/typegpu` and `@pmndrs/glyph/three/typegpu` need no change. The canonical Bitmap fragment now samples its
+page with filtering, as `/three` always has, instead of loading the nearest texel, so the layout carries the sampler:
+
+```ts
+// 0.1.0
+root.createBindGroup(TypeGpuBitmapPageLayout, { page });
+
+// 0.2.0
+const sampler = root.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+root.createBindGroup(TypeGpuBitmapPageLayout, { page, sampler });
+```
+
+A host that replaces `bitmapCoverageSlot` owns its own read and changes nothing.
+
 ## Rebake every font, and ask for the OpenType features your text uses
 
 Every bake, with or without `--unicodes`, now keeps the common OpenType layout features: what shaping applies by

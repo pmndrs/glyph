@@ -6,7 +6,6 @@ import type { Node, Texture } from 'three/webgpu';
 import {
   bitmapAtlasUv,
   bitmapPaintCoverageOpacity,
-  bitmapPageTexelCoordinate,
   bitmapQuadPosition,
   snapClipAxis,
 } from '../../../shaders/typegpu/bitmap-shader.js';
@@ -57,16 +56,9 @@ export function bitmapShader(
     'use gpu';
     return bitmapAtlasUv(t3.fromTSL(instance.uvOrigin, d.vec2f).$, t3.fromTSL(instance.uvSize, d.vec2f).$, t3.uv().$);
   }) as Node<'vec2'>;
-  // Three models textureSize as uvec2, while GLSL reports an array texture as ivec3. Converting the expression to
-  // vec2 normalizes both backend shapes and discards GLSL's layer count before it crosses the TypeGPU bridge.
-  const reportedDimensions = TSL.textureSize(TSL.textureLoad(resources.page), TSL.int(0)) as unknown as Node<'uvec2'>;
-  const pageDimensions = TSL.vec2(reportedDimensions);
-  const texelCoordinate = t3.toTSL(() => {
-    'use gpu';
-    return bitmapPageTexelCoordinate(t3.fromTSL(pageDimensions, d.vec2f).$, t3.fromTSL(atlasUv, d.vec2f).$);
-  }) as Node<'vec2'>;
-  const texelIndex = TSL.ivec2(TSL.int(texelCoordinate.x), TSL.int(texelCoordinate.y));
-  const coverage = TSL.textureLoad(resources.page, texelIndex, TSL.int(0)).depth(TSL.int(instance.pageIndex)).r;
+  // The page is read at Three's resource boundary, exactly as the stable `/tsl` realization reads it: one sample
+  // through the texture's own linear, clamp-to-edge sampler, on WebGPU and WebGL2 alike.
+  const coverage = TSL.texture(resources.page, atlasUv).depth(instance.pageIndex).r;
   const coverageOpacity = t3.toTSL(() => {
     'use gpu';
     return bitmapPaintCoverageOpacity(t3.fromTSL(coverage, d.f32).$, t3.fromTSL(instance.color, d.vec4f).$);

@@ -49,21 +49,6 @@ export function referenceSnappedClipPosition(clip: BitmapVec4, screenSize: Bitma
   ];
 }
 
-/** CPU mirror of `bitmapPageCoverage`: clamp-to-edge, texel-grid scaling, floor, bound clamping, exact texel fetch. Returns the linear texel index. */
-export function referenceBitmapPageCoverage(dimensions: BitmapVec2, atlasUv: BitmapVec2): number {
-  const clampedUv = [clamp(atlasUv[0], 0, 1), clamp(atlasUv[1], 0, 1)] as const;
-  const texelCoord = [Math.floor(clampedUv[0] * dimensions[0]), Math.floor(clampedUv[1] * dimensions[1])] as const;
-  const boundedCoord = [
-    clamp(texelCoord[0], 0, dimensions[0] - 1),
-    clamp(texelCoord[1], 0, dimensions[1] - 1),
-  ] as const;
-  return boundedCoord[0] + boundedCoord[1] * dimensions[0];
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(Math.max(value, minimum), maximum);
-}
-
 /** CPU mirror of `bitmapPaint`. */
 export function referenceBitmapPaint(
   coverage: number,
