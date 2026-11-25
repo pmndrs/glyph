@@ -8,7 +8,9 @@ import {
   bitmapPaintCoverageOpacity,
   bitmapQuadPosition,
   snapClipAxis,
+  snapDecorationClipAxis,
 } from '../../../shaders/typegpu/bitmap-shader.js';
+import type { SnappedDecorationPoints } from '../../../shaders/tsl/bitmap-shader.js';
 
 const modelViewProjection = TSL.modelViewProjection as Node<'vec4'>;
 
@@ -75,14 +77,43 @@ export function bitmapShader(
   };
 }
 
-/** The model-view-projection rounded onto whole physical pixels; snapped Bitmap glyphs and their decorations share it. */
-export function pixelSnappedClipPosition(): Node<'vec4'> {
+function pixelSnappedClipPosition(): Node<'vec4'> {
   const snapped = t3.toTSL(() => {
     'use gpu';
     const clip = t3.modelViewProjection.$;
     return d.vec4f(
       snapClipAxis(clip.x, clip.w, t3.screenSize.$.x),
       snapClipAxis(clip.y, clip.w, t3.screenSize.$.y),
+      clip.z,
+      clip.w,
+    );
+  });
+  return snapped as Node<'vec4'>;
+}
+
+/** A pixel-snapped text's decoration corner through the canonical `snapDecorationClipAxis`. */
+export function pixelSnappedDecorationClipPosition(points: SnappedDecorationPoints): Node<'vec4'> {
+  const project = (position: Node<'vec3'>): Node<'vec4'> =>
+    TSL.cameraProjectionMatrix.mul(TSL.modelViewMatrix.mul(TSL.vec4(position, 1))) as Node<'vec4'>;
+  const top = project(points.top);
+  const bottom = project(points.bottom);
+  const baseline = project(points.baseline);
+  const snapped = t3.toTSL(() => {
+    'use gpu';
+    const clip = t3.modelViewProjection.$;
+    const topClip = t3.fromTSL(top, d.vec4f).$;
+    const bottomClip = t3.fromTSL(bottom, d.vec4f).$;
+    const baselineClip = t3.fromTSL(baseline, d.vec4f).$;
+    return d.vec4f(
+      snapClipAxis(clip.x, clip.w, t3.screenSize.$.x),
+      snapDecorationClipAxis(
+        topClip.yw,
+        bottomClip.yw,
+        baselineClip.yw,
+        t3.fromTSL(points.bottomCorner, d.f32).$,
+        clip.w,
+        t3.screenSize.$.y,
+      ),
       clip.z,
       clip.w,
     );

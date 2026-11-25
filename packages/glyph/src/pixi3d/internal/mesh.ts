@@ -17,7 +17,7 @@ import {
   pixi3dSystemBuffers,
 } from './codec.js';
 import { glyphDecorationBit } from './decoration-bit.js';
-import { glyphPixelSnapBit } from './snap-bit.js';
+import { glyphDecorationPixelSnapBit, glyphPixelSnapBit } from './snap-bit.js';
 import {
   createPixi3DTextMaterial,
   detachPixi3DTextMaterial,
@@ -536,6 +536,11 @@ export function createDecorationMeshes(
 ): Mesh3D[] {
   const rect = codecBuffer(bindings, retained, decorationSchema.buffers.rect.id, 'f32', 4, 'decoration rect');
   const packed = codecBuffer(bindings, retained, decorationSchema.buffers.packed.id, 'u32', 2, 'decoration paint');
+  const baseline = pixelSnapping
+    ? codecBuffer(bindings, retained, decorationSchema.buffers.baseline.id, 'f32', 1, 'decoration baseline')
+    : undefined;
+  // Only a snapped text's decorations carry what the snap bit places them from: top, bottom, baseline, bottom corner.
+  const snaps = baseline === undefined ? undefined : new Float32Array(recordCount * 16);
   const positions = new Float32Array(recordCount * 12);
   const paints = new Uint32Array(recordCount * 8);
   const indices = new Uint32Array(recordCount * 6);
@@ -544,9 +549,14 @@ export function createDecorationMeshes(
     const index = recordIndex + i;
     const box = f32x(rect.bytes, index, 4);
     const paint = u32x(packed.bytes, index, 2);
+    const line =
+      baseline === undefined ? 0 : words(baseline.bytes, index, 1, (view, offset) => view.getFloat32(offset, true))[0]!;
     for (const [j, corner] of CORNERS.entries()) {
       positions.set([box[0] + corner[0] * box[2], -(box[1] + corner[1] * box[3]), 0], (i * 4 + j) * 3);
       paints.set(paint, (i * 4 + j) * 2);
+      if (snaps !== undefined) {
+        snaps.set([box[1], box[1] + box[3], line, corner[1]], (i * 4 + j) * 4);
+      }
     }
     const base = i * 4;
     indices.set([base, base + 1, base + 2, base, base + 2, base + 3], i * 6);
@@ -558,6 +568,7 @@ export function createDecorationMeshes(
     attributes: {
       aPosition: attribute(positions, 'float32x3', 'decoration-position'),
       aGlyphDecoration: attribute(paints, 'uint32x2', 'decoration-paint'),
+      ...(snaps === undefined ? {} : { aGlyphDecorationSnap: attribute(snaps, 'float32x4', 'decoration-snap') }),
     },
   });
   return [
@@ -573,7 +584,7 @@ export function createDecorationMeshes(
               alphaMode: 'blend',
               doubleSided: true,
               fog: false,
-              extraBits: pixelSnapping ? [glyphDecorationBit, glyphPixelSnapBit] : [glyphDecorationBit],
+              extraBits: pixelSnapping ? [glyphDecorationBit, glyphDecorationPixelSnapBit] : [glyphDecorationBit],
             });
             // Decoration paint is linear like glyph paint, and the default text material encodes linear light for
             // display; FlatMaterial's own default (`'display'`) would write the linear value unencoded, too dark.

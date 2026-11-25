@@ -14,6 +14,7 @@ import { slugGlyphRow } from './slug-glyph-table.js';
 import { createSlugPage, registerSlugPageUse } from './slug-residency.js';
 import { registerMsdfAtlasUse, registerMsdfEffectVariants } from './msdf-draws.js';
 import type { TslMsdfEffects } from '../../shaders/tsl/index.js';
+import type { SnappedDecorationPoints } from '../../shaders/tsl/bitmap-shader.js';
 import { atlasTextureArray } from './portable-resource.js';
 import type { ThreeRootContext, ThreeTextMaterialContextMap } from '../material.js';
 import type { ThreeRasterProgramBuffer } from '../raster-program.js';
@@ -118,11 +119,18 @@ export class ThreeMaterialRealizer {
       throw new Error('decoration draw is missing its rectangle or packed Codec buffer');
     }
     const facts = this.#glyphFactLanes(buffers, selection);
-    const lanes = materialBuffers([rect, packed, ...(facts?.buffers ?? [])], transform);
-    const factsKey = facts === undefined ? '' : `:facts:${facts.facts.storageKey}`;
-    // A decoration follows the snapping of the glyphs it runs under, resolved exactly as their Bitmap draw resolves it.
+    // A decoration follows the snapping of the glyphs it runs under, resolved exactly as their Bitmap draw resolves it,
+    // and only a snapped one reads its line's baseline.
     const pixelSnapping = this.#owner.pixelSnapping ?? selection?.pixelSnapping ?? false;
-    const snapKey = `:snap=${String(pixelSnapping)}`;
+    const baseline = pixelSnapping ? buffers.get(decorationSchema.buffers.baseline.id) : undefined;
+    if (pixelSnapping && baseline === undefined)
+      throw new Error('snapped decoration draw is missing its baseline lane');
+    const lanes = materialBuffers(
+      [rect, packed, ...(baseline === undefined ? [] : [baseline]), ...(facts?.buffers ?? [])],
+      transform,
+    );
+    const factsKey = facts === undefined ? '' : `:facts:${facts.facts.storageKey}`;
+    const snapKey = baseline === undefined ? ':snap=false' : `:snap=true:${baseline.storageKey}`;
     const key = `decoration:${this.key(selection)}:${rect.storageKey}:${packed.storageKey}${factsKey}${snapKey}:${transformProgramKey(
       transform,
       this.#context.transformGeneration,
@@ -136,7 +144,10 @@ export class ThreeMaterialRealizer {
       rect: storageVec4(rect, instance),
       packed: storageUvec2(packed, instance),
     });
-    const position = this.#position(shader.position, instance, buffers, transform);
+    const placeDraw = this.#positionTransform(instance, buffers, transform);
+    const position = placeDraw(shader.position);
+    const snappedPosition =
+      baseline === undefined ? undefined : snappedDecorationPoints(rect, baseline, instance, placeDraw);
     const material = this.#createMaterial(
       selection,
       {
@@ -145,8 +156,8 @@ export class ThreeMaterialRealizer {
         shader,
         createDefaultMaterial: () => {
           const created = coverageMaterial(shader, position);
-          // The rule a snapped Bitmap quad follows: each corner rounded onto whole physical pixels after projection.
-          if (pixelSnapping) created.vertexNode = shaders.pixelSnappedClipPosition();
+          if (snappedPosition !== undefined)
+            created.vertexNode = shaders.pixelSnappedDecorationClipPosition(snappedPosition);
           return created;
         },
       },
@@ -755,7 +766,7 @@ function takeStorageNodes(): readonly MaterialStorageNode[] {
   return taken;
 }
 
-function storageLane<Type extends 'vec2' | 'vec4' | 'uvec2' | 'uint'>(buffer: RetainedBuffer, type: Type) {
+function storageLane<Type extends 'float' | 'vec2' | 'vec4' | 'uvec2' | 'uint'>(buffer: RetainedBuffer, type: Type) {
   const node = TSL.storage(buffer.attribute, type, buffer.attribute.count).setPBO(true);
   createdStorageNodes.push({ node, lane: buffer.codecBufferId });
   return node;
@@ -786,6 +797,8 @@ const storageUvec2 = (buffer: RetainedBuffer, instance: THREE.Node<'uint'>): THR
   storageLane(buffer, 'uvec2').element(instance);
 const storageUint = (buffer: RetainedBuffer, instance: THREE.Node<'uint'>): THREE.Node<'uint'> =>
   storageLane(buffer, 'uint').element(instance);
+const storageFloat = (buffer: RetainedBuffer, instance: THREE.Node<'uint'>): THREE.Node<'float'> =>
+  storageLane(buffer, 'float').element(instance);
 
 function glyphStorageProgramKey(buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>): string {
   const stableIds = buffers.get(threeSystemBuffers.stableGlyphId.id);
@@ -914,6 +927,25 @@ function glyphFacts(
   if (lanes === undefined) return undefined;
   const record = storageVec4(lanes.facts, instance);
   return { index: TSL.uint(record.z), origin: record.xy.add(placementOffset) };
+}
+
+/** The draw-space points a snapped decoration corner is placed from: its rectangle's block edges and its baseline. */
+function snappedDecorationPoints(
+  rect: RetainedBuffer,
+  baseline: RetainedBuffer,
+  instance: THREE.Node<'uint'>,
+  placeDraw: (position: THREE.Node<'vec3'>) => THREE.Node<'vec3'>,
+): SnappedDecorationPoints {
+  // The unit quad's own corner: `positionLocal` is the placed position once the material's position node runs.
+  const unit = TSL.positionGeometry;
+  const box = storageVec4(rect, instance);
+  const inline = box.x.add(unit.x.mul(box.z));
+  return {
+    top: placeDraw(TSL.vec3(inline, box.y.negate(), 0)),
+    bottom: placeDraw(TSL.vec3(inline, box.y.add(box.w).negate(), 0)),
+    baseline: placeDraw(TSL.vec3(inline, storageFloat(baseline, instance).negate(), 0)),
+    bottomCorner: unit.y,
+  };
 }
 
 function bitmapMaterial(

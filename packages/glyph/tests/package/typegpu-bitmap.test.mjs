@@ -9,6 +9,7 @@ import {
   bitmapVertex,
   bitmapVertexSnapped,
   snapClipAxis,
+  snapDecorationClipAxis,
   TypeGpuBitmapInstance,
   TypeGpuBitmapVertexInput,
 } from '../../dist/shaders/typegpu/bitmap-shader.js';
@@ -177,6 +178,38 @@ test('snapClipAxis keeps a 1:1 quad whole when its corners sit halfway between p
     [10.75, 11],
   ]) {
     assert.equal(pixelOf(evaluate(snapClipAxis, (pixel * 2) / physicalSize - 1, 1, physicalSize)), expected);
+  }
+});
+
+test('a snapped decoration keeps one whole-pixel distance from its snapped baseline at every sub-pixel position', () => {
+  // Pixel rows grow downwards here, as in paragraph space; clip y grows upwards, so a row r is clip 1 - 2r/size.
+  const physicalSize = 600;
+  const clip = (row) => d.vec2f(Math.fround(1 - (row * 2) / physicalSize), 1);
+  const rowOf = (value) => Math.round(((1 - value) * physicalSize) / 2);
+  const glyphRow = (row) => rowOf(evaluate(snapClipAxis, clip(row).x, 1, physicalSize));
+  // Underline and line-through geometry from the font, in pixels: offset below (+) or above (-) the baseline, thickness.
+  for (const [offset, thickness] of [
+    [1.9, 0.8],
+    [2.3, 1.2],
+    [-4.6, 1.5],
+    [1.5, 0.4],
+  ]) {
+    const placements = new Set();
+    for (let fraction = 0; fraction < 1; fraction += 1 / 32) {
+      const baseline = 40.5 + fraction;
+      const top = baseline + offset;
+      const [topRow, bottomRow] = [0, 1].map((corner) =>
+        rowOf(
+          evaluate(snapDecorationClipAxis, clip(top), clip(top + thickness), clip(baseline), corner, 1, physicalSize),
+        ),
+      );
+      // Distance from where a glyph corner on the same baseline lands, and the drawn thickness.
+      placements.add(`${topRow - glyphRow(baseline)}/${bottomRow - topRow}`);
+    }
+    assert.equal(placements.size, 1, `offset ${offset}, thickness ${thickness}: ${[...placements].join(', ')}`);
+    const [distance, drawn] = [...placements][0].split('/').map(Number);
+    assert.equal(drawn, Math.max(1, Math.floor(thickness + 0.5 - 1 / 256)), 'thickness is whole pixels, at least one');
+    assert.ok(Math.abs(distance - offset) <= 0.5, 'the offset is rounded, never dropped');
   }
 });
 

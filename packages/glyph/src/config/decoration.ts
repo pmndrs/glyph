@@ -14,6 +14,7 @@ import { defineTechniqueSchema, schemaCodecBuffers, type TechniqueSchema } from 
 
 const DECORATION_RECT_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/decoration/rect');
 const DECORATION_PACKED_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/decoration/packed');
+const DECORATION_BASELINE_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/decoration/baseline');
 
 /** Decoration is a reserved technique of a host Codec, not a raster technique: rows are resource-free and fill the gather lanes directly. */
 export const decorationSchema: TechniqueSchema<
@@ -28,6 +29,11 @@ export const decorationSchema: TechniqueSchema<
       readonly scalar: 'u32';
       readonly lanes: readonly ['color', 'flags'];
     };
+    readonly baseline: {
+      readonly id: typeof DECORATION_BASELINE_BUFFER_ID;
+      readonly scalar: 'f32';
+      readonly lanes: readonly ['baseline'];
+    };
   },
   { readonly u32: readonly ['color', 'flags'] }
 > = defineTechniqueSchema({
@@ -37,6 +43,11 @@ export const decorationSchema: TechniqueSchema<
   buffers: {
     rect: { id: DECORATION_RECT_BUFFER_ID, scalar: 'f32', lanes: ['left', 'top', 'width', 'height'] },
     packed: { id: DECORATION_PACKED_BUFFER_ID, scalar: 'u32', lanes: ['color', 'flags'] },
+    /**
+     * The block position of the baseline of the line the rectangle decorates, in the rectangle's space. A pixel-snapped
+     * text places its decorations from the snapped baseline, so their distance from its glyphs never changes.
+     */
+    baseline: { id: DECORATION_BASELINE_BUFFER_ID, scalar: 'f32', lanes: ['baseline'] },
   },
 });
 
@@ -65,6 +76,8 @@ export function createDecorationCodecProgram(options: DecorationCodecProgramOpti
   const authoredBody = p.compile({
     rect: [inlineOrigin, blockOrigin, fontSize, color.red],
     packed: [p.binding.color, p.binding.flags],
+    // A decoration row's fifth float is its line's baseline (`DecorationRecord::baseline`).
+    baseline: [color.green],
   });
   const { glyphFacts, ...identity } = options.system;
   // The fact lane is the one this program shares with a caller's declaration, so it is checked like a raster's.

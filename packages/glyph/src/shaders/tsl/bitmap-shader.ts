@@ -69,12 +69,8 @@ export function bitmapShader(
   };
 }
 
-/**
- * Rounds the projected quad to whole physical pixels in clip space (not paragraph space), so it works regardless of
- * transform/camera/DPR — matching the grid the atlas was baked for. Three also draws the decorations of a snapped text
- * through it. Not on the public `/shaders/tsl` entry.
- */
-export function pixelSnappedClipPosition(): Node<'vec4'> {
+/** Rounds the projected quad to whole physical pixels in clip space (not paragraph space), so it works regardless of transform/camera/DPR — matching the grid the atlas was baked for. */
+function pixelSnappedClipPosition(): Node<'vec4'> {
   const clip = modelViewProjection;
   return TSL.vec4(
     snapClipAxis(clip.x, clip.w, TSL.screenSize.x),
@@ -90,4 +86,38 @@ function snapClipAxis(clipAxis: Node<'float'>, clipW: Node<'float'>, physicalSiz
   // The canonical TypeGPU `SNAP_ROUNDING_OFFSET`: halfway points round down, robustly against float error.
   const normalizedPhysicalPosition = TSL.floor(physicalPosition.add(0.5 - 1 / 256)).mul(TSL.reciprocal(physicalSize));
   return normalizedPhysicalPosition.mul(2).sub(1).mul(clipW);
+}
+
+/** The draw-space points a snapped decoration corner is placed from: its rectangle's block edges and its line's baseline, all under the corner. */
+export interface SnappedDecorationPoints {
+  readonly top: Node<'vec3'>;
+  readonly bottom: Node<'vec3'>;
+  readonly baseline: Node<'vec3'>;
+  /** 1 for a corner on the bottom edge, 0 on the top. */
+  readonly bottomCorner: Node<'float'>;
+}
+
+/**
+ * A pixel-snapped text's decoration corner: inline as a snapped glyph corner, block from the snapped baseline plus
+ * the rectangle's offset and thickness each rounded, mirroring the canonical TypeGPU `snapDecorationClipAxis`.
+ */
+export function pixelSnappedDecorationClipPosition(points: SnappedDecorationPoints): Node<'vec4'> {
+  const clip = modelViewProjection;
+  const project = (position: Node<'vec3'>): Node<'vec4'> =>
+    TSL.cameraProjectionMatrix.mul(TSL.modelViewMatrix.mul(TSL.vec4(position, 1))) as Node<'vec4'>;
+  const physical = (projected: Node<'vec4'>): Node<'float'> =>
+    projected.y.mul(TSL.reciprocal(projected.w)).add(1).mul(TSL.screenSize.y.mul(0.5));
+  const offset = 0.5 - 1 / 256;
+  const topPixel = physical(project(points.top));
+  const baselinePixel = physical(project(points.baseline));
+  const extent = physical(project(points.bottom)).sub(topPixel);
+  const snappedTop = TSL.floor(baselinePixel.add(offset)).add(TSL.floor(topPixel.sub(baselinePixel).add(offset)));
+  const thickness = TSL.max(1, TSL.floor(TSL.abs(extent).add(offset)));
+  const snapped = snappedTop.add(points.bottomCorner.mul(TSL.sign(extent)).mul(thickness));
+  return TSL.vec4(
+    snapClipAxis(clip.x, clip.w, TSL.screenSize.x),
+    snapped.mul(TSL.reciprocal(TSL.screenSize.y)).mul(2).sub(1).mul(clip.w),
+    clip.z,
+    clip.w,
+  );
 }

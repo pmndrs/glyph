@@ -10,9 +10,8 @@ import tgpu, { d } from 'typegpu';
 // build; `--check` fails when the committed module no longer matches what the shader library resolves to.
 const check = process.argv.includes('--check');
 const glyphShaders = new URL('../dist/shaders/typegpu/', import.meta.url);
-const { bitmapAtlasUv, bitmapPaintCoverageOpacity, bitmapQuadPosition, snapClipAxis } = await import(
-  new URL('./bitmap-shader.js', glyphShaders).href
-);
+const { bitmapAtlasUv, bitmapPaintCoverageOpacity, bitmapQuadPosition, snapClipAxis, snapDecorationClipAxis } =
+  await import(new URL('./bitmap-shader.js', glyphShaders).href);
 const { decorationPaint } = await import(new URL('./decoration-shader.js', glyphShaders).href);
 const { MsdfRenderInput, msdfAtlasCoordinate, msdfClampedCoordinates, msdfPosition, msdfRender } = await import(
   new URL('./msdf-shader.js', glyphShaders).href
@@ -25,7 +24,15 @@ const bitmapFunctions = [
 ];
 const decorationPaintFn = tgpu.fn([d.vec2u], d.vec4f)(decorationPaint).$name('glyphDecorationPaint');
 // Pixel snapping rounds the projected position after PixiJS 3D's own transform, for Bitmap glyphs and decorations.
-const snapFunctions = [tgpu.fn([d.f32, d.f32, d.f32], d.f32)(snapClipAxis).$name('glyphSnapClipAxis')];
+const snapFunctions = [
+  tgpu.fn([d.f32, d.f32, d.f32], d.f32)(snapClipAxis).$name('glyphSnapClipAxis'),
+  tgpu
+    .fn(
+      [d.vec2f, d.vec2f, d.vec2f, d.f32, d.f32, d.f32],
+      d.f32,
+    )(snapDecorationClipAxis)
+    .$name('glyphSnapDecorationClipAxis'),
+];
 MsdfRenderInput.$name('GlyphMsdfRenderInput');
 // GLSL ES 3.0 rejects a derivative anywhere in a vertex shader, even in a function the stage never calls, and PixiJS
 // 3D's shared `gl.header` reaches both stages. Vertex helpers therefore resolve apart from the fragment-only ones,

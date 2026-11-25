@@ -1,12 +1,11 @@
-import type { Node } from 'three/webgpu';
-
 import type { bitmapShader, decorationShader, msdfShader, slugShader } from '../../shaders/tsl/index.js';
+import type { pixelSnappedDecorationClipPosition } from '../../shaders/tsl/bitmap-shader.js';
 
 export interface ThreeShaderSet {
   readonly bitmapShader: typeof bitmapShader;
   readonly decorationShader: typeof decorationShader;
   readonly msdfShader: typeof msdfShader;
   readonly slugShader: typeof slugShader;
-  /** The model-view-projection rounded onto whole physical pixels, the rule a snapped Bitmap glyph quad follows. */
-  readonly pixelSnappedClipPosition: () => Node<'vec4'>;
+  /** A snapped text's decoration corner, placed from its line's snapped baseline. */
+  readonly pixelSnappedDecorationClipPosition: typeof pixelSnappedDecorationClipPosition;
 }

@@ -411,6 +411,7 @@ for (const [shaders, defineConfig] of Object.entries(shaderConfigs)) {
     for (const [backend, stages] of Object.entries(snapped.decoration)) {
       assert.match(stages.vertex, /floor\(/, `${backend} snapped decoration rounds its corners`);
       assert.match(stages.vertex, /0\.49609375/, `${backend} snapped decoration uses the glyphs' halfway rule`);
+      assert.match(stages.vertex, /sign\(/, `${backend} snapped decoration places its thickness from its snapped edge`);
       assert.match(snapped.glyphs[backend].vertex, /0\.49609375/, `${backend} snapped glyphs use the same rule`);
     }
     font.dispose();

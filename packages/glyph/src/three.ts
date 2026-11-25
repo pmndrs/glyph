@@ -1,5 +1,5 @@
 import { bitmapShader, decorationShader, msdfShader, slugShader } from './shaders/tsl/index.js';
-import { pixelSnappedClipPosition } from './shaders/tsl/bitmap-shader.js';
+import { pixelSnappedDecorationClipPosition } from './shaders/tsl/bitmap-shader.js';
 import type { ThreeConfigOptions, ThreeGlyphConfig } from './three/schema.js';
 import { createThreeConfig } from './three/internal/define-config.js';
 
@@ -75,7 +75,7 @@ export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphC
     decorationShader,
     msdfShader,
     slugShader,
-    pixelSnappedClipPosition,
+    pixelSnappedDecorationClipPosition,
   });
 }
 

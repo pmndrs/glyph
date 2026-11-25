@@ -74,11 +74,27 @@ test('a pixel-snapped Pixi3D text appends the snap bit to its Bitmap and decorat
     assert.match(gl, /gl_Position = vec4\(\s*glyphSnapClipAxis\(gl_Position\.x, gl_Position\.w/);
     assert.match(snappedBits[1].gpu.header, /floor\(\(physicalPosition \+ 0\.49609375f\)\)/);
     assert.match(snappedBits[1].gl.header, /floor\(\(physicalPosition \+ 0\.49609375\)\)/);
-    const snapBit = snappedBits[1];
-    // The snapped text's decoration material carries the same bit.
-    const decorations = meshes(snapped).filter((mesh) => mesh.geometry.getAttribute('aGlyphDecoration'));
-    assert.equal(decorations.length, 1);
-    assert.ok(decorations[0].material.extraBits.includes(snapBit));
+    // The snapped text's decoration is placed from its line's snapped baseline: its bit reads the rectangle's edges and
+    // baseline from an attribute only a snapped decoration carries.
+    const decorationOf = (text) => meshes(text).find((mesh) => mesh.geometry.getAttribute('aGlyphDecoration'));
+    const snappedDecoration = decorationOf(snapped);
+    const [decorationGpu, decorationGl] = afterTransform(snappedDecoration.material.extraBits).at(-1);
+    assert.match(
+      decorationGpu,
+      /glyphSnapDecorationClipAxis\(glyphSnapTop\.yw, glyphSnapBottom\.yw, glyphSnapBaseline\.yw/,
+    );
+    assert.match(
+      decorationGl,
+      /glyphSnapDecorationClipAxis\(glyphSnapTop\.yw, glyphSnapBottom\.yw, glyphSnapBaseline\.yw/,
+    );
+    const snap = snappedDecoration.geometry.getAttribute('aGlyphDecorationSnap');
+    assert.equal(snap.format, 'float32x4');
+    const [top, bottom, baseline, bottomCorner] = snap.buffer.data.slice(0, 4);
+    assert.equal(baseline, snapped.measure().lines[0].baseline, "the decoration carries its line's baseline");
+    assert.ok(top > baseline && bottom > top, 'an underline sits below its baseline');
+    assert.equal(bottomCorner, 0);
+    for (const text of [plain, unsnapped])
+      assert.equal(decorationOf(text).geometry.getAttribute('aGlyphDecorationSnap'), undefined);
     // MSDF ignores the option.
     assert.deepEqual(supplied[2], [glyphMsdfBit]);
     assert.equal(supplied.length, 3);

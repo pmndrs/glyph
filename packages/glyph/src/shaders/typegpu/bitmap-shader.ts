@@ -149,6 +149,40 @@ export function snapClipAxis(clipAxis: number, clipW: number, physicalSize: numb
   return (std.floor(physicalPosition + SNAP_ROUNDING_OFFSET) * (1 / physicalSize) * 2 - 1) * clipW;
 }
 
+/** A clip-space axis in physical pixels; `clip` is (axis, w). */
+function physicalAxis(clip: d.v2f, physicalSize: number): number {
+  'use gpu';
+
+  return (clip.x * (1 / clip.y) + 1) * (physicalSize * 0.5);
+}
+
+/**
+ * Where a corner of a pixel-snapped text's decoration lands along the block axis, in clip space: its line's baseline
+ * snapped as the text's glyphs snap theirs, then the rectangle's offset from that baseline and its thickness (at least
+ * one pixel) each rounded by the same rule. A glyph and its underline therefore keep the same whole-pixel distance at
+ * every sub-pixel position. `top`, `bottom` and `baseline` are (axis, w) of the rectangle's two block edges and its
+ * baseline under the corner; `bottomCorner` is 1 for a corner on the bottom edge, 0 on the top.
+ */
+export function snapDecorationClipAxis(
+  top: d.v2f,
+  bottom: d.v2f,
+  baseline: d.v2f,
+  bottomCorner: number,
+  clipW: number,
+  physicalSize: number,
+): number {
+  'use gpu';
+
+  const topPixel = physicalAxis(top, physicalSize);
+  const baselinePixel = physicalAxis(baseline, physicalSize);
+  const extent = physicalAxis(bottom, physicalSize) - topPixel;
+  const snappedTop =
+    std.floor(baselinePixel + SNAP_ROUNDING_OFFSET) + std.floor(topPixel - baselinePixel + SNAP_ROUNDING_OFFSET);
+  const thickness = std.max(1, std.floor(std.abs(extent) + SNAP_ROUNDING_OFFSET));
+  const snapped = snappedTop + bottomCorner * std.sign(extent) * thickness;
+  return (snapped * (1 / physicalSize) * 2 - 1) * clipW;
+}
+
 /** Projects the glyph quad through the draw's model-view-projection without pixel snapping. */
 export function projectClipPosition(modelViewProjection: d.m4x4f, position: d.v3f): d.v4f {
   'use gpu';
