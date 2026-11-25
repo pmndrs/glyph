@@ -19,7 +19,10 @@ const withPerf = process.argv.includes('--perf');
 
 /**
  * What the renderers are allowed to disagree on, per scene, as a count of pixels over the tolerance.
- * Bitmap is compared with its own capture only: the Three path snaps bitmap quads to the pixel grid.
+ * Bitmap is compared with its own capture only. Neither path snaps by default (`pixelSnapping` is opt-in), but on
+ * 2026-11-24 the direct TypeGPU Bitmap scene differed from Three in 29,588 pixels over 8/255: its 16 px line is not
+ * the 16 px Inter strike Three draws (different glyph shapes, a stray mark under "t"), and the saved capture holds the same
+ * image. That is an open TypeGPU defect, not a tolerance to set here; enable the Three budget once it is fixed.
  */
 const threeBudget: Readonly<Record<string, number | undefined>> = {
   bitmap: undefined,
