@@ -20,3 +20,6 @@ samples linearly and the Bitmap scene equals Three exactly (0 pixels differ). bi
 records the nearest-texel output and differs from the current render in 29,588 pixels over 8/255, every one of which
 is now within tolerance of Three, which the harness accepts as a change towards Three. The scene is held to Three with
 no pixel over the tolerance, like every other scene.
+
+Update (2026-11-25): bitmap.png is deleted. It recorded the nearest-texel output; the Bitmap scene is held to Three at a
+budget of 0, which is the stricter check, so it has no saved capture.
