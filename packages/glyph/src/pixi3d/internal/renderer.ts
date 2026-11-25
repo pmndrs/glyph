@@ -101,7 +101,14 @@ export class Pixi3DRenderer implements GlyphRenderer<Pixi3DBindings, void> {
         }
         const meshes =
           span.kind === 'decoration'
-            ? createDecorationMeshes(span.buffers, buffers, span.start, span.count, this.#pool)
+            ? createDecorationMeshes(
+                span.buffers,
+                buffers,
+                span.start,
+                span.count,
+                span.transform.pixelSnapping,
+                this.#pool,
+              )
             : createRasterMeshes(
                 span.resource!,
                 span.buffers,
@@ -110,6 +117,7 @@ export class Pixi3DRenderer implements GlyphRenderer<Pixi3DBindings, void> {
                 span.start,
                 span.count,
                 span.transform.material,
+                span.transform.pixelSnapping,
                 this.#pool,
               );
         created.push(...meshes);

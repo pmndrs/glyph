@@ -52,10 +52,16 @@ export interface Pixi3DTextOptions<Selection extends Pixi3DFontSelection = Pixi3
   readonly constraints?: Constraints;
   readonly flow?: TextFlow | undefined;
   readonly rasterPixelRatio?: number;
+  /**
+   * Rounds each Bitmap glyph quad's corners, and the text's decorations, onto whole physical pixels after the camera
+   * projection: sharp at rest, but animated motion moves in whole-pixel steps. MSDF and Slug glyphs ignore it. Off by
+   * default and fixed at construction; an unsnapped text compiles the materials it did before the option existed.
+   */
+  readonly pixelSnapping?: boolean;
 }
 
 export type Pixi3DTextUpdate<Selection extends Pixi3DFontSelection = Pixi3DFontSelection> = Partial<
-  Omit<Pixi3DTextOptions<Selection>, 'material'>
+  Omit<Pixi3DTextOptions<Selection>, 'material' | 'pixelSnapping'>
 >;
 
 /** One desired glyph in logical Text-local space (+X right, +Y down), including anchor placement. Native Container3D coordinates use +Y up. */
@@ -77,6 +83,7 @@ export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelect
   #controller: GlyphTextController<FontFaceRasterOf<Selection>, Pixi3DBindings['materialInput'], Pixi3DText>;
   #font: Font<FontFaceRasterOf<Selection>>;
   readonly #material: Pixi3DTextMaterial | undefined;
+  readonly #pixelSnapping: boolean;
   #state: Pixi3DTextOptions<Selection>;
   #disposed = false;
   #preparedAnchor: LayoutPoint = zeroAnchor;
@@ -95,6 +102,7 @@ export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelect
     this.#fonts = fonts;
     this.#services = services;
     this.#material = options.material;
+    this.#pixelSnapping = options.pixelSnapping === true;
     this.#state = options;
     this.#font = validatingInput(['font'], () => fonts.acquire(options.font));
     try {
@@ -135,6 +143,10 @@ export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelect
 
   get material(): Pixi3DTextMaterial | undefined {
     return this.#material;
+  }
+  /** @internal The renderer realizes a snapped text's Bitmap and decoration draws with the snap bit. */
+  get pixelSnapping(): boolean {
+    return this.#pixelSnapping;
   }
 
   get text(): TextInput<FontFaceRasterOf<Selection>> {
@@ -206,6 +218,7 @@ export class Pixi3DText<Selection extends Pixi3DFontSelection = Pixi3DFontSelect
       throw new TypeError('Pixi3D text update must be an object');
     }
     if ('material' in update) throw new TypeError('Pixi3D text material is fixed at construction');
+    if ('pixelSnapping' in update) throw new TypeError('Pixi3D text pixelSnapping is fixed at construction');
     const next = { ...this.#state, ...update };
     assertTextOptions(next);
     const nextFont = next.font === this.#state.font ? this.#font : this.#fonts.acquire(next.font);
@@ -442,6 +455,11 @@ function assertTextOptions<Selection extends Pixi3DFontSelection>(options: Pixi3
   validatingInput(['material'], () => {
     if (options.material !== undefined && !isPixi3DTextMaterial(options.material)) {
       throw new TypeError('Pixi3D text material must be a Pixi3DTextMaterial');
+    }
+  });
+  validatingInput(['pixelSnapping'], () => {
+    if (options.pixelSnapping !== undefined && typeof options.pixelSnapping !== 'boolean') {
+      throw new TypeError('Pixi3D text pixelSnapping must be a boolean');
     }
   });
 }

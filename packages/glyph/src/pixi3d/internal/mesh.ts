@@ -17,6 +17,7 @@ import {
   pixi3dSystemBuffers,
 } from './codec.js';
 import { glyphDecorationBit } from './decoration-bit.js';
+import { glyphPixelSnapBit } from './snap-bit.js';
 import {
   createPixi3DTextMaterial,
   detachPixi3DTextMaterial,
@@ -83,6 +84,7 @@ export function createRasterMeshes(
   recordIndex: number,
   recordCount: number,
   material: Pixi3DTextMaterial | undefined,
+  pixelSnapping: boolean,
   pool: Pixi3DMeshPool,
 ): Mesh3D[] {
   if (placementTable.scalarType !== 'f32' || placementTable.vectorWidth !== 2) {
@@ -96,7 +98,7 @@ export function createRasterMeshes(
   };
   const pages =
     resource.format === 'pmndrs.bitmap'
-      ? bitmapRecords(resource.bitmap, lanes, recordIndex, recordCount)
+      ? bitmapRecords(resource.bitmap, lanes, recordIndex, recordCount, pixelSnapping)
       : resource.format === 'pmndrs.msdf'
         ? msdfRecords(resource.msdf, lanes, recordIndex, recordCount)
         : slugRecords(resource.slug, lanes, recordIndex, recordCount);
@@ -155,6 +157,7 @@ function bitmapRecords(
   lanes: SpanLanes,
   recordIndex: number,
   recordCount: number,
+  pixelSnapping: boolean,
 ): Map<PageDraw, GlyphRecord[]> {
   const origin = lane(lanes, pixi3dBitmapBuffers.origin.id, 'f32', 2, 'origin');
   const size = lane(lanes, pixi3dBitmapBuffers.size.id, 'f32', 2, 'size');
@@ -169,7 +172,7 @@ function bitmapRecords(
     const placed = placedOrigin(lanes, index, f32x(origin.bytes, index, 2));
     const extent = f32x(size.bytes, index, 2);
     return [
-      bitmapPage(atlas, layer),
+      bitmapPage(atlas, layer, pixelSnapping),
       {
         fields: [
           { name: 'aGlyphOrigin', type: 'float32x2', value: placed },
@@ -268,18 +271,28 @@ function slugRecords(
 }
 
 const bitmapPages = new WeakMap<Pixi3DBitmapResource, PageDraw[]>();
+const snappedBitmapPages = new WeakMap<Pixi3DBitmapResource, PageDraw[]>();
 const msdfPages = new WeakMap<Pixi3DMsdfResource, PageDraw[]>();
 const slugPages = new WeakMap<Pixi3DSlugResource, PageDraw>();
 
-function bitmapPage(atlas: Pixi3DBitmapResource, layer: number): PageDraw {
-  const pages = bitmapPages.get(atlas) ?? [];
-  bitmapPages.set(atlas, pages);
-  pages[layer] ??= {
-    format: 'pmndrs.bitmap',
-    scope: atlas.pages[layer]!,
-    textures: { glyphBitmapAtlas: atlas.pages[layer]! },
-    bits: (extraBits) => [glyphBitmapBit, ...extraBits],
-  };
+/** A pixel-snapped text's pages are separate draws with their own material scope, ending in the snap bit. */
+function bitmapPage(atlas: Pixi3DBitmapResource, layer: number, pixelSnapping: boolean): PageDraw {
+  const cache = pixelSnapping ? snappedBitmapPages : bitmapPages;
+  const pages = cache.get(atlas) ?? [];
+  cache.set(atlas, pages);
+  pages[layer] ??= pixelSnapping
+    ? {
+        format: 'pmndrs.bitmap',
+        scope: {},
+        textures: { glyphBitmapAtlas: atlas.pages[layer]! },
+        bits: (extraBits) => [glyphBitmapBit, ...extraBits, glyphPixelSnapBit],
+      }
+    : {
+        format: 'pmndrs.bitmap',
+        scope: atlas.pages[layer]!,
+        textures: { glyphBitmapAtlas: atlas.pages[layer]! },
+        bits: (extraBits) => [glyphBitmapBit, ...extraBits],
+      };
   return pages[layer];
 }
 
@@ -510,12 +523,15 @@ function expandQuad(box: Box, [x, y, width, height]: Quad): void {
 }
 
 const decorationMaterialScope = {};
+const snappedDecorationMaterialScope = {};
 
+/** Decorations of a pixel-snapped text round their corners as its Bitmap glyphs do, so they stay on the same grid. */
 export function createDecorationMeshes(
   bindings: readonly Pixi3DBufferBinding[],
   retained: ReadonlyMap<Pixi3DBufferBinding, RetainedPixi3DBuffer>,
   recordIndex: number,
   recordCount: number,
+  pixelSnapping: boolean,
   pool: Pixi3DMeshPool,
 ): Mesh3D[] {
   const rect = codecBuffer(bindings, retained, decorationSchema.buffers.rect.id, 'f32', 4, 'decoration rect');
@@ -548,18 +564,23 @@ export function createDecorationMeshes(
     createMesh(
       geometry,
       () =>
-        pool.material(decorationMaterialScope, undefined, 'pmndrs.bitmap', () => {
-          const material = new FlatMaterial({
-            alphaMode: 'blend',
-            doubleSided: true,
-            fog: false,
-            extraBits: [glyphDecorationBit],
-          });
-          // Decoration paint is linear like glyph paint, and the default text material encodes linear light for
-          // display; FlatMaterial's own default (`'display'`) would write the linear value unencoded, too dark.
-          material.colorSpace = 'linear';
-          return material;
-        }),
+        pool.material(
+          pixelSnapping ? snappedDecorationMaterialScope : decorationMaterialScope,
+          undefined,
+          'pmndrs.bitmap',
+          () => {
+            const material = new FlatMaterial({
+              alphaMode: 'blend',
+              doubleSided: true,
+              fog: false,
+              extraBits: pixelSnapping ? [glyphDecorationBit, glyphPixelSnapBit] : [glyphDecorationBit],
+            });
+            // Decoration paint is linear like glyph paint, and the default text material encodes linear light for
+            // display; FlatMaterial's own default (`'display'`) would write the linear value unencoded, too dark.
+            material.colorSpace = 'linear';
+            return material;
+          },
+        ),
       pool,
     ),
   ];
