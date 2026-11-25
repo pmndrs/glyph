@@ -869,7 +869,7 @@ async function start(): Promise<ParityProof> {
    */
   function readDecorationFacts(
     world: THREE.Object3D,
-    layout: ReturnType<ThreeText['glyphs']>,
+    layout: ReturnType<TypeGpuText['glyphs']>,
     left: number,
     top: number,
     pixels: Uint8Array,
