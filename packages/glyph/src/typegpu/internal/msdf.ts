@@ -6,11 +6,17 @@ import { msdfDistances } from '../../shaders/typegpu/msdf/distance.js';
 import { decorationPaint } from '../../shaders/typegpu/decoration-shader.js';
 import { ResidentMsdfAtlas } from './msdf-atlas.js';
 import {
+  TYPEGPU_GLYPH_INDEX_BUFFER_ID,
+  TYPEGPU_GLYPH_ORIGIN_BUFFER_ID,
+  TYPEGPU_PLACEMENT_SLOT_BUFFER_ID,
+  TYPEGPU_TRANSFORM_INDEX_BUFFER_ID,
+} from './codec.js';
+import {
   colorTransform,
   corner,
-  GlyphFacts,
+  drawGlyph,
+  publishesGlyphFacts,
   recordDraw,
-  sceneBindings,
   sceneFunctions,
   shaderRoot,
   type SceneLayout,
@@ -39,8 +45,6 @@ const font = tgpu.bindGroupLayout({
   placements: { storage: d.arrayOf(d.vec2f), access: 'readonly', visibility: ['vertex'] },
   transformIndices: { storage: d.arrayOf(d.u32), access: 'readonly', visibility: ['vertex'] },
   transforms: { storage: d.arrayOf(d.vec2f), access: 'readonly', visibility: ['vertex'] },
-  glyphIndices: { storage: d.arrayOf(d.u32), access: 'readonly', visibility: ['vertex'] },
-  glyphOrigins: { storage: d.arrayOf(d.vec2f), access: 'readonly', visibility: ['vertex'] },
   atlas: { texture: d.texture2dArray(d.f32), visibility: ['fragment'] },
   sampler: { sampler: 'filtering', visibility: ['fragment'] },
   /** One row per baked glyph: `[left, top, width, height + layer * 4096]` in atlas texels. */
@@ -102,8 +106,6 @@ const MsdfGlyph = d.struct({
   width: d.f32,
   shadowUv: d.vec2f,
   shadow: d.vec4f,
-  glyphIndex: d.u32,
-  glyphOrigin: d.vec2f,
 });
 
 /** Screen pixels a trimmed quad keeps around the ink for antialiasing; the coverage ramp never reaches further. */
@@ -114,9 +116,9 @@ const TRIM_ANTIALIAS_PIXELS = 1;
  */
 const TRIM_FIELD_TEXELS = 0.5;
 
-function projectCell(origin: d.v2f, size: d.v2f, cell: d.v2f, offset: d.v2f, glyph: GlyphFacts): d.v4f {
+function projectCell(origin: d.v2f, size: d.v2f, cell: d.v2f, offset: d.v2f): d.v4f {
   'use gpu';
-  return scene.projectText(msdfPosition(origin, size, d.vec3f(cell, 0)), offset, glyph);
+  return scene.projectText(msdfPosition(origin, size, d.vec3f(cell, 0)), offset);
 }
 
 /**
@@ -141,14 +143,13 @@ function trimmedCell(
   outlineTexels: number,
   shadowTexels: d.v2f,
   offset: d.v2f,
-  glyph: GlyphFacts,
 ): d.v2f {
   'use gpu';
   const padding = std.ceil(fieldRange() * 0.5);
   // The projection is linear in the cell coordinate before the perspective divide: clip(u, v) = a + u b + v c.
-  const a = projectCell(origin, size, d.vec2f(0, 0), offset, glyph);
-  const b = projectCell(origin, size, d.vec2f(1, 0), offset, glyph).sub(a);
-  const c = projectCell(origin, size, d.vec2f(0, 1), offset, glyph).sub(a);
+  const a = projectCell(origin, size, d.vec2f(0, 0), offset);
+  const b = projectCell(origin, size, d.vec2f(1, 0), offset).sub(a);
+  const c = projectCell(origin, size, d.vec2f(0, 1), offset).sub(a);
   const clip = a.add(b.mul(unit.x)).add(c.mul(unit.y));
   // Screen-pixel Jacobian of the cell coordinate at this corner, scaled by w squared to avoid the divide.
   const halfViewport = scene.viewportSize().mul(0.5);
@@ -188,7 +189,6 @@ function msdfGlyph(
   const uvSize = cellTexels.div(atlas);
   const origin = scene.placedOrigin(rect.xy, instance);
   const offset = scene.textOffset(instance);
-  const facts = scene.glyphFacts(instance, offset);
   const width = effect.z * font.$.metrics.atlas.w;
   // Em to atlas UV: outline units per em times the field range is texels per em.
   const shadowOffset = effect.xy.mul(font.$.metrics.atlas.w * fieldRange()).div(atlas);
@@ -200,11 +200,10 @@ function msdfGlyph(
     outlineReach * std.max(width, 0) * fieldRange(),
     shadowOffset.mul(atlas).mul(shadowReach),
     offset,
-    facts,
   );
   const uv = uvOrigin.add(cell.mul(uvSize));
   return MsdfGlyph({
-    position: projectCell(origin, rect.zw, cell, offset, facts),
+    position: projectCell(origin, rect.zw, cell, offset),
     uv,
     bounds: d.vec4f(uvOrigin, uvOrigin.add(uvSize)),
     layer: d.u32(layer),
@@ -212,8 +211,6 @@ function msdfGlyph(
     width,
     shadowUv: uv.sub(shadowOffset),
     shadow: decorationPaint(d.vec2u(effectColor.y, 0)),
-    glyphIndex: facts.index,
-    glyphOrigin: facts.origin,
   });
 }
 
@@ -225,18 +222,7 @@ const vertexIn = {
   effectColor: d.vec2u,
   effect: d.vec4f,
 };
-/** The glyph facts a vertex stage hands its fragment stage; constant across a glyph, so never interpolated. */
-const glyphVaryings = {
-  glyphIndex: d.interpolate('flat', d.u32),
-  glyphOrigin: d.interpolate('flat', d.vec2f),
-};
-const fillVaryings = {
-  uv: d.vec2f,
-  bounds: d.vec4f,
-  color: d.vec4f,
-  layer: d.interpolate('flat', d.u32),
-  ...glyphVaryings,
-};
+const fillVaryings = { uv: d.vec2f, bounds: d.vec4f, color: d.vec4f, layer: d.interpolate('flat', d.u32) };
 const outlineVaryings = { outline: d.vec4f, width: d.f32 };
 const shadowVaryings = { shadowUv: d.vec2f, shadow: d.vec4f };
 
@@ -281,8 +267,6 @@ function composeEffects(
   shadow: d.v4f,
   shadowFill: number,
   position: d.v4f,
-  glyphIndex: number,
-  glyphOrigin: d.v2f,
 ): d.v4f {
   'use gpu';
   const composite = msdfComposite(
@@ -293,33 +277,20 @@ function composeEffects(
       shadowColor: shadow,
     }),
   );
-  return colorTransform.$(composite, position, glyphIndex, glyphOrigin);
+  return colorTransform.$(composite, position);
 }
 
 const plainVertex = tgpu.vertexFn({ in: vertexIn, out: { position: d.builtin.position, ...fillVaryings } })((input) => {
   'use gpu';
   const glyph = msdfGlyph(input.index, input.instance, input.rect, input.effectColor, input.effect, d.f32(0), d.f32(0));
-  return {
-    position: glyph.position,
-    uv: glyph.uv,
-    bounds: glyph.bounds,
-    color: input.color,
-    layer: glyph.layer,
-    glyphIndex: glyph.glyphIndex,
-    glyphOrigin: glyph.glyphOrigin,
-  };
+  return { position: glyph.position, uv: glyph.uv, bounds: glyph.bounds, color: input.color, layer: glyph.layer };
 });
 const plainFragment = tgpu.fragmentFn({ in: { position: d.builtin.position, ...fillVaryings }, out: d.vec4f })((
   input,
 ) => {
   'use gpu';
   const field = fillField(input.uv, input.bounds, input.layer);
-  return colorTransform.$(
-    d.vec4f(input.color.rgb, input.color.a * distanceCoverage(field.x, field.z)),
-    input.position,
-    input.glyphIndex,
-    input.glyphOrigin,
-  );
+  return colorTransform.$(d.vec4f(input.color.rgb, input.color.a * distanceCoverage(field.x, field.z)), input.position);
 });
 const outlineVertex = tgpu.vertexFn({
   in: vertexIn,
@@ -333,8 +304,6 @@ const outlineVertex = tgpu.vertexFn({
     bounds: glyph.bounds,
     color: input.color,
     layer: glyph.layer,
-    glyphIndex: glyph.glyphIndex,
-    glyphOrigin: glyph.glyphOrigin,
     outline: glyph.outline,
     width: glyph.width,
   };
@@ -345,17 +314,7 @@ const outlineFragment = tgpu.fragmentFn({
 })((input) => {
   'use gpu';
   const field = fillField(input.uv, input.bounds, input.layer);
-  return composeEffects(
-    field,
-    input.color,
-    input.outline,
-    input.width,
-    d.vec4f(0),
-    0,
-    input.position,
-    input.glyphIndex,
-    input.glyphOrigin,
-  );
+  return composeEffects(field, input.color, input.outline, input.width, d.vec4f(0), 0, input.position);
 });
 const shadowVertex = tgpu.vertexFn({
   in: vertexIn,
@@ -369,8 +328,6 @@ const shadowVertex = tgpu.vertexFn({
     bounds: glyph.bounds,
     color: input.color,
     layer: glyph.layer,
-    glyphIndex: glyph.glyphIndex,
-    glyphOrigin: glyph.glyphOrigin,
     shadowUv: glyph.shadowUv,
     shadow: glyph.shadow,
   };
@@ -382,17 +339,7 @@ const shadowFragment = tgpu.fragmentFn({
   'use gpu';
   const field = fillField(input.uv, input.bounds, input.layer);
   const shadow = shadowCoverage(input.shadowUv, input.bounds, input.layer, input.shadow.a, field);
-  return composeEffects(
-    field,
-    input.color,
-    d.vec4f(0),
-    0,
-    input.shadow,
-    shadow,
-    input.position,
-    input.glyphIndex,
-    input.glyphOrigin,
-  );
+  return composeEffects(field, input.color, d.vec4f(0), 0, input.shadow, shadow, input.position);
 });
 const bothVertex = tgpu.vertexFn({
   in: vertexIn,
@@ -406,8 +353,6 @@ const bothVertex = tgpu.vertexFn({
     bounds: glyph.bounds,
     color: input.color,
     layer: glyph.layer,
-    glyphIndex: glyph.glyphIndex,
-    glyphOrigin: glyph.glyphOrigin,
     outline: glyph.outline,
     width: glyph.width,
     shadowUv: glyph.shadowUv,
@@ -421,17 +366,135 @@ const bothFragment = tgpu.fragmentFn({
   'use gpu';
   const field = fillField(input.uv, input.bounds, input.layer);
   const shadow = shadowCoverage(input.shadowUv, input.bounds, input.layer, input.shadow.a, field);
-  return composeEffects(
-    field,
-    input.color,
-    input.outline,
-    input.width,
-    input.shadow,
-    shadow,
-    input.position,
-    input.glyphIndex,
-    input.glyphOrigin,
-  );
+  return composeEffects(field, input.color, input.outline, input.width, input.shadow, shadow, input.position);
+});
+
+// A config created with `glyphFacts: true` draws through these instead: the same four programs with the glyph index
+// and origin lanes as vertex inputs and flat varyings, recorded for the callbacks before anything else runs.
+const glyphVertexIn = { ...vertexIn, glyphIndex: d.u32, glyphOrigin: d.vec2f };
+const glyphVaryings = { glyphIndex: d.interpolate('flat', d.u32), glyphOrigin: d.interpolate('flat', d.vec2f) };
+const glyphIndexLayout = tgpu.vertexLayout(d.disarrayOf(d.uint32), 'instance');
+const glyphOriginLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
+/** Records the glyph of a vertex and returns its origin in the pixels `transformPosition` receives. */
+function drawnGlyphOrigin(instance: number, index: number, origin: d.v2f): d.v2f {
+  'use gpu';
+  const placed = scene.placedOrigin(origin, instance).add(scene.textOffset(instance));
+  drawGlyph(index, placed);
+  return placed;
+}
+const plainGlyphVertex = tgpu.vertexFn({
+  in: glyphVertexIn,
+  out: { position: d.builtin.position, ...fillVaryings, ...glyphVaryings },
+})((input) => {
+  'use gpu';
+  const glyphOrigin = drawnGlyphOrigin(input.instance, input.glyphIndex, input.glyphOrigin);
+  const glyph = msdfGlyph(input.index, input.instance, input.rect, input.effectColor, input.effect, d.f32(0), d.f32(0));
+  return {
+    position: glyph.position,
+    uv: glyph.uv,
+    bounds: glyph.bounds,
+    color: input.color,
+    layer: glyph.layer,
+    glyphIndex: input.glyphIndex,
+    glyphOrigin,
+  };
+});
+const plainGlyphFragment = tgpu.fragmentFn({
+  in: { position: d.builtin.position, ...fillVaryings, ...glyphVaryings },
+  out: d.vec4f,
+})((input) => {
+  'use gpu';
+  drawGlyph(input.glyphIndex, input.glyphOrigin);
+  const field = fillField(input.uv, input.bounds, input.layer);
+  return colorTransform.$(d.vec4f(input.color.rgb, input.color.a * distanceCoverage(field.x, field.z)), input.position);
+});
+const outlineGlyphVertex = tgpu.vertexFn({
+  in: glyphVertexIn,
+  out: { position: d.builtin.position, ...fillVaryings, ...glyphVaryings, ...outlineVaryings },
+})((input) => {
+  'use gpu';
+  const glyphOrigin = drawnGlyphOrigin(input.instance, input.glyphIndex, input.glyphOrigin);
+  const glyph = msdfGlyph(input.index, input.instance, input.rect, input.effectColor, input.effect, d.f32(1), d.f32(0));
+  return {
+    position: glyph.position,
+    uv: glyph.uv,
+    bounds: glyph.bounds,
+    color: input.color,
+    layer: glyph.layer,
+    glyphIndex: input.glyphIndex,
+    glyphOrigin,
+    outline: glyph.outline,
+    width: glyph.width,
+  };
+});
+const outlineGlyphFragment = tgpu.fragmentFn({
+  in: { position: d.builtin.position, ...fillVaryings, ...glyphVaryings, ...outlineVaryings },
+  out: d.vec4f,
+})((input) => {
+  'use gpu';
+  drawGlyph(input.glyphIndex, input.glyphOrigin);
+  const field = fillField(input.uv, input.bounds, input.layer);
+  return composeEffects(field, input.color, input.outline, input.width, d.vec4f(0), 0, input.position);
+});
+const shadowGlyphVertex = tgpu.vertexFn({
+  in: glyphVertexIn,
+  out: { position: d.builtin.position, ...fillVaryings, ...glyphVaryings, ...shadowVaryings },
+})((input) => {
+  'use gpu';
+  const glyphOrigin = drawnGlyphOrigin(input.instance, input.glyphIndex, input.glyphOrigin);
+  const glyph = msdfGlyph(input.index, input.instance, input.rect, input.effectColor, input.effect, d.f32(0), d.f32(1));
+  return {
+    position: glyph.position,
+    uv: glyph.uv,
+    bounds: glyph.bounds,
+    color: input.color,
+    layer: glyph.layer,
+    glyphIndex: input.glyphIndex,
+    glyphOrigin,
+    shadowUv: glyph.shadowUv,
+    shadow: glyph.shadow,
+  };
+});
+const shadowGlyphFragment = tgpu.fragmentFn({
+  in: { position: d.builtin.position, ...fillVaryings, ...glyphVaryings, ...shadowVaryings },
+  out: d.vec4f,
+})((input) => {
+  'use gpu';
+  drawGlyph(input.glyphIndex, input.glyphOrigin);
+  const field = fillField(input.uv, input.bounds, input.layer);
+  const shadow = shadowCoverage(input.shadowUv, input.bounds, input.layer, input.shadow.a, field);
+  return composeEffects(field, input.color, d.vec4f(0), 0, input.shadow, shadow, input.position);
+});
+const bothGlyphVertex = tgpu.vertexFn({
+  in: glyphVertexIn,
+  out: { position: d.builtin.position, ...fillVaryings, ...glyphVaryings, ...outlineVaryings, ...shadowVaryings },
+})((input) => {
+  'use gpu';
+  const glyphOrigin = drawnGlyphOrigin(input.instance, input.glyphIndex, input.glyphOrigin);
+  const glyph = msdfGlyph(input.index, input.instance, input.rect, input.effectColor, input.effect, d.f32(1), d.f32(1));
+  return {
+    position: glyph.position,
+    uv: glyph.uv,
+    bounds: glyph.bounds,
+    color: input.color,
+    layer: glyph.layer,
+    glyphIndex: input.glyphIndex,
+    glyphOrigin,
+    outline: glyph.outline,
+    width: glyph.width,
+    shadowUv: glyph.shadowUv,
+    shadow: glyph.shadow,
+  };
+});
+const bothGlyphFragment = tgpu.fragmentFn({
+  in: { position: d.builtin.position, ...fillVaryings, ...glyphVaryings, ...outlineVaryings, ...shadowVaryings },
+  out: d.vec4f,
+})((input) => {
+  'use gpu';
+  drawGlyph(input.glyphIndex, input.glyphOrigin);
+  const field = fillField(input.uv, input.bounds, input.layer);
+  const shadow = shadowCoverage(input.shadowUv, input.bounds, input.layer, input.shadow.a, field);
+  return composeEffects(field, input.color, input.outline, input.width, input.shadow, shadow, input.position);
 });
 function scalar(payload: PortableLeafResource, index = 0): number {
   if (payload.kind !== 'buffer') throw new Error('Expected a raster constant');
@@ -451,6 +514,7 @@ function msdfPrograms(options: PipelineOptions): MsdfPrograms {
   const cached = programsByConfig.get(options);
   if (cached !== undefined) return cached;
   const configured = shaderRoot(options);
+  const facts = publishesGlyphFacts(options);
   const common = {
     attribs: {
       rect: rectLayout.attrib,
@@ -463,6 +527,38 @@ function msdfPrograms(options: PipelineOptions): MsdfPrograms {
     depthStencil: options.depthStencil,
   };
   const create = (key: EffectKey): TgpuRenderPipeline => {
+    if (facts) {
+      const glyphCommon = {
+        ...common,
+        attribs: { ...common.attribs, glyphIndex: glyphIndexLayout.attrib, glyphOrigin: glyphOriginLayout.attrib },
+      };
+      switch (key) {
+        case 0:
+          return configured.createRenderPipeline({
+            vertex: plainGlyphVertex,
+            fragment: plainGlyphFragment,
+            ...glyphCommon,
+          });
+        case OUTLINE:
+          return configured.createRenderPipeline({
+            vertex: outlineGlyphVertex,
+            fragment: outlineGlyphFragment,
+            ...glyphCommon,
+          });
+        case SHADOW:
+          return configured.createRenderPipeline({
+            vertex: shadowGlyphVertex,
+            fragment: shadowGlyphFragment,
+            ...glyphCommon,
+          });
+        default:
+          return configured.createRenderPipeline({
+            vertex: bothGlyphVertex,
+            fragment: bothGlyphFragment,
+            ...glyphCommon,
+          });
+      }
+    }
     switch (key) {
       case 0:
         return configured.createRenderPipeline({ vertex: plainVertex, fragment: plainFragment, ...common });
@@ -542,7 +638,11 @@ export function msdfResource(
               generation = atlas.generation;
               bound = [];
               group = root.createBindGroup(font, {
-                ...sceneBindings(lanes),
+                viewport: lanes.viewport,
+                placementSlots: lane(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID),
+                placements: lanes.placementTable,
+                transformIndices: lane(TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
+                transforms: lanes.transformTable,
                 atlas: atlas.view,
                 sampler: programs.sampler,
                 glyphs: atlas.glyphs,
@@ -558,6 +658,11 @@ export function msdfResource(
                 .with(colorLayout, lane(b.color.id))
                 .with(effectColorLayout, lane(b.effectColor.id))
                 .with(effectLayout, lane(b.effect.id));
+              if (publishesGlyphFacts(options)) {
+                pipelineForVariant = pipelineForVariant
+                  .with(glyphIndexLayout, lane(TYPEGPU_GLYPH_INDEX_BUFFER_ID))
+                  .with(glyphOriginLayout, lane(TYPEGPU_GLYPH_ORIGIN_BUFFER_ID));
+              }
               bound[variant] = pipelineForVariant;
             }
             recordDraw(root, pipelineForVariant, pass, bindGroups, first, count);

@@ -9,7 +9,6 @@ import { schema } from './internal/bindings.js';
 import { codecDescriptor } from './internal/codec.js';
 import { createResource } from './internal/resources.js';
 import { Renderer, TypeGpuTransform } from './internal/renderer.js';
-import { readsGlyphFacts } from './internal/pipeline.js';
 import { RenderFailures } from '../render-failures.js';
 import {
   createText,
@@ -24,14 +23,13 @@ import {
  * one-pixel margin of its ink-trimmed quads from the corners of each glyph cell; matrix projections are exact for both,
  * while nonlinear deformations use a local approximation.
  *
- * A callback that declares the third and fourth parameters is also told which glyph the vertex belongs to.
+ * In a config created with `glyphFacts: true` the callback is also told which glyph the vertex belongs to.
  * `glyphIndex` is the glyph's index in its text's layout order: the index `TypeGpuText.glyphs()` reports it at,
  * counting every glyph of the text across lines, fonts and formats, blank ones included; glyphs of a right-to-left
  * run count in the order they are drawn and a ligature is one glyph. It is a position, not an identity: an edit before
  * a glyph shifts it. `glyphOrigin` is the glyph's pen origin on its baseline in the pixels of `position`:
  * `glyphs().x[glyphIndex]`, `glyphs().y[glyphIndex]` moved by the anchor and `text.position`, so `position.xy -
- * glyphOrigin` is the vertex's offset from its own glyph. A config whose callbacks declare neither publishes no glyph
- * lanes; declare them as plain parameters, since a default value or a rest parameter hides them.
+ * glyphOrigin` is the vertex's offset from its own glyph. Without `glyphFacts` neither is passed.
  */
 export type TypeGpuPositionTransform = (
   position: d.v3f,
@@ -44,7 +42,7 @@ export type TypeGpuPositionTransform = (
  * MSDF runs it only within a glyph's reach (ink box, one screen pixel, outline and shadow), not over its whole atlas
  * cell, so it cannot paint where the glyph has no coverage.
  *
- * A callback that declares the third and fourth parameters receives the `glyphIndex` and `glyphOrigin` of
+ * In a config created with `glyphFacts: true` it receives the `glyphIndex` and `glyphOrigin` of
  * {@link TypeGpuPositionTransform} for the glyph the fragment belongs to; the origin stays in logical pixels.
  */
 export type TypeGpuColorTransform = (
@@ -66,6 +64,14 @@ export interface TypeGpuConfigOptions {
   readonly transformPosition?: TypeGpuPositionTransform;
   /** Optional 'use gpu' function transforming the final fragment color. Fixed for this config's lifetime. */
   readonly transformColor?: TypeGpuColorTransform;
+  /**
+   * Publishes each glyph's layout index and pen origin and passes them to `transformPosition` and `transformColor`
+   * as their third and fourth arguments. Off by default: the two facts are 12 more bytes per glyph that the engine
+   * gathers and this renderer uploads for every text of the config, and its programs gain two vertex inputs and two
+   * flat varyings. A config without it compiles the programs it would without glyph facts, and a callback that
+   * declares the glyph parameters there throws.
+   */
+  readonly glyphFacts?: boolean;
   readonly defaultFontFormat?: 'bitmap' | 'msdf' | 'slug';
   /**
    * What the GPU atlas keeps of an MSDF font. `'msdf'` (default) keeps all four channels. `'sdf'` keeps only the
@@ -120,10 +126,22 @@ export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyph
   if (options.msdfAtlas !== undefined && options.msdfAtlas !== 'msdf' && options.msdfAtlas !== 'sdf') {
     throw new TypeError('TypeGPU config msdfAtlas must be "msdf" or "sdf"');
   }
+  const glyphFacts = options.glyphFacts ?? false;
+  if (typeof glyphFacts !== 'boolean') throw new TypeError('TypeGPU config glyphFacts must be a boolean');
+  if (!glyphFacts) {
+    for (const name of ['transformPosition', 'transformColor'] as const) {
+      // Such a callback would be called with two arguments and compile against the missing ones.
+      if ((options[name]?.length ?? 0) > 2) {
+        throw new TypeError(
+          `TypeGPU config ${name} declares glyph parameters, which the config does not publish; create it with glyphFacts: true`,
+        );
+      }
+    }
+  }
   return defineGlyphConfig({
     schema,
     fonts: { default: options.defaultFontFormat ?? 'msdf', formats: { bitmap, msdf, slug } },
-    encode: ({ ids }) => ({ descriptor: codecDescriptor(ids, readsGlyphFacts(options)) }),
+    encode: ({ ids }) => ({ descriptor: codecDescriptor(ids, glyphFacts) }),
     resolve: ({ format, payload }) => {
       const resource = createResource(options, format, payload);
       return resourceLease(resource, () => resource.dispose());

@@ -122,10 +122,11 @@ handle.with(cameraLayout);
 // @ts-expect-error A bound draw view does not create or own text.
 bound.createText({ font, text: 'Hello' });
 
-// A callback that declares the glyph parameters is told which glyph it draws; one that stops at two is still a callback.
+// A config that publishes glyph facts tells its callbacks which glyph they draw; a two-parameter one is still a callback.
 defineTypeGpuConfig({
   root,
   format: 'rgba8unorm',
+  glyphFacts: true,
   transformPosition: (position, viewport, glyphIndex, glyphOrigin) => {
     'use gpu';
     const phase: number = glyphIndex;

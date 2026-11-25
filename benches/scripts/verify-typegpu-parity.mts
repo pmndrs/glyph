@@ -1,4 +1,5 @@
-/* @workflow { "name": "benchmark:typegpu-parity", "summary": "Render the direct TypeGPU renderer on a real WebGPU device and compare its pixels with the Three MSDF path and a saved capture; --perf reports draws, bind groups and frame cost.", "requirements": "Playwright Chromium with WebGPU and the baked rendering fixtures. --scenes=a,b selects scenes; --baseline=<dir> compares with saved captures (default benches/render-reference/typegpu-start); --capture=<dir> writes captures; --out=<dir> writes this run's images; --tolerance=<n> sets the channel tolerance (default 8; a pixel may leave the capture only towards Three); --perf adds the one-text, 200 and 1,000 label measurements.", "writes": "Only the directories named by --capture and --out." } */
+/* @workflow { "name": "benchmark:typegpu-parity", "summary": "Render the direct TypeGPU renderer on a real WebGPU device and compare its pixels with the Three MSDF path and a saved capture; --perf reports draws, bind groups and frame cost.", "requirements": "Playwright Chromium with WebGPU and the baked rendering fixtures. --scenes=a,b selects scenes; --baseline=<dir> compares with saved captures (default benches/render-reference/typegpu-start); --capture=<dir> writes captures; --out=<dir> writes this run's images; --tolerance=<n> sets the channel tolerance (default 8; a pixel may leave the capture only towards Three); --perf adds the one-text, 200 and 1,000 label measurements; --shader-hash prints a digest of every WGSL module the scenes compile instead of the glyph-facts read-back.", "writes": "Only the directories named by --capture and --out." } */
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +17,8 @@ const captureDirectory = option('capture');
 const outDirectory = option('out');
 const selected = option('scenes')?.split(',');
 const withPerf = process.argv.includes('--perf');
+/** Prints a digest of every WGSL module the scenes compile, instead of running the glyph-facts read-back. */
+const shaderHash = process.argv.includes('--shader-hash');
 
 /**
  * What the renderers are allowed to disagree on, per scene, as a count of pixels over the tolerance.
@@ -116,6 +119,17 @@ try {
     ],
   });
   const page = await browser.newPage({ viewport: { width: 832, height: 600 }, deviceScaleFactor: 1 });
+  if (shaderHash) {
+    await page.addInitScript(() => {
+      const collected: string[] = [];
+      (window as unknown as { glyphWgsl: string[] }).glyphWgsl = collected;
+      const create = GPUDevice.prototype.createShaderModule;
+      GPUDevice.prototype.createShaderModule = function (descriptor) {
+        collected.push(descriptor.code);
+        return create.call(this, descriptor);
+      };
+    });
+  }
   const errors: string[] = [];
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
@@ -206,13 +220,23 @@ try {
     }
   }
 
-  const facts = await page.evaluate(async () => (await window.typegpuParity).glyphFacts());
-  if (errors.length !== 0) throw new Error(`glyph facts: browser errors: ${errors.join(' | ')}`);
-  process.stdout.write(
-    `\nglyph facts: ${String(facts.glyphs)} glyphs read back through transformPosition and transformColor, ${String(facts.failures.length)} disagree with glyphs()\n`,
-  );
-  if (facts.glyphs < 30) failures.push(`glyph facts: only ${String(facts.glyphs)} glyphs were drawn`);
-  failures.push(...facts.failures.map((failure) => `glyph facts: ${failure}`));
+  if (shaderHash) {
+    // Every WGSL module the scenes above compiled, for comparing the programs of two builds byte for byte.
+    const sources = await page.evaluate(() => (window as unknown as { glyphWgsl: string[] }).glyphWgsl);
+    const unique = [...new Set(sources)].sort();
+    const digest = createHash('sha256').update(unique.join('\n\u0000\n')).digest('hex');
+    process.stdout.write(
+      `\nshader modules: ${String(sources.length)} created, ${String(unique.length)} distinct, sha256 ${digest}\n`,
+    );
+  } else {
+    const facts = await page.evaluate(async () => (await window.typegpuParity).glyphFacts());
+    if (errors.length !== 0) throw new Error(`glyph facts: browser errors: ${errors.join(' | ')}`);
+    process.stdout.write(
+      `\nglyph facts: ${String(facts.glyphs)} glyphs read back through transformPosition and transformColor, ${String(facts.failures.length)} disagree with glyphs()\n`,
+    );
+    if (facts.glyphs < 30) failures.push(`glyph facts: only ${String(facts.glyphs)} glyphs were drawn`);
+    failures.push(...facts.failures.map((failure) => `glyph facts: ${failure}`));
+  }
 
   if (withPerf) {
     const costs = await page.evaluate(async () => (await window.typegpuParity).fontCosts());

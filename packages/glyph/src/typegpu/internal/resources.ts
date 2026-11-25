@@ -15,14 +15,21 @@ import {
   slugUnpackHalvesSlot,
 } from '../../shaders/typegpu/slug/slug-texture.js';
 import { bitmapPageAccessor } from '../../shaders/typegpu/bitmap-shader.js';
+import {
+  TYPEGPU_GLYPH_INDEX_BUFFER_ID,
+  TYPEGPU_GLYPH_ORIGIN_BUFFER_ID,
+  TYPEGPU_PLACEMENT_SLOT_BUFFER_ID,
+  TYPEGPU_TRANSFORM_INDEX_BUFFER_ID,
+} from './codec.js';
 import { msdfResource } from './msdf.js';
 import {
   colorTransform,
   corner,
   createSceneGroup,
+  drawGlyph,
+  publishesGlyphFacts,
   recordDraw,
   shaderRoot,
-  sceneBindings,
   sceneFunctions,
   textScene,
   target,
@@ -45,17 +52,19 @@ const slugPage = tgpu.bindGroupLayout({
   placements: { storage: d.arrayOf(d.vec2f), access: 'readonly', visibility: ['vertex'] },
   transformIndices: { storage: d.arrayOf(d.u32), access: 'readonly', visibility: ['vertex'] },
   transforms: { storage: d.arrayOf(d.vec2f), access: 'readonly', visibility: ['vertex'] },
-  glyphIndices: { storage: d.arrayOf(d.u32), access: 'readonly', visibility: ['vertex'] },
-  glyphOrigins: { storage: d.arrayOf(d.vec2f), access: 'readonly', visibility: ['vertex'] },
   headers: { texture: d.texture2d(d.u32), visibility: ['fragment'] },
   bandCurves: { texture: d.texture2d(d.u32), visibility: ['fragment'] },
   glyphs: { storage: d.arrayOf(SlugGlyphRow), access: 'readonly', visibility: ['vertex'] },
 });
-/** The glyph facts a vertex stage hands its fragment stage; constant across a glyph, so never interpolated. */
-const glyphVaryings = {
-  glyphIndex: d.interpolate('flat', d.u32),
-  glyphOrigin: d.interpolate('flat', d.vec2f),
-};
+/** The two lanes a config created with `glyphFacts: true` adds to a vertex stage, and what it hands its fragment stage. */
+const glyphInputs = { glyphIndex: d.u32, glyphOrigin: d.vec2f };
+const glyphVaryings = { glyphIndex: d.interpolate('flat', d.u32), glyphOrigin: d.interpolate('flat', d.vec2f) };
+interface GlyphInput {
+  readonly glyphIndex: number;
+  readonly glyphOrigin: d.v2f;
+}
+const glyphIndexLayout = tgpu.vertexLayout(d.disarrayOf(d.uint32), 'instance');
+const glyphOriginLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const slugScene = sceneFunctions(slugPage as unknown as SceneLayout);
 const v2 = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const v4 = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
@@ -98,60 +107,66 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
   const atlas = texture(root, payload);
   try {
     const view = atlas.createView(d.texture2dArray(d.f32));
+    const facts = publishesGlyphFacts(options);
+    const vertexIn = {
+      index: d.builtin.vertexIndex,
+      instance: d.builtin.instanceIndex,
+      origin: d.vec2f,
+      size: d.vec2f,
+      uvOrigin: d.vec2f,
+      uvSize: d.vec2f,
+      color: d.vec4f,
+      layer: d.u32,
+    };
+    const varyings = { uv: d.vec2f, color: d.vec4f, layer: d.interpolate('flat', d.u32) };
+    const vertexOut = { position: d.builtin.position, ...varyings };
+    const fragmentIn = { position: d.builtin.position, ...varyings };
     const vertex = tgpu.vertexFn({
-      in: {
-        index: d.builtin.vertexIndex,
-        instance: d.builtin.instanceIndex,
-        origin: d.vec2f,
-        size: d.vec2f,
-        uvOrigin: d.vec2f,
-        uvSize: d.vec2f,
-        color: d.vec4f,
-        layer: d.u32,
-      },
-      out: {
-        position: d.builtin.position,
-        uv: d.vec2f,
-        color: d.vec4f,
-        layer: d.interpolate('flat', d.u32),
-        ...glyphVaryings,
-      },
+      in: (facts ? { ...vertexIn, ...glyphInputs } : vertexIn) as typeof vertexIn,
+      out: (facts ? { ...vertexOut, ...glyphVaryings } : vertexOut) as typeof vertexOut,
     })((input) => {
       'use gpu';
       const unit = corner(input.index);
-      const offset = textScene.textOffset(input.instance);
-      const glyph = textScene.glyphFacts(input.instance, offset);
+      if (facts) {
+        const inputIndex = (input as typeof input & GlyphInput).glyphIndex;
+        const inputOrigin = (input as typeof input & GlyphInput).glyphOrigin;
+        const offset = textScene.textOffset(input.instance);
+        const glyphOrigin = textScene.placedOrigin(inputOrigin, input.instance).add(offset);
+        drawGlyph(inputIndex, glyphOrigin);
+        return {
+          position: textScene.projectText(
+            bitmapQuadPosition(textScene.placedOrigin(input.origin, input.instance), input.size, unit),
+            offset,
+          ),
+          uv: bitmapAtlasUv(input.uvOrigin, input.uvSize, unit),
+          color: input.color,
+          layer: input.layer,
+          glyphIndex: inputIndex,
+          glyphOrigin,
+        };
+      }
       return {
         position: textScene.projectText(
           bitmapQuadPosition(textScene.placedOrigin(input.origin, input.instance), input.size, unit),
-          offset,
-          glyph,
+          textScene.textOffset(input.instance),
         ),
         uv: bitmapAtlasUv(input.uvOrigin, input.uvSize, unit),
         color: input.color,
         layer: input.layer,
-        glyphIndex: glyph.index,
-        glyphOrigin: glyph.origin,
       };
     });
     const fragment = tgpu.fragmentFn({
-      in: {
-        position: d.builtin.position,
-        uv: d.vec2f,
-        color: d.vec4f,
-        layer: d.interpolate('flat', d.u32),
-        ...glyphVaryings,
-      },
+      in: (facts ? { ...fragmentIn, ...glyphVaryings } : fragmentIn) as typeof fragmentIn,
       out: d.vec4f,
     })((input) => {
       'use gpu';
+      if (facts) {
+        const inputIndex = (input as typeof input & GlyphInput).glyphIndex;
+        const inputOrigin = (input as typeof input & GlyphInput).glyphOrigin;
+        drawGlyph(inputIndex, inputOrigin);
+      }
       const result = bitmapFragment({ atlasUv: input.uv, color: input.color, pageLayer: input.layer });
-      return colorTransform.$(
-        d.vec4f(result.color, result.opacity),
-        input.position,
-        input.glyphIndex,
-        input.glyphOrigin,
-      );
+      return colorTransform.$(d.vec4f(result.color, result.opacity), input.position);
     });
     const pipeline = shaderRoot(options)
       .with(bitmapPageAccessor, view)
@@ -165,6 +180,7 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
           uvSize: uvSizeLayout.attrib,
           color: colorLayout.attrib,
           layer: u1.attrib,
+          ...(facts ? { glyphIndex: glyphIndexLayout.attrib, glyphOrigin: glyphOriginLayout.attrib } : {}),
         },
         targets: target(options),
         multisample: { count: options.sampleCount ?? 1 },
@@ -181,18 +197,30 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
         };
         const b = bitmapSchema.buffers;
         const bound = pipeline
-          .with(createSceneGroup(root, lanes))
+          .with(
+            createSceneGroup(
+              root,
+              lanes,
+              lane(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID),
+              lane(TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
+            ),
+          )
           .with(originLayout, lane(b.origin.id))
           .with(sizeLayout, lane(b.size.id))
           .with(uvOriginLayout, lane(b.uvOrigin.id))
           .with(uvSizeLayout, lane(b.uvSize.id))
           .with(colorLayout, lane(b.color.id))
           .with(u1, lane(b.page.id));
+        const drawn = facts
+          ? bound
+              .with(glyphIndexLayout, lane(TYPEGPU_GLYPH_INDEX_BUFFER_ID))
+              .with(glyphOriginLayout, lane(TYPEGPU_GLYPH_ORIGIN_BUFFER_ID))
+          : bound;
         return {
           watchedLanes: [],
           variant: () => 0,
           draw(pass, bindGroups, _variant, first, count) {
-            recordDraw(root, bound, pass, bindGroups, first, count);
+            recordDraw(root, drawn, pass, bindGroups, first, count);
           },
         };
       },
@@ -219,34 +247,44 @@ function slugResource(
       band: d.vec4f,
       starts: d.interpolate('flat', d.vec4u),
       counts: d.interpolate('flat', d.vec2u),
-      ...glyphVaryings,
     };
+    const facts = publishesGlyphFacts(options);
+    const vertexIn = {
+      index: d.builtin.vertexIndex,
+      instance: d.builtin.instanceIndex,
+      rect: d.vec4f,
+      color: d.vec4f,
+      glyph: d.vec2u,
+    };
+    const vertexOut = { position: d.builtin.position, ...varyings };
+    const fragmentIn = { position: d.builtin.position, ...varyings };
     const vertex = tgpu.vertexFn({
-      in: {
-        index: d.builtin.vertexIndex,
-        instance: d.builtin.instanceIndex,
-        rect: d.vec4f,
-        color: d.vec4f,
-        glyph: d.vec2u,
-      },
-      out: { position: d.builtin.position, ...varyings },
+      in: (facts ? { ...vertexIn, ...glyphInputs } : vertexIn) as typeof vertexIn,
+      out: (facts ? { ...vertexOut, ...glyphVaryings } : vertexOut) as typeof vertexOut,
     })((input) => {
       'use gpu';
+      if (facts) {
+        const inputIndex = (input as typeof input & GlyphInput).glyphIndex;
+        const inputOrigin = (input as typeof input & GlyphInput).glyphOrigin;
+        drawGlyph(
+          inputIndex,
+          slugScene.placedOrigin(inputOrigin, input.instance).add(slugScene.textOffset(input.instance)),
+        );
+      }
       const unit = corner(input.index);
       // What every drawing of a glyph shares is read once per vertex from the page's glyph table.
       const row = slugPage.$.glyphs[input.glyph.x]!;
       const origin = slugScene.placedOrigin(input.rect.xy, input.instance);
       const offset = slugScene.textOffset(input.instance);
-      const glyph = slugScene.glyphFacts(input.instance, offset);
       const local = d.vec2f(origin.x + unit.x * input.rect.z, -(origin.y + unit.y * input.rect.w));
       const normal = d.vec2f((unit.x - 0.5) * input.rect.z, -(unit.y - 0.5) * input.rect.w);
       const em = d.vec2f(row.quad.x + unit.x * row.quad.z, row.quad.y - unit.y * row.quad.w);
       // Em units per layout unit: the quad is the em quad scaled by the font size.
       const inverseScale = (row.quad.z + row.quad.w) / std.max(input.rect.z + input.rect.w, 1e-30);
       // Local homogeneous projection derivatives keep Slug's half-pixel expansion in screen space.
-      const clip = slugScene.projectText(d.vec3f(local, 0), offset, glyph);
-      const dx = slugScene.projectText(d.vec3f(local.x + 1, local.y, 0), offset, glyph).sub(clip);
-      const dy = slugScene.projectText(d.vec3f(local.x, local.y + 1, 0), offset, glyph).sub(clip);
+      const clip = slugScene.projectText(d.vec3f(local, 0), offset);
+      const dx = slugScene.projectText(d.vec3f(local.x + 1, local.y, 0), offset).sub(clip);
+      const dy = slugScene.projectText(d.vec3f(local.x, local.y + 1, 0), offset).sub(clip);
       const dilated = slugDilate(
         d.vec2f(0),
         normal,
@@ -257,19 +295,39 @@ function slugResource(
         d.vec4f(dx.w, dy.w, 0, clip.w),
         slugScene.viewportSize(),
       );
+      if (facts) {
+        const inputIndex = (input as typeof input & GlyphInput).glyphIndex;
+        const inputOrigin = (input as typeof input & GlyphInput).glyphOrigin;
+        return {
+          position: slugScene.projectText(d.vec3f(local.add(dilated.xy), 0), offset),
+          coordinate: dilated.zw,
+          color: input.color,
+          band: row.band,
+          starts: row.starts,
+          counts: row.counts.xy,
+          glyphIndex: inputIndex,
+          glyphOrigin: slugScene.placedOrigin(inputOrigin, input.instance).add(offset),
+        };
+      }
       return {
-        position: slugScene.projectText(d.vec3f(local.add(dilated.xy), 0), offset, glyph),
+        position: slugScene.projectText(d.vec3f(local.add(dilated.xy), 0), offset),
         coordinate: dilated.zw,
         color: input.color,
         band: row.band,
         starts: row.starts,
         counts: row.counts.xy,
-        glyphIndex: glyph.index,
-        glyphOrigin: glyph.origin,
       };
     });
-    const fragment = tgpu.fragmentFn({ in: { position: d.builtin.position, ...varyings }, out: d.vec4f })((input) => {
+    const fragment = tgpu.fragmentFn({
+      in: (facts ? { ...fragmentIn, ...glyphVaryings } : fragmentIn) as typeof fragmentIn,
+      out: d.vec4f,
+    })((input) => {
       'use gpu';
+      if (facts) {
+        const inputIndex = (input as typeof input & GlyphInput).glyphIndex;
+        const inputOrigin = (input as typeof input & GlyphInput).glyphOrigin;
+        drawGlyph(inputIndex, inputOrigin);
+      }
       const coverage = slugRender(
         SlugShaderGlyph({
           curveBaseTexel: input.starts.x,
@@ -282,12 +340,7 @@ function slugResource(
         }),
         input.coordinate,
       );
-      return colorTransform.$(
-        d.vec4f(input.color.rgb, input.color.a * coverage),
-        input.position,
-        input.glyphIndex,
-        input.glyphOrigin,
-      );
+      return colorTransform.$(d.vec4f(input.color.rgb, input.color.a * coverage), input.position);
     });
     const pipeline = shaderRoot(options)
       .with(slugHeaderWidthAccessor, d.u32(headerWidth))
@@ -312,6 +365,7 @@ function slugResource(
           rect: rectLayout.attrib,
           color: colorLayout.attrib,
           glyph: u2.attrib,
+          ...(facts ? { glyphIndex: glyphIndexLayout.attrib, glyphOrigin: glyphOriginLayout.attrib } : {}),
         },
         targets: target(options),
         multisample: { count: options.sampleCount ?? 1 },
@@ -346,7 +400,11 @@ function slugResource(
             if (generation !== bands.generation || bound === undefined) {
               generation = bands.generation;
               const group = root.createBindGroup(slugPage, {
-                ...sceneBindings(lanes),
+                viewport: lanes.viewport,
+                placementSlots: lane(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID),
+                placements: lanes.placementTable,
+                transformIndices: lane(TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
+                transforms: lanes.transformTable,
                 headers: headerView,
                 bandCurves: bands.view,
                 glyphs: bands.glyphs,
@@ -356,6 +414,11 @@ function slugResource(
                 .with(rectLayout, lane(b.rect.id))
                 .with(colorLayout, lane(b.color.id))
                 .with(u2, lane(b.glyph.id));
+              if (facts) {
+                bound = bound
+                  .with(glyphIndexLayout, lane(TYPEGPU_GLYPH_INDEX_BUFFER_ID))
+                  .with(glyphOriginLayout, lane(TYPEGPU_GLYPH_ORIGIN_BUFFER_ID));
+              }
             }
             recordDraw(root, bound, pass, bindGroups, first, count);
           },

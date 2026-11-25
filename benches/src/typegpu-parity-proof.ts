@@ -369,13 +369,14 @@ async function start(): Promise<ParityProof> {
       },
     }),
   );
-  // Callbacks that declare the glyph parameters: every glyph shrinks about its own origin and odd ones drop, and the
+  // A config that publishes glyph facts: every glyph shrinks about its own origin and odd ones drop, and the
   // colour is the glyph's index and origin, so both stages' facts can be read back out of the pixels.
   const facts = glyph.handle(
     'typegpu-parity:glyph-facts',
     defineTypeGpuConfig({
       root,
       format,
+      glyphFacts: true,
       transformPosition: (position, viewport, glyphIndex, glyphOrigin) => {
         'use gpu';
         const scaled = glyphOrigin.add(position.xy.sub(glyphOrigin).mul(FACTS_SCALE));

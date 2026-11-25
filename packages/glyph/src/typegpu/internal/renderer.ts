@@ -5,12 +5,7 @@ import type { CodecBufferId, CommandBufferView, GlyphRenderer, PreparedRendererC
 import type { DisplayList } from '../../config/glyph.js';
 import type { Bindings, BufferBinding } from './bindings.js';
 import type { BatchDrawBinding, TypeGpuResource } from './pipeline.js';
-import {
-  TYPEGPU_GLYPH_INDEX_BUFFER_ID,
-  TYPEGPU_GLYPH_ORIGIN_BUFFER_ID,
-  TYPEGPU_PLACEMENT_SLOT_BUFFER_ID,
-  TYPEGPU_TRANSFORM_INDEX_BUFFER_ID,
-} from './codec.js';
+import { TYPEGPU_PLACEMENT_SLOT_BUFFER_ID, TYPEGPU_TRANSFORM_INDEX_BUFFER_ID } from './codec.js';
 
 /**
  * A Text's offset in logical pixels (its position plus anchor), held on the CPU. Writing it bumps `revision` and
@@ -468,20 +463,15 @@ function stageBuffers(root: TgpuRoot, frame: CommandBufferView<Bindings>, staged
   }
 }
 
-/**
- * Lanes a vertex stage indexes itself (placement table, placement slot, transform index, glyph index and origin)
- * rather than steps through.
- */
+/** Lanes a vertex stage indexes itself (placement table, placement slot, transform index) rather than steps through. */
 function isStorageLane(buffer: BufferBinding): boolean {
   const declaration = buffer.input.declaration;
-  return declaration.kind === 'placement' || STORAGE_LANES.has(declaration.value.id);
+  return (
+    declaration.kind === 'placement' ||
+    declaration.value.id === TYPEGPU_PLACEMENT_SLOT_BUFFER_ID ||
+    declaration.value.id === TYPEGPU_TRANSFORM_INDEX_BUFFER_ID
+  );
 }
-const STORAGE_LANES: ReadonlySet<CodecBufferId> = new Set([
-  TYPEGPU_PLACEMENT_SLOT_BUFFER_ID,
-  TYPEGPU_TRANSFORM_INDEX_BUFFER_ID,
-  TYPEGPU_GLYPH_INDEX_BUFFER_ID,
-  TYPEGPU_GLYPH_ORIGIN_BUFFER_ID,
-]);
 
 function commitMutation(mutation: BufferMutation): void {
   const destination = mutation.target.bytes;

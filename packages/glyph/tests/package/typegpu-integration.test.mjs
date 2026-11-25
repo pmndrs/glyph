@@ -41,12 +41,10 @@ test('every first-party TypeGPU program reads its Text offset from the transform
   assert.equal(slugProgram.buffers.length, 6);
 });
 
-test('a TypeGPU config publishes glyph fact lanes only when a callback declares the glyph parameters', () => {
+test('a TypeGPU config publishes glyph fact lanes only when it is created with glyphFacts', () => {
   const root = { createUniform: () => ({}), device: {} };
-  const programs = (options) =>
-    defineTypeGpuConfig({ root, format: 'rgba8unorm', ...options }).encode({ ids: id }).descriptor;
   const lanes = (options) => {
-    const descriptor = programs(options);
+    const { descriptor } = defineTypeGpuConfig({ root, format: 'rgba8unorm', ...options }).encode({ ids: id });
     return {
       perDraw: descriptor.capabilitySets[0].maxBuffersPerDraw,
       facts: descriptor.programs.map(
@@ -58,19 +56,22 @@ test('a TypeGPU config publishes glyph fact lanes only when a callback declares 
     };
   };
   const twoParameters = (position, viewport) => [position, viewport];
+  const glyphParameters = (position, viewport, glyphIndex, glyphOrigin) => [glyphIndex, glyphOrigin];
   assert.deepEqual(lanes({}), { perDraw: 9, facts: [0, 0, 0] });
-  assert.deepEqual(lanes({ transformPosition: twoParameters, transformColor: twoParameters }), {
-    perDraw: 9,
-    facts: [0, 0, 0],
-  });
-  assert.deepEqual(lanes({ transformPosition: (position, viewport, glyphIndex, glyphOrigin) => glyphOrigin }), {
-    perDraw: 11,
-    facts: [2, 2, 2],
-  });
-  assert.deepEqual(lanes({ transformColor: (color, fragmentPosition, glyphIndex) => glyphIndex }), {
-    perDraw: 11,
-    facts: [2, 2, 2],
-  });
+  assert.deepEqual(lanes({ transformPosition: twoParameters }), { perDraw: 9, facts: [0, 0, 0] });
+  assert.deepEqual(lanes({ glyphFacts: true }), { perDraw: 11, facts: [2, 2, 2] });
+  assert.deepEqual(lanes({ glyphFacts: true, transformColor: glyphParameters }), { perDraw: 11, facts: [2, 2, 2] });
+  // A callback that asks for a glyph on a config that publishes none would compile against missing arguments.
+  for (const name of ['transformPosition', 'transformColor']) {
+    assert.throws(
+      () => defineTypeGpuConfig({ root, format: 'rgba8unorm', [name]: glyphParameters }),
+      new RegExp(`${name} declares glyph parameters.*glyphFacts: true`),
+    );
+  }
+  assert.throws(
+    () => defineTypeGpuConfig({ root, format: 'rgba8unorm', glyphFacts: 1 }),
+    /glyphFacts must be a boolean/,
+  );
 });
 
 function renderedState(draws) {
