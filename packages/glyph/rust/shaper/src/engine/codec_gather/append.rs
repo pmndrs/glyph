@@ -299,6 +299,9 @@ impl CodecGatherWorkspace {
 
     /// Appends resource-free decorations around glyph gather in CSS paint order.
     /// Rows use the decoration program's declared lanes; false means no decoration program.
+    /// A row fills its lanes by position: the rectangle in the first four F32 lanes, then the
+    /// baseline and the layout indices of its first and last glyph, which a program publishes
+    /// only when its host asked for glyph facts.
     pub fn append_decorations(
         &mut self,
         codec: &ValidatedCodec,
@@ -352,6 +355,10 @@ impl CodecGatherWorkspace {
                     1 => record.block_start,
                     2 => record.inline_extent,
                     3 => record.block_extent,
+                    4 => record.baseline,
+                    // Exact up to 2^24, like a glyph's own published index.
+                    5 => record.glyph_start as f32,
+                    6 => record.glyph_end as f32,
                     _ => 0.0,
                 };
                 field.push(value)?;

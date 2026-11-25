@@ -52,6 +52,7 @@ impl PositionedGlyphArena {
             // The run-local arena cuts a long island into numeric blocks, each with its own anchor
             // and a prefix that restarts at zero, so every block is its own placed segment.
             let mut block_glyph = piece_start;
+            let first_glyph = self.occurrence_semantic_count;
             while block_glyph < glyph {
                 let owner = if block_glyph == piece_start {
                     cluster
@@ -107,6 +108,7 @@ impl PositionedGlyphArena {
                         style,
                         font_handle: boundary.source_font_handle,
                         cluster_origin: piece_origin,
+                        glyphs: first_glyph..self.occurrence_semantic_count,
                     },
                     justify,
                     true,

@@ -630,6 +630,7 @@ impl PositionedGlyphArena {
         let source_line =
             SourceLine::Body(u32::try_from(line_index).map_err(|_| EngineError::ResultTooLarge)?);
         let line_facts = SourceLineFacts::from(line);
+        let first_glyph = self.occurrence_semantic_count;
         for old in spans {
             let offset = old
                 .placement_segment
@@ -687,8 +688,14 @@ impl PositionedGlyphArena {
             .decorations
             .get(decoration_start..decoration_start + decoration_count)
             .ok_or(EngineError::InvalidRequest)?;
-        reserve(&mut self.decorations, decorations.len())?;
-        self.decorations.extend_from_slice(decorations);
+        let previous_first_glyph = *previous
+            .semantic_line_glyph_starts
+            .get(previous_line)
+            .ok_or(EngineError::InvalidRequest)?;
+        self.extend_retained_decorations(
+            decorations,
+            first_glyph.wrapping_sub(previous_first_glyph),
+        )?;
         Ok(Some(inline_end))
     }
 
@@ -710,13 +717,14 @@ impl PositionedGlyphArena {
                 })
                 .count();
         });
+        let first_glyph = self.occurrence_semantic_count;
         self.emit_segment_spans(body, walk, geometry)?;
         if self.decorated {
             return self.position_decorated_segment(
                 body,
                 walk,
                 geometry,
-                adjust,
+                (adjust, first_glyph),
                 state,
                 metrics_for,
             );
@@ -782,21 +790,26 @@ impl PositionedGlyphArena {
     }
 
     /// A decorated line finishes each cluster on its own: decorations follow the pen.
+    /// `first_glyph` is the layout index of the segment's first glyph: its spans count the
+    /// glyphs of the same clusters in the same order.
     fn position_decorated_segment(
         &mut self,
         body: BodyLine<'_>,
         walk: SegmentWalk,
         geometry: RunGeometry,
-        adjust: bool,
+        (adjust, first_glyph): (bool, u32),
         state: &mut FragmentPositionState,
         metrics_for: impl Fn(u32) -> Option<FontMetrics> + Copy,
     ) -> Result<(), EngineError> {
         let clusters = body.clusters;
+        let mut glyph = first_glyph;
         for offset in 0..walk.count {
             let cluster = walk.cluster(offset);
             if clusters.flags[cluster] & CLUSTER_HARD_BREAK != 0 {
                 continue;
             }
+            let glyphs = glyph..glyph.wrapping_add(clusters.glyph_counts[cluster]);
+            glyph = glyphs.end;
             let style_index = usize::try_from(clusters.style_indexes[cluster])
                 .map_err(|_| EngineError::InvalidRequest)?;
             let style = body
@@ -814,6 +827,7 @@ impl PositionedGlyphArena {
                     style,
                     font_handle: geometry.font_handle,
                     cluster_origin,
+                    glyphs,
                 },
                 body.justify,
                 adjust,

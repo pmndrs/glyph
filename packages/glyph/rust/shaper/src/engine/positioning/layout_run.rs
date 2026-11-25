@@ -389,6 +389,7 @@ impl PositionedGlyphArena {
             style,
             font_handle,
             cluster_origin,
+            glyphs,
         } = positioned;
         if style.decoration_flags == 0 {
             if state.decorated_run.is_some() {
@@ -400,7 +401,8 @@ impl PositionedGlyphArena {
                     if run.font_handle == font_handle
                         && same_decoration_group(&run.style, &style) =>
                 {
-                    run.end = state.cursor
+                    run.end = state.cursor;
+                    run.glyph_limit = glyphs.end;
                 }
                 _ => {
                     self.flush_decorated_run(&mut state.decorated_run, line, metrics_for)?;
@@ -409,6 +411,8 @@ impl PositionedGlyphArena {
                         font_handle,
                         start: cluster_origin,
                         end: state.cursor,
+                        glyph_start: glyphs.start,
+                        glyph_limit: glyphs.end,
                     });
                 }
             }
@@ -443,6 +447,9 @@ impl PositionedGlyphArena {
             return Ok(());
         }
         let style = run.style;
+        let baseline_origin = finite_f32(baseline)?;
+        // A run of clusters that own no glyph names the glyph the pen meets next.
+        let glyph_end = run.glyph_limit.saturating_sub(1).max(run.glyph_start);
         let overrides = (style.decoration_offset, style.decoration_thickness);
         let emit = |flag: u32, position: i16, size: i16, arena: &mut Vec<DecorationRecord>| {
             if style.decoration_flags & flag == 0 {
@@ -466,6 +473,9 @@ impl PositionedGlyphArena {
                 inline_extent,
                 block_start: finite_f32(block_position)?,
                 block_extent: nonnegative_f32(thickness.max(0.0))?,
+                baseline: baseline_origin,
+                glyph_start: run.glyph_start,
+                glyph_end,
                 clip_id: line.clip_id,
                 region_id: line.region_id,
                 flow_thread_id: line.flow_thread_id,

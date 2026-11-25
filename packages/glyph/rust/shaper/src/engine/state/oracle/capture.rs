@@ -74,7 +74,25 @@ pub fn capture(session: &Session, output: &StepOutput) -> Result<Capture, String
     host_buffers(&mut capture, session, planner)?;
     let explicit = session.document().is_some_and(|document| document.explicit);
     document(&mut capture, planner, explicit);
+    decorated_glyphs(&mut capture, planner, &ids);
     Ok(capture)
+}
+
+/// Which glyphs each decoration record of every paragraph runs under, in paragraph order.
+/// The records' frozen lanes are per paragraph in `positioned.decoration`; these lanes came
+/// later, so they are one extended stage that no reference freezes and every step compares.
+fn decorated_glyphs(capture: &mut Capture, planner: &PlannerState, ids: &[u32]) {
+    let records: Vec<DecorationRecord> = ids
+        .iter()
+        .filter_map(|id| planner.paragraph(*id))
+        .filter(|paragraph| paragraph.state.active_inline().is_none())
+        .flat_map(|paragraph| paragraph.state.positioned.active().decorations())
+        .copied()
+        .collect();
+    columns!(capture, "decorated", Value, records, {
+        u32s: [glyph_start, glyph_end];
+        f32s: [baseline];
+    });
 }
 
 /// The first paragraph's lanes are unprefixed, as they were when it was the only one.
@@ -1149,7 +1167,7 @@ fn host_buffers(
 /// Stages added after the first reference set was frozen. A case frozen before them leaves
 /// them out of its frozen text, so its file stays byte-identical; the differential compares
 /// them for every case.
-pub const EXTENDED_STAGES: [&str; 2] = ["plan", "doc"];
+pub const EXTENDED_STAGES: [&str; 3] = ["plan", "doc", "decorated"];
 
 /// The draw structure the renderer holds: what each packet binds (material, clip, depth,
 /// transform) and what each primitive span names. A paint change that republishes retained

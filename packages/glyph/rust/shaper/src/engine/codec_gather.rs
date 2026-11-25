@@ -3336,6 +3336,9 @@ mod tests {
             inline_extent: 12.0,
             block_start: 9.0,
             block_extent: 0.5,
+            baseline: 8.0,
+            glyph_start: 2,
+            glyph_end: 5,
             clip_id: 0,
             region_id: 0,
             flow_thread_id: 0,
@@ -3456,6 +3459,9 @@ mod tests {
             inline_extent: 12.0,
             block_start: 9.0,
             block_extent: 0.5,
+            baseline: 8.0,
+            glyph_start: 2,
+            glyph_end: 5,
             clip_id: 0,
             region_id: 0,
             flow_thread_id: 0,
@@ -4635,11 +4641,43 @@ mod tests {
             inline_extent: 12.0,
             block_start: 9.0,
             block_extent: 0.5,
+            baseline: 8.0,
+            glyph_start: 2,
+            glyph_end: 5,
             clip_id: 9,
             region_id: 9,
             flow_thread_id: 7,
             transform_index: 9,
         };
+        // A decoration program that declares the three lanes after the rectangle reads the
+        // record's baseline and the layout indices of its first and last glyph there.
+        let mut descriptor = base_descriptor();
+        descriptor.capability_sets[0].flags = CAP_STORAGE_BUFFERS | CAP_ORDERED_DIRECT;
+        let mut wide = descriptor.programs[0].clone();
+        wide.primitive_kind = 2;
+        wide.technique = TechniqueId(99);
+        wide.variant = 0;
+        wide.id = ProgramId(9);
+        wide.resource_kind_mask = 0;
+        wide.f32_input_count = 7;
+        for field in 1..4 {
+            wide.inputs.insert(4, InputSource::semantic(field));
+        }
+        descriptor.programs.push(wide);
+        let wide = ValidatedCodec::new(descriptor).unwrap();
+        let mut wide_workspace = CodecGatherWorkspace::default();
+        wide_workspace.begin(&wide, 4).unwrap();
+        assert!(
+            wide_workspace
+                .append_decorations(&wide, CAPABILITY, &[record], 3, 5, DecorationPass::Under)
+                .unwrap()
+        );
+        let facts = wide_workspace.view();
+        assert_eq!(facts.f32_fields[0][0], 4.0);
+        assert_eq!(facts.f32_fields[4][0], 8.0);
+        assert_eq!(facts.f32_fields[5][0], 2.0);
+        assert_eq!(facts.f32_fields[6][0], 5.0);
+
         let decorated = codec_with_decorations();
         let mut workspace = CodecGatherWorkspace::default();
         workspace.begin(&decorated, 4).unwrap();
@@ -4731,6 +4769,9 @@ mod tests {
             inline_extent: 12.0,
             block_start: 9.0,
             block_extent: 0.5,
+            baseline: 8.0,
+            glyph_start: 2,
+            glyph_end: 5,
             clip_id: 9,
             region_id: 9,
             flow_thread_id: 7,

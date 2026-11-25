@@ -237,8 +237,8 @@ impl PositionedGlyphArena {
         self.line_glyph_starts
             .push(u32::try_from(outlined_start).map_err(|_| EngineError::ResultTooLarge)?);
         self.line_glyph_counts.push(outlined);
-        self.semantic_line_glyph_starts
-            .push(u32::try_from(semantic_start).map_err(|_| EngineError::ResultTooLarge)?);
+        let first_glyph = u32::try_from(semantic_start).map_err(|_| EngineError::ResultTooLarge)?;
+        self.semantic_line_glyph_starts.push(first_glyph);
         self.semantic_line_glyph_counts.push(semantic);
         self.semantic_line_inline_extents.push(
             *previous
@@ -276,19 +276,45 @@ impl PositionedGlyphArena {
         let decoration_end = decoration_start
             .checked_add(decoration_count)
             .ok_or(EngineError::InvalidRequest)?;
-        reserve(&mut self.decorations, decoration_count)?;
+        let previous_first_glyph = *previous
+            .semantic_line_glyph_starts
+            .get(line_index)
+            .ok_or(EngineError::InvalidRequest)?;
         self.line_decoration_starts
             .push(u32::try_from(self.decorations.len()).map_err(|_| EngineError::ResultTooLarge)?);
         self.line_decoration_counts
             .push(u32::try_from(decoration_count).map_err(|_| EngineError::ResultTooLarge)?);
-        self.decorations.extend_from_slice(
+        self.extend_retained_decorations(
             previous
                 .decorations
                 .get(decoration_start..decoration_end)
                 .ok_or(EngineError::InvalidRequest)?,
-        );
+            first_glyph.wrapping_sub(previous_first_glyph),
+        )?;
         #[cfg(test)]
         record_positioned_copy(decoration_count);
+        Ok(())
+    }
+
+    /// Appends a retained line's decoration records. They name glyphs by layout index, which
+    /// moved by `glyph_shift` (wrapping) when the glyphs laid out before the line changed in
+    /// number.
+    pub(super) fn extend_retained_decorations(
+        &mut self,
+        decorations: &[DecorationRecord],
+        glyph_shift: u32,
+    ) -> Result<(), EngineError> {
+        reserve(&mut self.decorations, decorations.len())?;
+        if glyph_shift == 0 {
+            self.decorations.extend_from_slice(decorations);
+        } else {
+            self.decorations
+                .extend(decorations.iter().map(|record| DecorationRecord {
+                    glyph_start: record.glyph_start.wrapping_add(glyph_shift),
+                    glyph_end: record.glyph_end.wrapping_add(glyph_shift),
+                    ..*record
+                }));
+        }
         Ok(())
     }
 }

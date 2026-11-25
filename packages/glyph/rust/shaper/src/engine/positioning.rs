@@ -170,6 +170,12 @@ impl PositionedSemanticGlyph {
 /// overline, or line-through geometry in positioned space, colored by the style's
 /// decoration paint. Non-solid line styles carry their style bits for later paint work
 /// and render as solid geometry until then.
+///
+/// A record also says which glyphs it runs under, for a material that moves glyphs by their
+/// layout index or origin. A line's glyphs stand in visual order, so the index only grows
+/// along the inline axis: `glyph_start` is the glyph at the rectangle's inline start and
+/// `glyph_end` the glyph at its inline end, whatever the direction of the text. The pen
+/// origin of the first of them is `(inline_start, baseline)`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DecorationRecord {
     pub flags: u32,
@@ -180,6 +186,13 @@ pub struct DecorationRecord {
     pub inline_extent: f32,
     pub block_start: f32,
     pub block_extent: f32,
+    /// The line's baseline, which the decorated glyphs' pen origins stand on.
+    pub baseline: f32,
+    /// Layout index of the first decorated glyph: the index `glyphs()` reports it at.
+    pub glyph_start: u32,
+    /// Layout index of the last decorated glyph. Equal to `glyph_start` under one glyph, and
+    /// under a run whose clusters own no glyph.
+    pub glyph_end: u32,
     pub clip_id: u32,
     pub region_id: u32,
     pub flow_thread_id: u32,
@@ -416,6 +429,9 @@ struct DecoratedRun {
     font_handle: u32,
     start: f64,
     end: f64,
+    /// Layout indices of the run's glyphs, as `glyph_start..glyph_limit`.
+    glyph_start: u32,
+    glyph_limit: u32,
 }
 
 struct FragmentPositionState {
@@ -493,6 +509,8 @@ struct PositionedCluster {
     style: ResolvedStyle,
     font_handle: u32,
     cluster_origin: f64,
+    /// Layout indices of the cluster's glyphs; empty for a cluster that owns none.
+    glyphs: core::ops::Range<u32>,
 }
 
 /// One line's ink in positioned space: what a union of its glyphs' placed ink boxes gives.
@@ -2691,6 +2709,54 @@ mod tests {
         assert_eq!(underline.block_extent, 0.5);
     }
 
+    /// A retained line's decoration records name glyphs by layout index, so a copy made after
+    /// the glyphs before the line changed in number moves both ends by that much and nothing
+    /// else. No edit reaches this today (a decorated paragraph repositions every line after an
+    /// edit before it); the copy must not go stale when retention widens.
+    #[test]
+    fn retained_decorations_follow_the_glyphs_laid_out_before_their_line() {
+        let record = DecorationRecord {
+            flags: crate::engine::frame::DECORATION_UNDERLINE,
+            style: 0,
+            color: 0xff00_00ff,
+            material_id: 3,
+            inline_start: 4.0,
+            inline_extent: 12.0,
+            block_start: 9.0,
+            block_extent: 0.5,
+            baseline: 8.0,
+            glyph_start: 16,
+            glyph_end: 19,
+            clip_id: 1,
+            region_id: 2,
+            flow_thread_id: 3,
+            transform_index: 4,
+        };
+        let mut arena = PositionedGlyphArena::default();
+        arena.extend_retained_decorations(&[record], 0).unwrap();
+        // One glyph more before the line, then six fewer.
+        arena.extend_retained_decorations(&[record], 1).unwrap();
+        arena
+            .extend_retained_decorations(&[record], 6_u32.wrapping_neg())
+            .unwrap();
+        assert_eq!(
+            arena.decorations,
+            [
+                record,
+                DecorationRecord {
+                    glyph_start: 17,
+                    glyph_end: 20,
+                    ..record
+                },
+                DecorationRecord {
+                    glyph_start: 10,
+                    glyph_end: 13,
+                    ..record
+                },
+            ]
+        );
+    }
+
     /// Decoration slice: a styled run with underline and line-through flags emits
     /// decoration records with geometry from the registered font's decoration metrics
     /// (fixture: underline -100/50, strikeout 300/50 at 1000 upem, font size 10).
@@ -2872,6 +2938,9 @@ mod tests {
         // post underline position -100 at scale 0.01 in down-positive space: 8.0 + 1.0.
         assert_eq!(underline.block_start, 9.0);
         assert_eq!(underline.block_extent, 0.5);
+        // Both glyphs of the run, on the line's baseline.
+        assert_eq!((underline.glyph_start, underline.glyph_end), (0, 1));
+        assert_eq!(underline.baseline, 8.0);
         assert_eq!(underline.color, 0xff00_00ff);
         assert_eq!(underline.material_id, 17);
         assert_eq!(underline.clip_id, 9);
