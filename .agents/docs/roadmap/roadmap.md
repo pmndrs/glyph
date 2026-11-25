@@ -286,7 +286,7 @@ Item 1.2 is closed. Item 1.3 is now the active dependency; it replaces local/con
 - [x] The package real-font E2E is mandatory and verifies fixture identity before invoking the compiled Wasm package.
 - [x] The shared interactive/headless baker target defaults to the canonical bytes and produces deterministic GLB output; local upload remains an explicit override.
 - [x] The UTF-16 corpus covers kerning and ligature toggles, decomposed marks, supplementary decode, variation selectors, spaces, and explicit newline.
-- [x] Repository commands generate HarfRust 0.12.0 and HarfBuzz 13.0.0 JSON oracles and refuse incompatible engine inputs.
+- [x] Repository commands generate HarfRust 0.12.0 and HarfBuzz 13.0.0 JSON oracles and refuse incompatible engine inputs. The HarfBuzz oracles are frozen data since 2026-11-24; their generator was removed with the HarfBuzz tools ([decision](../planning/decisions/remove-harfbuzz-tools.md)).
 - [x] A differential test proves core shaping equality and fixes the exact unsafe-to-concat flag-delta inventory.
 - [x] The deterministic HTML/CSS reference records exact font/text/style/viewport/browser inputs and a hashed PNG.
 - [x] Pin the remaining bitmap, paragraph, GLB, malformed-input, GPU-readback, maximum-cardinality, and empty identity contract fixtures.
@@ -368,7 +368,7 @@ Item 2.3 is closed. Exact goldens bind split, combined-embedded, combined-extern
 - [x] `bakeProject` consumes the canonical static discovery report, groups and deduplicates one source deterministically, and dynamically imports only each already-verified ESM baker entry.
 - [x] Project discovery uses Oxc parsing, scopes, and resolution without a consumer TypeScript compiler; isolated tarball installation proves actual CLI baking and application-module non-execution.
 - [x] The thin native-ESM `glyph bake` command covers conventional project defaults, repeatable entry/asset-root options, mirrored output roots, human output, JSON output, command-specific help, malformed arguments, and diagnostic exit status.
-- [x] `glyph glyphs` exposes Unicode mappings and retained `post`/CFF names through pinned `hb-info`, filters exact names, and emits either JSON or a compressed set accepted by `glyph bake --unicodes`; synthetic `gidN` labels are never promoted to semantic names.
+- [x] `glyph glyphs` exposes Unicode mappings and retained `post`/CFF names through the font baker's inspection, filters exact names, and emits either JSON or a compressed set accepted by `glyph bake --unicodes`; synthetic `gidN` labels are never promoted to semantic names.
 - [x] Exact Inter embedded/external goldens, mixed embedded/external raster composition, and repeated project runs prove authoritative byte and output-report determinism.
 - [x] Writes use same-directory exclusive temporary files, file synchronization, atomic rename, cancellation cleanup, source/output overlap checks, unique targets, and single-filename artifact IDs.
 - [x] The completed report records phase and total timing, before/after RSS, explicitly labeled process-lifetime peak RSS, output paths/roles/bytes/hashes, container bytes, and raw/gzip/Brotli transport bytes.
