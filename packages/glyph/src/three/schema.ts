@@ -111,7 +111,8 @@ export interface ThreeConfigOptions extends ThreeRootOptions {
    * Publishes each glyph's layout index and pen origin, which a text material reads as `glyphIndex` and `glyphOrigin`.
    * Off by default, and a material of a handle without it throws when it reads either: the two facts are 12 more
    * bytes per glyph that the engine gathers and this renderer keeps for every text of the handle, whatever its
-   * material. Only a material that reads them uploads them to the GPU.
+   * material. Only a material that reads them uploads them to the GPU, as two more vertex-stage storage buffers: an
+   * MSDF material that reads both in indexed transform mode binds 9, over WebGPU's default limit of 8.
    */
   readonly glyphFacts?: boolean;
   /**

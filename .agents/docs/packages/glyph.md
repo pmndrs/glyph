@@ -1348,9 +1348,9 @@ A material can also be told which glyph it is drawing: the glyph's index in its 
 across lines, fonts and formats) and its pen origin on the baseline. Both come from two host system buffers,
 `glyphIndex` and `glyphOrigin`, that a codec declares together; the index is the engine's one semantic input for it,
 and the origin lanes store the pen origin every technique body already loads, relative to the placement slot. They are
-opt-in, because they are 12 bytes per glyph instance gathered for every text of a handle: Three and PixiJS 3D publish
-them for a handle created with `glyphFacts: true`, and TypeGPU for a config whose `transformPosition` or
-`transformColor` declares the two glyph parameters. Three hands a glyph material context `glyphIndex` and
+opt-in, because they are 12 bytes per glyph instance gathered for every text of a handle: Three, TypeGPU and PixiJS 3D each publish
+them only for a handle created with `glyphFacts: true`; a TypeGPU config without it compiles the programs it compiled
+before the facts existed. Three hands a glyph material context `glyphIndex` and
 `glyphOrigin` nodes (the origin in `paragraphPosition` space) through the same stage-selecting node as the positions,
 TypeGPU passes them to its callbacks in the pixels of `position`, and PixiJS 3D gives a recipe whose bits declare it
 the `aGlyphFacts` attribute. A decoration has neither. The index is a position that an edit shifts, never an identity;

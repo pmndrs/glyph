@@ -646,6 +646,10 @@ a handle without them throws when it reads one. A decoration context has neither
 | `glyphIndex`  | `Node<'uint'>`: the glyph's index in its text's layout order, the index `label.glyphs()` reports it at. Blank glyphs count, so drawn indices have gaps; a right-to-left run counts in drawn order, left to right; a ligature is one glyph; lines, fonts and formats share one sequence. |
 | `glyphOrigin` | `Node<'vec3'>`: the glyph's pen origin on its baseline in `paragraphPosition` space, `(glyphs().x[i], -glyphs().y[i], 0)`. It is the pivot `Glyphs.setMatrixAt` turns a glyph about, not the centre of its quad.                                                                        |
 
+A material that reads both facts adds two storage buffers to its vertex stage. In indexed transform mode that is 8 for
+Bitmap and Slug and 9 for MSDF, and WebGPU's default `maxStorageBuffersPerShaderStage` is 8: an MSDF material that
+reads both needs direct transform mode (7) or a renderer created with a higher `requiredLimits` value.
+
 Both are constant across a glyph and safe in either stage, like the position nodes. The index is a position, not an
 identity: an edit before a glyph shifts it, and `split()` is still how an identity is frozen (a `Glyphs` keeps the
 index and origin each glyph had when it was split). To stagger an effect across a text, pass its length as a uniform

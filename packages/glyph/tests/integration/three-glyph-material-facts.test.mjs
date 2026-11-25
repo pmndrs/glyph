@@ -188,6 +188,28 @@ for (const [format, fonts] of Object.entries(FORMATS)) {
     label.dispose();
   });
 
+  test(`${format}: indices continue from one column into the next`, async (t) => {
+    const three = await createThreeTestHandle(t, FACTS_CONFIG);
+    const font = await fonts.amiri();
+    const { contexts, material } = recordingMaterial();
+    const text = Array.from({ length: 12 }, (_, index) => `word${index}`).join(' ');
+    const { label } = mount(three, {
+      font,
+      material,
+      text,
+      constraints: { width: { mode: 'exact', size: 240 }, height: { mode: 'exact', size: 80 } },
+      layout: { columns: { count: 2, gap: 20 } },
+    });
+    const layout = label.glyphs();
+    const drawn = assertFactsMatchInspection(label.parent, contexts, layout, format);
+    // The second column starts to the right of the first and above where the first ended.
+    const columnStart = drawn.findIndex((fact, index) => index > 0 && fact.y < drawn[index - 1].y - 1e-3);
+    assert.ok(columnStart > 0, 'the text flows into a second column');
+    assert.ok(drawn[columnStart].x > drawn[0].x + 100, 'the second column sits beside the first');
+    assert.equal(drawn[columnStart].index, drawn[columnStart - 1].index + 2, 'only the blank between them is skipped');
+    label.dispose();
+  });
+
   test(`${format}: fonts that draw in separate batches share one index sequence`, async (t) => {
     const three = await createThreeTestHandle(t, FACTS_CONFIG);
     const amiri = await fonts.amiri();

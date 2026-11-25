@@ -20,8 +20,10 @@ about that glyph in every integration: its index in the text's layout order and 
 - **Three** (`/three`, `/three/typegpu`, React, Vue). `defineThreeConfig({ glyphFacts: true })` publishes the two lanes;
   a glyph material context then carries `glyphIndex: Node<'uint'>` and `glyphOrigin: Node<'vec3'>`, stage-safe like
   the position nodes. Without the option neither lane exists and reading either fact throws.
-- **TypeGPU.** `transformPosition` and `transformColor` receive `glyphIndex` and `glyphOrigin` as third and fourth
-  parameters. A config publishes the lanes only when one of its callbacks declares them (`callback.length > 2`).
+- **TypeGPU.** `defineTypeGpuConfig({ glyphFacts: true })` publishes the lanes and passes `glyphIndex` and
+  `glyphOrigin` to `transformPosition` and `transformColor` as third and fourth arguments. Such a config builds its
+  pipelines with the two lanes as vertex inputs and flat varyings; any other config compiles the same WGSL as
+  `sil-green-72` (65 modules, one sha256).
 - **PixiJS 3D.** `definePixi3DConfig({ glyphFacts: true })` publishes the lanes, and a recipe whose bits declare the
   `aGlyphFacts` attribute (`float32x4`: origin x, origin y, index) carries them.
 
