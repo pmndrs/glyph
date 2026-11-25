@@ -132,7 +132,7 @@ export function threeCodecDescriptor(
   const DECORATION_PROGRAM_ID = ids.program(decorationSchema.technique, THREE_PROGRAM_NAMESPACE);
   const programs: CodecProgram[] = [
     ...rasterPrograms,
-    decorationProgram(DECORATION_TECHNIQUE_ID, DECORATION_PROGRAM_ID, modes.bitmap),
+    decorationProgram(DECORATION_TECHNIQUE_ID, DECORATION_PROGRAM_ID, modes.bitmap, glyphFacts),
     ...additionalPrograms,
   ];
   return { capabilitySets: [capabilitySet], programs };
@@ -157,12 +157,13 @@ function decorationProgram(
   techniqueId: CodecTechniqueId,
   programId: CodecProgramId,
   transformMode: ThreeTransformMode,
+  glyphFacts: boolean,
 ): CodecProgram {
   return createDecorationCodecProgram({
     techniqueId,
     programId,
     transformMode,
-    system: decorationSystemBuffers(transformMode),
+    system: decorationSystemBuffers(transformMode, glyphFacts),
   });
 }
 
@@ -176,9 +177,14 @@ function codecSystemBuffers(transformMode: ThreeTransformMode, glyphFacts: boole
   };
 }
 
-function decorationSystemBuffers(transformMode: ThreeTransformMode): CodecProgramSystemBuffers {
+/** `glyphFacts` adds the same lane to decoration rows: the glyphs a rectangle runs under. */
+function decorationSystemBuffers(
+  transformMode: ThreeTransformMode,
+  glyphFacts: boolean,
+): Pick<CodecProgramSystemBuffers, 'stableGlyphId' | 'transformIndex' | 'glyphFacts'> {
   return {
     stableGlyphId: threeSystemBuffers.stableGlyphId,
     ...(transformMode === 'indexed' ? { transformIndex: threeSystemBuffers.transformIndex } : {}),
+    ...(glyphFacts ? { glyphFacts: threeSystemBuffers.glyphFacts } : {}),
   };
 }

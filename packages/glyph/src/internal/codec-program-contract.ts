@@ -129,6 +129,41 @@ export function attachHostCodecProgramSystemBuffers<Schema extends TechniqueSche
   return attached;
 }
 
+/**
+ * Publish a decoration row's glyph facts into the lane glyph rows fill with their own. The engine writes a decoration
+ * row's F32 lanes by position: the rectangle in lanes 0-3, then the baseline and the layout indices of the first and
+ * last decorated glyph. The record is therefore the pen origin of the first glyph (the rectangle's inline start, on
+ * the baseline), its layout index, and the last glyph's index where a glyph row leaves a lane unused.
+ */
+export function attachDecorationGlyphFacts<Schema extends TechniqueSchemaMetadata>(
+  body: CompiledCodecProgramBody<Schema>,
+  schema: Schema,
+  system: CodecProgramSystemBuffers,
+): CompiledCodecProgramBody<Schema> {
+  const glyphFacts = system.glyphFacts;
+  if (glyphFacts === undefined) return body;
+  const opcodes = textShaperAbi.codec.opcodes;
+  const operations = [...body.operations];
+  for (const [lane, input] of DECORATION_GLYPH_FACT_INPUTS.entries()) {
+    operations.push(
+      { opcode: opcodes.loadF32, target: 0, operand0: input },
+      { opcode: opcodes.storeF32, operand0: 0, operand1: lane, immediate0: glyphFacts.id },
+    );
+  }
+  const attached = { ...body, operations };
+  recordTechniqueCodecBody(attached, {
+    schema,
+    stableGlyphId: system.stableGlyphId.id,
+    transformIndex: system.transformIndex?.id,
+    placementSlot: undefined,
+    glyphFacts: glyphFacts.id,
+  });
+  return attached;
+}
+
+/** The decoration row F32 lanes behind each glyph facts lane: inline start, baseline, first and last glyph index. */
+const DECORATION_GLYPH_FACT_INPUTS = [0, 4, 5, 6] as const;
+
 export function assertTechniqueCodecBody<Schema extends TechniqueSchemaMetadata>(
   body: unknown,
   schema: Schema,

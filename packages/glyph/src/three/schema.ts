@@ -113,7 +113,9 @@ export interface ThreeConfigOptions extends ThreeRootOptions {
    * bytes per glyph that the engine gathers and this renderer keeps for every text of the handle, whatever its
    * material. Only a material that reads them uploads the record to the GPU, as one more vertex-stage storage buffer
    * (8 at most, for MSDF in indexed transform mode: WebGPU's default limit). The index travels as a float, exact up
-   * to 16,777,216 glyphs in one text.
+   * to 16,777,216 glyphs in one text. A decoration rectangle carries the same record for the glyphs it runs under
+   * (16 bytes per underline, overline or line-through of a run on a line), and a material's decoration context then
+   * has `glyphIndex` and `glyphOrigin` too.
    */
   readonly glyphFacts?: boolean;
   /**

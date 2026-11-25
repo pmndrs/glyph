@@ -39,13 +39,22 @@ type RawMaterialContext = {
     'paragraphPosition' | 'position' | 'glyphIndex' | 'glyphOrigin'
   >;
 }[BuiltinMaterialContextKey];
-/** One draw's raw vertex graphs: the paragraph-local and final draw-local positions, and a glyph draw's facts. */
+/**
+ * One draw's raw vertex graphs: the paragraph-local and final draw-local positions, and the draw's glyph facts. A
+ * glyph's index is its own; a decoration's runs from its first glyph's to its last along the rectangle.
+ */
 interface RawMaterialNodes {
   readonly paragraph: THREE.Node<'vec3'>;
   readonly draw: THREE.Node<'vec3'>;
-  readonly glyph: Readonly<{ index: THREE.Node<'uint'>; origin: THREE.Node<'vec2'> }> | undefined;
+  readonly glyph:
+    | Readonly<{ index: THREE.Node<'uint'>; origin: THREE.Node<'vec2'> }>
+    | Readonly<{ span: THREE.Node<'float'>; origin: THREE.Node<'vec2'> }>
+    | undefined;
 }
-/** The lane behind a caller material's `glyphIndex` and `glyphOrigin`: origin x and y, then the index. */
+/**
+ * The lane behind a caller material's `glyphIndex` and `glyphOrigin`: origin x and y, then the index. A decoration
+ * record's fourth float is the index of the last glyph its rectangle runs under.
+ */
 interface GlyphFactLanes {
   readonly facts: RetainedBuffer;
   readonly buffers: readonly RetainedBuffer[];
@@ -108,12 +117,14 @@ export class ThreeMaterialRealizer {
     if (rect === undefined || packed === undefined) {
       throw new Error('decoration draw is missing its rectangle or packed Codec buffer');
     }
-    const lanes = materialBuffers([rect, packed], transform);
-    const key = `decoration:${this.key(selection)}:${rect.storageKey}:${packed.storageKey}:${transformProgramKey(
+    const facts = this.#glyphFactLanes(buffers, selection);
+    const lanes = materialBuffers([rect, packed, ...(facts?.buffers ?? [])], transform);
+    const factsKey = facts === undefined ? '' : `:facts:${facts.facts.storageKey}`;
+    const key = `decoration:${this.key(selection)}:${rect.storageKey}:${packed.storageKey}${factsKey}:${transformProgramKey(
       transform,
       this.#context.transformGeneration,
     )}`;
-    const shape = `decoration:${this.key(selection)}:${this.#transformShape(transform)}`;
+    const shape = `decoration:${this.key(selection)}${facts === undefined ? '' : ':facts'}:${this.#transformShape(transform)}`;
     const cached = this.#cached(key, shape, lanes);
     if (cached !== undefined) return cached;
     const instance = runInstance();
@@ -130,7 +141,7 @@ export class ThreeMaterialRealizer {
         shader,
         createDefaultMaterial: () => coverageMaterial(shader, position),
       },
-      { paragraph: shader.position, draw: position, glyph: undefined },
+      { paragraph: shader.position, draw: position, glyph: decorationFacts(facts, instance) },
     );
     this.#retain(key, material, undefined, lanes, transform.kind, shape);
     return material;
@@ -619,29 +630,23 @@ export class ThreeMaterialRealizer {
       paragraphPosition: stageNode(nodes.paragraph, 'vec3'),
       position: stageNode(nodes.draw, 'vec3'),
     };
+    const glyph = nodes.glyph;
+    const glyphOrigin =
+      glyph === undefined ? undefined : stageNode(TSL.vec3(glyph.origin.x, glyph.origin.y.negate(), 0), 'vec3');
     let created: THREE.NodeMaterial | undefined;
     if (context.kind === 'decoration') {
-      created = factory.create({ ...context, ...positions });
-    } else {
-      const glyph = nodes.glyph;
+      const placed = { ...context, ...positions };
       created = factory.create(
-        glyph === undefined
-          ? {
-              ...context,
-              ...positions,
-              get glyphIndex(): never {
-                throw unpublishedGlyphFact('glyphIndex');
-              },
-              get glyphOrigin(): never {
-                throw unpublishedGlyphFact('glyphOrigin');
-              },
-            }
-          : {
-              ...context,
-              ...positions,
-              glyphIndex: stageNode(glyph.index, 'uint'),
-              glyphOrigin: stageNode(TSL.vec3(glyph.origin.x, glyph.origin.y.negate(), 0), 'vec3'),
-            },
+        glyph === undefined || glyphOrigin === undefined || !('span' in glyph)
+          ? withoutGlyphFacts(placed)
+          : { ...placed, glyphIndex: stageNode(glyph.span, 'float'), glyphOrigin },
+      );
+    } else {
+      const placed = { ...context, ...positions };
+      created = factory.create(
+        glyph === undefined || glyphOrigin === undefined || !('index' in glyph)
+          ? withoutGlyphFacts(placed)
+          : { ...placed, glyphIndex: stageNode(glyph.index, 'uint'), glyphOrigin },
       );
     }
     return this.#own(created ?? context.createDefaultMaterial());
@@ -819,7 +824,7 @@ class StageNode extends THREE.Node {
   readonly node: THREE.Node;
   readonly interpolated: THREE.Node;
 
-  constructor(node: THREE.Node, type: 'vec3' | 'uint') {
+  constructor(node: THREE.Node, type: 'vec3' | 'uint' | 'float') {
     super(type);
     this.node = node;
     this.interpolated = TSL.vertexStage(node);
@@ -845,7 +850,7 @@ class StageNode extends THREE.Node {
   }
 }
 
-function stageNode<Type extends 'vec3' | 'uint'>(node: THREE.Node<Type>, type: Type): THREE.Node<Type> {
+function stageNode<Type extends 'vec3' | 'uint' | 'float'>(node: THREE.Node<Type>, type: Type): THREE.Node<Type> {
   // The wrapper builds whichever of two graphs of `type` its stage reads, so it is a node of that type.
   const staged: THREE.Node = new StageNode(node, type);
   return TSL.nodeObject(staged) as THREE.Node<Type>;
@@ -855,6 +860,32 @@ function unpublishedGlyphFact(name: 'glyphIndex' | 'glyphOrigin'): TypeError {
   return new TypeError(
     `text material read ${name}, which its handle does not publish; create the handle with defineThreeConfig({ glyphFacts: true })`,
   );
+}
+
+/** A context of a handle that publishes no glyph facts: reading either one says how to get them. */
+function withoutGlyphFacts<Context extends object>(
+  context: Context,
+): Context & { readonly glyphIndex: never; readonly glyphOrigin: never } {
+  return {
+    ...context,
+    get glyphIndex(): never {
+      throw unpublishedGlyphFact('glyphIndex');
+    },
+    get glyphOrigin(): never {
+      throw unpublishedGlyphFact('glyphOrigin');
+    },
+  };
+}
+
+/**
+ * A decoration rectangle's facts. Its record names the first and last glyph it runs under, and a line's glyphs are
+ * indexed in the order they are drawn, so the index at a point of the rectangle is the mix of the two along its inline
+ * axis: each end takes exactly its glyph's index. `positionLocal.x` spans the rectangle from 0 to 1.
+ */
+function decorationFacts(lanes: GlyphFactLanes | undefined, instance: THREE.Node<'uint'>): RawMaterialNodes['glyph'] {
+  if (lanes === undefined) return undefined;
+  const record = storageVec4(lanes.facts, instance);
+  return { span: TSL.mix(record.z, record.w, TSL.positionLocal.x), origin: record.xy };
 }
 
 function glyphFacts(

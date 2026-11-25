@@ -2,7 +2,7 @@
  * Reads what a caller's Three material is given about each glyph, the way its vertex stage does: the glyph facts lane
  * of every record a draw holds, with the origin moved by the record's placement slot.
  */
-import { slugSchema } from '@pmndrs/glyph/core';
+import { decorationSchema, slugSchema } from '@pmndrs/glyph/core';
 
 import { threeSystemBuffers } from '../../dist/three/codec.js';
 
@@ -35,7 +35,11 @@ export function drawnGlyphFacts(root, glyphOrigin) {
   const facts = [];
   const draws = [];
   root.traverse((object) => {
-    if (object.isMesh === true && object.geometry.getAttribute(lane(threeSystemBuffers.glyphFacts)) !== undefined) {
+    if (
+      object.isMesh === true &&
+      object.userData.pmndrsGlyphPrimitiveKind === 'glyph' &&
+      object.geometry.getAttribute(lane(threeSystemBuffers.glyphFacts)) !== undefined
+    ) {
       draws.push(object);
     }
   });
@@ -62,4 +66,38 @@ export function drawnGlyphFacts(root, glyphOrigin) {
     }
   }
   return facts;
+}
+
+/**
+ * Every decoration rectangle under `root` as `{ left, top, width, height, start, end, x, y }` in layout space (y
+ * down), sorted top to bottom, then left to right: the rectangle and the facts record its draw holds beside it.
+ * `start` and `end` are what a decoration context's `glyphIndex` evaluates to at the rectangle's inline start and end,
+ * and `x`/`y` its `glyphOrigin` before y is negated.
+ */
+export function drawnDecorationFacts(root) {
+  const rects = [];
+  root.traverse((object) => {
+    if (object.isMesh !== true || object.userData.pmndrsGlyphPrimitiveKind !== 'decoration') return;
+    const geometry = object.geometry;
+    const start = object.userData.pmndrsGlyphRunStart ?? 0;
+    const rect = geometry.getAttribute(lane(decorationSchema.buffers.rect)).array;
+    const facts = geometry.getAttribute(lane(threeSystemBuffers.glyphFacts))?.array;
+    for (let record = start; record < start + geometry.instanceCount; record += 1) {
+      rects.push({
+        left: rect[record * 4],
+        top: rect[record * 4 + 1],
+        width: rect[record * 4 + 2],
+        height: rect[record * 4 + 3],
+        ...(facts === undefined
+          ? {}
+          : {
+              x: facts[record * 4],
+              y: facts[record * 4 + 1],
+              start: facts[record * 4 + 2],
+              end: facts[record * 4 + 3],
+            }),
+      });
+    }
+  });
+  return rects.toSorted((a, b) => a.top - b.top || a.left - b.left);
 }

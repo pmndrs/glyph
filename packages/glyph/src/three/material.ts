@@ -39,7 +39,8 @@ type ThreeMaterialPositions = Readonly<{
 
 /**
  * What a glyph material context says about the glyph a vertex or fragment belongs to. Both are constant across a
- * glyph and, like the position nodes, may be read from any node of either stage. A decoration context has neither.
+ * glyph and, like the position nodes, may be read from any node of either stage. A decoration context carries the
+ * same two names for the glyphs its rectangle runs under ({@link ThreeMaterialDecoratedGlyphs}).
  */
 type ThreeMaterialGlyph = Readonly<{
   /**
@@ -59,13 +60,37 @@ type ThreeMaterialGlyph = Readonly<{
   glyphOrigin: Node<'vec3'>;
 }>;
 
+/**
+ * What a decoration material context says about the glyphs its rectangle (an underline, overline or line-through of
+ * one run on one line) runs under, so that an expression written for glyphs also moves the line drawn under them.
+ * A rectangle has four corners: it follows its first and last glyph and stays straight between them.
+ */
+type ThreeMaterialDecoratedGlyphs = Readonly<{
+  /**
+   * The layout index under this point of the rectangle, as a float: exactly the first decorated glyph's `glyphIndex`
+   * at the rectangle's inline start, exactly the last one's at its inline end, and linear between. A line's glyphs
+   * are indexed in the order they are drawn, so the value only grows left to right, through right-to-left text
+   * too, and counts the blanks the line runs under. It is a float where a glyph's is a `uint`: wrap it in `float()`
+   * to share an expression, and in `uint()` (which truncates) for integer arithmetic or a table lookup. A rectangle
+   * is cut at every line break and font change, so each has its own range.
+   */
+  glyphIndex: Node<'float'>;
+  /**
+   * The `glyphOrigin` of the first decorated glyph: the rectangle's inline start on the line's baseline. Constant
+   * across the rectangle, so a displacement taken from it moves the rectangle as one piece. A glyph raised off the
+   * baseline or moved by mark positioning has its own origin; the rectangle keeps the baseline.
+   */
+  glyphOrigin: Node<'vec3'>;
+}>;
+
 type ThreeDecorationMaterialContext = ThreeMaterialRootContext &
   Readonly<{
     kind: 'decoration';
     shader: TslDecorationShaderOutput;
     createDefaultMaterial(): NodeMaterial;
   }> &
-  ThreeMaterialPositions;
+  ThreeMaterialPositions &
+  ThreeMaterialDecoratedGlyphs;
 
 type ThreeBitmapMaterialContext = ThreeMaterialRootContext &
   Readonly<{

@@ -237,7 +237,9 @@ export interface CodecProgramSystemBuffers {
   /**
    * Host-owned glyph facts for materials, one record of four floats: each glyph's pen origin on the baseline,
    * relative to its placement slot like a technique's own origin, then its index in its text's layout order (the
-   * index `glyphs()` reports it at; exact up to 2^24), then an unused lane.
+   * index `glyphs()` reports it at; exact up to 2^24), then an unused lane. A decoration program that declares it
+   * stores the pen origin and layout index of the first glyph its rectangle runs under, and the last one's index in
+   * the lane a glyph leaves unused.
    */
   readonly glyphFacts?: CodecBufferDeclaration<'f32', readonly ['inlineOrigin', 'blockOrigin', 'glyphIndex', 'unused']>;
 }

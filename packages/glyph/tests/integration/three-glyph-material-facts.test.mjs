@@ -16,7 +16,7 @@ import * as THREE from 'three/webgpu';
 
 import { compileNodeMaterialBackends } from '../support/node-material-shaders.mjs';
 import { threeSystemBuffers } from '../../dist/three/codec.js';
-import { drawnGlyphFacts } from '../support/three-glyph-facts.mjs';
+import { drawnDecorationFacts, drawnGlyphFacts } from '../support/three-glyph-facts.mjs';
 import { createThreeTestHandle } from '../support/three-handle.mjs';
 import { assertCommitted } from '../support/three-render.mjs';
 
@@ -253,24 +253,6 @@ for (const [format, fonts] of Object.entries(FORMATS)) {
     label.dispose();
   });
 
-  test(`${format}: a decoration draw has no glyph facts`, async (t) => {
-    const three = await createThreeTestHandle(t, FACTS_CONFIG);
-    const font = await fonts.amiri();
-    const { contexts, material } = recordingMaterial();
-    const { label } = mount(three, {
-      font,
-      material,
-      text: 'Ab',
-      style: { decoration: { underline: true, color: '#ff0088' } },
-    });
-    const decoration = contexts.find((context) => context.kind === 'decoration');
-    assert.ok(decoration, 'the underline reaches the material factory');
-    assert.equal('glyphIndex' in decoration, false);
-    assert.equal('glyphOrigin' in decoration, false);
-    assertFactsMatchInspection(label.parent, contexts, label.glyphs(), format);
-    label.dispose();
-  });
-
   test(`${format}: split() glyphs keep the index and origin they had in their text`, async (t) => {
     const three = await createThreeTestHandle(t, FACTS_CONFIG);
     const font = await fonts.amiri();
@@ -294,6 +276,198 @@ for (const [format, fonts] of Object.entries(FORMATS)) {
     label.dispose();
   });
 }
+
+const UNDERLINE = { decoration: { underline: true, color: '#ff0088' } };
+
+/**
+ * Holds every decoration rectangle under `object` to the inspection: `start` and `end` are the indices `glyphs()`
+ * reports the leftmost and rightmost glyph under the rectangle at, and the origin is the pen origin of the first.
+ */
+function assertDecorationFactsMatchInspection(object, layout, where) {
+  const rects = drawnDecorationFacts(object);
+  for (const [ordinal, rect] of rects.entries()) {
+    const label = `${where}: rectangle ${ordinal}`;
+    assert.ok(Number.isInteger(rect.start) && Number.isInteger(rect.end), `${label} names whole glyphs`);
+    assert.ok(rect.start <= rect.end && rect.end < layout.glyphCount, `${label} names glyphs of the text in order`);
+    // Its origin is the first glyph's pen origin: the rectangle's own inline start, on that glyph's baseline.
+    assert.ok(Math.abs(rect.x - layout.x[rect.start]) < 1e-3, `${label} origin x is glyph ${rect.start}'s`);
+    assert.ok(Math.abs(rect.y - layout.y[rect.start]) < 1e-3, `${label} origin y is glyph ${rect.start}'s`);
+    assert.ok(Math.abs(rect.x - rect.left) < 1e-3, `${label} starts at its first glyph's pen`);
+    // The rectangle ends where its last glyph's advance does: the next glyph's pen when one follows on the line.
+    const line = [...layout.lineGlyphStarts].findLastIndex((start) => start <= rect.end);
+    const lineEnd = layout.lineGlyphStarts[line] + layout.lineGlyphCounts[line];
+    assert.ok(rect.start >= layout.lineGlyphStarts[line], `${label} stays on one line`);
+    if (rect.end + 1 < lineEnd) {
+      assert.ok(
+        Math.abs(rect.left + rect.width - layout.x[rect.end + 1]) < 1e-3,
+        `${label} ends at the pen of glyph ${rect.end + 1}`,
+      );
+    }
+    // Every glyph between the two sits inside the rectangle, in index order.
+    for (let glyph = rect.start; glyph <= rect.end; glyph += 1) {
+      assert.ok(
+        layout.x[glyph] >= rect.left - 1e-3 && layout.x[glyph] < rect.left + rect.width + 1e-3,
+        `${label} runs under glyph ${glyph}`,
+      );
+      if (glyph > rect.start) assert.ok(layout.x[glyph] >= layout.x[glyph - 1] - 1e-3, `${label} ascends at ${glyph}`);
+    }
+  }
+  return rects;
+}
+
+const ranges = (rects) => rects.map((rect) => [rect.start, rect.end]);
+
+for (const [format, fonts] of Object.entries(FORMATS)) {
+  test(`${format}: an underline names the first and last glyph it runs under, blanks included`, async (t) => {
+    const three = await createThreeTestHandle(t, FACTS_CONFIG);
+    const font = await fonts.amiri();
+    const { contexts, material } = recordingMaterial();
+    const { label } = mount(three, { font, material, text: 'To a wave', style: UNDERLINE });
+    const layout = label.glyphs();
+    const decoration = contexts.find((context) => context.kind === 'decoration');
+    assert.ok(decoration, 'the underline reaches the material factory');
+    assert.ok(decoration.glyphIndex.isNode && decoration.glyphOrigin.isNode, 'with both glyph facts');
+    // One rectangle for the nine glyphs of the line, the two blanks among them.
+    assert.deepEqual(ranges(assertDecorationFactsMatchInspection(label.parent, layout, format)), [[0, 8]]);
+    assertFactsMatchInspection(label.parent, contexts, layout, format);
+    label.dispose();
+  });
+}
+
+test('an underline over blanks alone names glyphs no draw holds', async (t) => {
+  const three = await createThreeTestHandle(t, FACTS_CONFIG);
+  const font = await FORMATS['pmndrs.bitmap'].amiri();
+  const { contexts, material } = recordingMaterial();
+  const { label } = mount(three, { font, material, text: txt`ab${span(UNDERLINE)`  c `}de` });
+  const layout = label.glyphs();
+  const rects = assertDecorationFactsMatchInspection(label.parent, layout, 'blanks');
+  // "  c ": both ends of the rectangle are blank glyphs, which the layout counts and no glyph draw holds.
+  assert.deepEqual(ranges(rects), [[2, 5]]);
+  const drawn = assertFactsMatchInspection(label.parent, contexts, layout, 'blanks');
+  assert.deepEqual(
+    drawn.map((fact) => fact.index),
+    [0, 1, 4, 6, 7],
+  );
+  label.dispose();
+});
+
+test('an underline under a ligature counts it as one glyph', async (t) => {
+  const three = await createThreeTestHandle(t, FACTS_CONFIG);
+  const font = await FORMATS['pmndrs.bitmap'].amiri();
+  const { material } = recordingMaterial();
+  const { label } = mount(three, { font, material, text: 'office', style: UNDERLINE });
+  const layout = label.glyphs();
+  assert.deepEqual([...layout.clusters], [0, 1, 4, 5]);
+  // Six characters, four glyphs: the range is in glyphs.
+  assert.deepEqual(ranges(assertDecorationFactsMatchInspection(label.parent, layout, 'ligature')), [[0, 3]]);
+  label.dispose();
+  // A span boundary inside "ffi" shapes its two halves apart, so the underline of "ff" runs under what "ff" became.
+  const partial = mount(three, { font, material, text: txt`o${span(UNDERLINE)`ff`}ice` });
+  const [rect, ...rest] = assertDecorationFactsMatchInspection(partial.label.parent, partial.label.glyphs(), 'part');
+  assert.deepEqual(rest, []);
+  assert.deepEqual(
+    [...partial.label.glyphs().clusters]
+      .slice(rect.start, rect.end + 1)
+      .filter((cluster) => cluster < 1 || cluster > 2),
+    [],
+    'only glyphs of the underlined characters',
+  );
+  partial.label.dispose();
+});
+
+test('an underline in right-to-left text starts at its leftmost glyph, the last of its text', async (t) => {
+  const three = await createThreeTestHandle(t, FACTS_CONFIG);
+  const font = await FORMATS['pmndrs.bitmap'].amiri();
+  const { material } = recordingMaterial();
+  const { label } = mount(three, { font, material, text: txt`ab ${span(UNDERLINE)`${ARABIC}`} cd` });
+  const layout = label.glyphs();
+  const [rect, ...rest] = assertDecorationFactsMatchInspection(label.parent, layout, 'right-to-left');
+  assert.deepEqual(rest, []);
+  assert.ok(rect.end - rect.start >= 6, 'the rectangle runs under the Arabic letters');
+  for (let glyph = rect.start; glyph <= rect.end; glyph += 1) assert.equal(layout.glyphBidiLevels[glyph], 1);
+  // Indices follow the drawing order, so "start" is the left end of the rectangle: the end of the Arabic text.
+  assert.ok(layout.clusters[rect.start] > layout.clusters[rect.end], 'the first index is the last character');
+  assert.ok(layout.x[rect.start] < layout.x[rect.end]);
+  label.dispose();
+});
+
+test('an underline that wraps is one rectangle per line, each with its own glyphs', async (t) => {
+  const three = await createThreeTestHandle(t, FACTS_CONFIG);
+  const font = await FORMATS['pmndrs.bitmap'].amiri();
+  const { material } = recordingMaterial();
+  const { label } = mount(three, {
+    font,
+    material,
+    text: txt`one ${span(UNDERLINE)`two three four five six seven`} eight`,
+    constraints: { width: { mode: 'exact', size: 90 } },
+  });
+  const layout = label.glyphs();
+  assert.ok(layout.lineCount >= 3, 'the text wraps');
+  const rects = assertDecorationFactsMatchInspection(label.parent, layout, 'wrapped');
+  assert.ok(rects.length >= 2, 'the underline is cut at each line break');
+  for (const [ordinal, rect] of rects.entries()) {
+    if (ordinal === 0) continue;
+    const previous = rects[ordinal - 1];
+    assert.ok(rect.top > previous.top, 'one rectangle per line');
+    assert.ok(rect.start > previous.end, 'later lines hold later glyphs');
+    assert.equal(rect.start, layout.lineGlyphStarts[layout.lineGlyphStarts.indexOf(rect.start)], 'from its line start');
+  }
+  // Together they run under every glyph of the span except the blanks each break swallowed.
+  assert.equal(layout.clusters[rects[0].start], 4, 'the first rectangle starts at "two"');
+  label.dispose();
+});
+
+test('an underline is cut where the font changes, each rectangle with its own glyphs', async (t) => {
+  const three = await createThreeTestHandle(t, FACTS_CONFIG);
+  const amiri = await FORMATS['pmndrs.bitmap'].amiri();
+  const inter = await FORMATS['pmndrs.bitmap'].inter();
+  const { material } = recordingMaterial();
+  const { label } = mount(three, { font: amiri, material, text: txt`ab${span(inter)`cd`}ef`, style: UNDERLINE });
+  const layout = label.glyphs();
+  // The two fonts draw their underlines at different heights, so order the rectangles along the line.
+  const rects = assertDecorationFactsMatchInspection(label.parent, layout, 'fonts');
+  assert.deepEqual(ranges(rects.toSorted((left, right) => left.left - right.left)), [
+    [0, 1],
+    [2, 3],
+    [4, 5],
+  ]);
+  label.dispose();
+});
+
+test('an edit before an underline moves the glyphs it names, on lines the edit did not touch', async (t) => {
+  const three = await createThreeTestHandle(t, FACTS_CONFIG);
+  const font = await FORMATS['pmndrs.bitmap'].amiri();
+  const { material } = recordingMaterial();
+  const text = (first) => txt`${first}\nsecond ${span(UNDERLINE)`line`}\nthird ${span(UNDERLINE)`line here`}\nfourth`;
+  const { label, scene } = mount(three, { font, material, text: text('first line') });
+  const before = ranges(assertDecorationFactsMatchInspection(label.parent, label.glyphs(), 'before'));
+  assert.equal(before.length, 2);
+  // One more blank on the first line: both underlines keep their place and name glyphs one index on.
+  label.set({ text: text('first  line') });
+  scene.updateMatrixWorld();
+  assertCommitted(label);
+  const spaced = ranges(assertDecorationFactsMatchInspection(label.parent, label.glyphs(), 'after a blank'));
+  assert.deepEqual(
+    spaced,
+    before.map(([start, end]) => [start + 1, end + 1]),
+  );
+  // A deletion moves them back by the glyphs it removed, and a text created with the same content agrees.
+  const spacedCount = label.glyphs().glyphCount;
+  label.replace(0, 6, '');
+  scene.updateMatrixWorld();
+  assertCommitted(label);
+  const removed = spacedCount - label.glyphs().glyphCount;
+  assert.ok(removed > 0);
+  const deleted = ranges(assertDecorationFactsMatchInspection(label.parent, label.glyphs(), 'after a deletion'));
+  assert.deepEqual(
+    deleted,
+    spaced.map(([start, end]) => [start - removed, end - removed]),
+  );
+  label.dispose();
+  const fresh = mount(three, { font, material, text: text(' line') });
+  assert.deepEqual(ranges(drawnDecorationFacts(fresh.label.parent)), deleted, 'a text created with that content');
+  fresh.label.dispose();
+});
 
 test('a handle that does not ask for glyph facts publishes neither lane and refuses a material that reads one', async (t) => {
   const three = await createThreeTestHandle(t);
@@ -346,6 +520,82 @@ for (const shaders of ['stable', 'typegpu']) {
           for (const source of [vertex, fragment]) {
             assert.doesNotMatch(source, /null\./, `${where} ${backend} lowered a builtin to null`);
             assert.doesNotMatch(source, /,\s*\)/, `${where} ${backend} lowered a builtin to an empty argument`);
+          }
+        }
+        label.dispose();
+      }
+    });
+  }
+}
+
+/** WebGPU's default `maxStorageBuffersPerShaderStage`, which a draw's vertex stage must fit without asking for more. */
+const MAX_VERTEX_STORAGE_BUFFERS = 8;
+
+for (const shaders of ['stable', 'typegpu']) {
+  for (const transformMode of ['direct', 'indexed']) {
+    test(`one expression of the glyph facts draws glyphs and their decorations: ${shaders} shaders, ${transformMode} transforms`, async (t) => {
+      const three = await createThreeTestHandle(t, shaderConfigs[shaders]({ transformMode, glyphFacts: true }));
+      for (const [format, fonts] of Object.entries(FORMATS)) {
+        const font = await fonts.amiri();
+        const kinds = [];
+        // Written once, with no branch on what is drawn: `float()` takes a glyph's uint and a decoration's float.
+        const wave = defineTextMaterial((context) => {
+          kinds.push(context.kind);
+          const value = context.createDefaultMaterial();
+          const { glyphIndex, glyphOrigin, position } = context;
+          const lift = TSL.float(glyphIndex).mul(0.4375).sin().mul(3.25).add(glyphOrigin.x.mul(0.15625));
+          value.positionNode = position.add(TSL.vec3(0, lift, 0));
+          value.colorNode = TSL.vec3(
+            TSL.float(glyphIndex).mul(0.1).fract(),
+            glyphOrigin.x.fract(),
+            glyphOrigin.y.fract(),
+          );
+          return value;
+        });
+        const scene = new THREE.Scene();
+        const label = three.createText({ font, material: wave, text: 'Ab cd', style: UNDERLINE });
+        scene.add(label);
+        scene.updateMatrixWorld();
+        assertCommitted(label);
+        assert.deepEqual(kinds.toSorted(), ['decoration', 'glyph'], `${format}: the factory draws both`);
+        const draws = scene.getObjectByName('@pmndrs/glyph:anonymous')?.children.filter((child) => child.isMesh) ?? [];
+        assert.equal(draws.length, 2, `${format}: a glyph and a decoration draw`);
+        for (const draw of draws) {
+          const kind = draw.userData.pmndrsGlyphPrimitiveKind;
+          const where = `${format} ${kind} ${shaders} ${transformMode}`;
+          const stages = compileNodeMaterialBackends(draw, { scene });
+          for (const [backend, { vertex, fragment }] of Object.entries(stages)) {
+            assert.ok(
+              vertex.includes('0.4375') && vertex.includes('3.25') && vertex.includes('0.15625'),
+              `${where} ${backend}: the displacement reaches the vertex stage`,
+            );
+            for (const source of [vertex, fragment]) {
+              assert.doesNotMatch(source, /null\./, `${where} ${backend} lowered a builtin to null`);
+              assert.doesNotMatch(source, /,\s*\)/, `${where} ${backend} lowered a builtin to an empty argument`);
+            }
+          }
+          if (kind === 'glyph') {
+            // A glyph's index reaches the fragment stage flat.
+            assert.match(
+              stages.webgpu.fragment,
+              /@interpolate\(\s*flat[^)]*\)[^;]*:\s*u32/,
+              `${where} WGSL flat index`,
+            );
+            assert.match(stages.webgl2.fragment, /flat in uint /, `${where} GLSL flat index`);
+          } else {
+            // A decoration's is the mix of its two ends along the rectangle, interpolated like a position.
+            assert.match(stages.webgpu.vertex, /mix\s*\(/, `${where} WGSL mixes the rectangle's two indices`);
+            assert.match(stages.webgl2.vertex, /mix\s*\(/, `${where} GLSL mixes the rectangle's two indices`);
+          }
+          const storageBuffers = stages.webgpu.vertex.match(/var<storage/g)?.length ?? 0;
+          assert.ok(
+            storageBuffers <= MAX_VERTEX_STORAGE_BUFFERS,
+            `${where}: ${storageBuffers} vertex storage buffers exceed WebGPU's default ${MAX_VERTEX_STORAGE_BUFFERS}`,
+          );
+          if (kind === 'decoration') {
+            // The rectangle and its facts, plus the transform index and table in indexed mode; the paint is read
+            // by the fragment stage.
+            assert.equal(storageBuffers, transformMode === 'indexed' ? 4 : 2, `${where}: vertex storage buffers`);
           }
         }
         label.dispose();

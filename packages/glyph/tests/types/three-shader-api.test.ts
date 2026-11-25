@@ -88,14 +88,21 @@ const displacedMaterial = defineTextMaterial((context) => {
   return material;
 });
 
-// Every glyph context names the glyph a vertex or fragment belongs to; a decoration is not a glyph.
+// Every glyph context names the glyph a vertex or fragment belongs to. A decoration context carries the same two
+// names for the glyphs its rectangle runs under, with the index as the float it is along the rectangle.
 const perGlyphMaterial = defineTextMaterial((context) => {
   const material = context.createDefaultMaterial();
+  // One expression for whatever is drawn: `float()` takes a glyph's uint and a decoration's float.
+  const shared: Node<'float'> = float(context.glyphIndex).mul(0.4).add(context.glyphOrigin.x);
+  void shared;
   if (context.kind === 'decoration') {
-    // @ts-expect-error A decoration context has no glyph index.
-    void context.glyphIndex;
-    // @ts-expect-error A decoration context has no glyph origin.
-    void context.glyphOrigin;
+    const along: Node<'float'> = context.glyphIndex;
+    const first: Node<'vec3'> = context.glyphOrigin;
+    void along;
+    void first;
+    // @ts-expect-error A rectangle's index is interpolated, so it is not the integer a glyph's is.
+    const whole: Node<'uint'> = context.glyphIndex;
+    void whole;
     return material;
   }
   const glyphIndex: Node<'uint'> = context.glyphIndex;
