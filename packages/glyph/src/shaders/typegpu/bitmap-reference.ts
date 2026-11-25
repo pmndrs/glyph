@@ -32,11 +32,14 @@ export function referenceProjectClipPosition(mvp: readonly number[], position: B
   ];
 }
 
+/** Mirrors the shader's `SNAP_ROUNDING_OFFSET`: halfway points round down, robustly against float error. */
+const SNAP_ROUNDING_OFFSET = 0.5 - 1 / 256;
+
 /** CPU mirror of `snapClipAxis`, including the final multiplication by clip w and the reciprocal-multiply order of the emitted shader. */
 export function referenceSnapClipAxis(clipAxis: number, clipW: number, physicalSize: number): number {
   const normalizedDevicePosition = clipAxis * (1 / clipW);
   const physicalPosition = (normalizedDevicePosition + 1) * (physicalSize * 0.5);
-  return (Math.round(physicalPosition) * (1 / physicalSize) * 2 - 1) * clipW;
+  return (Math.floor(physicalPosition + SNAP_ROUNDING_OFFSET) * (1 / physicalSize) * 2 - 1) * clipW;
 }
 
 /** CPU mirror of the snapped vertex variant's clip placement. */

@@ -69,8 +69,12 @@ export function bitmapShader(
   };
 }
 
-/** Rounds the projected quad to whole physical pixels in clip space (not paragraph space), so it works regardless of transform/camera/DPR — matching the grid the atlas was baked for. */
-function pixelSnappedClipPosition(): Node<'vec4'> {
+/**
+ * Rounds the projected quad to whole physical pixels in clip space (not paragraph space), so it works regardless of
+ * transform/camera/DPR — matching the grid the atlas was baked for. Three also draws the decorations of a snapped text
+ * through it. Not on the public `/shaders/tsl` entry.
+ */
+export function pixelSnappedClipPosition(): Node<'vec4'> {
   const clip = modelViewProjection;
   return TSL.vec4(
     snapClipAxis(clip.x, clip.w, TSL.screenSize.x),
@@ -83,6 +87,7 @@ function pixelSnappedClipPosition(): Node<'vec4'> {
 function snapClipAxis(clipAxis: Node<'float'>, clipW: Node<'float'>, physicalSize: Node<'float'>): Node<'float'> {
   const normalizedDevicePosition = clipAxis.mul(TSL.reciprocal(clipW));
   const physicalPosition = normalizedDevicePosition.add(1).mul(physicalSize.mul(0.5));
-  const normalizedPhysicalPosition = TSL.round(physicalPosition).mul(TSL.reciprocal(physicalSize));
+  // The canonical TypeGPU `SNAP_ROUNDING_OFFSET`: halfway points round down, robustly against float error.
+  const normalizedPhysicalPosition = TSL.floor(physicalPosition.add(0.5 - 1 / 256)).mul(TSL.reciprocal(physicalSize));
   return normalizedPhysicalPosition.mul(2).sub(1).mul(clipW);
 }

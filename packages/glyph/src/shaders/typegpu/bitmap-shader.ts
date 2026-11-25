@@ -131,13 +131,22 @@ export function bitmapQuadPosition(origin: d.v2f, size: d.v2f, quadPosition: d.v
   return d.vec3f(origin.x + quadPosition.x * size.x, -(origin.y + quadPosition.y * size.y), 0);
 }
 
+/**
+ * Where a projected position rounds: to the nearest pixel boundary, except that one within 1/256 px above a halfway
+ * point rounds down. Bitmap strike quads at whole-pixel text positions sit exactly halfway (their baselines fall on
+ * half pixels), and the two corners of a quad reach the halfway point through different float error; a plain
+ * `round()` then sends them different ways (and WGSL rounds halves to even), stretching the quad by a pixel. Every
+ * corner of a 1:1 quad shares its fraction, so a threshold off the halfway point keeps the quad whole on every backend.
+ */
+const SNAP_ROUNDING_OFFSET = 0.5 - 1 / 256;
+
 /** Rounds a clip-space axis onto whole physical pixels in clip space (not paragraph space), so any transform/camera/DPR lands on the atlas's baked grid; operation order matches the TSL realization exactly. */
 export function snapClipAxis(clipAxis: number, clipW: number, physicalSize: number): number {
   'use gpu';
 
   const normalizedDevicePosition = clipAxis * (1 / clipW);
   const physicalPosition = (normalizedDevicePosition + 1) * (physicalSize * 0.5);
-  return (std.round(physicalPosition) * (1 / physicalSize) * 2 - 1) * clipW;
+  return (std.floor(physicalPosition + SNAP_ROUNDING_OFFSET) * (1 / physicalSize) * 2 - 1) * clipW;
 }
 
 /** Projects the glyph quad through the draw's model-view-projection without pixel snapping. */

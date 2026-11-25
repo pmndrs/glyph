@@ -155,6 +155,31 @@ test('snapClipAxis keeps whole-pixel device coordinates fixed', () => {
   }
 });
 
+test('snapClipAxis keeps a 1:1 quad whole when its corners sit halfway between pixels', () => {
+  // A strike quad at a whole-pixel text position has both edges on half pixels, reached through the projection's
+  // float error. Each edge must move the same way, so the quad keeps its texel count; `round()` broke this both by
+  // float error and by rounding halves to even.
+  const physicalSize = 832;
+  const pixelOf = (clip) => Math.round(((clip + 1) * physicalSize) / 2);
+  for (let start = 0; start < 64; start += 1) {
+    for (const extent of [1, 7, 11, 16, 17]) {
+      const [low, high] = [start + 0.5, start + 0.5 + extent].map((pixel) =>
+        evaluate(snapClipAxis, Math.fround((pixel * 2) / physicalSize - 1), 1, physicalSize),
+      );
+      assert.equal(pixelOf(high) - pixelOf(low), extent, `quad at ${start}.5 spanning ${extent} px`);
+      assert.equal(pixelOf(low), start, `halfway edge at ${start}.5 rounds down`);
+    }
+  }
+  // Away from the halfway point it is ordinary rounding.
+  for (const [pixel, expected] of [
+    [10.49, 10],
+    [10.51, 11],
+    [10.75, 11],
+  ]) {
+    assert.equal(pixelOf(evaluate(snapClipAxis, (pixel * 2) / physicalSize - 1, 1, physicalSize)), expected);
+  }
+});
+
 test('paint composition scales unpremultiplied alpha by coverage and keeps rgb', () => {
   for (const coverage of [0, 0.25, 0.5, 1]) {
     for (const alpha of [0, 0.5, 1]) {

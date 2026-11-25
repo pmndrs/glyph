@@ -99,14 +99,16 @@ test('paint composition scales alpha by coverage identically', () => {
 test('pixel snapping rounds projected axes onto whole physical pixels identically', () => {
   const tslSnap = flatten(tsl.snapped.vertex);
   assert.match(tslSnap, /fnsnapClipAxis\(/);
-  assert.match(tslSnap, /round\(/);
   assert.match(tslSnap, /\(clipAxis\*\(1f\/clipW\)\)/);
-  assert.match(tslSnap, /\(round\(physicalPosition\)\*\(1f\/physicalSize\)\)/);
+  // Halfway points round down (a threshold 1/256 px above them), never through `round()`.
+  assert.doesNotMatch(tslSnap, /round\(/);
+  const chain = /\(\(\(\(floor\(\(physicalPosition\+0\.49609375f\)\)\*\(1f\/physicalSize\)\)\*2f\)-1f\)\*clipW\)/;
+  assert.match(tslSnap, chain);
 
   // The TypeGPU helper computes the identical chain, reciprocals included.
   const gpuSnap = flatten(gpu.snapped);
   assert.match(gpuSnap, /\(clipAxis\*\(1f\/clipW\)\)/);
-  assert.match(gpuSnap, /\(\(\(round\(physicalPosition\)\*\(1f\/physicalSize\)\)\*2f\)-1f\)\*clipW\)/);
+  assert.match(gpuSnap, chain);
 });
 
 test('shader functions agree with their CPU reference mirrors', () => {
