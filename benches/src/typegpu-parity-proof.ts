@@ -905,7 +905,7 @@ async function start(): Promise<ParityProof> {
       material: defineTextMaterial(
         (context) => {
           const material = context.createDefaultMaterial();
-          if (context.kind !== 'glyph') return material;
+          if (context.kind !== 'glyph' || context.format !== 'pmndrs.msdf') return material;
           const { glyphIndex, glyphOrigin, paragraphPosition, position } = context;
           // The same shrink about the origin and drop of odd glyphs, in +Y-up paragraph units.
           const fromOrigin = paragraphPosition.sub(glyphOrigin);
