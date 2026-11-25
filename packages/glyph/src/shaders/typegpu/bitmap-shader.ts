@@ -33,7 +33,7 @@ export const TypeGpuBitmapInstance: d.WgslStruct<{
 });
 export type TypeGpuBitmapInstance = d.InferGPU<typeof TypeGpuBitmapInstance>;
 
-/** Single-channel coverage pages uploaded in the atlas's own top-down row order — flipY-style host settings must stay disabled — and the filtering sampler they are read through; bind a linear, clamp-to-edge sampler to draw what `/tsl` draws. */
+/** Single-channel coverage pages uploaded in the atlas's own top-down row order — flipY-style host settings must stay disabled — and the filtering sampler they are read through. The sampler chooses the filter: bind a linear, clamp-to-edge one to draw what `/tsl` draws, or a nearest one to draw what the integrations draw under `bitmapFilter: 'nearest'`; the WGSL is the same. */
 export const TypeGpuBitmapPageLayout: TgpuBindGroupLayout<{
   page: TgpuLayoutTexture<d.WgslTexture2dArray<d.F32>> & { visibility?: readonly ['fragment'] };
   sampler: TgpuLayoutSampler & { visibility?: readonly ['fragment'] };

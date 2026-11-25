@@ -6,6 +6,7 @@ import type {
   PortableTextureArrayPayload,
   PortableTexturePayload,
 } from '../../config/resources.js';
+import type { BitmapFilter } from '../../raster/bitmap.js';
 import type { ThreeHostResource } from './render-state.js';
 
 export function textureArrayResource(
@@ -88,20 +89,22 @@ export function dataTexture(
   return texture;
 }
 
-/** A filtered, single-level layered atlas over bytes the caller keeps alive. */
+/** A single-level layered atlas over bytes the caller keeps alive, linearly filtered unless `filter` says nearest. */
 export function atlasTextureArray(
   bytes: Uint8Array,
   width: number,
   height: number,
   layers: number,
   format: THREE.PixelFormat,
+  filter: BitmapFilter = 'linear',
 ): THREE.DataArrayTexture {
   const texture = new THREE.DataArrayTexture(bytes, width, height, layers);
   texture.format = format;
   texture.type = THREE.UnsignedByteType;
   texture.colorSpace = THREE.NoColorSpace;
-  texture.magFilter = THREE.LinearFilter;
-  texture.minFilter = THREE.LinearFilter;
+  const sampled = filter === 'nearest' ? THREE.NearestFilter : THREE.LinearFilter;
+  texture.magFilter = sampled;
+  texture.minFilter = sampled;
   texture.generateMipmaps = false;
   texture.flipY = false;
   texture.needsUpdate = true;

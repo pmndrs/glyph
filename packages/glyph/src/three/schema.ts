@@ -108,6 +108,16 @@ export interface ThreeConfigOptions extends ThreeRootOptions {
    */
   readonly msdfAtlas?: 'msdf' | 'sdf';
   /**
+   * How every Bitmap text of the handle samples its strike pages. `'linear'` (default) interpolates neighbouring
+   * texels, so a strike drawn at another size or between pixels stays smooth. `'nearest'` reads the nearest texel,
+   * with no interpolation and no mipmaps, for pixel-art fonts drawn scaled or off the pixel grid. The strike chosen
+   * for a size is the same under both, and the filter is independent of `pixelSnapping`: a strike drawn at its own
+   * size on the pixel grid reads the same texels either way. The pages carry the filter, so `'linear'` compiles the
+   * programs it always has; for `'nearest'` pages Three's WebGPU backend reads the texel with `textureLoad` instead
+   * of a sampler, and WebGL2 samples them through a nearest sampler.
+   */
+  readonly bitmapFilter?: 'linear' | 'nearest';
+  /**
    * Publishes each glyph's layout index and pen origin, which a text material reads as `glyphIndex` and `glyphOrigin`.
    * Off by default, and a material of a handle without it throws when it reads either: the two facts are one record of 16
    * bytes per glyph that the engine gathers and this renderer keeps for every text of the handle, whatever its

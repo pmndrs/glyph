@@ -7,12 +7,16 @@ import type {
 import { msdfBakedPages } from '../../raster/msdf.js';
 import { SLUG_RESIDENT_BAND_CURVE_WIDTH, SlugBandResidency } from '../../raster/internal/slug-residency.js';
 import { BufferImageSource, Texture } from 'pixi.js';
+import type { BitmapFilter } from '../../raster/bitmap.js';
 
 export class Pixi3DBitmapResource {
   readonly pages: readonly Texture[];
   #disposed = false;
 
-  constructor(readonly payload: PortableTextureArrayPayload) {
+  constructor(
+    readonly payload: PortableTextureArrayPayload,
+    filter: BitmapFilter = 'linear',
+  ) {
     if (payload.format !== 'r8unorm') throw new TypeError(`Pixi3D Bitmap needs r8unorm, received ${payload.format}`);
     const pageBytes = payload.width * payload.height;
     this.pages = Object.freeze(
@@ -26,7 +30,7 @@ export class Pixi3DBitmapResource {
           width: payload.width,
           height: payload.height,
           format: 'rgba8unorm',
-          scaleMode: 'linear',
+          scaleMode: filter,
           autoGenerateMipmaps: false,
           alphaMode: 'no-premultiply-alpha',
           label: `glyph-bitmap-page-${layer}`,
@@ -210,9 +214,14 @@ export type Pixi3DResolvedResource =
   | Pixi3DMsdfResolvedResource
   | Pixi3DSlugResolvedResource;
 
-export function resolveRasterResource(format: string, name: string, payload: PortableResource): Pixi3DResolvedResource {
+export function resolveRasterResource(
+  format: string,
+  name: string,
+  payload: PortableResource,
+  bitmapFilter: BitmapFilter = 'linear',
+): Pixi3DResolvedResource {
   if (format === 'pmndrs.bitmap' && payload.kind === 'texture-array') {
-    return Object.freeze({ format, name, bitmap: new Pixi3DBitmapResource(payload) });
+    return Object.freeze({ format, name, bitmap: new Pixi3DBitmapResource(payload, bitmapFilter) });
   }
   if (format === 'pmndrs.msdf' && payload.kind === 'group') {
     return Object.freeze({ format, name, msdf: new Pixi3DMsdfResource(payload) });

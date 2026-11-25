@@ -97,6 +97,9 @@ defineTypeGpuConfig({
     return d.vec4f(color.rgb.mul(tint.$), color.a * fragmentPosition.w);
   },
 });
+defineTypeGpuConfig({ root, format: 'rgba8unorm', bitmapFilter: 'nearest' });
+// @ts-expect-error Only 'linear' and 'nearest' are page filters.
+defineTypeGpuConfig({ root, format: 'rgba8unorm', bitmapFilter: 'point' });
 defineTypeGpuConfig({
   root,
   format: 'rgba8unorm',

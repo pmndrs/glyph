@@ -43,6 +43,16 @@ export interface BitmapData {
   readonly coverage?: Uint8Array;
 }
 
+/** How a renderer samples Bitmap strike pages: the `bitmapFilter` values every integration's config accepts. */
+export type BitmapFilter = 'linear' | 'nearest';
+
+/** Validate a config's `bitmapFilter` at the public call, defaulting to the filtered read. */
+export function normalizeBitmapFilter(value: unknown, owner: string): BitmapFilter {
+  if (value === undefined || value === 'linear') return 'linear';
+  if (value === 'nearest') return value;
+  throw new TypeError(`${owner} bitmapFilter must be "linear" or "nearest"`);
+}
+
 /** Ppem of the strike selected for a CSS size and raster pixel ratio; read from here rather than reimplementing selection. */
 export function selectBitmapStrikePpem(
   strikes: readonly { readonly ppem: number }[],

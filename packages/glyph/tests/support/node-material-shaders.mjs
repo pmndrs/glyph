@@ -12,7 +12,21 @@ import * as THREE from 'three/webgpu';
  * Both backends are compiled because the TypeGPU bridge emits WGSL for WebGPU and
  * GLSL for WebGL2, and a core function can be valid in one and absent in the other.
  */
-export function compileNodeMaterial(mesh, { backend = 'webgpu', scene, camera } = {}) {
+export function compileNodeMaterial(mesh, options = {}) {
+  const builder = buildNodeMaterial(mesh, options);
+  return { vertex: builder.vertexShader, fragment: builder.fragmentShader };
+}
+
+/** The textures one node material's compiled program binds; WebGPU derives each sampler from its texture's filters. */
+export function compiledNodeMaterialTextures(mesh, options = {}) {
+  const textures = new Set();
+  for (const group of buildNodeMaterial(mesh, options).getBindings()) {
+    for (const binding of group.bindings) if (binding.texture?.isTexture === true) textures.add(binding.texture);
+  }
+  return [...textures];
+}
+
+function buildNodeMaterial(mesh, { backend = 'webgpu', scene, camera } = {}) {
   const renderer = uninitializedRenderer(backend);
   const NodeBuilder = backend === 'webgpu' ? THREE.WGSLNodeBuilder : THREE.GLSLNodeBuilder;
   const builder = new NodeBuilder(mesh, renderer);
@@ -21,7 +35,7 @@ export function compileNodeMaterial(mesh, { backend = 'webgpu', scene, camera } 
   builder.material = mesh.material;
   builder.geometry = mesh.geometry;
   builder.build();
-  return { vertex: builder.vertexShader, fragment: builder.fragmentShader };
+  return builder;
 }
 
 /** Compile against both supported backends, keyed by backend name. */

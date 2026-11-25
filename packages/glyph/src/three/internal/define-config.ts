@@ -1,4 +1,5 @@
 import { defineGlyphConfig, resourceLease, type RendererContext } from '../../config/glyph.js';
+import { normalizeBitmapFilter } from '../../raster/bitmap.js';
 import { normalizeGlyphBufferCapacity } from '../../text-properties.js';
 import { threeCodecDescriptor } from '../codec.js';
 import type { ThreePublicationBoundary } from './publication-boundary.js';
@@ -24,6 +25,7 @@ export function createThreeConfig(options: ThreeConfigOptions, shaders: ThreeSha
   const defaultFontFormat = options.defaultFontFormat ?? 'msdf';
   const msdfAtlas = options.msdfAtlas ?? 'msdf';
   if (msdfAtlas !== 'msdf' && msdfAtlas !== 'sdf') throw new TypeError('ThreeConfig msdfAtlas must be "msdf" or "sdf"');
+  const bitmapFilter = normalizeBitmapFilter(options.bitmapFilter, 'ThreeConfig');
   const glyphFacts = options.glyphFacts ?? false;
   if (typeof glyphFacts !== 'boolean') throw new TypeError('ThreeConfig glyphFacts must be a boolean');
   const capacity =
@@ -45,6 +47,7 @@ export function createThreeConfig(options: ThreeConfigOptions, shaders: ThreeSha
         options.material,
         shaders,
         msdfAtlas === 'sdf',
+        bitmapFilter,
       ),
     resolve: ({ format, resourceName, resources }) =>
       resourceLease(

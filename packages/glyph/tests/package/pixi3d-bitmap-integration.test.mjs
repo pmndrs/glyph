@@ -101,6 +101,44 @@ test('Bitmap text publishes retained Pixi3D meshes without a TypeGPU runtime', a
   }
 });
 
+test('a Pixi3D config samples Bitmap pages linearly unless it asks for nearest', async () => {
+  await glyph.init({ wasm: await readFile(shaperWasm) });
+  assert.throws(() => definePixi3DConfig({ bitmapFilter: 'point' }), /bitmapFilter must be "linear" or "nearest"/);
+  const font = glyph.fontFace(new Blob([await readFile(fontFixture)], { type: 'model/gltf-binary' }), {
+    format: bitmap({ strikes: [16] }),
+  });
+  await font.load();
+  const handles = [
+    glyph.handle('pixi3d:bitmap-filter-default', definePixi3DConfig()),
+    glyph.handle('pixi3d:bitmap-filter-linear', definePixi3DConfig({ bitmapFilter: 'linear' })),
+    glyph.handle('pixi3d:bitmap-filter-nearest', definePixi3DConfig({ bitmapFilter: 'nearest' })),
+  ];
+  try {
+    // The same baked page in each handle, drawn scaled where the two filters read different texels.
+    const pages = handles.map((handle) => {
+      const text = handle.createText({ font, text: 'Ag', style: { fontSize: 24 } });
+      glyph.shape();
+      const meshes = text.children.filter((child) => child instanceof Mesh3D);
+      assert.equal(meshes.length, 1);
+      return meshes[0].material.textures.glyphBitmapAtlas.source;
+    });
+    const [implicit, linear, nearest] = pages;
+    for (const page of [implicit, linear]) {
+      assert.equal(page.style.magFilter, 'linear');
+      assert.equal(page.style.minFilter, 'linear');
+    }
+    assert.equal(nearest.style.magFilter, 'nearest');
+    assert.equal(nearest.style.minFilter, 'nearest');
+    for (const page of pages) assert.equal(page.autoGenerateMipmaps, false);
+    // Two filters over one page are two texture sources, so they never share a sampler or a native material.
+    assert.notEqual(nearest, implicit);
+    assert.deepEqual(nearest.resource, implicit.resource);
+  } finally {
+    for (const handle of handles) handle.dispose();
+    font.dispose();
+  }
+});
+
 test('MTSDF shaping publishes Pixi3D meshes with effect attributes and material constants', async () => {
   await glyph.init({ wasm: await readFile(shaperWasm) });
   const handle = glyph.handle('pixi3d:msdf-test', definePixi3DConfig());

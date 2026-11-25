@@ -57,7 +57,8 @@ export function bitmapShader(
     return bitmapAtlasUv(t3.fromTSL(instance.uvOrigin, d.vec2f).$, t3.fromTSL(instance.uvSize, d.vec2f).$, t3.uv().$);
   }) as Node<'vec2'>;
   // The page is read at Three's resource boundary, exactly as the stable `/tsl` realization reads it: one sample
-  // through the texture's own linear, clamp-to-edge sampler, on WebGPU and WebGL2 alike.
+  // through the texture's own clamp-to-edge filter: linearly by default, and under the handle's `bitmapFilter:
+  // 'nearest'` as Three reads a nearest texture (a texel load on WebGPU, a nearest sampler on WebGL2).
   const coverage = TSL.texture(resources.page, atlasUv).depth(instance.pageIndex).r;
   const coverageOpacity = t3.toTSL(() => {
     'use gpu';

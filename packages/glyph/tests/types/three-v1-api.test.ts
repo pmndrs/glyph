@@ -206,6 +206,10 @@ const capacityThree = glyph.handle(
   defineThreeConfig({ capacity: { size: 4_096, policy: 'chunk' } }),
 );
 capacityThree.createText({ font: bitmapFont, text: 'Config-owned root policy' });
+// Bitmap page filtering is one handle-wide sampler choice, with the same two values in every renderer.
+defineThreeConfig({ bitmapFilter: 'nearest' });
+// @ts-expect-error Only 'linear' and 'nearest' are page filters.
+defineThreeConfig({ bitmapFilter: 'point' });
 // @ts-expect-error Capacity is immutable config policy, not mutable root state.
 three.setCapacity({ size: 4_096, policy: 'chunk' });
 // @ts-expect-error Compositing is immutable config policy, not mutable root state.

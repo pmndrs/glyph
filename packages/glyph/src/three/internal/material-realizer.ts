@@ -588,7 +588,14 @@ export class ThreeMaterialRealizer {
     let lease = this.#context.bitmapTextures.get(binding);
     if (lease !== undefined) return lease.resource;
     lease = this.#coordinator.acquireTextureArrayResource(data, () =>
-      atlasTextureArray(data.bytes, data.width, data.height, data.layers, THREE.RedFormat),
+      atlasTextureArray(
+        data.bytes,
+        data.width,
+        data.height,
+        data.layers,
+        THREE.RedFormat,
+        this.#coordinator.bitmapFilter,
+      ),
     );
     this.#context.newTextures.add(lease);
     this.#context.bitmapTextures.set(binding, lease);

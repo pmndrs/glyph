@@ -20,6 +20,9 @@ void glyph.handle('pixi3d:defined', definePixi3DConfig());
 void glyph.handle('pixi3d:facts', definePixi3DConfig({ glyphFacts: true }));
 // @ts-expect-error The switch is a boolean.
 definePixi3DConfig({ glyphFacts: 'yes' });
+void glyph.handle('pixi3d:nearest', definePixi3DConfig({ bitmapFilter: 'nearest' }));
+// @ts-expect-error Only 'linear' and 'nearest' are page filters.
+definePixi3DConfig({ bitmapFilter: 'point' });
 const font = glyph.fontFace('/inter.font.glb', { format: slug });
 const text = handle.createText({ font, text: 'Hello', style: { fontSize: 0.5, color: '#ffffff' } });
 

@@ -114,9 +114,11 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
   const atlas = texture(root, payload);
   try {
     const view = atlas.createView(d.texture2dArray(d.f32));
-    // Linear and clamp-to-edge, as Three and PixiJS 3D read the same pages: a strike drawn between pixels or at
-    // another size is interpolated, and one drawn on its own pixel grid still reads exact texels.
-    const sampler = root.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+    // Clamp-to-edge and linear unless the config asks for nearest, as Three and PixiJS 3D read the same pages: a
+    // strike drawn between pixels or at another size is interpolated, and one drawn on its own pixel grid still reads
+    // exact texels. The filter is sampler state only, so both compile the same WGSL.
+    const filter = options.bitmapFilter ?? 'linear';
+    const sampler = root.createSampler({ magFilter: filter, minFilter: filter });
     const coverage = (atlasUv: d.v2f, pageLayer: number): number => {
       'use gpu';
       return bitmapPageCoverage(view.$, sampler.$, atlasUv, pageLayer);

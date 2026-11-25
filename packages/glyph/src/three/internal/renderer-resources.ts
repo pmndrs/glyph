@@ -7,6 +7,7 @@ import type { TslSlugPageResources } from '../../shaders/tsl/index.js';
 import type { ThreeShaderSet } from './shader-set.js';
 import type { SlugGlyphTable } from './slug-glyph-table.js';
 import type { ThreeCodec } from '../schema.js';
+import type { BitmapFilter } from '../../raster/bitmap.js';
 import type { ThreeTextMaterial } from '../material.js';
 import {
   compiledThreeRasterPrograms,
@@ -76,6 +77,7 @@ export function createThreeCodec(
   material: ThreeTextMaterial | undefined,
   shaders: ThreeShaderSet,
   msdfSingleChannel = false,
+  bitmapFilter: BitmapFilter = 'linear',
 ): ThreeCodec {
   const programs = compiledThreeRasterPrograms(ids, transformMode);
   const resources = new ThreeRendererResources(
@@ -83,6 +85,7 @@ export function createThreeCodec(
     material,
     shaders,
     msdfSingleChannel,
+    bitmapFilter,
   );
   let disposed = false;
   const codec: ThreeCodec = Object.freeze({
@@ -122,6 +125,8 @@ export class ThreeRendererResources {
     readonly shaders: ThreeShaderSet,
     /** MSDF atlases of this handle keep only the true-distance channel. */
     readonly msdfSingleChannel = false,
+    /** The filter of every Bitmap page texture this handle creates: a Three texture carries its own sampler. */
+    readonly bitmapFilter: BitmapFilter = 'linear',
   ) {
     this.programs = programs;
     this.material = material;

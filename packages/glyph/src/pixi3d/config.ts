@@ -1,6 +1,6 @@
 import type { Codec, GlyphConfigFor, GlyphHandle, GlyphRoot } from '../index.js';
 import { defineGlyphConfig, resourceLease } from '../config/glyph.js';
-import { bitmap } from '../raster/bitmap.js';
+import { bitmap, normalizeBitmapFilter } from '../raster/bitmap.js';
 import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug.js';
 
@@ -37,18 +37,26 @@ export interface Pixi3DConfigOptions {
    * text of the handle. Only a material whose bits declare the attribute carries it per vertex.
    */
   readonly glyphFacts?: boolean;
+  /**
+   * How every Bitmap text of the handle samples its strike pages. `'linear'` (default) interpolates neighbouring
+   * texels, so a strike drawn at another size or between pixels stays smooth. `'nearest'` reads the nearest texel,
+   * with no interpolation and no mipmaps, for pixel-art fonts drawn scaled or off the pixel grid. The strike chosen
+   * for a size is the same under both. Only the page textures' `scaleMode` differs; shader bits do not.
+   */
+  readonly bitmapFilter?: 'linear' | 'nearest';
 }
 
 export function definePixi3DConfig(config: Pixi3DConfigOptions = {}): Pixi3DGlyphConfig {
   if (typeof config !== 'object' || config === null) throw new TypeError('Pixi3D config options must be an object');
   const glyphFacts = config.glyphFacts ?? false;
   if (typeof glyphFacts !== 'boolean') throw new TypeError('Pixi3D config glyphFacts must be a boolean');
+  const bitmapFilter = normalizeBitmapFilter(config.bitmapFilter, 'Pixi3D config');
   return defineGlyphConfig({
     schema: Pixi3DSchema,
     fonts: { default: 'msdf', formats: { bitmap, msdf, slug } },
     encode: ({ ids }) => ({ descriptor: pixi3dCodecDescriptor(ids, glyphFacts) }),
     resolve: ({ format, resourceName, payload }) => {
-      const resource = resolveRasterResource(format, resourceName, payload);
+      const resource = resolveRasterResource(format, resourceName, payload, bitmapFilter);
       return resourceLease(resource, () => {
         if (resource.format === 'pmndrs.bitmap') resource.bitmap.dispose();
         else if (resource.format === 'pmndrs.msdf') resource.msdf.dispose();

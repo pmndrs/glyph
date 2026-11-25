@@ -40,6 +40,50 @@ test('every first-party TypeGPU program reads its Text offset from the transform
   assert.equal(slugProgram.buffers.length, 6);
 });
 
+test('a TypeGPU config samples Bitmap pages linearly unless it asks for nearest', () => {
+  const page = Object.freeze({
+    kind: 'texture-array',
+    format: 'r8unorm',
+    width: 4,
+    height: 4,
+    layers: 1,
+    bytes: new Uint8Array(16),
+  });
+  // A device-free root: the resource is created up to its pipeline, which needs a GPU and is not under test here.
+  const samplerFor = (options) => {
+    const samplers = [];
+    const stop = new Error('pipeline');
+    const root = {
+      createTexture: () => ({
+        $usage() {
+          return this;
+        },
+        write() {},
+        createView: () => ({}),
+        destroy() {},
+      }),
+      createSampler(descriptor) {
+        samplers.push(descriptor);
+        return {};
+      },
+      with() {
+        throw stop;
+      },
+    };
+    const config = defineTypeGpuConfig({ root, format: 'rgba8unorm', ...options });
+    assert.throws(() => config.resolve({ format: 'pmndrs.bitmap', payload: page, resources: new Map() }), stop);
+    assert.equal(samplers.length, 1);
+    return samplers[0];
+  };
+  assert.deepEqual(samplerFor({}), { magFilter: 'linear', minFilter: 'linear' });
+  assert.deepEqual(samplerFor({ bitmapFilter: 'linear' }), { magFilter: 'linear', minFilter: 'linear' });
+  assert.deepEqual(samplerFor({ bitmapFilter: 'nearest' }), { magFilter: 'nearest', minFilter: 'nearest' });
+  assert.throws(
+    () => defineTypeGpuConfig({ root: {}, format: 'rgba8unorm', bitmapFilter: 'point' }),
+    /bitmapFilter must be "linear" or "nearest"/,
+  );
+});
+
 test('a TypeGPU config publishes glyph fact lanes only when it is created with glyphFacts', () => {
   const root = { createUniform: () => ({}), device: {} };
   const lanes = (options) => {

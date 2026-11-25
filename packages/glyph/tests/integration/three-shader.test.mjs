@@ -11,7 +11,7 @@ import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
 import { createThreeTestHandle } from '../support/three-handle.mjs';
-import { compileNodeMaterialBackends } from '../support/node-material-shaders.mjs';
+import { compileNodeMaterialBackends, compiledNodeMaterialTextures } from '../support/node-material-shaders.mjs';
 import { assertCommitted } from '../support/three-render.mjs';
 
 const fontUrl = new URL('../../../../benches/fixtures/rendering/inter-bitmap-16.font.glb', import.meta.url);
@@ -179,6 +179,71 @@ test('TypeGPU-backed default Bitmap and decoration positions compile for both Th
           assert.doesNotMatch(vertex, /,\s*\)/, 'a vertex builtin must not lower to an empty argument');
         }
         label.dispose();
+      });
+    }
+  } finally {
+    font.dispose();
+  }
+});
+
+test('Bitmap page filtering is a handle-wide texture filter that leaves the default programs unchanged', async (t) => {
+  const font = await loadFormatFont['pmndrs.bitmap']();
+  try {
+    for (const [name, defineConfig] of Object.entries(shaderConfigs)) {
+      await t.test(name, async (subtest) => {
+        assert.throws(() => defineConfig({ bitmapFilter: 'point' }), /bitmapFilter must be "linear" or "nearest"/);
+        const realize = async (options) => {
+          const three = await createThreeTestHandle(subtest, defineConfig(options));
+          const scene = new THREE.Scene();
+          // A scaled strike: 24 px drawn from the 16 px page, where the two filters read different texels.
+          const label = three.createText({ font, text: 'Ag', style: { fontSize: 24 } });
+          scene.add(label);
+          scene.updateMatrixWorld();
+          assertCommitted(label);
+          subtest.after(() => label.dispose());
+          const draws = rootDraws(scene);
+          assert.equal(draws.length, 1);
+          const pages = (backend) =>
+            compiledNodeMaterialTextures(draws[0], { scene, backend }).filter(
+              (texture) => texture.format === THREE.RedFormat,
+            );
+          const page = pages('webgpu');
+          assert.equal(page.length, 1, 'the program binds one Bitmap page texture');
+          assert.deepEqual(pages('webgl2'), page);
+          return { page: page[0], stages: compileNodeMaterialBackends(draws[0], { scene }) };
+        };
+        const implicit = await realize({});
+        const linear = await realize({ bitmapFilter: 'linear' });
+        const nearest = await realize({ bitmapFilter: 'nearest' });
+
+        for (const { page } of [implicit, linear]) {
+          assert.equal(page.magFilter, THREE.LinearFilter);
+          assert.equal(page.minFilter, THREE.LinearFilter);
+        }
+        assert.equal(nearest.page.magFilter, THREE.NearestFilter);
+        assert.equal(nearest.page.minFilter, THREE.NearestFilter);
+        for (const { page } of [implicit, linear, nearest]) assert.equal(page.generateMipmaps, false);
+        // The same baked page under two filters is two textures over the same bytes: a Three texture owns its sampler.
+        assert.notEqual(nearest.page, implicit.page);
+        assert.deepEqual(nearest.page.image.data, implicit.page.image.data);
+        // Node ids count every node the process has built, so they are numbered apart from the program text.
+        const program = (source) => source.replaceAll(/(NodeBuffer|nodeUniform|nodeVar|nodeVarying)_?\d+/g, '$1#');
+        for (const backend of ['webgpu', 'webgl2']) {
+          for (const stage of ['vertex', 'fragment']) {
+            const expected = program(implicit.stages[backend][stage]);
+            assert.equal(program(linear.stages[backend][stage]), expected, `${backend} ${stage}`);
+          }
+        }
+        // WebGL2 reads a nearest texture through its sampler with the same program.
+        for (const stage of ['vertex', 'fragment']) {
+          assert.equal(program(nearest.stages.webgl2[stage]), program(implicit.stages.webgl2[stage]), stage);
+        }
+        // WebGPU: Three loads the texel of a texture filtered nearest both ways, at floor(clamped uv * size).
+        const pageSample = /textureSample\(\s*nodeUniform\d+,\s*nodeUniform\d+_sampler/g;
+        assert.equal(implicit.stages.webgpu.fragment.match(pageSample)?.length, 1);
+        assert.doesNotMatch(implicit.stages.webgpu.fragment, /textureLoad\(/);
+        assert.doesNotMatch(nearest.stages.webgpu.fragment, pageSample);
+        assert.match(nearest.stages.webgpu.fragment, /textureLoad\(\s*nodeUniform\d+,[^;]*floor\(/);
       });
     }
   } finally {

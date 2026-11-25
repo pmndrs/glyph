@@ -2,7 +2,7 @@ import { d, type TgpuRoot, type TgpuBindGroup, type TgpuRenderPass } from 'typeg
 import type { Codec, GlyphConfigFor, GlyphHandle, GlyphRoot } from '../index.js';
 import { defineGlyphConfig, resourceLease } from '../config/glyph.js';
 import { validatingInput } from '../glyph-error.js';
-import { bitmap } from '../raster/bitmap.js';
+import { bitmap, normalizeBitmapFilter } from '../raster/bitmap.js';
 import { msdf } from '../raster/msdf.js';
 import { slug } from '../raster/slug.js';
 import { schema } from './internal/bindings.js';
@@ -79,6 +79,13 @@ export interface TypeGpuConfigOptions {
    * sharp (visible at large sizes). Either way only glyphs that have been drawn are resident.
    */
   readonly msdfAtlas?: 'msdf' | 'sdf';
+  /**
+   * How every Bitmap text of the config samples its strike pages. `'linear'` (default) interpolates neighbouring
+   * texels, so a strike drawn at another size or between pixels stays smooth. `'nearest'` reads the nearest texel,
+   * with no interpolation and no mipmaps, for pixel-art fonts drawn scaled or off the pixel grid. The strike chosen
+   * for a size is the same under both. Only the pages' sampler differs; the WGSL does not.
+   */
+  readonly bitmapFilter?: 'linear' | 'nearest';
 }
 export interface TypeGpuFontFormats {
   readonly bitmap: typeof bitmap;
@@ -126,6 +133,8 @@ export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyph
   if (options.msdfAtlas !== undefined && options.msdfAtlas !== 'msdf' && options.msdfAtlas !== 'sdf') {
     throw new TypeError('TypeGPU config msdfAtlas must be "msdf" or "sdf"');
   }
+  // Validated here; the Bitmap resource reads the option when it creates its page sampler.
+  normalizeBitmapFilter(options.bitmapFilter, 'TypeGPU config');
   const glyphFacts = options.glyphFacts ?? false;
   if (typeof glyphFacts !== 'boolean') throw new TypeError('TypeGPU config glyphFacts must be a boolean');
   if (!glyphFacts) {
