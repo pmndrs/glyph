@@ -1,4 +1,5 @@
 import { bitmapShader, decorationShader, msdfShader, slugShader } from './shaders/tsl/index.js';
+import { pixelSnappedClipPosition } from './shaders/tsl/bitmap-shader.js';
 import type { ThreeConfigOptions, ThreeGlyphConfig } from './three/schema.js';
 import { createThreeConfig } from './three/internal/define-config.js';
 
@@ -69,7 +70,13 @@ export type { TextCaret, TextDirection, TextMovement, TextPosition, TextRange, T
 
 /** Creates a Three config using the stable TSL shader implementation. */
 export function defineThreeConfig(options: ThreeConfigOptions = {}): ThreeGlyphConfig {
-  return createThreeConfig(options, { bitmapShader, decorationShader, msdfShader, slugShader });
+  return createThreeConfig(options, {
+    bitmapShader,
+    decorationShader,
+    msdfShader,
+    slugShader,
+    pixelSnappedClipPosition,
+  });
 }
 
 /** Built-in indexed/ordered Three adapter. Spreading it preserves hooks without shared handle state. */

@@ -120,15 +120,19 @@ export class ThreeMaterialRealizer {
     const facts = this.#glyphFactLanes(buffers, selection);
     const lanes = materialBuffers([rect, packed, ...(facts?.buffers ?? [])], transform);
     const factsKey = facts === undefined ? '' : `:facts:${facts.facts.storageKey}`;
-    const key = `decoration:${this.key(selection)}:${rect.storageKey}:${packed.storageKey}${factsKey}:${transformProgramKey(
+    // A decoration follows the snapping of the glyphs it runs under, resolved exactly as their Bitmap draw resolves it.
+    const pixelSnapping = this.#owner.pixelSnapping ?? selection?.pixelSnapping ?? false;
+    const snapKey = `:snap=${String(pixelSnapping)}`;
+    const key = `decoration:${this.key(selection)}:${rect.storageKey}:${packed.storageKey}${factsKey}${snapKey}:${transformProgramKey(
       transform,
       this.#context.transformGeneration,
     )}`;
-    const shape = `decoration:${this.key(selection)}${facts === undefined ? '' : ':facts'}:${this.#transformShape(transform)}`;
+    const shape = `decoration:${this.key(selection)}${facts === undefined ? '' : ':facts'}${snapKey}:${this.#transformShape(transform)}`;
     const cached = this.#cached(key, shape, lanes);
     if (cached !== undefined) return cached;
     const instance = runInstance();
-    const shader = this.#coordinator.shaders.decorationShader({
+    const shaders = this.#coordinator.shaders;
+    const shader = shaders.decorationShader({
       rect: storageVec4(rect, instance),
       packed: storageUvec2(packed, instance),
     });
@@ -139,7 +143,12 @@ export class ThreeMaterialRealizer {
         root: this.#root(selection),
         kind: 'decoration',
         shader,
-        createDefaultMaterial: () => coverageMaterial(shader, position),
+        createDefaultMaterial: () => {
+          const created = coverageMaterial(shader, position);
+          // The rule a snapped Bitmap quad follows: each corner rounded onto whole physical pixels after projection.
+          if (pixelSnapping) created.vertexNode = shaders.pixelSnappedClipPosition();
+          return created;
+        },
       },
       { paragraph: shader.position, draw: position, glyph: decorationFacts(facts, instance) },
     );

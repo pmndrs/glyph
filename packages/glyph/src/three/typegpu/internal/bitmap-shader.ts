@@ -75,7 +75,8 @@ export function bitmapShader(
   };
 }
 
-function pixelSnappedClipPosition(): Node<'vec4'> {
+/** The model-view-projection rounded onto whole physical pixels; snapped Bitmap glyphs and their decorations share it. */
+export function pixelSnappedClipPosition(): Node<'vec4'> {
   const snapped = t3.toTSL(() => {
     'use gpu';
     const clip = t3.modelViewProjection.$;

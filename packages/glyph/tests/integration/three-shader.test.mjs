@@ -375,6 +375,48 @@ test('Bitmap pixel snapping is an explicit opt-in graph specialization', async (
   font.dispose();
 });
 
+for (const [shaders, defineConfig] of Object.entries(shaderConfigs)) {
+  test(`${shaders} decorations of a pixel-snapped text snap by their glyphs' rule; unsnapped ones are untouched`, async (t) => {
+    const three = await createThreeTestHandle(t, defineConfig());
+    const font = await loadFont({ baked: { bytes: await readFile(fontUrl) } }, bitmap({ strikes: [16] }));
+    const style = { decoration: { underline: true, color: '#ff0088' } };
+    const compiled = (pixelSnapping) => {
+      const scene = new THREE.Scene();
+      const label = three.createText({ font, text: 'Decorated', style, pixelSnapping });
+      scene.add(label);
+      scene.updateMatrixWorld();
+      assertCommitted(label);
+      const draws = rootDraws(scene);
+      const kinds = draws.map((draw) => draw.userData.pmndrsGlyphPrimitiveKind);
+      const decoration = draws[kinds.indexOf('decoration')];
+      const glyphs = draws[kinds.indexOf('glyph')];
+      const result = {
+        decorationVertexNode: decoration.material.vertexNode,
+        decoration: compileNodeMaterialBackends(decoration, { scene }),
+        glyphs: compileNodeMaterialBackends(glyphs, { scene }),
+      };
+      label.dispose();
+      return result;
+    };
+    const unsnapped = compiled(undefined);
+    const unsnappedFalse = compiled(false);
+    const snapped = compiled(true);
+    // Unsnapped decorations keep Three's default projection: the program they compiled before snapping reached them.
+    assert.equal(unsnapped.decorationVertexNode, null);
+    assert.equal(unsnappedFalse.decorationVertexNode, null);
+    for (const [backend, stages] of Object.entries(unsnapped.decoration)) {
+      assert.doesNotMatch(unsnappedFalse.decoration[backend].vertex, /floor\(/, `${backend} pixelSnapping: false`);
+      assert.doesNotMatch(stages.vertex, /floor\(/, `${backend} unsnapped decoration`);
+    }
+    for (const [backend, stages] of Object.entries(snapped.decoration)) {
+      assert.match(stages.vertex, /floor\(/, `${backend} snapped decoration rounds its corners`);
+      assert.match(stages.vertex, /0\.49609375/, `${backend} snapped decoration uses the glyphs' halfway rule`);
+      assert.match(snapped.glyphs[backend].vertex, /0\.49609375/, `${backend} snapped glyphs use the same rule`);
+    }
+    font.dispose();
+  });
+}
+
 function rootDraws(scene) {
   return scene.getObjectByName('@pmndrs/glyph:anonymous')?.children.filter((child) => child.isMesh) ?? [];
 }
