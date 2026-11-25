@@ -234,6 +234,13 @@ export interface CodecProgramSystemBuffers {
   readonly transformIndex?: CodecBufferDeclaration<'u32', readonly ['transformIndex']>;
   /** Host-owned occurrence indirection. Raster bodies never receive this declaration; adapters choose its layout. */
   readonly placementSlot?: CodecBufferDeclaration<'u32', readonly ['placementSlot']>;
+  /**
+   * Host-owned glyph facts for materials, declared together: each glyph's index in its text's layout order (the
+   * index `glyphs()` reports it at) and its pen origin on the baseline, relative to its placement slot like a
+   * technique's own origin.
+   */
+  readonly glyphIndex?: CodecBufferDeclaration<'u32', readonly ['glyphIndex']>;
+  readonly glyphOrigin?: CodecBufferDeclaration<'f32', readonly ['inlineOrigin', 'blockOrigin']>;
 }
 
 type CodecBufferLaneValues<Buffer extends CodecBufferDeclaration> = CodecLaneTuple<Buffer['scalar'], Buffer['lanes']>;
@@ -366,6 +373,8 @@ function createTechniqueProgram<const Schema extends TechniqueSchemaMetadata>(
         stableGlyphId: undefined,
         transformIndex: undefined,
         placementSlot: undefined,
+        glyphIndex: undefined,
+        glyphOrigin: undefined,
       });
       return body;
     },

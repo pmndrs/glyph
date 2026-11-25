@@ -65,10 +65,7 @@ impl PositionedGlyphArena {
             Err(EngineError::InvalidRequest) => return Ok(false),
             Err(error) => return Err(error),
         };
-        walk.source_coordinates_retained &= previous.line_glyph_starts[line_index] as usize
-            == self
-                .outlined_count()
-                .saturating_sub(previous_glyph_count as usize);
+        walk.source_coordinates_retained &= self.retained_line_keeps_ordinals(previous, line_index);
         self.append_retained_line(previous, line_index, target, Some(remap))?;
         // An edit moved cluster indexes under the retained steps.
         self.push_line_topology(
@@ -170,10 +167,8 @@ impl PositionedGlyphArena {
             Err(EngineError::InvalidRequest) => return Ok(MatchedLine::Reposition(None)),
             Err(error) => return Err(error),
         };
-        *source_coordinates_retained &= previous.line_glyph_starts[previous_line_index] as usize
-            == self
-                .outlined_count()
-                .saturating_sub(previous_glyph_count as usize);
+        *source_coordinates_retained &=
+            self.retained_line_keeps_ordinals(previous, previous_line_index);
         self.append_retained_line(previous, previous_line_index, target, Some(remap))?;
         self.copy_line_topology(
             previous,
@@ -182,6 +177,28 @@ impl PositionedGlyphArena {
             usize::from(line.fragment_count),
         )?;
         Ok(MatchedLine::Appended)
+    }
+
+    /// Whether the retained line just admitted starts at the outlined ordinal and the layout
+    /// index it had in `previous`. Gather skips a retained line's records only while both
+    /// hold: a record is addressed by its outlined ordinal and publishes its layout index.
+    fn retained_line_keeps_ordinals(&self, previous: &Self, line_index: usize) -> bool {
+        let start = |starts: &[u32], counts: &[u32], total: usize| {
+            matches!(
+                (starts.get(line_index), counts.get(line_index)),
+                (Some(&start), Some(&count))
+                    if total.checked_sub(count as usize) == Some(start as usize)
+            )
+        };
+        start(
+            &previous.line_glyph_starts,
+            &previous.line_glyph_counts,
+            self.outlined_count(),
+        ) && start(
+            &previous.semantic_line_glyph_starts,
+            &previous.semantic_line_glyph_counts,
+            self.occurrence_count(),
+        )
     }
 
     pub(super) fn append_retained_line(

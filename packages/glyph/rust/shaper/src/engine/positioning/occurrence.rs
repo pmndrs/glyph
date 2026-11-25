@@ -528,6 +528,7 @@ impl ProjectedSourceRow<'_> {
                 Some(apply_opacity(self.style.shadow_rgba, self.style.opacity))
             }
             6..=7 => Some(0),
+            9 => Some(self.glyph.semantic_glyph_index),
             _ => None,
         }
     }

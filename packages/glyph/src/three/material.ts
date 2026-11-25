@@ -37,6 +37,28 @@ type ThreeMaterialPositions = Readonly<{
   position: Node<'vec3'>;
 }>;
 
+/**
+ * What a glyph material context says about the glyph a vertex or fragment belongs to. Both are constant across a
+ * glyph and, like the position nodes, may be read from any node of either stage. A decoration context has neither.
+ */
+type ThreeMaterialGlyph = Readonly<{
+  /**
+   * The glyph's index in its text's layout order: the index `Text.glyphs()` reports it at, counting every glyph of
+   * the text across lines, fonts and formats, blank ones included (so drawn indices have gaps). Glyphs of a
+   * right-to-left run count in the order they are drawn, left to right, and a ligature is one glyph. It is a
+   * position, not an identity: an edit before a glyph shifts it. On a `Glyphs` it is the index the glyph had in its
+   * source `Text` when `split()` ran.
+   */
+  glyphIndex: Node<'uint'>;
+  /**
+   * The glyph's pen origin on its baseline, in the space and units of `paragraphPosition`:
+   * `(glyphs().x[glyphIndex], -glyphs().y[glyphIndex], 0)`. `paragraphPosition.sub(glyphOrigin)` is a vertex's offset
+   * from its own glyph, the pivot `Glyphs.setMatrixAt` turns a glyph about. On a `Glyphs` it is the origin captured by
+   * `split()`.
+   */
+  glyphOrigin: Node<'vec3'>;
+}>;
+
 type ThreeDecorationMaterialContext = ThreeMaterialRootContext &
   Readonly<{
     kind: 'decoration';
@@ -52,7 +74,8 @@ type ThreeBitmapMaterialContext = ThreeMaterialRootContext &
     shader: TslBitmapShaderOutput;
     createDefaultMaterial(): NodeMaterial;
   }> &
-  ThreeMaterialPositions;
+  ThreeMaterialPositions &
+  ThreeMaterialGlyph;
 
 type ThreeMsdfMaterialContext = ThreeMaterialRootContext &
   Readonly<{
@@ -61,7 +84,8 @@ type ThreeMsdfMaterialContext = ThreeMaterialRootContext &
     shader: TslMsdfShaderOutput;
     createDefaultMaterial(): NodeMaterial;
   }> &
-  ThreeMaterialPositions;
+  ThreeMaterialPositions &
+  ThreeMaterialGlyph;
 
 type ThreeSlugMaterialContext = ThreeMaterialRootContext &
   Readonly<{
@@ -70,7 +94,8 @@ type ThreeSlugMaterialContext = ThreeMaterialRootContext &
     shader: TslSlugShaderOutput;
     createDefaultMaterial(): NodeMaterial;
   }> &
-  ThreeMaterialPositions;
+  ThreeMaterialPositions &
+  ThreeMaterialGlyph;
 
 /** Custom Three rasters augment this map with their literal format key and exact material context. */
 export interface ThreeTextMaterialContextMap {

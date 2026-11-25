@@ -967,6 +967,9 @@ pub(crate) fn u32_input_dependency(source: InputSource) -> u16 {
         0..=5 => 1 << (8 + source.field),
         6..=7 => super::positioning::SEMANTIC_EFFECTS_CHANGE,
         8 => super::positioning::SEMANTIC_PLACEMENT_SLOT_CHANGE,
+        // A glyph's layout index is instance data like its transform index: it decides no
+        // plan binding, so it shares that change class.
+        9 => 1 << 12,
         _ => 0,
     }
 }

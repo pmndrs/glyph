@@ -105,6 +105,12 @@ function systemCodecBuffers(
             buffer: { id: system.transformIndex.id, scalar: 'u32' as const, vectorWidth: 1 },
           },
         ]),
+    ...(system.glyphIndex === undefined || system.glyphOrigin === undefined
+      ? []
+      : [
+          { name: 'glyphIndex', buffer: { id: system.glyphIndex.id, scalar: 'u32' as const, vectorWidth: 1 } },
+          { name: 'glyphOrigin', buffer: { id: system.glyphOrigin.id, scalar: 'f32' as const, vectorWidth: 2 } },
+        ]),
   ];
 }
 

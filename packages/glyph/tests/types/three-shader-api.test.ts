@@ -1,4 +1,4 @@
-import { mul, texture, vec2, vec3 } from 'three/tsl';
+import { float, mul, texture, vec2, vec3 } from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 
@@ -87,6 +87,28 @@ const displacedMaterial = defineTextMaterial((context) => {
   material.colorNode = context.shader.color.mul(position.x.sin().mul(0.2).add(0.8));
   return material;
 });
+
+// Every glyph context names the glyph a vertex or fragment belongs to; a decoration is not a glyph.
+const perGlyphMaterial = defineTextMaterial((context) => {
+  const material = context.createDefaultMaterial();
+  if (context.kind === 'decoration') {
+    // @ts-expect-error A decoration context has no glyph index.
+    void context.glyphIndex;
+    // @ts-expect-error A decoration context has no glyph origin.
+    void context.glyphOrigin;
+    return material;
+  }
+  const glyphIndex: Node<'uint'> = context.glyphIndex;
+  const glyphOrigin: Node<'vec3'> = context.glyphOrigin;
+  // A wave that scales each glyph about its own pen origin, staggered by its place in the layout.
+  const fromOrigin = context.paragraphPosition.sub(glyphOrigin);
+  material.positionNode = context.position.add(fromOrigin.mul(float(glyphIndex).mul(0.4).sin().mul(0.25)));
+  // @ts-expect-error The index is an unsigned integer, so it cannot stand in for a float phase unconverted.
+  const phase: Node<'float'> = context.glyphIndex;
+  void phase;
+  return material;
+});
+void perGlyphMaterial;
 
 const material = new THREE.MeshBasicNodeMaterial();
 material.positionNode = slugOutput.position;

@@ -18,7 +18,7 @@ mod gather_equivalence {
             SEMANTIC_F32_FOREGROUND_GREEN, SEMANTIC_F32_FOREGROUND_RED, SEMANTIC_F32_INLINE_ORIGIN,
             SEMANTIC_F32_INVERSE_FONT_SIZE, SEMANTIC_F32_OUTLINE_WIDTH_EM,
             SEMANTIC_F32_SHADOW_OFFSET_X_EM, SEMANTIC_F32_SHADOW_OFFSET_Y_EM,
-            SEMANTIC_U32_PLACEMENT_SLOT,
+            SEMANTIC_U32_GLYPH_INDEX, SEMANTIC_U32_PLACEMENT_SLOT,
         },
         ordered_plan::replay::TestHost,
         placement_state::SegmentTranslation,
@@ -29,7 +29,7 @@ mod gather_equivalence {
 
     const CAPABILITY: CapabilitySetId = CapabilitySetId(1);
     const F32_SEMANTIC_FIELDS: u8 = SEMANTIC_F32_SHADOW_OFFSET_Y_EM + 1;
-    const U32_SEMANTIC_FIELDS: u8 = SEMANTIC_U32_PLACEMENT_SLOT + 1;
+    const U32_SEMANTIC_FIELDS: u8 = SEMANTIC_U32_GLYPH_INDEX + 1;
 
     const INTER: &[u8] =
         include_bytes!("../../../../../../benches/fixtures/fonts/inter-v4.1/Inter-Regular.ttf");

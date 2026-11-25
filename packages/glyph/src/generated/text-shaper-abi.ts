@@ -210,6 +210,7 @@ export const textShaperAbi = {
       "clusterId": 1,
       "flowThreadId": 3,
       "foregroundRgba": 0,
+      "glyphIndex": 9,
       "outlineRgba": 6,
       "placementSlot": 8,
       "regionId": 2,

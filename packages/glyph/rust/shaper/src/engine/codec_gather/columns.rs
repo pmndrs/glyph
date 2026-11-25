@@ -13,8 +13,8 @@ use super::super::{
     frame::{
         SEMANTIC_F32_BLOCK_EXTENT, SEMANTIC_F32_BLOCK_START, SEMANTIC_F32_FONT_SIZE,
         SEMANTIC_F32_INLINE_EXTENT, SEMANTIC_F32_INLINE_START, SEMANTIC_F32_RASTER_PIXEL_RATIO,
-        SEMANTIC_U32_CLUSTER_ID, SEMANTIC_U32_FLOW_THREAD_ID, SEMANTIC_U32_REGION_ID,
-        SEMANTIC_U32_STABLE_GLYPH_ID, SEMANTIC_U32_TRANSFORM_INDEX,
+        SEMANTIC_U32_CLUSTER_ID, SEMANTIC_U32_FLOW_THREAD_ID, SEMANTIC_U32_GLYPH_INDEX,
+        SEMANTIC_U32_REGION_ID, SEMANTIC_U32_STABLE_GLYPH_ID, SEMANTIC_U32_TRANSFORM_INDEX,
     },
     inline_leaf::LeafCluster,
     placement_state::GlyphSource,
@@ -76,17 +76,24 @@ struct GlyphLanes {
     glyph_id: u32,
     semantic_id: u32,
     stable_cluster: u32,
+    /// Position in the paragraph's layout order, blank glyphs counted.
+    semantic_index: u32,
     /// Inline and block origin, ink start and ink extent, all in run-local space.
     local: [f32; LOCAL_LANES],
 }
 
 impl GlyphLanes {
-    fn positioned(semantic: PositionedSemanticGlyph, stable_cluster: u32) -> Self {
+    fn positioned(
+        semantic: PositionedSemanticGlyph,
+        stable_cluster: u32,
+        semantic_index: u32,
+    ) -> Self {
         Self {
             stable_id: semantic.stable_id,
             glyph_id: u32::from(semantic.glyph_id),
             semantic_id: semantic.cluster,
             stable_cluster,
+            semantic_index,
             local: [
                 semantic.inline_origin,
                 semantic.block_origin,
@@ -119,6 +126,7 @@ pub(super) struct SourceChunk {
     glyph_id: [u32; CHUNK],
     semantic_id: [u32; CHUNK],
     stable_cluster: [u32; CHUNK],
+    semantic_index: [u32; CHUNK],
     local: [[f32; CHUNK]; LOCAL_LANES],
     span: [u8; CHUNK],
     style: [u8; CHUNK],
@@ -140,6 +148,7 @@ impl SourceChunk {
             glyph_id: [0; CHUNK],
             semantic_id: [0; CHUNK],
             stable_cluster: [0; CHUNK],
+            semantic_index: [0; CHUNK],
             local: [[0.0; CHUNK]; LOCAL_LANES],
             span: [0; CHUNK],
             style: [0; CHUNK],
@@ -249,6 +258,7 @@ impl SourceChunk {
         self.glyph_id[index] = glyph.glyph_id;
         self.semantic_id[index] = glyph.semantic_id;
         self.stable_cluster[index] = glyph.stable_cluster;
+        self.semantic_index[index] = glyph.semantic_index;
         self.span[index] = self.spans.len.wrapping_sub(1) as u8;
         self.style[index] = self.styles.len.wrapping_sub(1) as u8;
         let [
@@ -717,7 +727,11 @@ impl<'a> ProjectedRows<'a> {
         let (style_index, stable_cluster) = cluster_facts(clusters, mark.owner_cluster)?;
         let boundary = self.open_ranges(chunk, ranges, span, mark, style_index)?;
         if let Some(semantic) = boundary.filter(|_| span.source == GlyphSource::Boundary) {
-            chunk.push_glyph(GlyphLanes::positioned(semantic, stable_cluster));
+            chunk.push_glyph(GlyphLanes::positioned(
+                semantic,
+                stable_cluster,
+                mark.semantic_index,
+            ));
             return Ok(());
         }
         push_run_glyph(
@@ -726,6 +740,7 @@ impl<'a> ProjectedRows<'a> {
             clusters.run_local().lanes(),
             mark.source_glyph,
             stable_cluster,
+            mark.semantic_index,
         )
     }
 
@@ -785,10 +800,20 @@ impl<'a> ProjectedRows<'a> {
                 self.open_ranges(chunk, ranges, walk.span, mark, cluster.style_index)?;
                 style_open = true;
             }
+            let semantic_index = cluster
+                .semantic_start
+                .wrapping_add(source.wrapping_sub(cluster.start));
             if placed {
-                push_placed_glyph(chunk, clusters, rows, source)?;
+                push_placed_glyph(chunk, clusters, rows, source, semantic_index)?;
             } else {
-                push_run_glyph(chunk, clusters, rows, source, cluster.stable_id)?;
+                push_run_glyph(
+                    chunk,
+                    clusters,
+                    rows,
+                    source,
+                    cluster.stable_id,
+                    semantic_index,
+                )?;
             }
             self.next_index += 1;
             walk.remaining -= 1;
@@ -837,6 +862,8 @@ struct WalkCluster {
     end: u32,
     style_index: u32,
     stable_id: u32,
+    /// Layout index of the cluster's first source glyph.
+    semantic_start: u32,
 }
 
 impl<'a> SpanWalk<'a> {
@@ -880,12 +907,23 @@ impl<'a> SpanWalk<'a> {
             (start, count)
         };
         let (style_index, stable_id) = cluster_facts(clusters, index)?;
+        let end = start.wrapping_add(count);
+        // Clusters stand in the span's visual order, so the glyphs laid out before this
+        // cluster are the span's source glyphs on the side the walk came from.
+        let before = if span.cluster_order == ClusterOrder::Reverse {
+            span.source_glyph_start
+                .wrapping_add(span.source_glyph_count)
+                .wrapping_sub(end)
+        } else {
+            start.wrapping_sub(span.source_glyph_start)
+        };
         Ok(WalkCluster {
             index,
             start,
-            end: start.wrapping_add(count),
+            end,
             style_index,
             stable_id,
+            semantic_start: span.semantic_start.wrapping_add(before),
         })
     }
 }
@@ -910,6 +948,7 @@ fn push_run_glyph(
     rows: RunLocalLanes<'_>,
     source_glyph: u32,
     stable_cluster: u32,
+    semantic_index: u32,
 ) -> Result<(), GatherError> {
     let source = source_glyph as usize;
     let (
@@ -942,6 +981,7 @@ fn push_run_glyph(
         glyph_id: u32::from(glyph_id),
         semantic_id,
         stable_cluster,
+        semantic_index,
         local: [
             inline_origin,
             block_origin,
@@ -954,12 +994,13 @@ fn push_run_glyph(
     Ok(())
 }
 
-/// The placed lanes of a paragraph-run glyph: its identity and ink origin.
+/// The placed lanes of a paragraph-run glyph: its identity, layout index and ink origin.
 fn push_placed_glyph(
     chunk: &mut SourceChunk,
     clusters: &ClusterArena,
     rows: RunLocalLanes<'_>,
     source_glyph: u32,
+    semantic_index: u32,
 ) -> Result<(), GatherError> {
     let source = source_glyph as usize;
     let (Some(&stable_id), Some(&ink_inline_start), Some(&ink_block_start)) = (
@@ -972,6 +1013,7 @@ fn push_placed_glyph(
     let index = chunk.len & LANE;
     chunk.run_glyphs |= 1 << index;
     chunk.stable_id[index] = stable_id;
+    chunk.semantic_index[index] = semantic_index;
     chunk.span[index] = chunk.spans.len.wrapping_sub(1) as u8;
     chunk.local[LOCAL_INK_INLINE_START][index] = ink_inline_start;
     chunk.local[LOCAL_INK_BLOCK_START][index] = ink_block_start;
@@ -1032,7 +1074,12 @@ impl InlineRows<'_> {
                 break;
             }
             self.open_ranges(chunk, &mut ranges, source, semantic, cluster.style_index)?;
-            chunk.push_glyph(GlyphLanes::positioned(semantic, cluster.stable_text_id));
+            // Inline admission proves LTR source order equals semantic occurrence order.
+            chunk.push_glyph(GlyphLanes::positioned(
+                semantic,
+                cluster.stable_text_id,
+                source,
+            ));
             self.remaining &= self.remaining.wrapping_sub(1);
             self.next_index += 1;
         }
@@ -1156,6 +1203,7 @@ enum U32Source<'b> {
     FlowThreadId,
     TransformIndex,
     StableGlyph,
+    GlyphIndex,
     OutlineRgba,
     ShadowRgba,
     Glyph(&'b [u32]),
@@ -1236,6 +1284,8 @@ impl<'c, 'b> ColumnPlan<'c, 'b> {
                 | U32Source::RegionId
                 | U32Source::FlowThreadId
                 | U32Source::TransformIndex
+                // A line's visual order and its boundary glyphs follow its breaks.
+                | U32Source::GlyphIndex
                 | U32Source::Missing
         )
     }
@@ -1324,6 +1374,7 @@ fn u32_source<'b>(source: InputSource, binding: &'b FontRenderBinding) -> U32Sou
                 SEMANTIC_U32_OUTLINE_RGBA => U32Source::OutlineRgba,
                 SEMANTIC_U32_SHADOW_RGBA => U32Source::ShadowRgba,
                 SEMANTIC_U32_PLACEMENT_SLOT => U32Source::PlacementSlot,
+                SEMANTIC_U32_GLYPH_INDEX => U32Source::GlyphIndex,
                 _ => U32Source::Missing,
             };
         }
@@ -1487,6 +1538,7 @@ fn u32_column(source: U32Source<'_>, chunk: &SourceChunk, rows: Rows<'_>, out: &
         U32Source::FlowThreadId => span(&spans.flow_thread_id, out),
         U32Source::TransformIndex => span(&spans.transform_index, out),
         U32Source::StableGlyph => copy_lane(&chunk.stable_id, rows, out),
+        U32Source::GlyphIndex => copy_lane(&chunk.semantic_index, rows, out),
         U32Source::OutlineRgba => style(&styles.outline_rgba, out),
         U32Source::ShadowRgba => style(&styles.shadow_rgba, out),
         U32Source::Glyph(table) => return binding_lane(table, &chunk.glyph_id, rows, out),

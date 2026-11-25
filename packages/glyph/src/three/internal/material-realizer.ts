@@ -32,14 +32,24 @@ import type {
 
 type MaterialSelection = ThreeResolvedMaterialBinding | undefined;
 type BuiltinMaterialContextKey = 'decoration' | 'pmndrs.bitmap' | 'pmndrs.msdf' | 'pmndrs.slug';
-/** A built-in context before its stage-safe position nodes; the open map's external augmentations are not built here. */
+/** A built-in context before its stage-safe nodes; the open map's external augmentations are not built here. */
 type RawMaterialContext = {
-  [Key in BuiltinMaterialContextKey]: Omit<ThreeTextMaterialContextMap[Key], 'paragraphPosition' | 'position'>;
+  [Key in BuiltinMaterialContextKey]: Omit<
+    ThreeTextMaterialContextMap[Key],
+    'paragraphPosition' | 'position' | 'glyphIndex' | 'glyphOrigin'
+  >;
 }[BuiltinMaterialContextKey];
-/** One draw's raw vertex position graphs: paragraph-local, and final draw-local. */
-interface RawMaterialPositions {
+/** One draw's raw vertex graphs: the paragraph-local and final draw-local positions, and a glyph draw's facts. */
+interface RawMaterialNodes {
   readonly paragraph: THREE.Node<'vec3'>;
   readonly draw: THREE.Node<'vec3'>;
+  readonly glyph: Readonly<{ index: THREE.Node<'uint'>; origin: THREE.Node<'vec2'> }> | undefined;
+}
+/** The lanes behind a caller material's `glyphIndex` and `glyphOrigin`. */
+interface GlyphFactLanes {
+  readonly index: RetainedBuffer;
+  readonly origin: RetainedBuffer;
+  readonly buffers: readonly RetainedBuffer[];
 }
 
 interface ThreeMaterialOwner {
@@ -121,7 +131,7 @@ export class ThreeMaterialRealizer {
         shader,
         createDefaultMaterial: () => coverageMaterial(shader, position),
       },
-      { paragraph: shader.position, draw: position },
+      { paragraph: shader.position, draw: position, glyph: undefined },
     );
     this.#retain(key, material, undefined, lanes, transform.kind, shape);
     return material;
@@ -152,7 +162,8 @@ export class ThreeMaterialRealizer {
     const part = schemaDrawBuffers(bitmapSchema, buffers, 'Bitmap');
     const required = [part.origin, part.size, part.uvOrigin, part.uvSize, part.color, part.page];
     const placement = this.#placementSources(buffers);
-    const retained = [...required, ...placement.buffers];
+    const facts = this.#glyphFactLanes(buffers, selection);
+    const retained = [...required, ...placement.buffers, ...(facts?.buffers ?? [])];
     const lanes = materialBuffers(retained, transform);
     const key = this.#cacheKey('bitmap', resource, selection, retained, buffers, transform, [
       `snap=${String(this.#owner.pixelSnapping ?? selection?.pixelSnapping ?? false)}`,
@@ -188,7 +199,7 @@ export class ThreeMaterialRealizer {
         shader,
         createDefaultMaterial: () => bitmapMaterial(shader, position),
       },
-      { paragraph: shader.position, draw: position },
+      { paragraph: shader.position, draw: position, glyph: glyphFacts(facts, instance, placementOffset) },
     );
     this.#retain(key, material, resource, lanes, transform.kind, shape);
     return material;
@@ -203,7 +214,8 @@ export class ThreeMaterialRealizer {
     const part = schemaDrawBuffers(msdfSchema, buffers, 'MSDF');
     const required = [part.rect, part.color, part.effectColor, part.effect];
     const placement = this.#placementSources(buffers);
-    const retained = [...required, ...placement.buffers];
+    const facts = this.#glyphFactLanes(buffers, selection);
+    const retained = [...required, ...placement.buffers, ...(facts?.buffers ?? [])];
     const lanes = materialBuffers(retained, transform);
     const key = this.#cacheKey('msdf', resource, selection, retained, buffers, transform);
     const shape = this.#cacheShape('msdf', resource, selection, retained, buffers, transform);
@@ -270,7 +282,7 @@ export class ThreeMaterialRealizer {
         shader,
         createDefaultMaterial: () => coverageMaterial(shader, position),
       },
-      { paragraph: shader.position, draw: position },
+      { paragraph: shader.position, draw: position, glyph: glyphFacts(facts, instance, placementOffset) },
     );
     registerMsdfAtlasUse(material, atlas);
     // A caller's material is theirs to keep, so only the default material is exchanged for effect specializations.
@@ -293,7 +305,8 @@ export class ThreeMaterialRealizer {
     const part = schemaDrawBuffers(slugSchema, buffers, 'Slug');
     const required = [part.rect, part.color, part.glyph];
     const placementTable = this.#placementTable();
-    const retained = [...required, placementTable];
+    const facts = this.#glyphFactLanes(buffers, selection);
+    const retained = [...required, placementTable, ...(facts?.buffers ?? [])];
     const lanes = materialBuffers(retained, transform);
     const key = this.#cacheKey('slug', resource, selection, retained, buffers, transform);
     const shape = this.#cacheShape('slug', resource, selection, retained, buffers, transform);
@@ -353,7 +366,7 @@ export class ThreeMaterialRealizer {
         shader,
         createDefaultMaterial: () => coverageMaterial(shader, position),
       },
-      { paragraph: shader.position, draw: position },
+      { paragraph: shader.position, draw: position, glyph: glyphFacts(facts, instance, placementOffset) },
     );
     registerSlugPageUse(material, page);
     this.#retain(key, material, resource, lanes, transform.kind, shape);
@@ -516,6 +529,20 @@ export class ThreeMaterialRealizer {
     return { slots, table, buffers: [slots, table] };
   }
 
+  /** The glyph fact lanes of a draw a caller's material renders; the default material reads neither. */
+  #glyphFactLanes(
+    buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
+    selection: MaterialSelection,
+  ): GlyphFactLanes | undefined {
+    if (selection?.material === undefined) return undefined;
+    const index = buffers.get(threeSystemBuffers.glyphIndex.id);
+    const origin = buffers.get(threeSystemBuffers.glyphOrigin.id);
+    if (index === undefined || origin === undefined) {
+      throw new Error('glyph draw is missing its glyph index or glyph origin lane');
+    }
+    return { index, origin, buffers: [index, origin] };
+  }
+
   #placementTable(): RetainedBuffer {
     const table = this.#context.placementTable;
     if (table === undefined || table.scalarType !== 'f32' || table.vectorWidth !== 2) {
@@ -582,20 +609,32 @@ export class ThreeMaterialRealizer {
 
   /**
    * The default material drives its raw vertex graphs directly and builds nothing more. A caller's factory receives
-   * each position as a stage-safe node, which any node of either stage may read any number of times.
+   * each position and glyph fact as a stage-safe node, which any node of either stage may read any number of times.
    */
   #createMaterial(
     selection: MaterialSelection,
     context: RawMaterialContext,
-    positions: RawMaterialPositions,
+    nodes: RawMaterialNodes,
   ): THREE.NodeMaterial {
     const factory = selection?.material;
     if (factory === undefined) return this.#own(context.createDefaultMaterial());
-    const created = factory.create({
-      ...context,
-      paragraphPosition: stagePosition(positions.paragraph),
-      position: stagePosition(positions.draw),
-    });
+    const positions = {
+      paragraphPosition: stageNode(nodes.paragraph, 'vec3'),
+      position: stageNode(nodes.draw, 'vec3'),
+    };
+    let created: THREE.NodeMaterial | undefined;
+    if (context.kind === 'decoration') {
+      created = factory.create({ ...context, ...positions });
+    } else {
+      if (nodes.glyph === undefined) throw new Error('glyph draw has no glyph fact lanes for its material');
+      const origin = nodes.glyph.origin;
+      created = factory.create({
+        ...context,
+        ...positions,
+        glyphIndex: stageNode(nodes.glyph.index, 'uint'),
+        glyphOrigin: stageNode(TSL.vec3(origin.x, origin.y.negate(), 0), 'vec3'),
+      });
+    }
     return this.#own(created ?? context.createDefaultMaterial());
   }
 
@@ -758,25 +797,26 @@ function affineColumns(transforms: THREE.StorageInstancedBufferAttribute, firstC
 }
 
 /**
- * A vertex position graph that is safe to read from either stage.
+ * A vertex graph (a position, or a per-glyph fact read from instance storage) that is safe to read from either stage.
  *
- * The vertex stage reads the graph itself, so a material passing it to `positionNode` compiles to the default
+ * The vertex stage reads the graph itself, so a material passing a position to `positionNode` compiles to the default
  * material's vertex program; a three.js `vertexStage()` varying there instead loses a TypeGPU-backed graph's
  * `positionLocal` on WebGL2. The fragment stage reads the graph's vertex-computed varying: the position of the
  * rasterized surface, interpolated from the corners actually drawn, rather than the graph re-run per fragment (where
- * Slug's graph would assign its coverage varying, an immutable fragment input).
+ * Slug's graph would assign its coverage varying, an immutable fragment input, and an instance read has no instance).
+ * Three interpolates an integer varying flat.
  */
-class StagePositionNode extends THREE.Node<'vec3'> {
-  readonly node: THREE.Node<'vec3'>;
-  readonly interpolated: THREE.Node<'vec3'>;
+class StageNode extends THREE.Node {
+  readonly node: THREE.Node;
+  readonly interpolated: THREE.Node;
 
-  constructor(node: THREE.Node<'vec3'>) {
-    super('vec3');
+  constructor(node: THREE.Node, type: 'vec3' | 'uint') {
+    super(type);
     this.node = node;
     this.interpolated = TSL.vertexStage(node);
   }
 
-  #stageNode(builder: THREE.NodeBuilder): THREE.Node<'vec3'> {
+  #stageNode(builder: THREE.NodeBuilder): THREE.Node {
     // three 0.185.1 sets `NodeBuilder.shaderStage` while building each stage; @types/three 0.185.4 declares only a
     // stub of the builder, so the field is read untyped and compared, never trusted as a type.
     return Reflect.get(builder, 'shaderStage') === 'fragment' ? this.interpolated : this.node;
@@ -796,8 +836,22 @@ class StagePositionNode extends THREE.Node<'vec3'> {
   }
 }
 
-function stagePosition(node: THREE.Node<'vec3'>): THREE.Node<'vec3'> {
-  return TSL.nodeObject(new StagePositionNode(node));
+function stageNode<Type extends 'vec3' | 'uint'>(node: THREE.Node<Type>, type: Type): THREE.Node<Type> {
+  // The wrapper builds whichever of two graphs of `type` its stage reads, so it is a node of that type.
+  const staged: THREE.Node = new StageNode(node, type);
+  return TSL.nodeObject(staged) as THREE.Node<Type>;
+}
+
+function glyphFacts(
+  lanes: GlyphFactLanes | undefined,
+  instance: THREE.Node<'uint'>,
+  placementOffset: THREE.Node<'vec2'>,
+): RawMaterialNodes['glyph'] {
+  if (lanes === undefined) return undefined;
+  return {
+    index: storageUint(lanes.index, instance),
+    origin: storageVec2(lanes.origin, instance).add(placementOffset),
+  };
 }
 
 function bitmapMaterial(
