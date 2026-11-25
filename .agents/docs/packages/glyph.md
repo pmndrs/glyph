@@ -1820,8 +1820,12 @@ above a halfway point rounds down. Strike quads at whole-pixel text positions si
 pixels), and `round()` sent the two edges of one quad different ways through float error and WGSL's round-half-to-even,
 stretching it by a pixel; the threshold keeps every 1:1 quad whole, so snapped linear and nearest reads agree. MSDF and
 Slug glyphs ignore the option. The decorations of a snapped text (Three, PixiJS 3D; TypeGPU draws none) snap their
-corners by the same rule, so they land on the grid; their offset from the snapped baseline can still differ by one pixel
-between sub-pixel positions, because a decoration record does not carry its line's baseline. Direct TypeGPU uses the
+inline edges as glyph corners do and are placed along the block axis from their line's snapped baseline
+(`snapDecorationClipAxis`): the baseline rounds by the glyphs' rule, then the rectangle's offset from it and its
+thickness (at least one pixel) round by the same rule, so an underline keeps one whole-pixel distance from the snapped
+glyphs at every sub-pixel position. Every decoration program publishes the line's baseline as the one-float
+`decorationSchema.buffers.baseline` lane (lane 4 of a decoration row); only a snapped decoration reads it (Three binds
+it as storage, PixiJS 3D copies it into the snapped mesh's `aGlyphDecorationSnap` attribute). Direct TypeGPU uses the
 viewport given to `draw()` as the pixel grid (exact when it is the attachment's size in device pixels) and compiles the
 snapped Bitmap program only when a snapped text first draws; PixiJS 3D reads the physical pass viewport from
 `camera.uLightTileTransform` as Slug's dilation does and appends an internal snap bit (`afterTransform`) to a snapped
