@@ -16,6 +16,7 @@ import interSlugUrl from '../fixtures/rendering/inter-slug.font.glb.gz?url';
 import msdfManifest from '../fixtures/rendering/showcase-mtsdf-fixtures-v0.json' with { type: 'json' };
 import slugManifest from '../fixtures/rendering/showcase-slug-fixtures-v0.json' with { type: 'json' };
 import type { Pixi3DBackend, Pixi3DParityProof } from './pixi3d-parity-contract';
+import { SNAPPED_ROWS } from './snapped-bitmap-rows';
 import { fetchAuthenticatedGzipAsset } from './workloads/font-assets/authenticated-gzip';
 
 const WIDTH = 832;
@@ -48,6 +49,8 @@ interface Scene {
   readonly widenedFrom?: number;
   /** Both renderers sample Bitmap pages with the nearest texel (`bitmapFilter: 'nearest'`). */
   readonly nearest?: boolean;
+  /** Every text of both renderers is constructed with `pixelSnapping: true`. */
+  readonly snapped?: boolean;
 }
 
 const backend: Pixi3DBackend = new URLSearchParams(location.search).get('backend') === 'webgl' ? 'webgl' : 'webgpu';
@@ -153,6 +156,38 @@ function edited(technique: Technique): Scene {
   };
 }
 
+/**
+ * Strikes at their own sizes (1:1), on whole-pixel positions and at fractional ones, some underlined: snapping rounds
+ * every glyph quad and decoration corner onto the pixel grid, so both filters read whole texels.
+ */
+function snapped(nearest: boolean): Scene {
+  const items: Item[] = [];
+  for (const { x: left, y } of SNAPPED_ROWS) {
+    items.push({
+      text: 'Snapped 16 px: Glyph Ag fj Wy',
+      x: left,
+      y,
+      style: { fontSize: 16, color: '#ffffff' },
+    });
+    items.push({ text: 'Snapped 32 px: Ag', x: left, y: y + 24, style: { fontSize: 32, color: '#ffffff' } });
+    items.push({
+      text: 'Underlined 0123',
+      x: left + 410,
+      y,
+      // White decorations: PixiJS 3D's decoration material encodes its paint for display (the package's lit default),
+      // which the proof's unlit display-space text material does not, so only full-intensity paint stores alike.
+      style: { fontSize: 16, color: '#80c0ff', decoration: { underline: true, color: '#ffffff' } },
+    });
+    items.push({
+      text: 'Struck 32',
+      x: left + 410,
+      y: y + 24,
+      style: { fontSize: 32, color: '#ffffff', opacity: 0.6, decoration: { lineThrough: true } },
+    });
+  }
+  return { technique: 'bitmap', items, snapped: true, nearest };
+}
+
 const scenes: Readonly<Record<string, Scene>> = {
   'msdf-sizes': sizes('msdf'),
   'msdf-effects': effects(),
@@ -184,6 +219,9 @@ const scenes: Readonly<Record<string, Scene>> = {
   // The sizes scene read texel by texel. Nearest sampling picks a texel by convention where a pixel centre lies
   // exactly on a texel edge (Three's WebGPU texel load floors, a sampler rounds in fixed point), and these strikes'
   // quads sit on half pixels, so each row starts on a whole pixel moved 0.3 px, off texel edges at 1x, 1.5x and 2x.
+  // Named apart from `bitmap-*`: snapped quads own whole pixels, so WebGL's pixel-centre edge budget does not apply.
+  'snapped-bitmap': snapped(false),
+  'snapped-bitmap-nearest': snapped(true),
   'bitmap-nearest': {
     ...sizes('bitmap'),
     items: sizes('bitmap').items.map((item) => ({ ...item, x: item.x + 0.3, y: Math.round(item.y) + 0.3 })),
@@ -271,6 +309,7 @@ async function start(): Promise<Pixi3DParityProof> {
     font: fontOf(scene, item),
     text,
     style: item.style,
+    ...(scene.snapped === true ? { pixelSnapping: true } : {}),
     ...(width === undefined
       ? { layout: { wrap: 'none' as const } }
       : { constraints: { width: { mode: 'at-most' as const, size: width } } }),

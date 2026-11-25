@@ -23,6 +23,7 @@ import interSlugFontUrl from '../fixtures/rendering/inter-slug.font.glb.gz?url';
 import showcaseManifest from '../fixtures/rendering/showcase-mtsdf-fixtures-v0.json' with { type: 'json' };
 import slugManifest from '../fixtures/rendering/showcase-slug-fixtures-v0.json' with { type: 'json' };
 import type { Counters, FontCost, GlyphFactsProof, ParityPerf, ParityProof } from './typegpu-parity-contract';
+import { SNAPPED_ROWS } from './snapped-bitmap-rows';
 import { fetchAuthenticatedGzipAsset } from './workloads/font-assets/authenticated-gzip';
 
 // A row of 832 RGBA pixels is a multiple of 256 bytes, which a texture-to-buffer copy requires.
@@ -66,6 +67,8 @@ interface Scene {
   readonly sdf?: boolean;
   /** Both renderers sample Bitmap pages with the nearest texel (`bitmapFilter: 'nearest'`). */
   readonly nearest?: boolean;
+  /** Every text of both renderers is constructed with `pixelSnapping: true`. */
+  readonly snapped?: boolean;
 }
 const counters = emptyCounters();
 installCounters();
@@ -246,6 +249,28 @@ function arrivingScene(font: (index: number) => FontName = (index) => (index % 2
   return { items, arriving: true };
 }
 
+function snappedBitmapItems(): Item[] {
+  const items: Item[] = [];
+  for (const { x: left, y } of SNAPPED_ROWS) {
+    items.push({
+      font: 'bitmap',
+      text: 'Snapped 16 px: Glyph Ag fj Wy',
+      x: left,
+      y,
+      style: { fontSize: 16 },
+    });
+    items.push({ font: 'bitmap', text: 'Snapped 32 px: Ag', x: left, y: y + 24, style: { fontSize: 32 } });
+    items.push({
+      font: 'bitmap',
+      text: 'Label 0123',
+      x: left + 410,
+      y,
+      style: { fontSize: 16, color: '#80c0ff', opacity: 0.6 },
+    });
+  }
+  return items;
+}
+
 const scenes: Readonly<Record<string, Scene>> = {
   one: { items: [{ font: 'inter', text: 'Hello, TypeGPU!', x: 24, y: 40, style: { fontSize: 72, color: '#ffffff' } }] },
   fx: fxScene(),
@@ -326,6 +351,11 @@ const scenes: Readonly<Record<string, Scene>> = {
   // texel by convention where a pixel centre lies exactly on a texel edge (Three's WebGPU texel load floors, a
   // sampler rounds in fixed point), and these strikes' quads sit on half pixels, so every text is moved 0.3 px on
   // both axes to keep pixel centres off texel edges at each of these scales.
+  // Pixel-snapped strikes at their own sizes (1:1), on whole-pixel positions and at fractional ones: snapping rounds
+  // every quad corner onto the pixel grid, so both filters read whole texels. The same items under both filters; the
+  // proof holds each to Three with no pixel over the tolerance.
+  'snapped-bitmap': { items: snappedBitmapItems(), snapped: true },
+  'snapped-bitmap-nearest': { items: snappedBitmapItems(), snapped: true, nearest: true },
   'bitmap-nearest': {
     nearest: true,
     items: [
@@ -513,6 +543,7 @@ async function start(): Promise<ParityProof> {
           text: item.text,
           style: item.style,
           layout: { wrap: 'none' },
+          ...(scene.snapped === true ? { pixelSnapping: true } : {}),
         });
         text.position.set(item.x, -item.y, 0);
         sheet.add(text);
@@ -567,6 +598,7 @@ async function start(): Promise<ParityProof> {
         position: [item.x, item.y],
         style: item.style,
         layout: { wrap: 'none' },
+        ...(scene.snapped === true ? { pixelSnapping: true } : {}),
       }),
     );
   }
@@ -581,6 +613,7 @@ async function start(): Promise<ParityProof> {
             ? flatNearest
             : flat;
     const texts = mount(handle, {
+      ...scene,
       items: scene.items.slice(0, scene.grownFrom).map((item) => {
         const moved =
           scene.movedFrom === undefined
@@ -594,7 +627,7 @@ async function start(): Promise<ParityProof> {
       frame(handle);
       if (scene.grownFrom !== undefined) {
         for (let from = scene.grownFrom; from < scene.items.length; from += 16) {
-          texts.push(...mount(handle, { items: scene.items.slice(from, from + 16) }));
+          texts.push(...mount(handle, { ...scene, items: scene.items.slice(from, from + 16) }));
           glyph.shape();
           frame(handle);
         }
