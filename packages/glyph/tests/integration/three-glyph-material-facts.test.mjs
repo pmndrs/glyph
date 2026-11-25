@@ -333,3 +333,45 @@ for (const shaders of ['stable', 'typegpu']) {
     });
   }
 }
+
+for (const shaders of ['stable', 'typegpu']) {
+  for (const transformMode of ['direct', 'indexed']) {
+    test(`a displacement by position moves a decoration with its glyphs: ${shaders} shaders, ${transformMode} transforms`, async (t) => {
+      const three = await createThreeTestHandle(t, shaderConfigs[shaders]({ transformMode }));
+      for (const [format, fonts] of Object.entries(FORMATS)) {
+        const font = await fonts.amiri();
+        const kinds = [];
+        // One function of position, written once, for whatever the factory is asked to draw.
+        const displaced = defineTextMaterial((context) => {
+          kinds.push(context.kind);
+          const value = context.createDefaultMaterial();
+          value.positionNode = context.position.add(TSL.vec3(0, context.position.x.mul(0.4375).sin().mul(3.25), 0));
+          return value;
+        });
+        const scene = new THREE.Scene();
+        const options = { font, text: 'Ab', style: { decoration: { underline: true, color: '#ff0088' } } };
+        const label = three.createText({ ...options, material: displaced });
+        const plain = three.createText(options);
+        scene.add(label, plain);
+        scene.updateMatrixWorld();
+        assertCommitted(label);
+        assert.deepEqual(kinds.toSorted(), ['decoration', 'glyph'], `${format}: the factory draws both`);
+        const draws = scene.getObjectByName('@pmndrs/glyph:anonymous')?.children.filter((child) => child.isMesh) ?? [];
+        assert.equal(draws.length, 4, `${format}: a glyph and a decoration draw per text`);
+        let moved = 0;
+        for (const draw of draws) {
+          const { webgpu, webgl2 } = compileNodeMaterialBackends(draw, { scene });
+          // The displacement's two constants reach the vertex stage of exactly the draws the factory made.
+          const carries = [webgpu.vertex, webgl2.vertex].map(
+            (source) => source.includes('0.4375') && source.includes('3.25') && /sin\s*\(/.test(source),
+          );
+          assert.equal(carries[0], carries[1], `${format}: both backends agree`);
+          moved += carries[0] ? 1 : 0;
+        }
+        assert.equal(moved, 2, `${format}: the glyph draw and the decoration draw carry the same displacement`);
+        label.dispose();
+        plain.dispose();
+      }
+    });
+  }
+}
