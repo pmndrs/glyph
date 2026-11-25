@@ -25,11 +25,28 @@ export type Pixi3DRoot = GlyphRoot & Pixi3DRootExtension;
 export type Pixi3DHandle = GlyphHandle<Pixi3DRoot>;
 export type Pixi3DGlyphConfig = GlyphConfigFor<typeof Pixi3DSchema, Pixi3DRoot, void, Codec, Pixi3DFontFormats>;
 
-export function definePixi3DConfig(): Pixi3DGlyphConfig {
+export interface Pixi3DConfigOptions {
+  /**
+   * Publishes each glyph's layout index and pen origin for shader bits that declare the `aGlyphFacts` attribute
+   * (`float32x4`: the origin's x and y, then the index). The index is the one `Pixi3DText.glyphs()` reports the glyph
+   * at, counting every glyph of the text in the order it is drawn, blanks included; it is a position, not an identity,
+   * and an edit before a glyph shifts it. The origin is `glyphs().x`, `-glyphs().y` at that index: the pen origin on
+   * the baseline in the paragraph space of the vertex `position` the Glyph raster bit writes, so `position.xy -
+   * aGlyphFacts.xy` is a vertex's offset from its own glyph. Off by default, and a material of a handle without it
+   * throws when a bit declares the attribute: the facts are 12 more bytes per glyph that the engine gathers for every
+   * text of the handle. Only a material whose bits declare the attribute carries it per vertex.
+   */
+  readonly glyphFacts?: boolean;
+}
+
+export function definePixi3DConfig(config: Pixi3DConfigOptions = {}): Pixi3DGlyphConfig {
+  if (typeof config !== 'object' || config === null) throw new TypeError('Pixi3D config options must be an object');
+  const glyphFacts = config.glyphFacts ?? false;
+  if (typeof glyphFacts !== 'boolean') throw new TypeError('Pixi3D config glyphFacts must be a boolean');
   return defineGlyphConfig({
     schema: Pixi3DSchema,
     fonts: { default: 'msdf', formats: { bitmap, msdf, slug } },
-    encode: ({ ids }) => ({ descriptor: pixi3dCodecDescriptor(ids) }),
+    encode: ({ ids }) => ({ descriptor: pixi3dCodecDescriptor(ids, glyphFacts) }),
     resolve: ({ format, resourceName, payload }) => {
       const resource = resolveRasterResource(format, resourceName, payload);
       return resourceLease(resource, () => {

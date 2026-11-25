@@ -26,20 +26,37 @@ export const pixi3dSystemBuffers: {
   placementSlot: { id: PIXI3D_PLACEMENT_SLOT_BUFFER_ID, scalar: 'u32', lanes: ['placementSlot'] },
 });
 
-const pixi3dCodecCapabilitySet: CodecCapabilitySet = Object.freeze({
-  capabilities: Object.freeze(['storage-buffers', 'alias-vec2', 'alias-vec4', 'ordered-direct'] as const),
-  maxBufferBytes: 16 * 1024 * 1024,
-  updateAlignment: 4,
-  coalesceGapBytes: 128,
-  rangeCallPenaltyBytes: 256,
-  maxBuffersPerDraw: 9,
-  maxResourcesPerDraw: 1,
-  maxIndirectDraws: 0,
-  fragmentationBudget: 8,
-  wholeBufferThresholdBasisPoints: 7_500,
+/** The lanes behind the `aGlyphFacts` attribute; published only by a config created with `glyphFacts: true`. */
+export const pixi3dGlyphFactBuffers: {
+  readonly glyphIndex: {
+    readonly id: CodecBufferId;
+    readonly scalar: 'u32';
+    readonly lanes: readonly ['glyphIndex'];
+  };
+  readonly glyphOrigin: {
+    readonly id: CodecBufferId;
+    readonly scalar: 'f32';
+    readonly lanes: readonly ['inlineOrigin', 'blockOrigin'];
+  };
+} = defineCodecBuffers({
+  glyphIndex: { id: id.buffer('glyph-pixi3d/glyph-index'), scalar: 'u32', lanes: ['glyphIndex'] },
+  glyphOrigin: { id: id.buffer('glyph-pixi3d/glyph-origin'), scalar: 'f32', lanes: ['inlineOrigin', 'blockOrigin'] },
 });
 
-export function pixi3dCodecDescriptor(ids: CodecIdFactory): CodecDescriptor {
+export function pixi3dCodecDescriptor(ids: CodecIdFactory, glyphFacts = false): CodecDescriptor {
+  const pixi3dCodecCapabilitySet: CodecCapabilitySet = Object.freeze({
+    capabilities: Object.freeze(['storage-buffers', 'alias-vec2', 'alias-vec4', 'ordered-direct'] as const),
+    maxBufferBytes: 16 * 1024 * 1024,
+    updateAlignment: 4,
+    coalesceGapBytes: 128,
+    rangeCallPenaltyBytes: 256,
+    maxBuffersPerDraw: glyphFacts ? 11 : 9,
+    maxResourcesPerDraw: 1,
+    maxIndirectDraws: 0,
+    fragmentationBudget: 8,
+    wholeBufferThresholdBasisPoints: 7_500,
+  });
+  const system = glyphFacts ? { ...pixi3dSystemBuffers, ...pixi3dGlyphFactBuffers } : pixi3dSystemBuffers;
   return Object.freeze({
     capabilitySets: [pixi3dCodecCapabilitySet],
     programs: [
@@ -51,21 +68,21 @@ export function pixi3dCodecDescriptor(ids: CodecIdFactory): CodecDescriptor {
       }),
       createRasterCodecProgram(bitmapCodec, {
         namespace: 'pixi3d',
-        system: pixi3dSystemBuffers,
+        system,
         capabilitySet: pixi3dCodecCapabilitySet,
         transformMode: 'direct',
         ids,
       }),
       createRasterCodecProgram(msdfCodec, {
         namespace: 'pixi3d',
-        system: pixi3dSystemBuffers,
+        system,
         capabilitySet: pixi3dCodecCapabilitySet,
         transformMode: 'direct',
         ids,
       }),
       createRasterCodecProgram(slugCodec, {
         namespace: 'pixi3d',
-        system: pixi3dSystemBuffers,
+        system,
         capabilitySet: pixi3dCodecCapabilitySet,
         transformMode: 'direct',
         ids,

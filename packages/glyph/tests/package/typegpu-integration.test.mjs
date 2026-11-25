@@ -6,9 +6,12 @@ import { bitmap, glyph, msdf } from '@pmndrs/glyph';
 import { id, bitmapSchema, msdfSchema, slugSchema } from '@pmndrs/glyph/core';
 import {
   codecDescriptor,
+  TYPEGPU_GLYPH_INDEX_BUFFER_ID,
+  TYPEGPU_GLYPH_ORIGIN_BUFFER_ID,
   TYPEGPU_PLACEMENT_SLOT_BUFFER_ID,
   TYPEGPU_TRANSFORM_INDEX_BUFFER_ID,
 } from '../../dist/typegpu/internal/codec.js';
+import { defineTypeGpuConfig } from '@pmndrs/glyph/typegpu';
 
 const fontBytes = await readFile(
   new URL('../../../../apps/r3f-hello-world/assets/inter-latin.font.glb', import.meta.url),
@@ -36,6 +39,38 @@ test('every first-party TypeGPU program reads its Text offset from the transform
   );
   // rect, color and glyph, plus the stable glyph id, placement slot and transform index.
   assert.equal(slugProgram.buffers.length, 6);
+});
+
+test('a TypeGPU config publishes glyph fact lanes only when a callback declares the glyph parameters', () => {
+  const root = { createUniform: () => ({}), device: {} };
+  const programs = (options) =>
+    defineTypeGpuConfig({ root, format: 'rgba8unorm', ...options }).encode({ ids: id }).descriptor;
+  const lanes = (options) => {
+    const descriptor = programs(options);
+    return {
+      perDraw: descriptor.capabilitySets[0].maxBuffersPerDraw,
+      facts: descriptor.programs.map(
+        (program) =>
+          program.buffers.filter(
+            (buffer) => buffer.id === TYPEGPU_GLYPH_INDEX_BUFFER_ID || buffer.id === TYPEGPU_GLYPH_ORIGIN_BUFFER_ID,
+          ).length,
+      ),
+    };
+  };
+  const twoParameters = (position, viewport) => [position, viewport];
+  assert.deepEqual(lanes({}), { perDraw: 9, facts: [0, 0, 0] });
+  assert.deepEqual(lanes({ transformPosition: twoParameters, transformColor: twoParameters }), {
+    perDraw: 9,
+    facts: [0, 0, 0],
+  });
+  assert.deepEqual(lanes({ transformPosition: (position, viewport, glyphIndex, glyphOrigin) => glyphOrigin }), {
+    perDraw: 11,
+    facts: [2, 2, 2],
+  });
+  assert.deepEqual(lanes({ transformColor: (color, fragmentPosition, glyphIndex) => glyphIndex }), {
+    perDraw: 11,
+    facts: [2, 2, 2],
+  });
 });
 
 function renderedState(draws) {

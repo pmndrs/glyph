@@ -14,6 +14,7 @@ export {
 export {
   definePixi3DConfig,
   Pixi3DConfig,
+  type Pixi3DConfigOptions,
   type Pixi3DFontFormats,
   type Pixi3DGlyphConfig,
   type Pixi3DHandle,

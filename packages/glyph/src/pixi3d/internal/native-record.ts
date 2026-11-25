@@ -28,6 +28,7 @@ const glyphAttributes = {
   aGlyphTableStarts: 'uint32x4',
   aGlyphBandCounts: 'uint32x4',
   aGlyphEffect: 'float32x2',
+  aGlyphFacts: 'float32x4',
 } as const;
 const integer = (type: string): boolean => type.startsWith('uint');
 const width = (type: string): number => Number(type.at(-1));

@@ -16,6 +16,10 @@ import { TextOffsetError as ThreeTextOffsetError } from '@pmndrs/glyph/three';
 
 const handle: Pixi3DHandle = glyph.handle('pixi3d:typed', Pixi3DConfig);
 void glyph.handle('pixi3d:defined', definePixi3DConfig());
+// Glyph facts are published only by a config that asks for them.
+void glyph.handle('pixi3d:facts', definePixi3DConfig({ glyphFacts: true }));
+// @ts-expect-error The switch is a boolean.
+definePixi3DConfig({ glyphFacts: 'yes' });
 const font = glyph.fontFace('/inter.font.glb', { format: slug });
 const text = handle.createText({ font, text: 'Hello', style: { fontSize: 0.5, color: '#ffffff' } });
 

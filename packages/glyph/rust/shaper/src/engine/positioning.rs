@@ -4348,7 +4348,10 @@ mod tests {
             .map(|index| positioned.placement_handle(index))
             .collect::<Vec<_>>();
         let retained_before = positioned.recomposed_glyphs_retained;
-        let source_intervals = positioned.unpublished_source_intervals(false).unwrap().to_vec();
+        let source_intervals = positioned
+            .unpublished_source_intervals(false)
+            .unwrap()
+            .to_vec();
 
         keys[count - 2] += 100;
         keys[count - 1] += 100;

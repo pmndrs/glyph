@@ -121,3 +121,19 @@ handle('overlay').with(cameraGroup).draw(pass, { width: 640, height: 320 });
 handle.with(cameraLayout);
 // @ts-expect-error A bound draw view does not create or own text.
 bound.createText({ font, text: 'Hello' });
+
+// A callback that declares the glyph parameters is told which glyph it draws; one that stops at two is still a callback.
+defineTypeGpuConfig({
+  root,
+  format: 'rgba8unorm',
+  transformPosition: (position, viewport, glyphIndex, glyphOrigin) => {
+    'use gpu';
+    const phase: number = glyphIndex;
+    const local: d.v2f = position.xy.sub(glyphOrigin);
+    return d.vec4f(glyphOrigin.add(local.mul(phase)).div(viewport), position.z, 1);
+  },
+  transformColor: (color, _fragmentPosition, glyphIndex, glyphOrigin) => {
+    'use gpu';
+    return d.vec4f(glyphOrigin, d.f32(glyphIndex), color.a);
+  },
+});

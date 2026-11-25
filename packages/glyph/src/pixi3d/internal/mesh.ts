@@ -9,7 +9,13 @@ import { Buffer, BufferUsage } from 'pixi.js';
 
 import type { Pixi3DBufferBinding } from './bindings.js';
 import { glyphBitmapBit } from '../bitmap-bit.js';
-import { pixi3dBitmapBuffers, pixi3dMsdfBuffers, pixi3dSlugBuffers, pixi3dSystemBuffers } from './codec.js';
+import {
+  pixi3dBitmapBuffers,
+  pixi3dGlyphFactBuffers,
+  pixi3dMsdfBuffers,
+  pixi3dSlugBuffers,
+  pixi3dSystemBuffers,
+} from './codec.js';
 import { glyphDecorationBit } from './decoration-bit.js';
 import {
   createPixi3DTextMaterial,
@@ -94,6 +100,9 @@ export function createRasterMeshes(
       : resource.format === 'pmndrs.msdf'
         ? msdfRecords(resource.msdf, lanes, recordIndex, recordCount)
         : slugRecords(resource.slug, lanes, recordIndex, recordCount);
+  if (material?.extraBits.some((bit) => bit.attributes?.aGlyphFacts !== undefined) === true) {
+    appendGlyphFacts(pages, lanes, recordIndex);
+  }
   const meshes: Mesh3D[] = [];
   try {
     for (const [draw, records] of pages) meshes.push(realizePage(draw, records, material, pool));
@@ -101,6 +110,38 @@ export function createRasterMeshes(
   } catch (error) {
     destroyBitmapMeshes(meshes);
     throw error;
+  }
+}
+
+/**
+ * Gives every record the `aGlyphFacts` field a recipe's bits declared: the pen origin in the paragraph space of the
+ * vertex position (+Y up), then the layout index. Only such a recipe reads the two lanes or carries the field.
+ */
+function appendGlyphFacts(pages: Map<PageDraw, GlyphRecord[]>, lanes: SpanLanes, recordIndex: number): void {
+  if (
+    !lanes.bindings.some(
+      ({ input }) =>
+        input.declaration.kind === 'codec' && input.declaration.value.id === pixi3dGlyphFactBuffers.glyphIndex.id,
+    )
+  ) {
+    throw new TypeError(
+      'Pixi3D text material declares aGlyphFacts, which its handle does not publish; create the handle with definePixi3DConfig({ glyphFacts: true })',
+    );
+  }
+  const indices = lane(lanes, pixi3dGlyphFactBuffers.glyphIndex.id, 'u32', 1, 'glyphIndex');
+  const origins = lane(lanes, pixi3dGlyphFactBuffers.glyphOrigin.id, 'f32', 2, 'glyphOrigin');
+  for (const records of pages.values()) {
+    for (const [position, record] of records.entries()) {
+      const index = recordIndex + record.ordinal;
+      const [x, y] = placedOrigin(lanes, index, f32x(origins.bytes, index, 2));
+      records[position] = {
+        ...record,
+        fields: [
+          ...record.fields,
+          { name: 'aGlyphFacts', type: 'float32x4', value: [x, -y, u32(indices.bytes, index), 0] },
+        ],
+      };
+    }
   }
 }
 
