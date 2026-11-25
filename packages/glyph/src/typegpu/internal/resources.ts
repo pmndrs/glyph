@@ -10,6 +10,7 @@ import {
   bitmapFragment,
   bitmapPageCoverage,
   bitmapQuadPosition,
+  snapClipAxis,
 } from '../../shaders/typegpu/bitmap-shader.js';
 import { slugRender, SlugShaderGlyph } from '../../shaders/typegpu/slug/slug-render.js';
 import { slugDilate } from '../../shaders/typegpu/slug/core/dilate.js';
@@ -73,6 +74,16 @@ interface GlyphVarying {
 }
 const glyphFactsLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const slugScene = sceneFunctions(slugPage as unknown as SceneLayout);
+/**
+ * The scene projection with x and y rounded onto whole pixels of the draw's viewport, after any `transformPosition`:
+ * the rule Three's snapped Bitmap quads follow, through the same `snapClipAxis`, with the viewport as the pixel grid.
+ */
+function snappedProjectText(position: d.v3f, offset: d.v2f): d.v4f {
+  'use gpu';
+  const clip = textScene.projectText(position, offset);
+  const viewport = textScene.viewportSize();
+  return d.vec4f(snapClipAxis(clip.x, clip.w, viewport.x), snapClipAxis(clip.y, clip.w, viewport.y), clip.z, clip.w);
+}
 const v2 = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const v4 = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const u1 = tgpu.vertexLayout(d.disarrayOf(d.uint32), 'instance');
@@ -137,40 +148,45 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
     const varyings = { uv: d.vec2f, color: d.vec4f, layer: d.interpolate('flat', d.u32) };
     const vertexOut = { position: d.builtin.position, ...varyings };
     const fragmentIn = { position: d.builtin.position, ...varyings };
-    const vertex = tgpu.vertexFn({
-      in: (facts ? { ...vertexIn, ...glyphInputs } : vertexIn) as typeof vertexIn,
-      out: (facts ? { ...vertexOut, ...glyphVaryings } : vertexOut) as typeof vertexOut,
-    })((input) => {
-      'use gpu';
-      const unit = corner(input.index);
-      if (facts) {
-        const inputIndex = d.u32((input as typeof input & GlyphInput).glyphFacts.z);
-        const inputOrigin = (input as typeof input & GlyphInput).glyphFacts.xy;
-        const offset = textScene.textOffset(input.instance);
-        const glyphOrigin = textScene.placedOrigin(inputOrigin, input.instance).add(offset);
-        drawGlyph(inputIndex, glyphOrigin);
+    // `project` is chosen per program while building it: the unsnapped program calls the scene projection itself, so
+    // it compiles the WGSL it did before snapping existed, and only a snapped text's draws compile the second program.
+    const vertexFor = (project: typeof textScene.projectText) => {
+      const vertex = tgpu.vertexFn({
+        in: (facts ? { ...vertexIn, ...glyphInputs } : vertexIn) as typeof vertexIn,
+        out: (facts ? { ...vertexOut, ...glyphVaryings } : vertexOut) as typeof vertexOut,
+      })((input) => {
+        'use gpu';
+        const unit = corner(input.index);
+        if (facts) {
+          const inputIndex = d.u32((input as typeof input & GlyphInput).glyphFacts.z);
+          const inputOrigin = (input as typeof input & GlyphInput).glyphFacts.xy;
+          const offset = textScene.textOffset(input.instance);
+          const glyphOrigin = textScene.placedOrigin(inputOrigin, input.instance).add(offset);
+          drawGlyph(inputIndex, glyphOrigin);
+          return {
+            position: project(
+              bitmapQuadPosition(textScene.placedOrigin(input.origin, input.instance), input.size, unit),
+              offset,
+            ),
+            uv: bitmapAtlasUv(input.uvOrigin, input.uvSize, unit),
+            color: input.color,
+            layer: input.layer,
+            glyphIndex: inputIndex,
+            glyphOrigin,
+          };
+        }
         return {
-          position: textScene.projectText(
+          position: project(
             bitmapQuadPosition(textScene.placedOrigin(input.origin, input.instance), input.size, unit),
-            offset,
+            textScene.textOffset(input.instance),
           ),
           uv: bitmapAtlasUv(input.uvOrigin, input.uvSize, unit),
           color: input.color,
           layer: input.layer,
-          glyphIndex: inputIndex,
-          glyphOrigin,
         };
-      }
-      return {
-        position: textScene.projectText(
-          bitmapQuadPosition(textScene.placedOrigin(input.origin, input.instance), input.size, unit),
-          textScene.textOffset(input.instance),
-        ),
-        uv: bitmapAtlasUv(input.uvOrigin, input.uvSize, unit),
-        color: input.color,
-        layer: input.layer,
-      };
-    });
+      });
+      return vertex;
+    };
     const fragment = tgpu.fragmentFn({
       in: (facts ? { ...fragmentIn, ...glyphVaryings } : fragmentIn) as typeof fragmentIn,
       out: d.vec4f,
@@ -184,25 +200,31 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
       const result = bitmapFragment({ atlasUv: input.uv, color: input.color, pageLayer: input.layer });
       return colorTransform.$(d.vec4f(result.color, result.opacity), input.position);
     });
-    const pipeline = shaderRoot(options)
-      .with(bitmapCoverageSlot, coverage)
-      .createRenderPipeline({
-        vertex,
-        fragment,
-        attribs: {
-          origin: originLayout.attrib,
-          size: sizeLayout.attrib,
-          uvOrigin: uvOriginLayout.attrib,
-          uvSize: uvSizeLayout.attrib,
-          color: colorLayout.attrib,
-          layer: u1.attrib,
-          ...(facts ? { glyphFacts: glyphFactsLayout.attrib } : {}),
-        },
-        targets: target(options),
-        multisample: { count: options.sampleCount ?? 1 },
-        depthStencil: options.depthStencil,
-      });
-    pipeline.initSync();
+    const program = (project: typeof textScene.projectText): TgpuRenderPipeline => {
+      const created = shaderRoot(options)
+        .with(bitmapCoverageSlot, coverage)
+        .createRenderPipeline({
+          vertex: vertexFor(project),
+          fragment,
+          attribs: {
+            origin: originLayout.attrib,
+            size: sizeLayout.attrib,
+            uvOrigin: uvOriginLayout.attrib,
+            uvSize: uvSizeLayout.attrib,
+            color: colorLayout.attrib,
+            layer: u1.attrib,
+            ...(facts ? { glyphFacts: glyphFactsLayout.attrib } : {}),
+          },
+          targets: target(options),
+          multisample: { count: options.sampleCount ?? 1 },
+          depthStencil: options.depthStencil,
+        });
+      created.initSync();
+      return created;
+    };
+    const pipeline = program(textScene.projectText);
+    /** Compiled the first time a pixel-snapped text of this font draws. */
+    let snappedPipeline: TgpuRenderPipeline | undefined;
     return {
       dispose: () => atlas.destroy(),
       bind(lanes) {
@@ -212,27 +234,33 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
           return buffer;
         };
         const b = bitmapSchema.buffers;
-        const bound = pipeline
-          .with(
-            createSceneGroup(
-              root,
-              lanes,
-              lane(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID),
-              lane(TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
-            ),
-          )
-          .with(originLayout, lane(b.origin.id))
-          .with(sizeLayout, lane(b.size.id))
-          .with(uvOriginLayout, lane(b.uvOrigin.id))
-          .with(uvSizeLayout, lane(b.uvSize.id))
-          .with(colorLayout, lane(b.color.id))
-          .with(u1, lane(b.page.id));
-        const drawn = facts ? bound.with(glyphFactsLayout, lane(TYPEGPU_GLYPH_FACTS_BUFFER_ID)) : bound;
+        const scene = createSceneGroup(
+          root,
+          lanes,
+          lane(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID),
+          lane(TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
+        );
+        const withLanes = (unbound: TgpuRenderPipeline): TgpuRenderPipeline => {
+          const bound = unbound
+            .with(scene)
+            .with(originLayout, lane(b.origin.id))
+            .with(sizeLayout, lane(b.size.id))
+            .with(uvOriginLayout, lane(b.uvOrigin.id))
+            .with(uvSizeLayout, lane(b.uvSize.id))
+            .with(colorLayout, lane(b.color.id))
+            .with(u1, lane(b.page.id));
+          return facts ? bound.with(glyphFactsLayout, lane(TYPEGPU_GLYPH_FACTS_BUFFER_ID)) : bound;
+        };
+        const drawn = withLanes(pipeline);
+        let snappedDrawn: TgpuRenderPipeline | undefined;
         return {
           watchedLanes: [],
           variant: () => 0,
-          draw(pass, bindGroups, _variant, first, count) {
-            recordDraw(root, drawn, pass, bindGroups, first, count);
+          draw(pass, bindGroups, _variant, first, count, pixelSnapping) {
+            const selected = pixelSnapping
+              ? (snappedDrawn ??= withLanes((snappedPipeline ??= program(snappedProjectText))))
+              : drawn;
+            recordDraw(root, selected, pass, bindGroups, first, count);
           },
         };
       },

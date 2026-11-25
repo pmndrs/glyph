@@ -11,6 +11,12 @@ import { defineGlyphSchema } from '../../config/glyph.js';
 import type { TypeGpuResource } from './resources.js';
 import type { TypeGpuTransform } from './renderer.js';
 
+/**
+ * The material a text constructed with `pixelSnapping: true` hands the core, so its draws arrive apart from unsnapped
+ * ones; an unsnapped text has no material, and its display list is the one it had before the option existed.
+ */
+export const pixelSnappedMaterial: object = Object.freeze({ pixelSnapping: true });
+
 export interface BufferBinding {
   readonly input: GlyphBufferBindingInput<CodecProgram>;
 }

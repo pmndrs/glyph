@@ -26,7 +26,7 @@ import type { LayoutBox, LayoutPoint } from '../layout.js';
 import type { bitmap } from '../raster/bitmap.js';
 import type { msdf } from '../raster/msdf.js';
 import type { slug } from '../raster/slug.js';
-import type { Bindings } from './internal/bindings.js';
+import { pixelSnappedMaterial, type Bindings } from './internal/bindings.js';
 import type { TypeGpuTransform } from './internal/renderer.js';
 import { reuseOrCreateTextPropertySnapshot, reuseOrCreateTextStyleSnapshot } from '../config/text-property.js';
 import { GlyphInputError, glyphInputError, PostCommitError, validatingInput } from '../glyph-error.js';
@@ -49,6 +49,13 @@ export interface TypeGpuTextOptions<Selection extends TypeGpuFontSelection = Typ
   readonly layout?: ParagraphLayout;
   readonly constraints?: Constraints;
   readonly rasterPixelRatio?: number;
+  /**
+   * Rounds each Bitmap glyph quad's corners onto whole pixels of the viewport `draw()` is given, after
+   * `transformPosition`: sharp at rest, but animated motion moves in whole-pixel steps. MSDF and Slug glyphs ignore it.
+   * The viewport is the pixel grid, so draw with the target's size in device pixels for the quads to land on them.
+   * Off by default and fixed at construction; a config whose texts never set it compiles no snapped program.
+   */
+  readonly pixelSnapping?: boolean;
   /** Pixel coordinates relative to the upper-left corner of the viewport. */
   readonly position?: readonly [number, number];
   /** See {@link TypeGpuText.onLayout}. */
@@ -61,13 +68,13 @@ export type TypeGpuLayoutCallback<Selection extends TypeGpuFontSelection = TypeG
   layout: ParagraphLayoutSummary,
 ) => void;
 export type TypeGpuTextUpdate<Selection extends TypeGpuFontSelection = TypeGpuFontSelection> = Partial<
-  Omit<TypeGpuTextOptions<Selection>, 'onLayout'>
+  Omit<TypeGpuTextOptions<Selection>, 'onLayout' | 'pixelSnapping'>
 >;
 type TypeGpuSemanticTextOptions<Selection extends TypeGpuFontSelection> = Omit<
   TypeGpuTextOptions<Selection>,
-  'position' | 'style' | 'onLayout'
+  'position' | 'style' | 'onLayout' | 'pixelSnapping'
 > & { readonly style?: TextStyle };
-type TypeGpuSemanticTextKey = Exclude<keyof TypeGpuTextOptions, 'position' | 'onLayout'>;
+type TypeGpuSemanticTextKey = Exclude<keyof TypeGpuTextOptions, 'position' | 'onLayout' | 'pixelSnapping'>;
 const semanticUpdateKeys = {
   font: 'font',
   text: 'text',
@@ -157,7 +164,13 @@ export function createText<Selection extends TypeGpuFontSelection>(
   onDispose: () => void,
 ): TypeGpuTextPublication<Selection> {
   assertNoDecoration(options.style);
-  const { position: _initialPosition, onLayout: initialOnLayout, ...initialSemanticState } = options;
+  const {
+    position: _initialPosition,
+    onLayout: initialOnLayout,
+    pixelSnapping: initialPixelSnapping,
+    ...initialSemanticState
+  } = options;
+  const material = pixelSnappingMaterial(initialPixelSnapping);
   let onLayout = initialOnLayout;
   let notifiedLayout: ParagraphLayoutSummary | undefined;
   let reportedRefusal: unknown;
@@ -183,7 +196,7 @@ export function createText<Selection extends TypeGpuFontSelection>(
   let acquiredController: typeof controller | undefined;
   try {
     writePosition(transform, positionValue, positionX, positionY);
-    controller = services.createText(coreTextState(state, font, transform));
+    controller = services.createText(coreTextState(state, font, transform, material));
     acquiredController = controller;
     controller.keepMeasured = onLayout !== undefined;
     // An anchor is resolved from the batch preparation, so constructing a text never enters the engine.
@@ -201,6 +214,9 @@ export function createText<Selection extends TypeGpuFontSelection>(
   }
   function applyUpdate(update: TypeGpuTextUpdate<Selection>): void {
     assertActive();
+    if (Object.hasOwn(update, 'pixelSnapping')) {
+      throw new GlyphInputError(['pixelSnapping'], 'TypeGPU text pixelSnapping is fixed at construction');
+    }
     const [nextPositionX, nextPositionY] = updatedPosition(update, positionX, positionY);
     if (!hasSemanticUpdate(update)) {
       if (nextPositionX !== positionX || nextPositionY !== positionY) {
@@ -222,7 +238,7 @@ export function createText<Selection extends TypeGpuFontSelection>(
     const nextFont = next.font === previousState.font ? font : fonts.acquire(next.font);
     let failure: PostCommitError | undefined;
     try {
-      controller.update(coreTextState(next, nextFont, transform));
+      controller.update(coreTextState(next, nextFont, transform, material));
     } catch (error) {
       if (error instanceof PostCommitError) failure = error;
       else {
@@ -416,16 +432,25 @@ function coreTextState<Selection extends TypeGpuFontSelection>(
   next: TypeGpuSemanticTextOptions<Selection>,
   selected: Font<FontFaceRasterOf<Selection>>,
   transform: TypeGpuTransform,
+  material: object | undefined,
 ) {
   return {
     font: selected,
     text: next.text,
     transform,
+    ...(material === undefined ? {} : { material }),
     ...(next.style === undefined ? {} : { style: next.style }),
     ...(next.layout === undefined ? {} : { layout: next.layout }),
     ...(next.constraints === undefined ? {} : { constraints: next.constraints }),
     ...(next.rasterPixelRatio === undefined ? {} : { rasterPixelRatio: next.rasterPixelRatio }),
   };
+}
+
+/** The core material of a text's construction-fixed `pixelSnapping`: none unless it is `true`. */
+function pixelSnappingMaterial(value: unknown): object | undefined {
+  if (value === undefined || value === false) return undefined;
+  if (value === true) return pixelSnappedMaterial;
+  throw new GlyphInputError(['pixelSnapping'], 'TypeGPU text pixelSnapping must be a boolean');
 }
 
 function assertNoDecoration(style: Pick<TextStyle, 'decoration'> | undefined): void {

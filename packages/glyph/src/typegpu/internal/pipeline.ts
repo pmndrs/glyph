@@ -34,12 +34,14 @@ export interface BatchDrawBinding {
    * prepare what those records draw (MSDF makes their glyphs resident).
    */
   variant(start: number, count: number): number;
+  /** `pixelSnapping` is the drawn texts' option; only Bitmap reads it, and it compiles its snapped program on first use. */
   draw(
     pass: TgpuRenderPass | GPURenderPassEncoder,
     bindGroups: readonly TgpuBindGroup[],
     variant: number,
     first: number,
     count: number,
+    pixelSnapping: boolean,
   ): void;
 }
 export interface TypeGpuResource {

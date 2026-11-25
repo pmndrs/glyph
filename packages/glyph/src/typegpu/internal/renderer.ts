@@ -3,7 +3,7 @@ import type { TgpuRoot, TgpuUniform, TgpuBindGroup, TgpuRenderPass } from 'typeg
 import { d } from 'typegpu';
 import type { CodecBufferId, CommandBufferView, GlyphRenderer, PreparedRendererCommit } from '../../index.js';
 import type { DisplayList } from '../../config/glyph.js';
-import type { Bindings, BufferBinding } from './bindings.js';
+import { pixelSnappedMaterial, type Bindings, type BufferBinding } from './bindings.js';
 import type { BatchDrawBinding, TypeGpuResource } from './pipeline.js';
 import { TYPEGPU_PLACEMENT_SLOT_BUFFER_ID, TYPEGPU_TRANSFORM_INDEX_BUFFER_ID } from './codec.js';
 
@@ -66,11 +66,14 @@ interface Span {
   readonly buffers: readonly BufferBinding[];
   readonly start: number;
   readonly count: number;
+  /** Whether the span's text was constructed with `pixelSnapping: true`. */
+  readonly pixelSnapping: boolean;
 }
-/** One instanced draw: a run of spans over the same bindings and program variant. */
+/** One instanced draw: a run of spans over the same bindings, program variant and snapping. */
 interface Range {
   readonly binding: BatchDrawBinding;
   readonly variant: number;
+  readonly pixelSnapping: boolean;
   readonly first: number;
   count: number;
 }
@@ -126,7 +129,9 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
     }
     this.#viewport.write([width, height]);
     this.#uploadChangedTransforms();
-    for (const range of this.#ranges) range.binding.draw(pass, bindGroups, range.variant, range.first, range.count);
+    for (const range of this.#ranges) {
+      range.binding.draw(pass, bindGroups, range.variant, range.first, range.count, range.pixelSnapping);
+    }
   }
   decode(frame: CommandBufferView<Bindings>): PreparedRendererCommit<void> {
     const staged: StagedBuffers = { buffers: new Map(this.#buffers), allocated: [], mutations: [], uploads: new Map() };
@@ -283,11 +288,16 @@ export class Renderer implements GlyphRenderer<Bindings, void> {
         variant = binding.variant(span.start, span.count);
         this.#variants[index] = variant;
       }
-      if (last?.binding === binding && last.variant === variant && last.first + last.count === span.start) {
+      if (
+        last?.binding === binding &&
+        last.variant === variant &&
+        last.pixelSnapping === span.pixelSnapping &&
+        last.first + last.count === span.start
+      ) {
         last.count += span.count;
         continue;
       }
-      last = { binding, variant, first: span.start, count: span.count };
+      last = { binding, variant, pixelSnapping: span.pixelSnapping, first: span.start, count: span.count };
       ranges.push(last);
     }
     return ranges;
@@ -361,10 +371,12 @@ function readSpans(children: DisplayList<Bindings>['children']): Span[] {
         buffers: Array.from(input.buffers),
         start: primitive.recordIndex,
         count: primitive.recordCount,
+        pixelSnapping: input.material === pixelSnappedMaterial,
       });
       continue;
     }
     const buffers = Array.from(child.value.input.buffers);
+    const pixelSnapping = child.value.input.material === pixelSnappedMaterial;
     for (const instance of child.instances) {
       const primitive = instance.value.input;
       if (primitive.recordCount === 0) continue;
@@ -373,6 +385,7 @@ function readSpans(children: DisplayList<Bindings>['children']): Span[] {
         buffers,
         start: primitive.recordIndex,
         count: primitive.recordCount,
+        pixelSnapping,
       });
     }
   }
