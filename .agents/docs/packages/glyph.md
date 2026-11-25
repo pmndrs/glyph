@@ -1810,10 +1810,22 @@ and 5,362 glyphs.
 
 Bitmap vertex pixel snapping is an explicit immutable Three/R3F option and defaults off. The unsnapped graph uses the
 ordinary model-view-projection position so shared-root or camera animation preserves subpixel movement; callers targeting
-a pixel-art presentation can opt in without changing shaping, layout, or render-plan records. It exists on Three,
-`/three/typegpu`, R3F and Vue (`Text` and `TextGroup`; an enclosing group's stated value wins), applies to Bitmap glyph
-draws only (decorations under them are not snapped), and has no counterpart in direct TypeGPU or PixiJS 3D; a
-`/shaders/typegpu` host binds `bitmapVertexSnapped` instead.
+a pixel-art presentation can opt in without changing shaping, layout, or render-plan records. It has one name,
+one default (`false`) and one rule in every renderer: Three, `/three/typegpu`, R3F and Vue (`Text` and `TextGroup`; an
+enclosing group's stated value wins), direct TypeGPU (`createText({ pixelSnapping })`, construction-fixed) and PixiJS 3D
+(`createText({ pixelSnapping })`, construction-fixed); a `/shaders/typegpu` host binds `bitmapVertexSnapped`. Each
+corner of a Bitmap glyph quad is rounded onto the physical pixel grid after projection by `snapClipAxis` (TypeGPU
+canonical, mirrored in TSL, generated for PixiJS 3D): to the nearest boundary, except that a corner within 1/256 px
+above a halfway point rounds down. Strike quads at whole-pixel text positions sit exactly halfway (baselines on half
+pixels), and `round()` sent the two edges of one quad different ways through float error and WGSL's round-half-to-even,
+stretching it by a pixel; the threshold keeps every 1:1 quad whole, so snapped linear and nearest reads agree. MSDF and
+Slug glyphs ignore the option. The decorations of a snapped text (Three, PixiJS 3D; TypeGPU draws none) snap their
+corners by the same rule, so they land on the grid; their offset from the snapped baseline can still differ by one pixel
+between sub-pixel positions, because a decoration record does not carry its line's baseline. Direct TypeGPU uses the
+viewport given to `draw()` as the pixel grid (exact when it is the attachment's size in device pixels) and compiles the
+snapped Bitmap program only when a snapped text first draws; PixiJS 3D reads the physical pass viewport from
+`camera.uLightTileTransform` as Slug's dilation does and appends an internal snap bit (`afterTransform`) to a snapped
+text's Bitmap and decoration materials. Unsnapped texts compile exactly the programs they did before.
 
 Bitmap page filtering is a handle-wide config option with one name and two values in every renderer:
 `bitmapFilter: 'linear' | 'nearest'` on `defineThreeConfig` (`/three`, `/three/typegpu`, and so R3F and Vue through
