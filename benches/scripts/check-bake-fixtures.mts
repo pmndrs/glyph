@@ -1,4 +1,4 @@
-/* @workflow { "name": "benchmark:bake-check", "summary": "Verify every deterministic benchmark bake and authenticated Japanese subset.", "requirements": "Core toolchain plus the scoped HarfBuzz utilities for the Japanese subset.", "writes": "Temporary build outputs only; checked-in fixtures must remain unchanged.", "args": [] } */
+/* @workflow { "name": "benchmark:bake-check", "summary": "Verify every deterministic benchmark bake and the frozen Japanese subset.", "requirements": "Core toolchain.", "writes": "Temporary build outputs only; checked-in fixtures must remain unchanged.", "args": [] } */
 
 import { buildRuntimePackages, isMainModule, runNodeScript } from './support/command-cli.mts';
 
@@ -15,8 +15,7 @@ export async function checkBakeFixtures(): Promise<void> {
   await buildRuntimePackages();
   for (const script of fixtureChecks) await runNodeScript(`scripts/${script}`, ['--check']);
   await runNodeScript('scripts/check-paragraph-contract-fixtures.mts');
-  await runNodeScript('scripts/provision-harfbuzz.mts', ['--check']);
-  await runNodeScript('scripts/generate-japanese-showcase-subset.mts', ['--check']);
+  await runNodeScript('scripts/check-japanese-showcase-subset.mts');
 }
 
 if (isMainModule(import.meta.url)) {
