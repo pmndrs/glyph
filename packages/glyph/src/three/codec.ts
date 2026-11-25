@@ -24,8 +24,7 @@ export { decorationSchema } from '../config/decoration.js';
 const THREE_STABLE_GLYPH_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/stable-glyph');
 const THREE_TRANSFORM_INDEX_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/transform-index');
 const THREE_PLACEMENT_SLOT_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/placement-slot');
-const THREE_GLYPH_INDEX_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/glyph-index');
-const THREE_GLYPH_ORIGIN_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/glyph-origin');
+const THREE_GLYPH_FACTS_BUFFER_ID: CodecBufferId = id.buffer('glyph-three/glyph-facts');
 
 /** Buffers the Three Codec itself owns, shared by every program in it. */
 export const threeSystemBuffers: {
@@ -44,22 +43,20 @@ export const threeSystemBuffers: {
     readonly scalar: 'u32';
     readonly lanes: readonly ['placementSlot'];
   };
-  readonly glyphIndex: {
-    readonly id: typeof THREE_GLYPH_INDEX_BUFFER_ID;
-    readonly scalar: 'u32';
-    readonly lanes: readonly ['glyphIndex'];
-  };
-  readonly glyphOrigin: {
-    readonly id: typeof THREE_GLYPH_ORIGIN_BUFFER_ID;
+  readonly glyphFacts: {
+    readonly id: typeof THREE_GLYPH_FACTS_BUFFER_ID;
     readonly scalar: 'f32';
-    readonly lanes: readonly ['inlineOrigin', 'blockOrigin'];
+    readonly lanes: readonly ['inlineOrigin', 'blockOrigin', 'glyphIndex', 'unused'];
   };
 } = defineCodecBuffers({
   stableGlyphId: { id: THREE_STABLE_GLYPH_BUFFER_ID, scalar: 'u32', lanes: ['stableGlyphId'] },
   transformIndex: { id: THREE_TRANSFORM_INDEX_BUFFER_ID, scalar: 'u32', lanes: ['transformIndex'] },
   placementSlot: { id: THREE_PLACEMENT_SLOT_BUFFER_ID, scalar: 'u32', lanes: ['placementSlot'] },
-  glyphIndex: { id: THREE_GLYPH_INDEX_BUFFER_ID, scalar: 'u32', lanes: ['glyphIndex'] },
-  glyphOrigin: { id: THREE_GLYPH_ORIGIN_BUFFER_ID, scalar: 'f32', lanes: ['inlineOrigin', 'blockOrigin'] },
+  glyphFacts: {
+    id: THREE_GLYPH_FACTS_BUFFER_ID,
+    scalar: 'f32',
+    lanes: ['inlineOrigin', 'blockOrigin', 'glyphIndex', 'unused'],
+  },
 });
 
 export const TRANSFORM_BUFFER_ID: CodecBufferId = threeSystemBuffers.transformIndex.id;
@@ -169,13 +166,13 @@ function decorationProgram(
   });
 }
 
-/** `glyphFacts` adds the two lanes a material's `glyphIndex` and `glyphOrigin` read; without it nothing is published. */
+/** `glyphFacts` adds the lane a material's `glyphIndex` and `glyphOrigin` read; without it nothing is published. */
 function codecSystemBuffers(transformMode: ThreeTransformMode, glyphFacts: boolean): RasterCodecSystem {
   return {
     stableGlyphId: threeSystemBuffers.stableGlyphId,
     ...(transformMode === 'indexed' ? { transformIndex: threeSystemBuffers.transformIndex } : {}),
     placementSlot: threeSystemBuffers.placementSlot,
-    ...(glyphFacts ? { glyphIndex: threeSystemBuffers.glyphIndex, glyphOrigin: threeSystemBuffers.glyphOrigin } : {}),
+    ...(glyphFacts ? { glyphFacts: threeSystemBuffers.glyphFacts } : {}),
   };
 }
 

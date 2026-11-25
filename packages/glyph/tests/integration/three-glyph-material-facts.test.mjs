@@ -301,9 +301,7 @@ test('a handle that does not ask for glyph facts publishes neither lane and refu
   const { contexts, material } = recordingMaterial();
   const { label, scene } = mount(three, { font, material, text: 'Ab' });
   const draw = scene.getObjectByName('@pmndrs/glyph:anonymous').children.find((child) => child.isMesh);
-  for (const fact of [threeSystemBuffers.glyphIndex, threeSystemBuffers.glyphOrigin]) {
-    assert.equal(draw.geometry.getAttribute(`_pmndrsGlyph_${fact.id}`), undefined);
-  }
+  assert.equal(draw.geometry.getAttribute(`_pmndrsGlyph_${threeSystemBuffers.glyphFacts.id}`), undefined);
   const [context] = contexts;
   assert.equal(context.kind, 'glyph');
   assert.throws(() => context.glyphIndex, /glyphIndex.*defineThreeConfig\(\{ glyphFacts: true \}\)/);

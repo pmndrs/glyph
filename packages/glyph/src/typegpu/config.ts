@@ -66,8 +66,8 @@ export interface TypeGpuConfigOptions {
   readonly transformColor?: TypeGpuColorTransform;
   /**
    * Publishes each glyph's layout index and pen origin and passes them to `transformPosition` and `transformColor`
-   * as their third and fourth arguments. Off by default: the two facts are 12 more bytes per glyph that the engine
-   * gathers and this renderer uploads for every text of the config, and its programs gain two vertex inputs and two
+   * as their third and fourth arguments. Off by default: the two facts are 16 more bytes per glyph that the engine
+   * gathers and this renderer uploads for every text of the config, and its programs gain one vertex input and two
    * flat varyings. A config without it compiles the programs it would without glyph facts, and a callback that
    * declares the glyph parameters there throws.
    */

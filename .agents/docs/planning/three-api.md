@@ -638,7 +638,7 @@ the Three executor decides which GPU resources can be shared safely.
 ### Glyph facts
 
 A handle created with `defineThreeConfig({ glyphFacts: true })` also tells a glyph material which glyph it is drawing.
-The facts are off by default: they are 12 more bytes per glyph instance for every text of the handle, and a material of
+The facts are off by default: they are 16 more bytes per glyph instance for every text of the handle, and a material of
 a handle without them throws when it reads one. A decoration context has neither.
 
 | Node          | Value                                                                                                                                                                                                                                                                                   |
@@ -646,9 +646,9 @@ a handle without them throws when it reads one. A decoration context has neither
 | `glyphIndex`  | `Node<'uint'>`: the glyph's index in its text's layout order, the index `label.glyphs()` reports it at. Blank glyphs count, so drawn indices have gaps; a right-to-left run counts in drawn order, left to right; a ligature is one glyph; lines, fonts and formats share one sequence. |
 | `glyphOrigin` | `Node<'vec3'>`: the glyph's pen origin on its baseline in `paragraphPosition` space, `(glyphs().x[i], -glyphs().y[i], 0)`. It is the pivot `Glyphs.setMatrixAt` turns a glyph about, not the centre of its quad.                                                                        |
 
-A material that reads both facts adds two storage buffers to its vertex stage. In indexed transform mode that is 8 for
-Bitmap and Slug and 9 for MSDF, and WebGPU's default `maxStorageBuffersPerShaderStage` is 8: an MSDF material that
-reads both needs direct transform mode (7) or a renderer created with a higher `requiredLimits` value.
+A material that reads either fact adds one storage buffer to its vertex stage: 7 for Bitmap and Slug and 8 for MSDF in
+indexed transform mode, WebGPU's default `maxStorageBuffersPerShaderStage`. The index reaches the shader as a float,
+exact up to 16,777,216 glyphs in one text; a `Text` holds 65,536 UTF-16 units by default.
 
 Both are constant across a glyph and safe in either stage, like the position nodes. The index is a position, not an
 identity: an edit before a glyph shifts it, and `split()` is still how an identity is frozen (a `Glyphs` keeps the

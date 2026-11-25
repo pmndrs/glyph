@@ -14,8 +14,7 @@ interface CompiledCodecMetadata {
   readonly stableGlyphId: CodecBufferId | undefined;
   readonly transformIndex: CodecBufferId | undefined;
   readonly placementSlot: CodecProgramU32StoreTarget | undefined;
-  readonly glyphIndex: CodecBufferId | undefined;
-  readonly glyphOrigin: CodecBufferId | undefined;
+  readonly glyphFacts: CodecBufferId | undefined;
 }
 
 const metadata = new WeakMap<object, CompiledCodecMetadata>();
@@ -52,22 +51,16 @@ export function normalizeCodecProgramSystemBuffers(
       throw new TypeError('placementSlot system buffer collides with a technique buffer');
     }
   }
-  const glyphIndex = value.glyphIndex === undefined ? undefined : snapshotSystemBuffer(value.glyphIndex, 'glyphIndex');
-  const glyphOrigin = value.glyphOrigin === undefined ? undefined : snapshotGlyphOriginBuffer(value.glyphOrigin);
-  if ((glyphIndex === undefined) !== (glyphOrigin === undefined)) {
-    throw new TypeError('glyphIndex and glyphOrigin system buffers are declared together');
-  }
-  if (glyphIndex !== undefined && glyphOrigin !== undefined) {
+  const glyphFacts = value.glyphFacts === undefined ? undefined : snapshotGlyphFactsBuffer(value.glyphFacts);
+  if (glyphFacts !== undefined) {
     const taken = new Set([...ids, stableGlyphId.id, transformIndex?.id, placementSlot?.id]);
-    if (taken.has(glyphIndex.id) || taken.has(glyphOrigin.id) || glyphIndex.id === glyphOrigin.id) {
-      throw new TypeError('glyphIndex and glyphOrigin system buffers collide with another buffer');
-    }
+    if (taken.has(glyphFacts.id)) throw new TypeError('glyphFacts system buffer collides with another buffer');
   }
   return Object.freeze({
     stableGlyphId,
     ...(transformIndex === undefined ? {} : { transformIndex }),
     ...(placementSlot === undefined ? {} : { placementSlot }),
-    ...(glyphIndex === undefined || glyphOrigin === undefined ? {} : { glyphIndex, glyphOrigin }),
+    ...(glyphFacts === undefined ? {} : { glyphFacts }),
   });
 }
 
@@ -104,18 +97,26 @@ export function attachHostCodecProgramSystemBuffers<Schema extends TechniqueSche
   storeU32(1, system.stableGlyphId.id);
   if (system.transformIndex !== undefined) storeU32(0, system.transformIndex.id);
   if (placementTarget !== undefined) storeU32(2, placementTarget.buffer, placementTarget.lane);
-  if (system.glyphIndex !== undefined && system.glyphOrigin !== undefined) {
-    // The layout index is the one input a technique body never reads, so the host appends it after the body's own.
-    inputs.push({ scope: 'semantic', field: textShaperAbi.engine.semanticU32Fields.glyphIndex });
-    storeU32(u32InputCount, system.glyphIndex.id);
-    u32InputCount += 1;
+  if (system.glyphFacts !== undefined) {
+    const buffer = system.glyphFacts.id;
+    const storeF32 = (lane: number): void => {
+      operations.push({ opcode: opcodes.storeF32, operand0: 0, operand1: lane, immediate0: buffer });
+    };
     // Every technique body's first two F32 inputs are the pen origin.
     for (const lane of [0, 1]) {
-      operations.push(
-        { opcode: opcodes.loadF32, target: 0, operand0: lane },
-        { opcode: opcodes.storeF32, operand0: 0, operand1: lane, immediate0: system.glyphOrigin.id },
-      );
+      operations.push({ opcode: opcodes.loadF32, target: 0, operand0: lane });
+      storeF32(lane);
     }
+    // The layout index is the one input a technique body never reads, so the host appends it after the body's own.
+    inputs.push({ scope: 'semantic', field: textShaperAbi.engine.semanticU32Fields.glyphIndex });
+    operations.push(
+      { opcode: opcodes.loadU32, target: 1, operand0: u32InputCount },
+      { opcode: opcodes.convertU32ToF32, target: 0, operand0: 1 },
+    );
+    storeF32(2);
+    u32InputCount += 1;
+    operations.push({ opcode: opcodes.constantF32, target: 0, immediate0: 0 });
+    storeF32(3);
   }
   const attached = { ...body, inputs, operations, u32InputCount };
   recordTechniqueCodecBody(attached, {
@@ -123,8 +124,7 @@ export function attachHostCodecProgramSystemBuffers<Schema extends TechniqueSche
     stableGlyphId: system.stableGlyphId.id,
     transformIndex: system.transformIndex?.id,
     placementSlot: placementTarget,
-    glyphIndex: system.glyphIndex?.id,
-    glyphOrigin: system.glyphOrigin?.id,
+    glyphFacts: system.glyphFacts?.id,
   });
   return attached;
 }
@@ -149,16 +149,17 @@ export function assertTechniqueCodecBody<Schema extends TechniqueSchemaMetadata>
       compiled.transformIndex !== system.transformIndex?.id ||
       compiled.placementSlot?.buffer !== expectedPlacement?.buffer ||
       compiled.placementSlot?.lane !== expectedPlacement?.lane ||
-      compiled.glyphIndex !== system.glyphIndex?.id ||
-      compiled.glyphOrigin !== system.glyphOrigin?.id)
+      compiled.glyphFacts !== system.glyphFacts?.id)
   ) {
     throw new TypeError(`technique "${schema.technique}" codec body does not use the requested system buffers`);
   }
 }
 
-function snapshotGlyphOriginBuffer(
+const GLYPH_FACT_LANES = ['inlineOrigin', 'blockOrigin', 'glyphIndex', 'unused'] as const;
+
+function snapshotGlyphFactsBuffer(
   value: unknown,
-): CodecBufferDeclaration<'f32', readonly ['inlineOrigin', 'blockOrigin']> {
+): CodecBufferDeclaration<'f32', readonly ['inlineOrigin', 'blockOrigin', 'glyphIndex', 'unused']> {
   const id = isRecord(value) ? value.id : undefined;
   const lanes = isRecord(value) ? value.lanes : undefined;
   if (
@@ -169,20 +170,19 @@ function snapshotGlyphOriginBuffer(
     id > 0xffff ||
     value.scalar !== 'f32' ||
     !Array.isArray(lanes) ||
-    lanes.length !== 2 ||
-    lanes[0] !== 'inlineOrigin' ||
-    lanes[1] !== 'blockOrigin'
+    lanes.length !== GLYPH_FACT_LANES.length ||
+    GLYPH_FACT_LANES.some((lane, index) => lanes[index] !== lane)
   ) {
-    throw new TypeError('glyphOrigin system buffer needs f32 "inlineOrigin" and "blockOrigin" lanes');
+    throw new TypeError(`glyphFacts system buffer needs the f32 lanes ${GLYPH_FACT_LANES.join(', ')}`);
   }
   return Object.freeze({
-    id: assertGlyphId(id, 'buffer', 'glyphOrigin system buffer id'),
+    id: assertGlyphId(id, 'buffer', 'glyphFacts system buffer id'),
     scalar: 'f32',
-    lanes: ['inlineOrigin', 'blockOrigin'] as const,
+    lanes: GLYPH_FACT_LANES,
   });
 }
 
-function snapshotSystemBuffer<const Name extends 'stableGlyphId' | 'transformIndex' | 'placementSlot' | 'glyphIndex'>(
+function snapshotSystemBuffer<const Name extends 'stableGlyphId' | 'transformIndex' | 'placementSlot'>(
   value: unknown,
   name: Name,
 ): CodecBufferDeclaration<'u32', readonly [Name]> {

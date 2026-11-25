@@ -62,7 +62,7 @@ browser lane comparing a `glyphIndex`-driven wave against the same wave through 
 - `glyphIndex` is the index `glyphs()` reports the glyph at; `glyphOrigin` is its pen origin on the baseline. Neither
   can be derived from what an instance already carried: a draw holds only the inked glyphs of one font, so a record's
   position in its batch skips blanks and other fonts, and an instance carries its quad's corner, not its pen (Bitmap
-  keeps the bearing on the CPU only). Both are therefore two new lanes, 12 bytes per instance.
+  keeps the bearing on the CPU only). Both therefore travel in one new lane of four floats, 16 bytes per instance.
 - They are opt-in per handle (`glyphFacts: true` in Three, TypeGPU and PixiJS 3D), because the codec that decides what the engine gathers is fixed when a handle is created. A handle that
   does not ask publishes the same codec bytes as before.
 - No text-level glyph count reaches a shader: Three batches many texts into one draw. Normalise with a uniform set

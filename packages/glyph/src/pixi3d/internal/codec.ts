@@ -26,21 +26,19 @@ export const pixi3dSystemBuffers: {
   placementSlot: { id: PIXI3D_PLACEMENT_SLOT_BUFFER_ID, scalar: 'u32', lanes: ['placementSlot'] },
 });
 
-/** The lanes behind the `aGlyphFacts` attribute; published only by a config created with `glyphFacts: true`. */
+/** The lane behind the `aGlyphFacts` attribute; published only by a config created with `glyphFacts: true`. */
 export const pixi3dGlyphFactBuffers: {
-  readonly glyphIndex: {
-    readonly id: CodecBufferId;
-    readonly scalar: 'u32';
-    readonly lanes: readonly ['glyphIndex'];
-  };
-  readonly glyphOrigin: {
+  readonly glyphFacts: {
     readonly id: CodecBufferId;
     readonly scalar: 'f32';
-    readonly lanes: readonly ['inlineOrigin', 'blockOrigin'];
+    readonly lanes: readonly ['inlineOrigin', 'blockOrigin', 'glyphIndex', 'unused'];
   };
 } = defineCodecBuffers({
-  glyphIndex: { id: id.buffer('glyph-pixi3d/glyph-index'), scalar: 'u32', lanes: ['glyphIndex'] },
-  glyphOrigin: { id: id.buffer('glyph-pixi3d/glyph-origin'), scalar: 'f32', lanes: ['inlineOrigin', 'blockOrigin'] },
+  glyphFacts: {
+    id: id.buffer('glyph-pixi3d/glyph-facts'),
+    scalar: 'f32',
+    lanes: ['inlineOrigin', 'blockOrigin', 'glyphIndex', 'unused'],
+  },
 });
 
 export function pixi3dCodecDescriptor(ids: CodecIdFactory, glyphFacts = false): CodecDescriptor {
@@ -50,7 +48,7 @@ export function pixi3dCodecDescriptor(ids: CodecIdFactory, glyphFacts = false): 
     updateAlignment: 4,
     coalesceGapBytes: 128,
     rangeCallPenaltyBytes: 256,
-    maxBuffersPerDraw: glyphFacts ? 11 : 9,
+    maxBuffersPerDraw: glyphFacts ? 10 : 9,
     maxResourcesPerDraw: 1,
     maxIndirectDraws: 0,
     fragmentationBudget: 8,

@@ -150,8 +150,8 @@ export interface RasterCodecProgramOptions {
  * Assemble one engine CodecProgram from a registered renderer-neutral raster Codec.
  *
  * The program publishes the technique's schema buffers followed by the host system buffers:
- * `stableGlyphId`, `placementSlot`, `transformIndex` when `system` declares it, and `glyphIndex` with
- * `glyphOrigin` when it declares those. Every one of them binds to each draw, so the total must fit `capabilitySet.maxBuffersPerDraw`; an indexed
+ * `stableGlyphId`, `placementSlot`, `transformIndex` when `system` declares it, and `glyphFacts`
+ * when it declares that. Every one of them binds to each draw, so the total must fit `capabilitySet.maxBuffersPerDraw`; an indexed
  * transform program therefore needs one more buffer per draw than its direct counterpart.
  * Throws a RangeError at assembly time when the assembled program exceeds that limit.
  */

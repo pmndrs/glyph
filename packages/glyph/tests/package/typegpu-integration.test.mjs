@@ -6,8 +6,7 @@ import { bitmap, glyph, msdf } from '@pmndrs/glyph';
 import { id, bitmapSchema, msdfSchema, slugSchema } from '@pmndrs/glyph/core';
 import {
   codecDescriptor,
-  TYPEGPU_GLYPH_INDEX_BUFFER_ID,
-  TYPEGPU_GLYPH_ORIGIN_BUFFER_ID,
+  TYPEGPU_GLYPH_FACTS_BUFFER_ID,
   TYPEGPU_PLACEMENT_SLOT_BUFFER_ID,
   TYPEGPU_TRANSFORM_INDEX_BUFFER_ID,
 } from '../../dist/typegpu/internal/codec.js';
@@ -48,10 +47,7 @@ test('a TypeGPU config publishes glyph fact lanes only when it is created with g
     return {
       perDraw: descriptor.capabilitySets[0].maxBuffersPerDraw,
       facts: descriptor.programs.map(
-        (program) =>
-          program.buffers.filter(
-            (buffer) => buffer.id === TYPEGPU_GLYPH_INDEX_BUFFER_ID || buffer.id === TYPEGPU_GLYPH_ORIGIN_BUFFER_ID,
-          ).length,
+        (program) => program.buffers.filter((buffer) => buffer.id === TYPEGPU_GLYPH_FACTS_BUFFER_ID).length,
       ),
     };
   };
@@ -59,8 +55,8 @@ test('a TypeGPU config publishes glyph fact lanes only when it is created with g
   const glyphParameters = (position, viewport, glyphIndex, glyphOrigin) => [glyphIndex, glyphOrigin];
   assert.deepEqual(lanes({}), { perDraw: 9, facts: [0, 0, 0] });
   assert.deepEqual(lanes({ transformPosition: twoParameters }), { perDraw: 9, facts: [0, 0, 0] });
-  assert.deepEqual(lanes({ glyphFacts: true }), { perDraw: 11, facts: [2, 2, 2] });
-  assert.deepEqual(lanes({ glyphFacts: true, transformColor: glyphParameters }), { perDraw: 11, facts: [2, 2, 2] });
+  assert.deepEqual(lanes({ glyphFacts: true }), { perDraw: 10, facts: [1, 1, 1] });
+  assert.deepEqual(lanes({ glyphFacts: true, transformColor: glyphParameters }), { perDraw: 10, facts: [1, 1, 1] });
   // A callback that asks for a glyph on a config that publishes none would compile against missing arguments.
   for (const name of ['transformPosition', 'transformColor']) {
     assert.throws(

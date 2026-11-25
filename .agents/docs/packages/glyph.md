@@ -1345,10 +1345,10 @@ root policy states draw order.
 identity may split draws without forcing a second copy of the canonical glyph buffers.
 A material can also be told which glyph it is drawing: the glyph's index in its text's layout order (the index
 `glyphs()` reports it at, counting blanks, in drawn order through a right-to-left run, one per ligature, continuing
-across lines, fonts and formats) and its pen origin on the baseline. Both come from two host system buffers,
-`glyphIndex` and `glyphOrigin`, that a codec declares together; the index is the engine's one semantic input for it,
-and the origin lanes store the pen origin every technique body already loads, relative to the placement slot. They are
-opt-in, because they are 12 bytes per glyph instance gathered for every text of a handle: Three, TypeGPU and PixiJS 3D each publish
+across lines, fonts and formats) and its pen origin on the baseline. Both come from one host system buffer,
+`glyphFacts`, a record of four floats: the index is the engine's one semantic input for it, converted to a float
+(exact up to 2^24), and the origin lanes store the pen origin every technique body already loads, relative to the placement slot. They are
+opt-in, because they are 16 bytes per glyph instance gathered for every text of a handle: Three, TypeGPU and PixiJS 3D each publish
 them only for a handle created with `glyphFacts: true`; a TypeGPU config without it compiles the programs it compiled
 before the facts existed. Three hands a glyph material context `glyphIndex` and
 `glyphOrigin` nodes (the origin in `paragraphPosition` space) through the same stage-selecting node as the positions,

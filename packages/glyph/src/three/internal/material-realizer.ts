@@ -45,10 +45,9 @@ interface RawMaterialNodes {
   readonly draw: THREE.Node<'vec3'>;
   readonly glyph: Readonly<{ index: THREE.Node<'uint'>; origin: THREE.Node<'vec2'> }> | undefined;
 }
-/** The lanes behind a caller material's `glyphIndex` and `glyphOrigin`. */
+/** The lane behind a caller material's `glyphIndex` and `glyphOrigin`: origin x and y, then the index. */
 interface GlyphFactLanes {
-  readonly index: RetainedBuffer;
-  readonly origin: RetainedBuffer;
+  readonly facts: RetainedBuffer;
   readonly buffers: readonly RetainedBuffer[];
 }
 
@@ -535,11 +534,10 @@ export class ThreeMaterialRealizer {
     selection: MaterialSelection,
   ): GlyphFactLanes | undefined {
     if (selection?.material === undefined) return undefined;
-    const index = buffers.get(threeSystemBuffers.glyphIndex.id);
-    const origin = buffers.get(threeSystemBuffers.glyphOrigin.id);
-    // A handle created without `glyphFacts` publishes neither lane.
-    if (index === undefined || origin === undefined) return undefined;
-    return { index, origin, buffers: [index, origin] };
+    const facts = buffers.get(threeSystemBuffers.glyphFacts.id);
+    // A handle created without `glyphFacts` does not publish the lane.
+    if (facts === undefined) return undefined;
+    return { facts, buffers: [facts] };
   }
 
   #placementTable(): RetainedBuffer {
@@ -865,10 +863,8 @@ function glyphFacts(
   placementOffset: THREE.Node<'vec2'>,
 ): RawMaterialNodes['glyph'] {
   if (lanes === undefined) return undefined;
-  return {
-    index: storageUint(lanes.index, instance),
-    origin: storageVec2(lanes.origin, instance).add(placementOffset),
-  };
+  const record = storageVec4(lanes.facts, instance);
+  return { index: TSL.uint(record.z), origin: record.xy.add(placementOffset) };
 }
 
 function bitmapMaterial(

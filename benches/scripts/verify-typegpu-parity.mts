@@ -232,9 +232,9 @@ try {
     const facts = await page.evaluate(async () => (await window.typegpuParity).glyphFacts());
     if (errors.length !== 0) throw new Error(`glyph facts: browser errors: ${errors.join(' | ')}`);
     process.stdout.write(
-      `\nglyph facts: ${String(facts.glyphs)} glyphs read back through transformPosition and transformColor, ${String(facts.failures.length)} disagree with glyphs()\n`,
+      `\nglyph facts: ${String(facts.glyphs)} glyphs read back through TypeGPU's callbacks and a Three MSDF material in indexed mode, ${String(facts.failures.length)} disagree with glyphs()\n`,
     );
-    if (facts.glyphs < 30) failures.push(`glyph facts: only ${String(facts.glyphs)} glyphs were drawn`);
+    if (facts.glyphs < 55) failures.push(`glyph facts: only ${String(facts.glyphs)} glyphs were drawn`);
     failures.push(...facts.failures.map((failure) => `glyph facts: ${failure}`));
   }
 

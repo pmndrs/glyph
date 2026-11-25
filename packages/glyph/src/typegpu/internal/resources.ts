@@ -16,8 +16,7 @@ import {
 } from '../../shaders/typegpu/slug/slug-texture.js';
 import { bitmapPageAccessor } from '../../shaders/typegpu/bitmap-shader.js';
 import {
-  TYPEGPU_GLYPH_INDEX_BUFFER_ID,
-  TYPEGPU_GLYPH_ORIGIN_BUFFER_ID,
+  TYPEGPU_GLYPH_FACTS_BUFFER_ID,
   TYPEGPU_PLACEMENT_SLOT_BUFFER_ID,
   TYPEGPU_TRANSFORM_INDEX_BUFFER_ID,
 } from './codec.js';
@@ -56,15 +55,18 @@ const slugPage = tgpu.bindGroupLayout({
   bandCurves: { texture: d.texture2d(d.u32), visibility: ['fragment'] },
   glyphs: { storage: d.arrayOf(SlugGlyphRow), access: 'readonly', visibility: ['vertex'] },
 });
-/** The two lanes a config created with `glyphFacts: true` adds to a vertex stage, and what it hands its fragment stage. */
-const glyphInputs = { glyphIndex: d.u32, glyphOrigin: d.vec2f };
+/** The lane a config created with `glyphFacts: true` adds to a vertex stage, and what it hands its fragment stage. */
+const glyphInputs = { glyphFacts: d.vec4f };
 const glyphVaryings = { glyphIndex: d.interpolate('flat', d.u32), glyphOrigin: d.interpolate('flat', d.vec2f) };
+/** One record of the glyph facts lane: the pen origin, then the layout index as a float. */
 interface GlyphInput {
+  readonly glyphFacts: d.v4f;
+}
+interface GlyphVarying {
   readonly glyphIndex: number;
   readonly glyphOrigin: d.v2f;
 }
-const glyphIndexLayout = tgpu.vertexLayout(d.disarrayOf(d.uint32), 'instance');
-const glyphOriginLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
+const glyphFactsLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 const slugScene = sceneFunctions(slugPage as unknown as SceneLayout);
 const v2 = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const v4 = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
@@ -128,8 +130,8 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
       'use gpu';
       const unit = corner(input.index);
       if (facts) {
-        const inputIndex = (input as typeof input & GlyphInput).glyphIndex;
-        const inputOrigin = (input as typeof input & GlyphInput).glyphOrigin;
+        const inputIndex = d.u32((input as typeof input & GlyphInput).glyphFacts.z);
+        const inputOrigin = (input as typeof input & GlyphInput).glyphFacts.xy;
         const offset = textScene.textOffset(input.instance);
         const glyphOrigin = textScene.placedOrigin(inputOrigin, input.instance).add(offset);
         drawGlyph(inputIndex, glyphOrigin);
@@ -161,8 +163,8 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
     })((input) => {
       'use gpu';
       if (facts) {
-        const inputIndex = (input as typeof input & GlyphInput).glyphIndex;
-        const inputOrigin = (input as typeof input & GlyphInput).glyphOrigin;
+        const inputIndex = (input as typeof input & GlyphVarying).glyphIndex;
+        const inputOrigin = (input as typeof input & GlyphVarying).glyphOrigin;
         drawGlyph(inputIndex, inputOrigin);
       }
       const result = bitmapFragment({ atlasUv: input.uv, color: input.color, pageLayer: input.layer });
@@ -180,7 +182,7 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
           uvSize: uvSizeLayout.attrib,
           color: colorLayout.attrib,
           layer: u1.attrib,
-          ...(facts ? { glyphIndex: glyphIndexLayout.attrib, glyphOrigin: glyphOriginLayout.attrib } : {}),
+          ...(facts ? { glyphFacts: glyphFactsLayout.attrib } : {}),
         },
         targets: target(options),
         multisample: { count: options.sampleCount ?? 1 },
@@ -211,11 +213,7 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
           .with(uvSizeLayout, lane(b.uvSize.id))
           .with(colorLayout, lane(b.color.id))
           .with(u1, lane(b.page.id));
-        const drawn = facts
-          ? bound
-              .with(glyphIndexLayout, lane(TYPEGPU_GLYPH_INDEX_BUFFER_ID))
-              .with(glyphOriginLayout, lane(TYPEGPU_GLYPH_ORIGIN_BUFFER_ID))
-          : bound;
+        const drawn = facts ? bound.with(glyphFactsLayout, lane(TYPEGPU_GLYPH_FACTS_BUFFER_ID)) : bound;
         return {
           watchedLanes: [],
           variant: () => 0,
@@ -264,8 +262,8 @@ function slugResource(
     })((input) => {
       'use gpu';
       if (facts) {
-        const inputIndex = (input as typeof input & GlyphInput).glyphIndex;
-        const inputOrigin = (input as typeof input & GlyphInput).glyphOrigin;
+        const inputIndex = d.u32((input as typeof input & GlyphInput).glyphFacts.z);
+        const inputOrigin = (input as typeof input & GlyphInput).glyphFacts.xy;
         drawGlyph(
           inputIndex,
           slugScene.placedOrigin(inputOrigin, input.instance).add(slugScene.textOffset(input.instance)),
@@ -296,8 +294,8 @@ function slugResource(
         slugScene.viewportSize(),
       );
       if (facts) {
-        const inputIndex = (input as typeof input & GlyphInput).glyphIndex;
-        const inputOrigin = (input as typeof input & GlyphInput).glyphOrigin;
+        const inputIndex = d.u32((input as typeof input & GlyphInput).glyphFacts.z);
+        const inputOrigin = (input as typeof input & GlyphInput).glyphFacts.xy;
         return {
           position: slugScene.projectText(d.vec3f(local.add(dilated.xy), 0), offset),
           coordinate: dilated.zw,
@@ -324,8 +322,8 @@ function slugResource(
     })((input) => {
       'use gpu';
       if (facts) {
-        const inputIndex = (input as typeof input & GlyphInput).glyphIndex;
-        const inputOrigin = (input as typeof input & GlyphInput).glyphOrigin;
+        const inputIndex = (input as typeof input & GlyphVarying).glyphIndex;
+        const inputOrigin = (input as typeof input & GlyphVarying).glyphOrigin;
         drawGlyph(inputIndex, inputOrigin);
       }
       const coverage = slugRender(
@@ -365,7 +363,7 @@ function slugResource(
           rect: rectLayout.attrib,
           color: colorLayout.attrib,
           glyph: u2.attrib,
-          ...(facts ? { glyphIndex: glyphIndexLayout.attrib, glyphOrigin: glyphOriginLayout.attrib } : {}),
+          ...(facts ? { glyphFacts: glyphFactsLayout.attrib } : {}),
         },
         targets: target(options),
         multisample: { count: options.sampleCount ?? 1 },
@@ -415,9 +413,7 @@ function slugResource(
                 .with(colorLayout, lane(b.color.id))
                 .with(u2, lane(b.glyph.id));
               if (facts) {
-                bound = bound
-                  .with(glyphIndexLayout, lane(TYPEGPU_GLYPH_INDEX_BUFFER_ID))
-                  .with(glyphOriginLayout, lane(TYPEGPU_GLYPH_ORIGIN_BUFFER_ID));
+                bound = bound.with(glyphFactsLayout, lane(TYPEGPU_GLYPH_FACTS_BUFFER_ID));
               }
             }
             recordDraw(root, bound, pass, bindGroups, first, count);

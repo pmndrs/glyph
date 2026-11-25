@@ -115,31 +115,28 @@ export function createRasterMeshes(
 
 /**
  * Gives every record the `aGlyphFacts` field a recipe's bits declared: the pen origin in the paragraph space of the
- * vertex position (+Y up), then the layout index. Only such a recipe reads the two lanes or carries the field.
+ * vertex position (+Y up), then the layout index. Only such a recipe reads the lane or carries the field.
  */
 function appendGlyphFacts(pages: Map<PageDraw, GlyphRecord[]>, lanes: SpanLanes, recordIndex: number): void {
   if (
     !lanes.bindings.some(
       ({ input }) =>
-        input.declaration.kind === 'codec' && input.declaration.value.id === pixi3dGlyphFactBuffers.glyphIndex.id,
+        input.declaration.kind === 'codec' && input.declaration.value.id === pixi3dGlyphFactBuffers.glyphFacts.id,
     )
   ) {
     throw new TypeError(
       'Pixi3D text material declares aGlyphFacts, which its handle does not publish; create the handle with definePixi3DConfig({ glyphFacts: true })',
     );
   }
-  const indices = lane(lanes, pixi3dGlyphFactBuffers.glyphIndex.id, 'u32', 1, 'glyphIndex');
-  const origins = lane(lanes, pixi3dGlyphFactBuffers.glyphOrigin.id, 'f32', 2, 'glyphOrigin');
+  const facts = lane(lanes, pixi3dGlyphFactBuffers.glyphFacts.id, 'f32', 4, 'glyphFacts');
   for (const records of pages.values()) {
     for (const [position, record] of records.entries()) {
       const index = recordIndex + record.ordinal;
-      const [x, y] = placedOrigin(lanes, index, f32x(origins.bytes, index, 2));
+      const [originX, originY, glyphIndex] = f32x(facts.bytes, index, 4);
+      const [x, y] = placedOrigin(lanes, index, [originX, originY]);
       records[position] = {
         ...record,
-        fields: [
-          ...record.fields,
-          { name: 'aGlyphFacts', type: 'float32x4', value: [x, -y, u32(indices.bytes, index), 0] },
-        ],
+        fields: [...record.fields, { name: 'aGlyphFacts', type: 'float32x4', value: [x, -y, glyphIndex, 0] }],
       };
     }
   }

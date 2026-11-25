@@ -33,7 +33,7 @@ export interface Pixi3DConfigOptions {
    * and an edit before a glyph shifts it. The origin is `glyphs().x`, `-glyphs().y` at that index: the pen origin on
    * the baseline in the paragraph space of the vertex `position` the Glyph raster bit writes, so `position.xy -
    * aGlyphFacts.xy` is a vertex's offset from its own glyph. Off by default, and a material of a handle without it
-   * throws when a bit declares the attribute: the facts are 12 more bytes per glyph that the engine gathers for every
+   * throws when a bit declares the attribute: the facts are 16 more bytes per glyph that the engine gathers for every
    * text of the handle. Only a material whose bits declare the attribute carries it per vertex.
    */
   readonly glyphFacts?: boolean;

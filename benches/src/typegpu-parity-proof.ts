@@ -1,13 +1,14 @@
 // Real-device proof for the direct TypeGPU renderer: the same scenes through `@pmndrs/glyph/typegpu` and through the
 // Three MSDF path at the same camera, read back as pixels, plus draw/bind-group/upload counters and frame timings.
 import { bitmap, glyph, msdf, slug, type FontFace } from '@pmndrs/glyph';
-import { defineThreeConfig, type Text as ThreeText } from '@pmndrs/glyph/three';
+import { defineTextMaterial, defineThreeConfig, type Text as ThreeText } from '@pmndrs/glyph/three';
 import {
   defineTypeGpuConfig,
   type TypeGpuHandle,
   type TypeGpuText,
   type TypeGpuTextOptions,
 } from '@pmndrs/glyph/typegpu';
+import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 import tgpu, { d, std } from 'typegpu';
 
@@ -449,6 +450,8 @@ async function start(): Promise<ParityProof> {
   renderer.setClearColor(0x000000, 1);
   const threeMsdf = glyph.handle('typegpu-parity:three', defineThreeConfig({}));
   const threeSdf = glyph.handle('typegpu-parity:three-sdf', defineThreeConfig({ msdfAtlas: 'sdf' }));
+  // Indexed transform mode, the default: the case where a material reading both facts binds the most storage.
+  const threeFacts = glyph.handle('typegpu-parity:three-facts', defineThreeConfig({ glyphFacts: true }));
 
   const pixelCamera = new THREE.OrthographicCamera(0, WIDTH, 0, -HEIGHT, 0.1, 10);
   pixelCamera.position.z = 1;
@@ -812,9 +815,56 @@ async function start(): Promise<ParityProof> {
     }
   }
 
+  /** Holds every inked glyph of `layout`, drawn at (`left`, `top`), to the pixels the glyph-fact shaders wrote. */
+  function readGlyphFacts(
+    label: string,
+    layout: ReturnType<TypeGpuText['glyphs']>,
+    left: number,
+    top: number,
+    pixels: Uint8Array,
+    failures: string[],
+  ): number {
+    let glyphs = 0;
+    for (let glyphIndex = 0; glyphIndex < layout.glyphCount; glyphIndex += 1) {
+      if (layout.glyphInkWidths[glyphIndex]! <= 0 || layout.glyphInkHeights[glyphIndex]! <= 0) continue;
+      glyphs += 1;
+      const originX = left + layout.x[glyphIndex]!;
+      const originY = top + layout.y[glyphIndex]!;
+      const drop = (glyphIndex % 2) * FACTS_DROP;
+      const scaledX = (value: number): number => originX + (left + value - originX) * FACTS_SCALE;
+      const scaledY = (value: number): number => originY + (top + value - originY) * FACTS_SCALE + drop;
+      const x0 = Math.floor(scaledX(layout.glyphInkX[glyphIndex]!));
+      const x1 = Math.ceil(scaledX(layout.glyphInkX[glyphIndex]! + layout.glyphInkWidths[glyphIndex]!));
+      const y0 = Math.floor(scaledY(layout.glyphInkY[glyphIndex]!));
+      const y1 = Math.ceil(scaledY(layout.glyphInkY[glyphIndex]! + layout.glyphInkHeights[glyphIndex]!));
+      const expected = [glyphIndex + 1, (originX / WIDTH) * 255, (originY / HEIGHT) * 255] as const;
+      let matching = 0;
+      for (let y = Math.max(y0, 0); y < Math.min(y1, HEIGHT); y += 1) {
+        for (let x = Math.max(x0, 0); x < Math.min(x1, WIDTH); x += 1) {
+          const offset = (y * WIDTH + x) * 4;
+          if (
+            pixels[offset] === expected[0] &&
+            Math.abs(pixels[offset + 1]! - expected[1]) <= 1 &&
+            Math.abs(pixels[offset + 2]! - expected[2]) <= 1
+          ) {
+            matching += 1;
+          }
+        }
+      }
+      if (matching < FACTS_MINIMUM_PIXELS) {
+        failures.push(
+          `${label} glyph ${String(glyphIndex)}: ${String(matching)} pixels in [${String(x0)}, ${String(y0)}, ${String(x1)}, ${String(y1)}] carry index ${String(expected[0])} and origin (${originX.toFixed(2)}, ${originY.toFixed(2)})`,
+        );
+      }
+    }
+    return glyphs;
+  }
+
   /**
-   * One text per raster format through the glyph-fact callbacks. Each drawn glyph must put enough pixels carrying its
-   * own index and origin inside the box its ink was scaled and dropped to; the expectation is `glyphs()` alone.
+   * One text per raster format through the TypeGPU glyph-fact callbacks, then the same specimen through Three's MSDF
+   * path in indexed transform mode with a material that reads both facts in both stages. Each drawn glyph must put
+   * enough pixels carrying its own index and origin inside the box its ink was scaled and dropped to; the expectation
+   * is `glyphs()` alone.
    */
   async function glyphFacts(): Promise<GlyphFactsProof> {
     const specimens = [
@@ -822,61 +872,70 @@ async function start(): Promise<ParityProof> {
       { font: 'bitmap', x: 60.25, y: 230.5, size: 32 },
       { font: 'slug', x: 30.75, y: 400.25, size: 56 },
     ] as const;
+    const specimen = 'To wave ME\nline two';
     const texts = specimens.map(({ font, x, y, size }) =>
       facts.createText({
         font: fonts[font] as FontFace<typeof msdf>,
-        text: 'To wave ME\nline two',
+        text: specimen,
         position: [x, y],
         style: { fontSize: size, color: '#ffffff' },
       }),
     );
+    const failures: string[] = [];
+    let glyphs = 0;
     try {
       glyph.shape();
       const pixels = await readPixels(facts);
-      const failures: string[] = [];
-      let glyphs = 0;
       for (const [index, text] of texts.entries()) {
         const { font, x: left, y: top } = specimens[index]!;
-        const layout = text.glyphs();
-        for (let glyphIndex = 0; glyphIndex < layout.glyphCount; glyphIndex += 1) {
-          if (layout.glyphInkWidths[glyphIndex]! <= 0 || layout.glyphInkHeights[glyphIndex]! <= 0) continue;
-          glyphs += 1;
-          const originX = left + layout.x[glyphIndex]!;
-          const originY = top + layout.y[glyphIndex]!;
-          const drop = (glyphIndex % 2) * FACTS_DROP;
-          const scaledX = (value: number): number => originX + (left + value - originX) * FACTS_SCALE;
-          const scaledY = (value: number): number => originY + (top + value - originY) * FACTS_SCALE + drop;
-          const x0 = Math.floor(scaledX(layout.glyphInkX[glyphIndex]!));
-          const x1 = Math.ceil(scaledX(layout.glyphInkX[glyphIndex]! + layout.glyphInkWidths[glyphIndex]!));
-          const y0 = Math.floor(scaledY(layout.glyphInkY[glyphIndex]!));
-          const y1 = Math.ceil(scaledY(layout.glyphInkY[glyphIndex]! + layout.glyphInkHeights[glyphIndex]!));
-          const expected = [glyphIndex + 1, (originX / WIDTH) * 255, (originY / HEIGHT) * 255] as const;
-          let matching = 0;
-          for (let y = Math.max(y0, 0); y < Math.min(y1, HEIGHT); y += 1) {
-            for (let x = Math.max(x0, 0); x < Math.min(x1, WIDTH); x += 1) {
-              const offset = (y * WIDTH + x) * 4;
-              if (
-                pixels[offset] === expected[0] &&
-                Math.abs(pixels[offset + 1]! - expected[1]) <= 1 &&
-                Math.abs(pixels[offset + 2]! - expected[2]) <= 1
-              ) {
-                matching += 1;
-              }
-            }
-          }
-          if (matching < FACTS_MINIMUM_PIXELS) {
-            failures.push(
-              `${font} glyph ${String(glyphIndex)}: ${String(matching)} pixels in [${String(x0)}, ${String(y0)}, ${String(x1)}, ${String(y1)}] carry index ${String(expected[0])} and origin (${originX.toFixed(2)}, ${originY.toFixed(2)})`,
-            );
-          }
-        }
+        glyphs += readGlyphFacts(`typegpu ${font}`, text.glyphs(), left, top, pixels, failures);
       }
-      if (errors.length !== 0) throw new Error(errors.splice(0).join('\n'));
-      return { glyphs, failures };
     } finally {
       for (const text of texts) text.dispose();
       glyph.shape();
     }
+
+    const [left, top] = [40.5, 30.25];
+    const world = new THREE.Scene();
+    const label = threeFacts.createText({
+      font: fonts.inter as FontFace<typeof msdf>,
+      text: specimen,
+      style: { fontSize: 56, color: '#ffffff' },
+      layout: { wrap: 'none' },
+      material: defineTextMaterial(
+        (context) => {
+          const material = context.createDefaultMaterial();
+          if (context.kind !== 'glyph') return material;
+          const { glyphIndex, glyphOrigin, paragraphPosition, position } = context;
+          // The same shrink about the origin and drop of odd glyphs, in +Y-up paragraph units.
+          const fromOrigin = paragraphPosition.sub(glyphOrigin);
+          const drop = TSL.float(glyphIndex.mod(2)).mul(-FACTS_DROP);
+          material.positionNode = position.add(fromOrigin.mul(FACTS_SCALE - 1)).add(TSL.vec3(0, drop, 0));
+          material.colorNode = TSL.vec3(
+            TSL.float(glyphIndex.add(1)).div(255),
+            glyphOrigin.x.add(left).div(WIDTH),
+            glyphOrigin.y.negate().add(top).div(HEIGHT),
+          );
+          return material;
+        },
+        { frustumCulled: false },
+      ),
+    });
+    try {
+      label.position.set(left, -top, 0);
+      world.add(label);
+      glyph.shape();
+      renderer.render(world, pixelCamera);
+      const read = await renderer.readRenderTargetPixelsAsync(threeTarget, 0, 0, WIDTH, HEIGHT);
+      const pixels = new Uint8Array(read.buffer, read.byteOffset, read.byteLength);
+      glyphs += readGlyphFacts('three msdf indexed', label.glyphs(), left, top, pixels, failures);
+    } finally {
+      label.removeFromParent();
+      label.dispose();
+      glyph.shape();
+    }
+    if (errors.length !== 0) throw new Error(errors.splice(0).join('\n'));
+    return { glyphs, failures };
   }
 
   return {

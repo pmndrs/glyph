@@ -6,8 +6,7 @@ import { msdfDistances } from '../../shaders/typegpu/msdf/distance.js';
 import { decorationPaint } from '../../shaders/typegpu/decoration-shader.js';
 import { ResidentMsdfAtlas } from './msdf-atlas.js';
 import {
-  TYPEGPU_GLYPH_INDEX_BUFFER_ID,
-  TYPEGPU_GLYPH_ORIGIN_BUFFER_ID,
+  TYPEGPU_GLYPH_FACTS_BUFFER_ID,
   TYPEGPU_PLACEMENT_SLOT_BUFFER_ID,
   TYPEGPU_TRANSFORM_INDEX_BUFFER_ID,
 } from './codec.js';
@@ -371,15 +370,14 @@ const bothFragment = tgpu.fragmentFn({
 
 // A config created with `glyphFacts: true` draws through these instead: the same four programs with the glyph index
 // and origin lanes as vertex inputs and flat varyings, recorded for the callbacks before anything else runs.
-const glyphVertexIn = { ...vertexIn, glyphIndex: d.u32, glyphOrigin: d.vec2f };
+const glyphVertexIn = { ...vertexIn, glyphFacts: d.vec4f };
 const glyphVaryings = { glyphIndex: d.interpolate('flat', d.u32), glyphOrigin: d.interpolate('flat', d.vec2f) };
-const glyphIndexLayout = tgpu.vertexLayout(d.disarrayOf(d.uint32), 'instance');
-const glyphOriginLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
+const glyphFactsLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
 /** Records the glyph of a vertex and returns its origin in the pixels `transformPosition` receives. */
-function drawnGlyphOrigin(instance: number, index: number, origin: d.v2f): d.v2f {
+function drawnGlyphOrigin(instance: number, facts: d.v4f): d.v2f {
   'use gpu';
-  const placed = scene.placedOrigin(origin, instance).add(scene.textOffset(instance));
-  drawGlyph(index, placed);
+  const placed = scene.placedOrigin(facts.xy, instance).add(scene.textOffset(instance));
+  drawGlyph(d.u32(facts.z), placed);
   return placed;
 }
 const plainGlyphVertex = tgpu.vertexFn({
@@ -387,7 +385,7 @@ const plainGlyphVertex = tgpu.vertexFn({
   out: { position: d.builtin.position, ...fillVaryings, ...glyphVaryings },
 })((input) => {
   'use gpu';
-  const glyphOrigin = drawnGlyphOrigin(input.instance, input.glyphIndex, input.glyphOrigin);
+  const glyphOrigin = drawnGlyphOrigin(input.instance, input.glyphFacts);
   const glyph = msdfGlyph(input.index, input.instance, input.rect, input.effectColor, input.effect, d.f32(0), d.f32(0));
   return {
     position: glyph.position,
@@ -395,7 +393,7 @@ const plainGlyphVertex = tgpu.vertexFn({
     bounds: glyph.bounds,
     color: input.color,
     layer: glyph.layer,
-    glyphIndex: input.glyphIndex,
+    glyphIndex: d.u32(input.glyphFacts.z),
     glyphOrigin,
   };
 });
@@ -413,7 +411,7 @@ const outlineGlyphVertex = tgpu.vertexFn({
   out: { position: d.builtin.position, ...fillVaryings, ...glyphVaryings, ...outlineVaryings },
 })((input) => {
   'use gpu';
-  const glyphOrigin = drawnGlyphOrigin(input.instance, input.glyphIndex, input.glyphOrigin);
+  const glyphOrigin = drawnGlyphOrigin(input.instance, input.glyphFacts);
   const glyph = msdfGlyph(input.index, input.instance, input.rect, input.effectColor, input.effect, d.f32(1), d.f32(0));
   return {
     position: glyph.position,
@@ -421,7 +419,7 @@ const outlineGlyphVertex = tgpu.vertexFn({
     bounds: glyph.bounds,
     color: input.color,
     layer: glyph.layer,
-    glyphIndex: input.glyphIndex,
+    glyphIndex: d.u32(input.glyphFacts.z),
     glyphOrigin,
     outline: glyph.outline,
     width: glyph.width,
@@ -441,7 +439,7 @@ const shadowGlyphVertex = tgpu.vertexFn({
   out: { position: d.builtin.position, ...fillVaryings, ...glyphVaryings, ...shadowVaryings },
 })((input) => {
   'use gpu';
-  const glyphOrigin = drawnGlyphOrigin(input.instance, input.glyphIndex, input.glyphOrigin);
+  const glyphOrigin = drawnGlyphOrigin(input.instance, input.glyphFacts);
   const glyph = msdfGlyph(input.index, input.instance, input.rect, input.effectColor, input.effect, d.f32(0), d.f32(1));
   return {
     position: glyph.position,
@@ -449,7 +447,7 @@ const shadowGlyphVertex = tgpu.vertexFn({
     bounds: glyph.bounds,
     color: input.color,
     layer: glyph.layer,
-    glyphIndex: input.glyphIndex,
+    glyphIndex: d.u32(input.glyphFacts.z),
     glyphOrigin,
     shadowUv: glyph.shadowUv,
     shadow: glyph.shadow,
@@ -470,7 +468,7 @@ const bothGlyphVertex = tgpu.vertexFn({
   out: { position: d.builtin.position, ...fillVaryings, ...glyphVaryings, ...outlineVaryings, ...shadowVaryings },
 })((input) => {
   'use gpu';
-  const glyphOrigin = drawnGlyphOrigin(input.instance, input.glyphIndex, input.glyphOrigin);
+  const glyphOrigin = drawnGlyphOrigin(input.instance, input.glyphFacts);
   const glyph = msdfGlyph(input.index, input.instance, input.rect, input.effectColor, input.effect, d.f32(1), d.f32(1));
   return {
     position: glyph.position,
@@ -478,7 +476,7 @@ const bothGlyphVertex = tgpu.vertexFn({
     bounds: glyph.bounds,
     color: input.color,
     layer: glyph.layer,
-    glyphIndex: input.glyphIndex,
+    glyphIndex: d.u32(input.glyphFacts.z),
     glyphOrigin,
     outline: glyph.outline,
     width: glyph.width,
@@ -530,7 +528,7 @@ function msdfPrograms(options: PipelineOptions): MsdfPrograms {
     if (facts) {
       const glyphCommon = {
         ...common,
-        attribs: { ...common.attribs, glyphIndex: glyphIndexLayout.attrib, glyphOrigin: glyphOriginLayout.attrib },
+        attribs: { ...common.attribs, glyphFacts: glyphFactsLayout.attrib },
       };
       switch (key) {
         case 0:
@@ -659,9 +657,7 @@ export function msdfResource(
                 .with(effectColorLayout, lane(b.effectColor.id))
                 .with(effectLayout, lane(b.effect.id));
               if (publishesGlyphFacts(options)) {
-                pipelineForVariant = pipelineForVariant
-                  .with(glyphIndexLayout, lane(TYPEGPU_GLYPH_INDEX_BUFFER_ID))
-                  .with(glyphOriginLayout, lane(TYPEGPU_GLYPH_ORIGIN_BUFFER_ID));
+                pipelineForVariant = pipelineForVariant.with(glyphFactsLayout, lane(TYPEGPU_GLYPH_FACTS_BUFFER_ID));
               }
               bound[variant] = pipelineForVariant;
             }
