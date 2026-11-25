@@ -65,7 +65,9 @@ impl PositionedGlyphArena {
             Err(EngineError::InvalidRequest) => return Ok(false),
             Err(error) => return Err(error),
         };
-        walk.source_coordinates_retained &= self.retained_line_keeps_ordinals(previous, line_index);
+        let (outlined, layout) = self.retained_line_keeps_ordinals(previous, line_index);
+        walk.source_coordinates_retained &= outlined;
+        walk.layout_indices_retained &= layout;
         self.append_retained_line(previous, line_index, target, Some(remap))?;
         // An edit moved cluster indexes under the retained steps.
         self.push_line_topology(
@@ -89,6 +91,7 @@ impl PositionedGlyphArena {
         fragments: &RopeCursorRange<'_, FlowFragment>,
         retained_cursor: &mut RetainedFlowLineCursor<'_>,
         source_coordinates_retained: &mut bool,
+        layout_indices_retained: &mut bool,
     ) -> Result<MatchedLine, EngineError> {
         let line = head.line;
         let Some(matched) = matching_retained_line(
@@ -167,8 +170,9 @@ impl PositionedGlyphArena {
             Err(EngineError::InvalidRequest) => return Ok(MatchedLine::Reposition(None)),
             Err(error) => return Err(error),
         };
-        *source_coordinates_retained &=
-            self.retained_line_keeps_ordinals(previous, previous_line_index);
+        let (outlined, layout) = self.retained_line_keeps_ordinals(previous, previous_line_index);
+        *source_coordinates_retained &= outlined;
+        *layout_indices_retained &= layout;
         self.append_retained_line(previous, previous_line_index, target, Some(remap))?;
         self.copy_line_topology(
             previous,
@@ -179,10 +183,11 @@ impl PositionedGlyphArena {
         Ok(MatchedLine::Appended)
     }
 
-    /// Whether the retained line just admitted starts at the outlined ordinal and the layout
-    /// index it had in `previous`. Gather skips a retained line's records only while both
-    /// hold: a record is addressed by its outlined ordinal and publishes its layout index.
-    fn retained_line_keeps_ordinals(&self, previous: &Self, line_index: usize) -> bool {
+    /// Whether the retained line just admitted starts at the outlined ordinal, and at the
+    /// layout index, it had in `previous`. Gather skips a retained line's records only while
+    /// the first holds, since a record is addressed by its outlined ordinal; a codec that
+    /// publishes layout indices needs the second too.
+    fn retained_line_keeps_ordinals(&self, previous: &Self, line_index: usize) -> (bool, bool) {
         let start = |starts: &[u32], counts: &[u32], total: usize| {
             matches!(
                 (starts.get(line_index), counts.get(line_index)),
@@ -190,14 +195,17 @@ impl PositionedGlyphArena {
                     if total.checked_sub(count as usize) == Some(start as usize)
             )
         };
-        start(
-            &previous.line_glyph_starts,
-            &previous.line_glyph_counts,
-            self.outlined_count(),
-        ) && start(
-            &previous.semantic_line_glyph_starts,
-            &previous.semantic_line_glyph_counts,
-            self.occurrence_count(),
+        (
+            start(
+                &previous.line_glyph_starts,
+                &previous.line_glyph_counts,
+                self.outlined_count(),
+            ),
+            start(
+                &previous.semantic_line_glyph_starts,
+                &previous.semantic_line_glyph_counts,
+                self.occurrence_count(),
+            ),
         )
     }
 

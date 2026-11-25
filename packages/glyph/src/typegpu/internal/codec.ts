@@ -11,29 +11,43 @@ const system = defineCodecBuffers({
   placementSlot: { id: id.buffer('glyph-typegpu/placement-slot'), scalar: 'u32', lanes: ['placementSlot'] },
   transformIndex: { id: id.buffer('glyph-typegpu/transform-index'), scalar: 'u32', lanes: ['transformIndex'] },
 });
+/** The lanes behind the glyph parameters of `transformPosition` and `transformColor`; published only when one asks. */
+const glyphFacts = defineCodecBuffers({
+  glyphIndex: { id: id.buffer('glyph-typegpu/glyph-index'), scalar: 'u32', lanes: ['glyphIndex'] },
+  glyphOrigin: { id: id.buffer('glyph-typegpu/glyph-origin'), scalar: 'f32', lanes: ['inlineOrigin', 'blockOrigin'] },
+});
+export const TYPEGPU_GLYPH_INDEX_BUFFER_ID: CodecBufferId = glyphFacts.glyphIndex.id;
+export const TYPEGPU_GLYPH_ORIGIN_BUFFER_ID: CodecBufferId = glyphFacts.glyphOrigin.id;
 export const TYPEGPU_PLACEMENT_SLOT_BUFFER_ID: CodecBufferId = system.placementSlot.id;
 /** Per-instance record in the renderer's transform table; every first-party program is indexed. */
 export const TYPEGPU_TRANSFORM_INDEX_BUFFER_ID: CodecBufferId = system.transformIndex.id;
-const capabilitySet: CodecCapabilitySet = {
+const capabilities = {
   capabilities: ['storage-buffers', 'alias-vec2', 'alias-vec4', 'ordered-direct'],
   maxBufferBytes: 16 * 1024 * 1024,
   updateAlignment: 4,
   coalesceGapBytes: 128,
   rangeCallPenaltyBytes: 256,
-  // Bitmap's six vertex lanes plus the placement-slot and transform-index storage lanes; stableGlyphId is
-  // published but never bound.
-  maxBuffersPerDraw: 9,
   maxResourcesPerDraw: 4,
   maxIndirectDraws: 0,
   fragmentationBudget: 8,
   wholeBufferThresholdBasisPoints: 7500,
-};
-export function codecDescriptor(ids: CodecIdFactory): CodecDescriptor {
+} as const;
+/**
+ * `glyphFacts` adds the glyph-index and glyph-origin lanes a config publishes when one of its callbacks declares the
+ * glyph parameters. A config that asks for neither publishes, uploads and binds exactly what it did without them.
+ */
+export function codecDescriptor(ids: CodecIdFactory, glyphFactLanes = false): CodecDescriptor {
+  const capabilitySet: CodecCapabilitySet = {
+    ...capabilities,
+    // Bitmap's six vertex lanes plus the placement-slot and transform-index storage lanes, and the two glyph fact
+    // lanes when published; stableGlyphId is published but never bound.
+    maxBuffersPerDraw: glyphFactLanes ? 11 : 9,
+  };
   // Batched programs read each Text's offset from the transform table, so many Texts share one draw.
   const options = {
     ids,
     namespace: 'typegpu',
-    system,
+    system: glyphFactLanes ? { ...system, ...glyphFacts } : system,
     capabilitySet,
     transformMode: 'indexed',
   } as const;

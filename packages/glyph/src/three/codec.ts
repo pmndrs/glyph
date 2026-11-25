@@ -82,8 +82,9 @@ export function threeCodecBytes(
   ids: CodecIdFactory = id,
   transformMode: ThreeTransformMode | ThreeFormatTransformModes = 'indexed',
   additionalPrograms: readonly CodecProgram[] = [],
+  glyphFacts = false,
 ): Uint8Array {
-  return compileCodec(threeCodecDescriptor(ids, transformMode, additionalPrograms));
+  return compileCodec(threeCodecDescriptor(ids, transformMode, additionalPrograms, glyphFacts));
 }
 
 /** @internal Assemble the descriptor retained by the Three adapter alongside its compiled wire Codec. */
@@ -91,6 +92,7 @@ export function threeCodecDescriptor(
   ids: CodecIdFactory = id,
   transformMode: ThreeTransformMode | ThreeFormatTransformModes = 'indexed',
   additionalPrograms: readonly CodecProgram[] = [],
+  glyphFacts = false,
 ): CodecDescriptor {
   if (!Array.isArray(additionalPrograms)) throw new TypeError('Three additional Codec programs need an array');
   const modes =
@@ -105,7 +107,7 @@ export function threeCodecDescriptor(
   const capabilitySet = threeCodecCapabilitySet();
   const slugOptions = {
     namespace: THREE_PROGRAM_NAMESPACE,
-    system: codecSystemBuffers(modes.slug),
+    system: codecSystemBuffers(modes.slug, glyphFacts),
     placementSlotTarget: { buffer: slugSchema.buffers.glyph.id, lane: 1 },
     capabilitySet,
     transformMode: modes.slug,
@@ -115,14 +117,14 @@ export function threeCodecDescriptor(
   const rasterPrograms: CodecProgram[] = [
     createHostRasterCodecProgram(bitmapCodec, {
       namespace: THREE_PROGRAM_NAMESPACE,
-      system: codecSystemBuffers(modes.bitmap),
+      system: codecSystemBuffers(modes.bitmap, glyphFacts),
       capabilitySet,
       transformMode: modes.bitmap,
       ids,
     }),
     createHostRasterCodecProgram(msdfCodec, {
       namespace: THREE_PROGRAM_NAMESPACE,
-      system: codecSystemBuffers(modes.msdf),
+      system: codecSystemBuffers(modes.msdf, glyphFacts),
       capabilitySet,
       transformMode: modes.msdf,
       ids,
@@ -167,13 +169,13 @@ function decorationProgram(
   });
 }
 
-function codecSystemBuffers(transformMode: ThreeTransformMode): RasterCodecSystem {
+/** `glyphFacts` adds the two lanes a material's `glyphIndex` and `glyphOrigin` read; without it nothing is published. */
+function codecSystemBuffers(transformMode: ThreeTransformMode, glyphFacts: boolean): RasterCodecSystem {
   return {
     stableGlyphId: threeSystemBuffers.stableGlyphId,
     ...(transformMode === 'indexed' ? { transformIndex: threeSystemBuffers.transformIndex } : {}),
     placementSlot: threeSystemBuffers.placementSlot,
-    glyphIndex: threeSystemBuffers.glyphIndex,
-    glyphOrigin: threeSystemBuffers.glyphOrigin,
+    ...(glyphFacts ? { glyphIndex: threeSystemBuffers.glyphIndex, glyphOrigin: threeSystemBuffers.glyphOrigin } : {}),
   };
 }
 

@@ -364,6 +364,9 @@ pub(crate) struct PositionedGlyphArena {
     // Candidate-owned scratch keeps capacity when complete preparation revokes its proof.
     recomposed_glyphs: Vec<core::ops::Range<usize>>,
     recomposed_glyphs_retained: bool,
+    /// Every line retained since the last publication kept the layout index of its first
+    /// glyph, so the glyphs outside the recomposed windows kept theirs.
+    layout_indices_retained: bool,
     decorations: Vec<DecorationRecord>,
     replacement_runs: Vec<LayoutRun>,
     replacement_run_boundary_indices: Vec<u32>,
@@ -700,10 +703,17 @@ impl PositionedGlyphArena {
     pub(crate) fn mark_published(&mut self) {
         self.recomposed_glyphs.clear();
         self.recomposed_glyphs_retained = true;
+        self.layout_indices_retained = true;
     }
 
-    pub(crate) fn unpublished_source_intervals(&self) -> Option<&[core::ops::Range<usize>]> {
-        self.recomposed_glyphs_retained
+    /// The outlined ordinals whose rows may differ from the published ones, when the rest are
+    /// proved unchanged. `layout_indices` asks that proof to cover each row's layout index,
+    /// which a blank or boundary glyph added before a retained line moves.
+    pub(crate) fn unpublished_source_intervals(
+        &self,
+        layout_indices: bool,
+    ) -> Option<&[core::ops::Range<usize>]> {
+        (self.recomposed_glyphs_retained && (!layout_indices || self.layout_indices_retained))
             .then_some(self.recomposed_glyphs.as_slice())
     }
 
@@ -741,6 +751,7 @@ struct PositioningSource<'a> {
 /// The cursors a positioning build advances line by line.
 struct LineBuildWalk<'a> {
     source_coordinates_retained: bool,
+    layout_indices_retained: bool,
     retained_cursor: Option<RetainedFlowLineCursor<'a>>,
     recomposed_line_index: usize,
     drop_cap_cursor: usize,
@@ -3883,7 +3894,7 @@ mod tests {
             placed_semantic_at(&active, 3, &clusters, &boundary).block_origin + 1.0,
         );
         assert_eq!(
-            next.unpublished_source_intervals(),
+            next.unpublished_source_intervals(false),
             Some(core::slice::from_ref(&(3..5)))
         );
         // The clean first line contains the inserted boundary glyph. Its retained
@@ -3937,11 +3948,11 @@ mod tests {
             placed_semantic_at(&next, 3, &clusters, &boundary).block_origin,
         );
         assert_eq!(
-            newest.unpublished_source_intervals(),
+            newest.unpublished_source_intervals(false),
             Some(core::slice::from_ref(&(0..5)))
         );
         newest.mark_published();
-        assert_eq!(newest.unpublished_source_intervals(), Some(&[][..]));
+        assert_eq!(newest.unpublished_source_intervals(false), Some(&[][..]));
     }
 
     #[test]
@@ -4337,7 +4348,7 @@ mod tests {
             .map(|index| positioned.placement_handle(index))
             .collect::<Vec<_>>();
         let retained_before = positioned.recomposed_glyphs_retained;
-        let source_intervals = positioned.unpublished_source_intervals().unwrap().to_vec();
+        let source_intervals = positioned.unpublished_source_intervals(false).unwrap().to_vec();
 
         keys[count - 2] += 100;
         keys[count - 1] += 100;
@@ -4356,7 +4367,7 @@ mod tests {
         );
         assert_eq!(positioned.recomposed_glyphs_retained, retained_before);
         assert_eq!(
-            positioned.unpublished_source_intervals(),
+            positioned.unpublished_source_intervals(false),
             Some(source_intervals.as_slice())
         );
 

@@ -9,6 +9,7 @@ import { schema } from './internal/bindings.js';
 import { codecDescriptor } from './internal/codec.js';
 import { createResource } from './internal/resources.js';
 import { Renderer, TypeGpuTransform } from './internal/renderer.js';
+import { readsGlyphFacts } from './internal/pipeline.js';
 import { RenderFailures } from '../render-failures.js';
 import {
   createText,
@@ -22,14 +23,36 @@ import {
  * May capture TypeGPU resources. Slug estimates its antialiasing footprint from nearby positions, and MSDF sizes the
  * one-pixel margin of its ink-trimmed quads from the corners of each glyph cell; matrix projections are exact for both,
  * while nonlinear deformations use a local approximation.
+ *
+ * A callback that declares the third and fourth parameters is also told which glyph the vertex belongs to.
+ * `glyphIndex` is the glyph's index in its text's layout order: the index `TypeGpuText.glyphs()` reports it at,
+ * counting every glyph of the text across lines, fonts and formats, blank ones included; glyphs of a right-to-left
+ * run count in the order they are drawn and a ligature is one glyph. It is a position, not an identity: an edit before
+ * a glyph shifts it. `glyphOrigin` is the glyph's pen origin on its baseline in the pixels of `position`:
+ * `glyphs().x[glyphIndex]`, `glyphs().y[glyphIndex]` moved by the anchor and `text.position`, so `position.xy -
+ * glyphOrigin` is the vertex's offset from its own glyph. A config whose callbacks declare neither publishes no glyph
+ * lanes; declare them as plain parameters, since a default value or a rest parameter hides them.
  */
-export type TypeGpuPositionTransform = (position: d.v3f, viewport: d.v2f) => d.v4f;
+export type TypeGpuPositionTransform = (
+  position: d.v3f,
+  viewport: d.v2f,
+  glyphIndex: number,
+  glyphOrigin: d.v2f,
+) => d.v4f;
 /** Fragment-stage callback: straight RGBA after raster coverage, plus WebGPU fragment position (physical pixels).
  * Preserve color.a to retain glyph edges. May capture TypeGPU resources; runs for fill, outline, and shadow together.
  * MSDF runs it only within a glyph's reach (ink box, one screen pixel, outline and shadow), not over its whole atlas
  * cell, so it cannot paint where the glyph has no coverage.
+ *
+ * A callback that declares the third and fourth parameters receives the `glyphIndex` and `glyphOrigin` of
+ * {@link TypeGpuPositionTransform} for the glyph the fragment belongs to; the origin stays in logical pixels.
  */
-export type TypeGpuColorTransform = (color: d.v4f, fragmentPosition: d.v4f) => d.v4f;
+export type TypeGpuColorTransform = (
+  color: d.v4f,
+  fragmentPosition: d.v4f,
+  glyphIndex: number,
+  glyphOrigin: d.v2f,
+) => d.v4f;
 
 export interface TypeGpuConfigOptions {
   /** Caller-owned TypeGPU root. Disposing Glyph leaves this root and its device alive. */
@@ -100,7 +123,7 @@ export function defineTypeGpuConfig(options: TypeGpuConfigOptions): TypeGpuGlyph
   return defineGlyphConfig({
     schema,
     fonts: { default: options.defaultFontFormat ?? 'msdf', formats: { bitmap, msdf, slug } },
-    encode: ({ ids }) => ({ descriptor: codecDescriptor(ids) }),
+    encode: ({ ids }) => ({ descriptor: codecDescriptor(ids, readsGlyphFacts(options)) }),
     resolve: ({ format, payload }) => {
       const resource = createResource(options, format, payload);
       return resourceLease(resource, () => resource.dispose());

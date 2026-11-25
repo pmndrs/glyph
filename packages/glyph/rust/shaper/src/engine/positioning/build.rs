@@ -121,6 +121,7 @@ impl PositionedGlyphArena {
         // numeric correspondence can reject an otherwise unchanged flow line.
         let mut walk = LineBuildWalk {
             source_coordinates_retained: src.recomposed_lines.is_some(),
+            layout_indices_retained: true,
             // The canonical span stream is the only source representation. Static
             // geometry reuses clean lines through the placement/occurrence proof;
             // dirty lines are emitted from their current run-local rows.
@@ -166,6 +167,7 @@ impl PositionedGlyphArena {
                         &fragments,
                         retained_cursor,
                         &mut walk.source_coordinates_retained,
+                        &mut walk.layout_indices_retained,
                     )? {
                         MatchedLine::Appended => continue,
                         MatchedLine::Reposition(source) => source,
@@ -210,7 +212,11 @@ impl PositionedGlyphArena {
         if walk.fragment_cursor != flow.fragments.len() || !fragment_ranges.is_empty() {
             return Err(EngineError::InvalidRequest);
         }
-        self.finish_build(src.previous, walk.source_coordinates_retained)
+        self.finish_build(
+            src.previous,
+            walk.source_coordinates_retained,
+            walk.layout_indices_retained,
+        )
     }
 
     /// Clears the arena, rebuilds the replacement runs the boundary shapes need, and reserves
@@ -491,7 +497,10 @@ impl PositionedGlyphArena {
         &mut self,
         previous: &Self,
         source_coordinates_retained: bool,
+        layout_indices_retained: bool,
     ) -> Result<(), EngineError> {
+        // Like the windows below, this covers every preparation since the last publication.
+        self.layout_indices_retained = layout_indices_retained && previous.layout_indices_retained;
         self.recomposed_glyphs_retained = source_coordinates_retained
             && previous.outlined_count() == self.outlined_count()
             && previous.line_glyph_counts.len() == self.line_glyph_counts.len();

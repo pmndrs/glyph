@@ -6716,7 +6716,7 @@ mod tests {
             .expect("the first-band exclusion must leave clean later lines");
         let positioned = candidate.positioned.active();
         let intervals = positioned
-            .unpublished_source_intervals()
+            .unpublished_source_intervals(false)
             .expect("the visible source retains outlined coordinates");
         let (old, next) = positioned
             .occurrence_spans()
@@ -8306,7 +8306,7 @@ mod tests {
                     let source_intervals = warm
                         .positioned
                         .committed()
-                        .unpublished_source_intervals()
+                        .unpublished_source_intervals(false)
                         .expect("actual retained lines preserve source scope");
                     let source_count = source_intervals
                         .iter()
@@ -8370,7 +8370,7 @@ mod tests {
                     let first_scope = warm
                         .positioned
                         .committed()
-                        .unpublished_source_intervals()
+                        .unpublished_source_intervals(false)
                         .unwrap()
                         .to_vec();
                     let mut intermediate = desired.clone();
@@ -8399,7 +8399,7 @@ mod tests {
                     let final_scope = final_paragraph
                         .positioned
                         .committed()
-                        .unpublished_source_intervals()
+                        .unpublished_source_intervals(false)
                         .expect("measured edits retain source scope");
                     assert!(first_scope.iter().all(|old| {
                         final_scope
@@ -8636,7 +8636,7 @@ mod tests {
         assert!(!paragraph.positioned_changed);
         assert!(paragraph.preparation_changed_since_publication);
         let source_visits = pending
-            .unpublished_source_intervals()
+            .unpublished_source_intervals(false)
             .unwrap()
             .iter()
             .map(core::ops::Range::len)

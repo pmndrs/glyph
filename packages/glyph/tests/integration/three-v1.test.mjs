@@ -592,7 +592,7 @@ test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Thre
   assert.equal(instrumentedGlyph.crossings, 1, 'one paragraph-order transaction crosses into Rust');
   assert.deepEqual(
     instrumentedGlyph.latestPlanCounts(),
-    { buffers: 0, draws: 0, patches: 11, primitives: 0, resources: 0, retirements: 0 },
+    { buffers: 0, draws: 0, patches: 9, primitives: 0, resources: 0, retirements: 0 },
     'an order-only frame publishes only writes into the existing physical buffers',
   );
   assert.equal(instrumentedGlyph.measureCrossings, 0, 'order-only publication reuses measurements');
@@ -629,7 +629,7 @@ test('Text renderOrder ranks grouped paragraphs while standalone Text keeps Thre
   assert.deepEqual(groupedSequence(), authored, 'the aggregate draw survives a reverse-order round trip');
   assert.deepEqual(
     instrumentedGlyph.latestPlanCounts(),
-    { buffers: 0, draws: 0, patches: 11, primitives: 0, resources: 0, retirements: 0 },
+    { buffers: 0, draws: 0, patches: 9, primitives: 0, resources: 0, retirements: 0 },
     'the reverse-order round trip also stays patch-only',
   );
   assert.equal(

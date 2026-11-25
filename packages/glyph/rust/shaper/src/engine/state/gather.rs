@@ -19,7 +19,7 @@ pub(super) fn append_planner_gather(
     let mut retaining = retained;
     let mut order_index = 0;
     if retaining && sparse {
-        let owners = planner_gather_owners(planner);
+        let owners = planner_gather_owners(planner, codec.reads_layout_index());
         let stop = gather
             .append_retained_stream(codec, capability_set, owners, |handle| {
                 font_bindings
@@ -181,7 +181,9 @@ pub(super) fn append_planner_gather(
                                     || paragraph.preparation_changed_since_publication)
                                 && range.source_count() == positioned.outlined_count()
                         })
-                        .and_then(|_| positioned.unpublished_source_intervals()),
+                        .and_then(|_| {
+                            positioned.unpublished_source_intervals(codec.reads_layout_index())
+                        }),
                     paragraph.state.row_change_since_publication(),
                     binding_for_font,
                 )
@@ -231,8 +233,9 @@ pub(super) fn append_planner_gather(
 
 pub(super) fn planner_gather_owners(
     planner: &PlannerState,
+    layout_indices: bool,
 ) -> impl Iterator<Item = Result<RetainedGatherOwner<'_>, GatherError>> + Clone {
-    planner.order_sort_scratch.iter().map(|entry| {
+    planner.order_sort_scratch.iter().map(move |entry| {
         let paragraph = planner
             .paragraph(entry.1)
             .ok_or(GatherError::InvalidSemanticShape)?;
@@ -261,7 +264,7 @@ pub(super) fn planner_gather_owners(
             },
             paragraph.state.visible_boundary_shape(),
             (paragraph.positioned_changed || paragraph.preparation_changed_since_publication)
-                .then(|| positioned.unpublished_source_intervals())
+                .then(|| positioned.unpublished_source_intervals(layout_indices))
                 .flatten(),
         )
         .with_row_change(paragraph.state.row_change_since_publication()))
@@ -275,7 +278,7 @@ pub(super) fn replace_planner_gather(
     capability_set: CapabilitySetId,
     font_bindings: &[RegisteredFontBinding],
 ) -> Result<(), EngineError> {
-    let owners = planner_gather_owners(planner);
+    let owners = planner_gather_owners(planner, codec.reads_layout_index());
     gather
         .replace_retained_owners(codec, capability_set, owners, |handle| {
             font_bindings

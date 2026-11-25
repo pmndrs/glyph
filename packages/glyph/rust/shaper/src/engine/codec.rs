@@ -290,6 +290,17 @@ pub struct ValidatedCodec {
 }
 
 impl ValidatedCodec {
+    /// Whether any program publishes a glyph's layout index, which moves under a retained
+    /// row when the glyphs laid out before it change in number.
+    pub(crate) fn reads_layout_index(&self) -> bool {
+        self.programs.iter().any(|program| {
+            program.inputs.iter().any(|input| {
+                input.scope == InputScope::Semantic
+                    && input.field == super::frame::SEMANTIC_U32_GLYPH_INDEX
+            })
+        })
+    }
+
     /// The decoration program admitted for this capability set, if the codec declares one.
     pub fn decoration_program(
         &self,

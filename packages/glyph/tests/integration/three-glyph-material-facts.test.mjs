@@ -15,6 +15,7 @@ import * as TSL from 'three/tsl';
 import * as THREE from 'three/webgpu';
 
 import { compileNodeMaterialBackends } from '../support/node-material-shaders.mjs';
+import { threeSystemBuffers } from '../../dist/three/codec.js';
 import { drawnGlyphFacts } from '../support/three-glyph-facts.mjs';
 import { createThreeTestHandle } from '../support/three-handle.mjs';
 import { assertCommitted } from '../support/three-render.mjs';
@@ -54,6 +55,8 @@ const FORMATS = Object.fromEntries(
     { amiri: () => fixtureFont(format, 'amiri'), inter: () => fixtureFont(format, 'inter') },
   ]),
 );
+/** Glyph facts are published only by a handle that asks for them. */
+const FACTS_CONFIG = defineStableThreeConfig({ glyphFacts: true });
 const ARABIC = 'سلام عليكم';
 
 /** A material that changes nothing and keeps every context it was given. */
@@ -107,7 +110,7 @@ function assertFactsMatchInspection(object, contexts, layout, where) {
 
 for (const [format, fonts] of Object.entries(FORMATS)) {
   test(`${format}: left-to-right glyphs count blanks, so drawn indices skip them`, async (t) => {
-    const three = await createThreeTestHandle(t);
+    const three = await createThreeTestHandle(t, FACTS_CONFIG);
     const font = await fonts.amiri();
     const { contexts, material } = recordingMaterial();
     const { label } = mount(three, { font, material, text: 'To a wave' });
@@ -128,7 +131,7 @@ for (const [format, fonts] of Object.entries(FORMATS)) {
   });
 
   test(`${format}: a ligature is one glyph with one index`, async (t) => {
-    const three = await createThreeTestHandle(t);
+    const three = await createThreeTestHandle(t, FACTS_CONFIG);
     const font = await fonts.amiri();
     const { contexts, material } = recordingMaterial();
     const { label } = mount(three, { font, material, text: 'office' });
@@ -144,7 +147,7 @@ for (const [format, fonts] of Object.entries(FORMATS)) {
   });
 
   test(`${format}: right-to-left glyphs are indexed in the order they are drawn`, async (t) => {
-    const three = await createThreeTestHandle(t);
+    const three = await createThreeTestHandle(t, FACTS_CONFIG);
     const font = await fonts.amiri();
     const { contexts, material } = recordingMaterial();
     const { label } = mount(three, { font, material, text: `ab ${ARABIC} cd` });
@@ -166,7 +169,7 @@ for (const [format, fonts] of Object.entries(FORMATS)) {
   });
 
   test(`${format}: indices continue across lines`, async (t) => {
-    const three = await createThreeTestHandle(t);
+    const three = await createThreeTestHandle(t, FACTS_CONFIG);
     const font = await fonts.amiri();
     const { contexts, material } = recordingMaterial();
     const { label } = mount(three, { font, material, text: `one two\n${ARABIC}\nsix` });
@@ -186,7 +189,7 @@ for (const [format, fonts] of Object.entries(FORMATS)) {
   });
 
   test(`${format}: fonts that draw in separate batches share one index sequence`, async (t) => {
-    const three = await createThreeTestHandle(t);
+    const three = await createThreeTestHandle(t, FACTS_CONFIG);
     const amiri = await fonts.amiri();
     const inter = await fonts.inter();
     const { contexts, material } = recordingMaterial();
@@ -207,7 +210,7 @@ for (const [format, fonts] of Object.entries(FORMATS)) {
   });
 
   test(`${format}: an edit that shifts later glyphs republishes their indices`, async (t) => {
-    const three = await createThreeTestHandle(t);
+    const three = await createThreeTestHandle(t, FACTS_CONFIG);
     const font = await fonts.amiri();
     const { contexts, material } = recordingMaterial();
     const lines = ['first line', 'second line', 'third line', 'fourth line'];
@@ -229,7 +232,7 @@ for (const [format, fonts] of Object.entries(FORMATS)) {
   });
 
   test(`${format}: a decoration draw has no glyph facts`, async (t) => {
-    const three = await createThreeTestHandle(t);
+    const three = await createThreeTestHandle(t, FACTS_CONFIG);
     const font = await fonts.amiri();
     const { contexts, material } = recordingMaterial();
     const { label } = mount(three, {
@@ -247,7 +250,7 @@ for (const [format, fonts] of Object.entries(FORMATS)) {
   });
 
   test(`${format}: split() glyphs keep the index and origin they had in their text`, async (t) => {
-    const three = await createThreeTestHandle(t);
+    const three = await createThreeTestHandle(t, FACTS_CONFIG);
     const font = await fonts.amiri();
     const { contexts, material } = recordingMaterial();
     const { label, scene } = mount(three, { font, material, text: `To a ${ARABIC}` });
@@ -270,12 +273,29 @@ for (const [format, fonts] of Object.entries(FORMATS)) {
   });
 }
 
+test('a handle that does not ask for glyph facts publishes neither lane and refuses a material that reads one', async (t) => {
+  const three = await createThreeTestHandle(t);
+  const font = await FORMATS['pmndrs.bitmap'].amiri();
+  const { contexts, material } = recordingMaterial();
+  const { label, scene } = mount(three, { font, material, text: 'Ab' });
+  const draw = scene.getObjectByName('@pmndrs/glyph:anonymous').children.find((child) => child.isMesh);
+  for (const fact of [threeSystemBuffers.glyphIndex, threeSystemBuffers.glyphOrigin]) {
+    assert.equal(draw.geometry.getAttribute(`_pmndrsGlyph_${fact.id}`), undefined);
+  }
+  const [context] = contexts;
+  assert.equal(context.kind, 'glyph');
+  assert.throws(() => context.glyphIndex, /glyphIndex.*defineThreeConfig\(\{ glyphFacts: true \}\)/);
+  assert.throws(() => context.glyphOrigin, /glyphOrigin.*defineThreeConfig\(\{ glyphFacts: true \}\)/);
+  assert.throws(() => defineStableThreeConfig({ glyphFacts: 1 }), /glyphFacts must be a boolean/);
+  label.dispose();
+});
+
 const shaderConfigs = { stable: defineStableThreeConfig, typegpu: defineTypeGpuThreeConfig };
 
 for (const shaders of ['stable', 'typegpu']) {
   for (const transformMode of ['direct', 'indexed']) {
     test(`glyph facts compile from either stage: ${shaders} shaders, ${transformMode} transforms`, async (t) => {
-      const three = await createThreeTestHandle(t, shaderConfigs[shaders]({ transformMode }));
+      const three = await createThreeTestHandle(t, shaderConfigs[shaders]({ transformMode, glyphFacts: true }));
       for (const [format, fonts] of Object.entries(FORMATS)) {
         const font = await fonts.amiri();
         const material = defineTextMaterial((context) => {

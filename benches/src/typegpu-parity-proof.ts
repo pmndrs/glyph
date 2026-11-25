@@ -20,12 +20,17 @@ import interFontUrl from '../fixtures/rendering/inter-mtsdf.font.glb.gz?url';
 import interSlugFontUrl from '../fixtures/rendering/inter-slug.font.glb.gz?url';
 import showcaseManifest from '../fixtures/rendering/showcase-mtsdf-fixtures-v0.json' with { type: 'json' };
 import slugManifest from '../fixtures/rendering/showcase-slug-fixtures-v0.json' with { type: 'json' };
-import type { Counters, FontCost, ParityPerf, ParityProof } from './typegpu-parity-contract';
+import type { Counters, FontCost, GlyphFactsProof, ParityPerf, ParityProof } from './typegpu-parity-contract';
 import { fetchAuthenticatedGzipAsset } from './workloads/font-assets/authenticated-gzip';
 
 // A row of 832 RGBA pixels is a multiple of 256 bytes, which a texture-to-buffer copy requires.
 const WIDTH = 832;
 const HEIGHT = 600;
+/** The glyph-fact callbacks shrink every glyph to this about its origin and drop odd-indexed glyphs this far. */
+const FACTS_SCALE = 0.75;
+const FACTS_DROP = 26;
+/** Fully covered pixels a drawn glyph must show with its own index and origin; a thin stem at the smallest size has more. */
+const FACTS_MINIMUM_PIXELS = 6;
 
 type Style = NonNullable<TypeGpuTextOptions['style']>;
 type FontName = 'inter' | 'latin' | 'dancing' | 'devanagari' | 'bitmap' | 'slug';
@@ -361,6 +366,25 @@ async function start(): Promise<ParityProof> {
       transformPosition: (position) => {
         'use gpu';
         return std.mul(matrix.$, d.vec4f(position.x, -position.y, position.z, 1));
+      },
+    }),
+  );
+  // Callbacks that declare the glyph parameters: every glyph shrinks about its own origin and odd ones drop, and the
+  // colour is the glyph's index and origin, so both stages' facts can be read back out of the pixels.
+  const facts = glyph.handle(
+    'typegpu-parity:glyph-facts',
+    defineTypeGpuConfig({
+      root,
+      format,
+      transformPosition: (position, viewport, glyphIndex, glyphOrigin) => {
+        'use gpu';
+        const scaled = glyphOrigin.add(position.xy.sub(glyphOrigin).mul(FACTS_SCALE));
+        const moved = d.vec2f(scaled.x, scaled.y + d.f32(glyphIndex % 2) * FACTS_DROP);
+        return d.vec4f((moved.x * 2) / viewport.x - 1, 1 - (moved.y * 2) / viewport.y, position.z, 1);
+      },
+      transformColor: (color, _fragmentPosition, glyphIndex, glyphOrigin) => {
+        'use gpu';
+        return d.vec4f(d.f32(glyphIndex + 1) / 255, glyphOrigin.x / WIDTH, glyphOrigin.y / HEIGHT, color.a);
       },
     }),
   );
@@ -787,8 +811,76 @@ async function start(): Promise<ParityProof> {
     }
   }
 
+  /**
+   * One text per raster format through the glyph-fact callbacks. Each drawn glyph must put enough pixels carrying its
+   * own index and origin inside the box its ink was scaled and dropped to; the expectation is `glyphs()` alone.
+   */
+  async function glyphFacts(): Promise<GlyphFactsProof> {
+    const specimens = [
+      { font: 'inter', x: 40.5, y: 30.25, size: 56 },
+      { font: 'bitmap', x: 60.25, y: 230.5, size: 32 },
+      { font: 'slug', x: 30.75, y: 400.25, size: 56 },
+    ] as const;
+    const texts = specimens.map(({ font, x, y, size }) =>
+      facts.createText({
+        font: fonts[font] as FontFace<typeof msdf>,
+        text: 'To wave ME\nline two',
+        position: [x, y],
+        style: { fontSize: size, color: '#ffffff' },
+      }),
+    );
+    try {
+      glyph.shape();
+      const pixels = await readPixels(facts);
+      const failures: string[] = [];
+      let glyphs = 0;
+      for (const [index, text] of texts.entries()) {
+        const { font, x: left, y: top } = specimens[index]!;
+        const layout = text.glyphs();
+        for (let glyphIndex = 0; glyphIndex < layout.glyphCount; glyphIndex += 1) {
+          if (layout.glyphInkWidths[glyphIndex]! <= 0 || layout.glyphInkHeights[glyphIndex]! <= 0) continue;
+          glyphs += 1;
+          const originX = left + layout.x[glyphIndex]!;
+          const originY = top + layout.y[glyphIndex]!;
+          const drop = (glyphIndex % 2) * FACTS_DROP;
+          const scaledX = (value: number): number => originX + (left + value - originX) * FACTS_SCALE;
+          const scaledY = (value: number): number => originY + (top + value - originY) * FACTS_SCALE + drop;
+          const x0 = Math.floor(scaledX(layout.glyphInkX[glyphIndex]!));
+          const x1 = Math.ceil(scaledX(layout.glyphInkX[glyphIndex]! + layout.glyphInkWidths[glyphIndex]!));
+          const y0 = Math.floor(scaledY(layout.glyphInkY[glyphIndex]!));
+          const y1 = Math.ceil(scaledY(layout.glyphInkY[glyphIndex]! + layout.glyphInkHeights[glyphIndex]!));
+          const expected = [glyphIndex + 1, (originX / WIDTH) * 255, (originY / HEIGHT) * 255] as const;
+          let matching = 0;
+          for (let y = Math.max(y0, 0); y < Math.min(y1, HEIGHT); y += 1) {
+            for (let x = Math.max(x0, 0); x < Math.min(x1, WIDTH); x += 1) {
+              const offset = (y * WIDTH + x) * 4;
+              if (
+                pixels[offset] === expected[0] &&
+                Math.abs(pixels[offset + 1]! - expected[1]) <= 1 &&
+                Math.abs(pixels[offset + 2]! - expected[2]) <= 1
+              ) {
+                matching += 1;
+              }
+            }
+          }
+          if (matching < FACTS_MINIMUM_PIXELS) {
+            failures.push(
+              `${font} glyph ${String(glyphIndex)}: ${String(matching)} pixels in [${String(x0)}, ${String(y0)}, ${String(x1)}, ${String(y1)}] carry index ${String(expected[0])} and origin (${originX.toFixed(2)}, ${originY.toFixed(2)})`,
+            );
+          }
+        }
+      }
+      if (errors.length !== 0) throw new Error(errors.splice(0).join('\n'));
+      return { glyphs, failures };
+    } finally {
+      for (const text of texts) text.dispose();
+      glyph.shape();
+    }
+  }
+
   return {
     scenes: Object.keys(scenes),
+    glyphFacts,
     async fontCosts() {
       const result = await fontCosts();
       if (errors.length !== 0) throw new Error(errors.splice(0).join('\n'));

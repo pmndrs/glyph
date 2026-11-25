@@ -15,7 +15,6 @@ import {
   slugUnpackHalvesSlot,
 } from '../../shaders/typegpu/slug/slug-texture.js';
 import { bitmapPageAccessor } from '../../shaders/typegpu/bitmap-shader.js';
-import { TYPEGPU_PLACEMENT_SLOT_BUFFER_ID, TYPEGPU_TRANSFORM_INDEX_BUFFER_ID } from './codec.js';
 import { msdfResource } from './msdf.js';
 import {
   colorTransform,
@@ -23,6 +22,7 @@ import {
   createSceneGroup,
   recordDraw,
   shaderRoot,
+  sceneBindings,
   sceneFunctions,
   textScene,
   target,
@@ -45,10 +45,17 @@ const slugPage = tgpu.bindGroupLayout({
   placements: { storage: d.arrayOf(d.vec2f), access: 'readonly', visibility: ['vertex'] },
   transformIndices: { storage: d.arrayOf(d.u32), access: 'readonly', visibility: ['vertex'] },
   transforms: { storage: d.arrayOf(d.vec2f), access: 'readonly', visibility: ['vertex'] },
+  glyphIndices: { storage: d.arrayOf(d.u32), access: 'readonly', visibility: ['vertex'] },
+  glyphOrigins: { storage: d.arrayOf(d.vec2f), access: 'readonly', visibility: ['vertex'] },
   headers: { texture: d.texture2d(d.u32), visibility: ['fragment'] },
   bandCurves: { texture: d.texture2d(d.u32), visibility: ['fragment'] },
   glyphs: { storage: d.arrayOf(SlugGlyphRow), access: 'readonly', visibility: ['vertex'] },
 });
+/** The glyph facts a vertex stage hands its fragment stage; constant across a glyph, so never interpolated. */
+const glyphVaryings = {
+  glyphIndex: d.interpolate('flat', d.u32),
+  glyphOrigin: d.interpolate('flat', d.vec2f),
+};
 const slugScene = sceneFunctions(slugPage as unknown as SceneLayout);
 const v2 = tgpu.vertexLayout(d.disarrayOf(d.float32x2), 'instance');
 const v4 = tgpu.vertexLayout(d.disarrayOf(d.float32x4), 'instance');
@@ -102,27 +109,49 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
         color: d.vec4f,
         layer: d.u32,
       },
-      out: { position: d.builtin.position, uv: d.vec2f, color: d.vec4f, layer: d.interpolate('flat', d.u32) },
+      out: {
+        position: d.builtin.position,
+        uv: d.vec2f,
+        color: d.vec4f,
+        layer: d.interpolate('flat', d.u32),
+        ...glyphVaryings,
+      },
     })((input) => {
       'use gpu';
       const unit = corner(input.index);
+      const offset = textScene.textOffset(input.instance);
+      const glyph = textScene.glyphFacts(input.instance, offset);
       return {
         position: textScene.projectText(
           bitmapQuadPosition(textScene.placedOrigin(input.origin, input.instance), input.size, unit),
-          textScene.textOffset(input.instance),
+          offset,
+          glyph,
         ),
         uv: bitmapAtlasUv(input.uvOrigin, input.uvSize, unit),
         color: input.color,
         layer: input.layer,
+        glyphIndex: glyph.index,
+        glyphOrigin: glyph.origin,
       };
     });
     const fragment = tgpu.fragmentFn({
-      in: { position: d.builtin.position, uv: d.vec2f, color: d.vec4f, layer: d.interpolate('flat', d.u32) },
+      in: {
+        position: d.builtin.position,
+        uv: d.vec2f,
+        color: d.vec4f,
+        layer: d.interpolate('flat', d.u32),
+        ...glyphVaryings,
+      },
       out: d.vec4f,
     })((input) => {
       'use gpu';
       const result = bitmapFragment({ atlasUv: input.uv, color: input.color, pageLayer: input.layer });
-      return colorTransform.$(d.vec4f(result.color, result.opacity), input.position);
+      return colorTransform.$(
+        d.vec4f(result.color, result.opacity),
+        input.position,
+        input.glyphIndex,
+        input.glyphOrigin,
+      );
     });
     const pipeline = shaderRoot(options)
       .with(bitmapPageAccessor, view)
@@ -152,14 +181,7 @@ function bitmapResource(options: PipelineOptions, payload: PortableResource): Ty
         };
         const b = bitmapSchema.buffers;
         const bound = pipeline
-          .with(
-            createSceneGroup(
-              root,
-              lanes,
-              lane(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID),
-              lane(TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
-            ),
-          )
+          .with(createSceneGroup(root, lanes))
           .with(originLayout, lane(b.origin.id))
           .with(sizeLayout, lane(b.size.id))
           .with(uvOriginLayout, lane(b.uvOrigin.id))
@@ -197,6 +219,7 @@ function slugResource(
       band: d.vec4f,
       starts: d.interpolate('flat', d.vec4u),
       counts: d.interpolate('flat', d.vec2u),
+      ...glyphVaryings,
     };
     const vertex = tgpu.vertexFn({
       in: {
@@ -214,15 +237,16 @@ function slugResource(
       const row = slugPage.$.glyphs[input.glyph.x]!;
       const origin = slugScene.placedOrigin(input.rect.xy, input.instance);
       const offset = slugScene.textOffset(input.instance);
+      const glyph = slugScene.glyphFacts(input.instance, offset);
       const local = d.vec2f(origin.x + unit.x * input.rect.z, -(origin.y + unit.y * input.rect.w));
       const normal = d.vec2f((unit.x - 0.5) * input.rect.z, -(unit.y - 0.5) * input.rect.w);
       const em = d.vec2f(row.quad.x + unit.x * row.quad.z, row.quad.y - unit.y * row.quad.w);
       // Em units per layout unit: the quad is the em quad scaled by the font size.
       const inverseScale = (row.quad.z + row.quad.w) / std.max(input.rect.z + input.rect.w, 1e-30);
       // Local homogeneous projection derivatives keep Slug's half-pixel expansion in screen space.
-      const clip = slugScene.projectText(d.vec3f(local, 0), offset);
-      const dx = slugScene.projectText(d.vec3f(local.x + 1, local.y, 0), offset).sub(clip);
-      const dy = slugScene.projectText(d.vec3f(local.x, local.y + 1, 0), offset).sub(clip);
+      const clip = slugScene.projectText(d.vec3f(local, 0), offset, glyph);
+      const dx = slugScene.projectText(d.vec3f(local.x + 1, local.y, 0), offset, glyph).sub(clip);
+      const dy = slugScene.projectText(d.vec3f(local.x, local.y + 1, 0), offset, glyph).sub(clip);
       const dilated = slugDilate(
         d.vec2f(0),
         normal,
@@ -234,12 +258,14 @@ function slugResource(
         slugScene.viewportSize(),
       );
       return {
-        position: slugScene.projectText(d.vec3f(local.add(dilated.xy), 0), offset),
+        position: slugScene.projectText(d.vec3f(local.add(dilated.xy), 0), offset, glyph),
         coordinate: dilated.zw,
         color: input.color,
         band: row.band,
         starts: row.starts,
         counts: row.counts.xy,
+        glyphIndex: glyph.index,
+        glyphOrigin: glyph.origin,
       };
     });
     const fragment = tgpu.fragmentFn({ in: { position: d.builtin.position, ...varyings }, out: d.vec4f })((input) => {
@@ -256,7 +282,12 @@ function slugResource(
         }),
         input.coordinate,
       );
-      return colorTransform.$(d.vec4f(input.color.rgb, input.color.a * coverage), input.position);
+      return colorTransform.$(
+        d.vec4f(input.color.rgb, input.color.a * coverage),
+        input.position,
+        input.glyphIndex,
+        input.glyphOrigin,
+      );
     });
     const pipeline = shaderRoot(options)
       .with(slugHeaderWidthAccessor, d.u32(headerWidth))
@@ -315,11 +346,7 @@ function slugResource(
             if (generation !== bands.generation || bound === undefined) {
               generation = bands.generation;
               const group = root.createBindGroup(slugPage, {
-                viewport: lanes.viewport,
-                placementSlots: lane(TYPEGPU_PLACEMENT_SLOT_BUFFER_ID),
-                placements: lanes.placementTable,
-                transformIndices: lane(TYPEGPU_TRANSFORM_INDEX_BUFFER_ID),
-                transforms: lanes.transformTable,
+                ...sceneBindings(lanes),
                 headers: headerView,
                 bandCurves: bands.view,
                 glyphs: bands.glyphs,

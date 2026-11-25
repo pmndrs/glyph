@@ -50,11 +50,21 @@ export interface FontCost {
   readonly bufferBytes: number;
 }
 
+export interface GlyphFactsProof {
+  readonly glyphs: number;
+  readonly failures: readonly string[];
+}
+
 export interface ParityProof {
   readonly scenes: readonly string[];
   capture(scene: string, three: boolean): Promise<ParityCapture>;
   perf(labels: number, font: 'inter' | 'latin'): Promise<ParityPerf>;
   fontCosts(): Promise<readonly FontCost[]>;
+  /**
+   * Draws one text per raster format through callbacks that declare the glyph parameters and reads each glyph's index
+   * and origin back out of its pixels; returns how many glyphs were held to `glyphs()` and what disagreed.
+   */
+  glyphFacts(): Promise<GlyphFactsProof>;
   /** RGBA rows to a PNG file and back, both base64; the pixels are opaque, so the round trip is exact. */
   toPng(rgba: string, width: number, height: number): Promise<string>;
   fromPng(png: string): Promise<string>;

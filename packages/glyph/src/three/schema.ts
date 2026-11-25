@@ -108,6 +108,13 @@ export interface ThreeConfigOptions extends ThreeRootOptions {
    */
   readonly msdfAtlas?: 'msdf' | 'sdf';
   /**
+   * Publishes each glyph's layout index and pen origin, which a text material reads as `glyphIndex` and `glyphOrigin`.
+   * Off by default, and a material of a handle without it throws when it reads either: the two facts are 12 more
+   * bytes per glyph that the engine gathers and this renderer keeps for every text of the handle, whatever its
+   * material. Only a material that reads them uploads them to the GPU.
+   */
+  readonly glyphFacts?: boolean;
+  /**
    * The most UTF-16 units one Text may hold; assigning more throws from the setter. Defaults to 65,536, which
    * keeps one paragraph under roughly a hundred megabytes of engine memory.
    */

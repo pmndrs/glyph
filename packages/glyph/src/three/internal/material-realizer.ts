@@ -529,7 +529,7 @@ export class ThreeMaterialRealizer {
     return { slots, table, buffers: [slots, table] };
   }
 
-  /** The glyph fact lanes of a draw a caller's material renders; the default material reads neither. */
+  /** The glyph fact lanes of a draw a caller's material renders, when its handle publishes them. */
   #glyphFactLanes(
     buffers: ReadonlyMap<ThreeBufferBindingId, RetainedBuffer>,
     selection: MaterialSelection,
@@ -537,9 +537,8 @@ export class ThreeMaterialRealizer {
     if (selection?.material === undefined) return undefined;
     const index = buffers.get(threeSystemBuffers.glyphIndex.id);
     const origin = buffers.get(threeSystemBuffers.glyphOrigin.id);
-    if (index === undefined || origin === undefined) {
-      throw new Error('glyph draw is missing its glyph index or glyph origin lane');
-    }
+    // A handle created without `glyphFacts` publishes neither lane.
+    if (index === undefined || origin === undefined) return undefined;
     return { index, origin, buffers: [index, origin] };
   }
 
@@ -626,14 +625,26 @@ export class ThreeMaterialRealizer {
     if (context.kind === 'decoration') {
       created = factory.create({ ...context, ...positions });
     } else {
-      if (nodes.glyph === undefined) throw new Error('glyph draw has no glyph fact lanes for its material');
-      const origin = nodes.glyph.origin;
-      created = factory.create({
-        ...context,
-        ...positions,
-        glyphIndex: stageNode(nodes.glyph.index, 'uint'),
-        glyphOrigin: stageNode(TSL.vec3(origin.x, origin.y.negate(), 0), 'vec3'),
-      });
+      const glyph = nodes.glyph;
+      created = factory.create(
+        glyph === undefined
+          ? {
+              ...context,
+              ...positions,
+              get glyphIndex(): never {
+                throw unpublishedGlyphFact('glyphIndex');
+              },
+              get glyphOrigin(): never {
+                throw unpublishedGlyphFact('glyphOrigin');
+              },
+            }
+          : {
+              ...context,
+              ...positions,
+              glyphIndex: stageNode(glyph.index, 'uint'),
+              glyphOrigin: stageNode(TSL.vec3(glyph.origin.x, glyph.origin.y.negate(), 0), 'vec3'),
+            },
+      );
     }
     return this.#own(created ?? context.createDefaultMaterial());
   }
@@ -840,6 +851,12 @@ function stageNode<Type extends 'vec3' | 'uint'>(node: THREE.Node<Type>, type: T
   // The wrapper builds whichever of two graphs of `type` its stage reads, so it is a node of that type.
   const staged: THREE.Node = new StageNode(node, type);
   return TSL.nodeObject(staged) as THREE.Node<Type>;
+}
+
+function unpublishedGlyphFact(name: 'glyphIndex' | 'glyphOrigin'): TypeError {
+  return new TypeError(
+    `text material read ${name}, which its handle does not publish; create the handle with defineThreeConfig({ glyphFacts: true })`,
+  );
 }
 
 function glyphFacts(
