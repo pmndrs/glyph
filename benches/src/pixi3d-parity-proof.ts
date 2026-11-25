@@ -46,6 +46,8 @@ interface Scene {
   readonly edited?: boolean;
   /** Pixi only: mount each item at this paragraph width, draw, then set the scene's width and draw again. */
   readonly widenedFrom?: number;
+  /** Both renderers sample Bitmap pages with the nearest texel (`bitmapFilter: 'nearest'`). */
+  readonly nearest?: boolean;
 }
 
 const backend: Pixi3DBackend = new URLSearchParams(location.search).get('backend') === 'webgl' ? 'webgl' : 'webgpu';
@@ -179,6 +181,14 @@ const scenes: Readonly<Record<string, Scene>> = {
   'bitmap-grown': grown('bitmap'),
   'bitmap-edit': edited('bitmap'),
   'bitmap-width': { ...paragraph('bitmap', 520), widenedFrom: 260 },
+  // The sizes scene read texel by texel. Nearest sampling picks a texel by convention where a pixel centre lies
+  // exactly on a texel edge (Three's WebGPU texel load floors, a sampler rounds in fixed point), and these strikes'
+  // quads sit on half pixels, so each row starts on a whole pixel moved 0.3 px, off texel edges at 1x, 1.5x and 2x.
+  'bitmap-nearest': {
+    ...sizes('bitmap'),
+    items: sizes('bitmap').items.map((item) => ({ ...item, x: item.x + 0.3, y: Math.round(item.y) + 0.3 })),
+    nearest: true,
+  },
 };
 
 async function start(): Promise<Pixi3DParityProof> {
@@ -225,6 +235,7 @@ async function start(): Promise<Pixi3DParityProof> {
   renderer.setRenderTarget(threeTarget);
   renderer.setClearColor(0x000000, 1);
   const threeHandle = glyph.handle('pixi3d-parity:three', defineThreeConfig({}));
+  const threeNearest = glyph.handle('pixi3d-parity:three-nearest', defineThreeConfig({ bitmapFilter: 'nearest' }));
   const pixelCamera = new THREE.OrthographicCamera(0, WIDTH, 0, -HEIGHT, 0.1, 10);
   pixelCamera.position.z = 1;
   const perspectiveCamera = new THREE.PerspectiveCamera(50, WIDTH / HEIGHT, 10, 4000);
@@ -249,6 +260,7 @@ async function start(): Promise<Pixi3DParityProof> {
   const view = new View3D({ width: WIDTH, height: HEIGHT, background: 0x000000, toneMapping: 'none' });
   app.stage.addChild(view);
   const pixiHandle = glyph.handle('pixi3d-parity:pixi', definePixi3DConfig());
+  const pixiNearest = glyph.handle('pixi3d-parity:pixi-nearest', definePixi3DConfig({ bitmapFilter: 'nearest' }));
   const unlit = new Pixi3DTextMaterial({
     shared: true,
     nativeRecords: true,
@@ -282,7 +294,8 @@ async function start(): Promise<Pixi3DParityProof> {
     const texts: { removeFromParent(): unknown; dispose(): void }[] = [];
     try {
       for (const item of scene.items) {
-        const text = threeHandle.createText(textOptions(scene, item) as Parameters<typeof threeHandle.createText>[0]);
+        const handle = scene.nearest === true ? threeNearest : threeHandle;
+        const text = handle.createText(textOptions(scene, item) as Parameters<typeof handle.createText>[0]);
         text.position.set(item.x, -item.y, 0);
         sheet.add(text);
         texts.push(text);
@@ -345,10 +358,11 @@ async function start(): Promise<Pixi3DParityProof> {
             : scene.edited === true
               ? `Label ${String(index)}`
               : item.text;
-        const created = pixiHandle.createText({
+        const handle = scene.nearest === true ? pixiNearest : pixiHandle;
+        const created = handle.createText({
           ...textOptions(scene, item, text, scene.widenedFrom ?? item.width),
           material: unlit,
-        } as Parameters<typeof pixiHandle.createText>[0]);
+        } as Parameters<typeof handle.createText>[0]);
         created.position.set(item.x, -item.y, 0);
         sheet.addChild(created);
         texts.push(created);

@@ -64,6 +64,8 @@ interface Scene {
   readonly arriving?: boolean;
   /** Both renderers keep only the true-distance channel of the MSDF atlas (`msdfAtlas: 'sdf'`). */
   readonly sdf?: boolean;
+  /** Both renderers sample Bitmap pages with the nearest texel (`bitmapFilter: 'nearest'`). */
+  readonly nearest?: boolean;
 }
 const counters = emptyCounters();
 installCounters();
@@ -320,6 +322,21 @@ const scenes: Readonly<Record<string, Scene>> = {
       ...labelScene(200).items.map((item) => ({ ...item, font: 'bitmap' as const, y: item.y + 140 })),
     ],
   },
+  // Pixel-art reading of the same strikes, magnified (1.5x, 2x, 3x), minified and at 1:1. Nearest sampling picks a
+  // texel by convention where a pixel centre lies exactly on a texel edge (Three's WebGPU texel load floors, a
+  // sampler rounds in fixed point), and these strikes' quads sit on half pixels, so every text is moved 0.3 px on
+  // both axes to keep pixel centres off texel edges at each of these scales.
+  'bitmap-nearest': {
+    nearest: true,
+    items: [
+      { font: 'bitmap', text: 'Nearest 16 px: Glyph Ag fj Wy', x: 10, y: 10, style: { fontSize: 16 } },
+      { font: 'bitmap', text: 'Nearest 32 px: Glyph Ag', x: 10, y: 34, style: { fontSize: 32 } },
+      { font: 'bitmap', text: 'Scaled 24 px: Glyph Ag', x: 10, y: 80, style: { fontSize: 24 } },
+      { font: 'bitmap', text: 'Scaled 48 px', x: 10, y: 112, style: { fontSize: 48 } },
+      { font: 'bitmap', text: 'Scaled 96 px', x: 10, y: 170, style: { fontSize: 96, color: '#80c0ff' } },
+      { font: 'bitmap', text: 'Shrunk 12 px: Glyph Ag fj Wy', x: 10, y: 300, style: { fontSize: 12 } },
+    ].map((item) => ({ ...item, font: 'bitmap' as const, x: item.x + 0.3, y: item.y + 0.3 })),
+  },
 };
 
 async function start(): Promise<ParityProof> {
@@ -360,6 +377,10 @@ async function start(): Promise<ParityProof> {
   const matrix = root.createUniform(d.mat4x4f);
   const flat = glyph.handle('typegpu-parity:flat', defineTypeGpuConfig({ root, format }));
   const flatSdf = glyph.handle('typegpu-parity:flat-sdf', defineTypeGpuConfig({ root, format, msdfAtlas: 'sdf' }));
+  const flatNearest = glyph.handle(
+    'typegpu-parity:flat-nearest',
+    defineTypeGpuConfig({ root, format, bitmapFilter: 'nearest' }),
+  );
   const projected = glyph.handle(
     'typegpu-parity:projected',
     defineTypeGpuConfig({
@@ -458,6 +479,7 @@ async function start(): Promise<ParityProof> {
   renderer.setClearColor(0x000000, 1);
   const threeMsdf = glyph.handle('typegpu-parity:three', defineThreeConfig({}));
   const threeSdf = glyph.handle('typegpu-parity:three-sdf', defineThreeConfig({ msdfAtlas: 'sdf' }));
+  const threeNearest = glyph.handle('typegpu-parity:three-nearest', defineThreeConfig({ bitmapFilter: 'nearest' }));
   // Indexed transform mode, the default: the case where a material reading both facts binds the most storage.
   const threeFacts = glyph.handle('typegpu-parity:three-facts', defineThreeConfig({ glyphFacts: true }));
 
@@ -486,7 +508,7 @@ async function start(): Promise<ParityProof> {
     const texts: ThreeText<typeof msdf>[] = [];
     try {
       for (const item of scene.items) {
-        const text = (scene.sdf === true ? threeSdf : threeMsdf).createText({
+        const text = (scene.sdf === true ? threeSdf : scene.nearest === true ? threeNearest : threeMsdf).createText({
           font: fonts[item.font] as FontFace<typeof msdf>,
           text: item.text,
           style: item.style,
@@ -550,7 +572,14 @@ async function start(): Promise<ParityProof> {
   }
 
   async function captureTypeGpu(scene: Scene): Promise<{ pixels: Uint8Array; gpuMs: number | undefined }> {
-    const handle = scene.perspective === true ? projected : scene.sdf === true ? flatSdf : flat;
+    const handle =
+      scene.perspective === true
+        ? projected
+        : scene.sdf === true
+          ? flatSdf
+          : scene.nearest === true
+            ? flatNearest
+            : flat;
     const texts = mount(handle, {
       items: scene.items.slice(0, scene.grownFrom).map((item) => {
         const moved =
