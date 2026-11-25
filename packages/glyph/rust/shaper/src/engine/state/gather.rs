@@ -163,7 +163,7 @@ pub(super) fn append_planner_gather(
                 capability_set,
                 positioned.decorations(),
                 ordered.id,
-                planner.revision.engine.max(1),
+                decoration_revision(planner),
                 crate::engine::codec_gather::DecorationPass::Under,
             )
             .map_err(gather_error)?;
@@ -217,7 +217,7 @@ pub(super) fn append_planner_gather(
                 capability_set,
                 positioned.decorations(),
                 ordered.id,
-                planner.revision.engine.max(1),
+                decoration_revision(planner),
                 crate::engine::codec_gather::DecorationPass::Over,
             )
             .map_err(gather_error)?;
@@ -229,6 +229,15 @@ pub(super) fn append_planner_gather(
         gather.truncate_to_retained_prefix().map_err(gather_error)?;
     }
     Ok(())
+}
+
+/// The content revision of the decoration rows gathered now. A decoration row has no identity
+/// of its own: its stable id is its ordinal, so only this revision tells the plan that a row
+/// in the same place holds different content. It is the revision this update commits, which
+/// no earlier gather used; the committed revision itself is zero before the first commit and
+/// would repeat for the update after it.
+fn decoration_revision(planner: &PlannerState) -> u32 {
+    planner.revision.engine.saturating_add(1)
 }
 
 pub(super) fn planner_gather_owners(
