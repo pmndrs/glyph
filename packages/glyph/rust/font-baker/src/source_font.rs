@@ -149,11 +149,11 @@ pub fn prepare_font(
     let legacy_kern = font.table_data(LEGACY_KERN).map(|data| data.as_bytes());
     let retain_glyph_ids =
         postscript_outlines.is_some() || legacy_kern.is_some() || every_code_point;
-    let flags = if retain_glyph_ids {
-        SubsetFlags::SUBSET_FLAGS_RETAIN_GIDS
-    } else {
-        SubsetFlags::default()
-    };
+    // hb-subset drops the .notdef outline by default; a glyph the font lacks must still draw the font's own box.
+    let mut flags = SubsetFlags::SUBSET_FLAGS_NOTDEF_OUTLINE;
+    if retain_glyph_ids {
+        flags |= SubsetFlags::SUBSET_FLAGS_RETAIN_GIDS;
+    }
     let plan = Plan::new(
         &glyphs,
         &unicodes,
@@ -629,6 +629,36 @@ mod tests {
                     "{ranges:?} {left_char}{right_char} kerning"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn preparation_keeps_the_notdef_outline() {
+        // hb-subset drops the .notdef outline unless asked; a missing glyph must still draw the font's own box.
+        let notdef_commands = |font: &FontRef<'_>| {
+            let outline = font
+                .outline_glyphs()
+                .get(GlyphId::new(0))
+                .expect("notdef outline glyph");
+            let mut pen = CountingPen::default();
+            outline
+                .draw(
+                    skrifa::outline::DrawSettings::unhinted(
+                        skrifa::instance::Size::unscaled(),
+                        skrifa::instance::LocationRef::default(),
+                    ),
+                    &mut pen,
+                )
+                .expect("draw notdef");
+            pen.0
+        };
+        let source = FontRef::new(INTER).expect("Inter");
+        let expected = notdef_commands(&source);
+        assert!(expected > 0, "Inter draws a .notdef box");
+        for ranges in [ASCII, EVERY_CODE_POINT] {
+            let prepared = subset(INTER, ranges);
+            let font = FontRef::new(&prepared.bytes).expect("prepared font");
+            assert_eq!(notdef_commands(&font), expected, "{ranges:?}");
         }
     }
 

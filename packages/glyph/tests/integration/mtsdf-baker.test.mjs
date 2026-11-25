@@ -548,7 +548,7 @@ async function exerciseRuntime(result, rasterArtifact, extension, rasterKey) {
   const paddedBindingBytes = data.binding.width * data.binding.height * data.binding.layers * 4;
   const decodedPageBytes = data.pages.reduce((bytes, page) => bytes + page.bytes.byteLength, 0);
   assert.equal(paddedBindingBytes, 41_943_040);
-  assert.equal(decodedPageBytes, 38_667_084);
+  assert.equal(decodedPageBytes, 38_698_252);
   assert.ok(decodedPageBytes < paddedBindingBytes, 'decoded pages must not carry the binding padding');
 
   const glyphIds = firstPresentGlyphByPage(records, data.pages.length);

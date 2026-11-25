@@ -298,7 +298,7 @@ test('missing and invalid probes fall back once with deduplicated diagnostics', 
   assert.equal(calls.filter((url) => url === 'https://assets.test/fonts/Missing.font.glb').length, 1);
   const retained = getRegisteredFontData(missingA);
   assert.deepEqual(Buffer.from(retained.sourceBytes), Buffer.from(sourceBytes));
-  assert.equal(retained.sourceFingerprint, '71a5b9401816cde60f085baf2ea7dd57');
+  assert.equal(retained.sourceFingerprint, '2ae3730bf917e3a629a20ff3745f824e');
 });
 
 test('normal loading does not require Web Crypto or a secure context', async (t) => {
@@ -312,7 +312,7 @@ test('normal loading does not require Web Crypto or a secure context', async (t)
     fetch: fixtureFetch(new Map([['https://assets.test/Inter.font.glb', embeddedBytes]]), []),
   });
   const font = await loader.load({ baked: 'https://assets.test/Inter.font.glb' });
-  assert.equal(font.shapingFingerprint, 'fabec8663ea1571a1c92a149c2db8e2a');
+  assert.equal(font.shapingFingerprint, '56cabc317513e22ff87cf4b8e9831948');
 });
 
 test('baked-only failures never fetch a source or invoke fallback', async () => {
@@ -350,7 +350,7 @@ test('normal loading trusts the runtime baker stamp instead of hashing source by
   });
 
   const font = await loader.load('/source.ttf');
-  assert.equal(getRegisteredFontData(font).sourceFingerprint, '71a5b9401816cde60f085baf2ea7dd57');
+  assert.equal(getRegisteredFontData(font).sourceFingerprint, '2ae3730bf917e3a629a20ff3745f824e');
 });
 
 test('shaping deduplication keeps differently sourced bytes qualified by provenance', async () => {
