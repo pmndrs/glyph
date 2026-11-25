@@ -1810,7 +1810,25 @@ and 5,362 glyphs.
 
 Bitmap vertex pixel snapping is an explicit immutable Three/R3F option and defaults off. The unsnapped graph uses the
 ordinary model-view-projection position so shared-root or camera animation preserves subpixel movement; callers targeting
-a pixel-art presentation can opt in without changing shaping, layout, or render-plan records.
+a pixel-art presentation can opt in without changing shaping, layout, or render-plan records. It exists on Three,
+`/three/typegpu`, R3F and Vue (`Text` and `TextGroup`; an enclosing group's stated value wins), applies to Bitmap glyph
+draws only (decorations under them are not snapped), and has no counterpart in direct TypeGPU or PixiJS 3D; a
+`/shaders/typegpu` host binds `bitmapVertexSnapped` instead.
+
+Bitmap page filtering is a handle-wide config option with one name and two values in every renderer:
+`bitmapFilter: 'linear' | 'nearest'` on `defineThreeConfig` (`/three`, `/three/typegpu`, and so R3F and Vue through
+the handle they are given), `defineTypeGpuConfig` and `definePixi3DConfig`. `'linear'` (default) is the clamp-to-edge
+filtered read every renderer has always used; `'nearest'` reads the nearest texel with no mip, for pixel-art fonts drawn
+scaled or off the pixel grid. It is sampler state, never text or glyph state: Three sets the page texture's filters
+(Three's WebGPU backend lowers a nearest texture to a `textureLoad` at `floor(uv * size)`; WebGL2 samples it through a
+nearest sampler), direct TypeGPU creates the page sampler with it (identical WGSL), and PixiJS 3D sets the page
+sources' `scaleMode` (identical shader bits). Strike selection and baked bytes are unchanged and it is independent of
+`pixelSnapping`. Each handle owns its page textures, so two handles with different filters over one font hold two
+textures and never share a sampler or draw. Where a pixel centre lies exactly on a texel edge (quads on half pixels at
+1:1 or at whole-number scales), nearest picks a side by convention, and a texel load and a hardware sampler may pick
+differently; `benchmark:typegpu-parity` and `benchmark:pixi3d-parity` hold a `bitmap-nearest` scene placed off those
+edges to Three with no pixel over the tolerance. `/shaders/typegpu` hosts choose by the sampler they bind with
+`TypeGpuBitmapPageLayout`.
 
 WebGPU may alias compatible Wasm-backed typed arrays. Three's WebGL2 PBO path owns a padded array and therefore requires
 one retained copy. The architecture does not add complexity to pretend WebGL2 can preserve a Wasm alias it replaces.

@@ -159,6 +159,11 @@ root.createBindGroup(TypeGpuBitmapPageLayout, { page, sampler });
 
 A host that replaces `bitmapCoverageSlot` owns its own read and changes nothing.
 
+The sampler is the host's choice of filter: bind `root.createSampler({ magFilter: 'nearest', minFilter: 'nearest' })`
+to read the nearest texel of a pixel-art strike, as the integrations do under `bitmapFilter: 'nearest'`. The WGSL is the
+same either way. The integrations take that choice per handle, through `defineThreeConfig`, `defineTypeGpuConfig` or
+`definePixi3DConfig({ bitmapFilter: 'nearest' })`; `'linear'` is the default and the 0.1.0 `/three` read.
+
 ## Rebake every font, and ask for the OpenType features your text uses
 
 Every bake, with or without `--unicodes`, now keeps the common OpenType layout features: what shaping applies by
