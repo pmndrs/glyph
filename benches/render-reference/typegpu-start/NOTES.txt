@@ -8,3 +8,8 @@ same camera into an 8-bit linear target.
 Starting result against Three at 8/255: one 1, fx 6, fx-outline 6, fx-shadow 1, fx-both 6, devanagari 4 pixels over
 (all on cell edges the Three path trims away), fx-plain, fx-persp and labels 0. Bitmap is compared with its own
 capture only: the Three path snaps bitmap quads to the pixel grid and this renderer does not.
+
+Correction (2026-11-24): Three does not snap Bitmap quads by default (`pixelSnapping` is opt-in) and neither proof
+enables it. The Bitmap scene differs from Three in 29,588 pixels over 8/255 because this renderer's 16 px line does
+not match Three's 16 px Inter strike glyph for glyph; bitmap.png records that output. It stays compared with this
+capture only until the TypeGPU defect is fixed.

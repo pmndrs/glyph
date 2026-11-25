@@ -520,9 +520,9 @@ bytes' fingerprint and the recorded dropped list. Skera 0.5.1 cannot serialize t
 bake that named neither option then keeps such a face as it is and reports `LAYOUT_FEATURES_KEPT`
 (`internal/bake-source.ts`), and a bake that named one fails. A runtime raster for a full runtime bake rebuilds the
 prepared bytes from the retained original source (`*` and `-tag` per dropped tag,
-`internal/raster-source-preparation.ts`). The Rust tests compare feature sets and glyph counts with HarfBuzz 14.4.0's
-`hb-subset`. The CLI calls the same `bakeFont` host as programmatic consumers rather than maintaining an example-only
-composition path.
+`internal/raster-source-preparation.ts`). The Rust tests compare feature sets and glyph counts with constants recorded
+from HarfBuzz 14.4.0's `hb-subset`; no HarfBuzz binary runs. The CLI calls the same `bakeFont` host as programmatic
+consumers rather than maintaining an example-only composition path.
 
 Project discovery uses Oxc Parser 0.150.0 for JS/JSX/TS/TSX syntax, Oxc Walker 1.1.1 for lexical scopes, and Oxc Resolver 11.24.2 for
 module resolution, including tsconfig paths and TypeScript source extension aliases. It scans `src` by default or the
