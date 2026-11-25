@@ -1,4 +1,4 @@
-/* @workflow { "name": "benchmark:typegpu-parity", "summary": "Render the direct TypeGPU renderer on a real WebGPU device and compare its pixels with the Three MSDF path and a saved capture; --perf reports draws, bind groups and frame cost.", "requirements": "Playwright Chromium with WebGPU and the baked rendering fixtures. --scenes=a,b selects scenes; --baseline=<dir> compares with saved captures (default benches/render-reference/typegpu-start); --capture=<dir> writes captures; --out=<dir> writes this run's images; --tolerance=<n> sets the channel tolerance (default 8; a pixel may leave the capture only towards Three); --perf adds the one-text, 200 and 1,000 label measurements; --shader-hash prints a digest of every WGSL module the scenes compile instead of the glyph-facts read-back.", "writes": "Only the directories named by --capture and --out." } */
+/* @workflow { "name": "benchmark:typegpu-parity", "summary": "Render the direct TypeGPU renderer on a real WebGPU device and compare its pixels with Three's at the same camera and with a saved capture; --perf reports draws, bind groups and frame cost.", "requirements": "Playwright Chromium with WebGPU and the baked rendering fixtures. --scenes=a,b selects scenes; --baseline=<dir> compares with saved captures (default benches/render-reference/typegpu-start); --capture=<dir> writes captures; --out=<dir> writes this run's images; --tolerance=<n> sets the channel tolerance (default 8; a pixel may leave the capture only towards Three); --perf adds the one-text, 200 and 1,000 label measurements; --shader-hash prints a digest of every WGSL module the scenes compile instead of the glyph-facts read-back.", "writes": "Only the directories named by --capture and --out." } */
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -19,17 +19,6 @@ const selected = option('scenes')?.split(',');
 const withPerf = process.argv.includes('--perf');
 /** Prints a digest of every WGSL module the scenes compile, instead of running the glyph-facts read-back. */
 const shaderHash = process.argv.includes('--shader-hash');
-
-/**
- * What the renderers are allowed to disagree on, per scene, as a count of pixels over the tolerance.
- * Bitmap is compared with its own capture only. Neither path snaps by default (`pixelSnapping` is opt-in), but on
- * 2026-11-24 the direct TypeGPU Bitmap scene differed from Three in 29,588 pixels over 8/255: its 16 px line is not
- * the 16 px Inter strike Three draws (different glyph shapes, a stray mark under "t"), and the saved capture holds the same
- * image. That is an open TypeGPU defect, not a tolerance to set here; enable the Three budget once it is fixed.
- */
-const threeBudget: Readonly<Record<string, number | undefined>> = {
-  bitmap: undefined,
-};
 
 interface Difference {
   readonly differing: number;
@@ -180,7 +169,7 @@ try {
       );
       baselineDifference = compare(candidate, decode(baseline), capture.width);
       drift =
-        capture.three === undefined || (threeBudget[scene] === undefined && scene in threeBudget)
+        capture.three === undefined
           ? baselineDifference.over
           : driftAwayFromThree(candidate, decode(baseline), decode(capture.three));
     }
@@ -207,8 +196,8 @@ try {
       for (const at of baselineDifference?.where ?? []) process.stdout.write(`    capture ${at}\n`);
     }
     if (lit < 100) failures.push(`${scene}: the TypeGPU renderer drew ${String(lit)} lit pixels`);
-    const budget = scene in threeBudget ? threeBudget[scene] : 0;
-    if (budget !== undefined && threeDifference !== undefined && threeDifference.over > budget) {
+    // Every scene, Bitmap included, is held to Three with no pixel over the tolerance.
+    if (threeDifference !== undefined && threeDifference.over > 0) {
       failures.push(
         `${scene}: ${String(threeDifference.over)} pixels differ from Three by more than ${String(tolerance)}/255`,
       );

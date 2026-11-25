@@ -13,3 +13,10 @@ Correction (2026-11-24): Three does not snap Bitmap quads by default (`pixelSnap
 enables it. The Bitmap scene differs from Three in 29,588 pixels over 8/255 because this renderer's 16 px line does
 not match Three's 16 px Inter strike glyph for glyph; bitmap.png records that output. It stays compared with this
 capture only until the TypeGPU defect is fixed.
+
+Fixed (2026-11-25): the cause was filtering, not strike selection. Both renderers received byte-identical glyph lanes
+and strike pages; Three samples the page through a linear sampler and this renderer loaded the nearest texel. It now
+samples linearly and the Bitmap scene equals Three exactly (0 pixels differ). bitmap.png was not re-taken: it still
+records the nearest-texel output and differs from the current render in 29,588 pixels over 8/255, every one of which
+is now within tolerance of Three, which the harness accepts as a change towards Three. The scene is held to Three with
+no pixel over the tolerance, like every other scene.

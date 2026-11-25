@@ -31,7 +31,7 @@ const HEIGHT = 600;
 /** The glyph-fact callbacks shrink every glyph to this about its origin and drop odd-indexed glyphs this far. */
 const FACTS_SCALE = 0.75;
 const FACTS_DROP = 26;
-/** Fully covered pixels a drawn glyph must show with its own index and origin; a thin stem at the smallest size has more. */
+/** Pixels a drawn glyph must show with its own index and origin; a thin stem at the smallest size has more. */
 const FACTS_MINIMUM_PIXELS = 6;
 
 type Style = NonNullable<TypeGpuTextOptions['style']>;
@@ -387,7 +387,14 @@ async function start(): Promise<ParityProof> {
       },
       transformColor: (color, _fragmentPosition, glyphIndex, glyphOrigin) => {
         'use gpu';
-        return d.vec4f(d.f32(glyphIndex + 1) / 255, glyphOrigin.x / WIDTH, glyphOrigin.y / HEIGHT, color.a);
+        // Every pixel at least half covered is written whole, so a fact is never blended away: the Bitmap strike is
+        // drawn shrunk and filtered, and a thin stem of it need not cover any pixel fully.
+        return d.vec4f(
+          d.f32(glyphIndex + 1) / 255,
+          glyphOrigin.x / WIDTH,
+          glyphOrigin.y / HEIGHT,
+          std.step(0.5, color.a),
+        );
       },
     }),
   );
