@@ -346,12 +346,6 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Provision authenticated vendored HarfBuzz utilities
-        run: |
-          pnpm scripts run fixture:harfbuzz:provision
-          pnpm scripts run fixture:harfbuzz:provision -- --version=14.2.0
-          printf '%s\n' "$GITHUB_WORKSPACE/benches/.cache/harfbuzz/14.2.0/build/util" >> "$GITHUB_PATH"
-
       - name: Select rolling runner Chromium
         shell: bash
         run: |

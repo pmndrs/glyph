@@ -28,7 +28,8 @@ test('indexes current specialized workflows from source metadata', async () => {
 
   assert.match(stdout, /benchmark:presentation\n/);
   assert.match(stdout, /benchmark:labs-package\n/);
-  assert.match(stdout, /fixture:harfbuzz:provision\n/);
+  assert.match(stdout, /fixture:japanese-showcase:check\n/);
+  assert.doesNotMatch(stdout, /harfbuzz/);
   assert.match(stdout, /release:size:generate\n/);
   assert.doesNotMatch(stdout, /advanced-shaping-performance/);
   assert.doesNotMatch(stdout, /slug-fixed32-performance/);
