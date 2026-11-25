@@ -29,6 +29,7 @@ See the [0.2 migration guide](./MIGRATION-0.2.md) for before/after examples and 
 
 ### Fixed
 
+- A `glyph bake --unicodes` subset keeps the font's `.notdef` outline, so a missing glyph draws the font's box as in a full bake; it drew nothing.
 - A `glyph bake --unicodes` subset of a font that kerns only through the legacy `kern` table now keeps that table and kerns like a full bake; it had no kerning at all. Such subsets keep source glyph IDs, so they carry a little more per-glyph metadata.
 - Corrected word wrapping at Unicode-legal boundaries that require local reshaping. Arabic, Devanagari, CJK, and contextual Latin text now fill lines without losing shaping context. Affected line breaks, measurements, and glyph positions may differ from 0.1.0 because the previous output was incorrect.
 - Preserved Three transform state across patch-only publications and during replacement publication.

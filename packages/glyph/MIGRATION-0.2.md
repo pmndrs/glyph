@@ -171,7 +171,8 @@ tokens: `*` (first only) starts from every feature, `tag` or `+tag` adds, `-tag`
 removed. A tag the font never had is ignored and listed in the bake report, and `{ tag, value: 0 }` never throws.
 Fonts baked before this change carry no record of dropped features and never throw. Rebaked fonts are smaller where
 they used to carry alternates no text asked for. A full bake of a face too large for the subsetter to prepare (Noto Sans CJK) keeps every feature
-and reports a `LAYOUT_FEATURES_KEPT` warning.
+and reports a `LAYOUT_FEATURES_KEPT` warning. Every bake also keeps the font's `.notdef` glyph, so a `--unicodes` subset draws
+the font's box for a missing character (it drew nothing) and grows by that glyph's rasters.
 
 ## Read glyph facts after `measure()` deliberately
 

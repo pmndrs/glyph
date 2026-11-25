@@ -505,8 +505,9 @@ charstring, and only the rasters shrink to the selection.
 Every bake prepares its source through the same Skera plan, with or without `--unicodes`: a bake without it prepares
 every code point, keeping source glyph IDs and the glyph count, so the original source still rasterizes it. Skera has no
 legacy `kern` subsetter, so a face with a `kern` table also keeps source glyph IDs in a subset and carries the table
-whole; a subset then kerns like a full bake ([issue 18](../planning/issues-0.2.0/18-subset-drops-legacy-kern.md)). The
-plan keeps the common OpenType layout features (`skera::DEFAULT_LAYOUT_FEATURES`, hb-subset's default list) unless
+whole; a subset then kerns like a full bake. Every preparation keeps the `.notdef` outline, which hb-subset drops by
+default, so a missing glyph draws the font's box ([issue 18](../planning/issues-0.2.0/18-subset-drops-legacy-kern.md)).
+The plan keeps the common OpenType layout features (`skera::DEFAULT_LAYOUT_FEATURES`, hb-subset's default list) unless
 `--layout-features <tokens>` (`layoutFeatures` on `bakeFont()`, `fontIsUpToDate()`, `FontBakeSelection` and a
 runtime-baked `loadFont` request) says otherwise: `*` (first token) starts from every feature, `tag`/`+tag` adds, `-tag`
 removes, and the shaping floor in `font-baker/src/layout_features.rs` (`ccmp locl rvrn mark mkmk curs rlig rclt`, the

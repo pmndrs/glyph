@@ -77,6 +77,9 @@ Final rule ([decision](../decisions/bake-layout-feature-selection.md)):
 - A face Skera 0.5.1 cannot prepare (Noto Sans CJK's whole BMP overflows its GSUB serializer) is baked as it is when
   the bake named neither `--unicodes` nor `--layout-features`: every feature kept, nothing recorded, and a
   `LAYOUT_FEATURES_KEPT` warning in the report and on stderr. With either option it fails.
+- Every prepared font keeps the `.notdef` outline (`SUBSET_FLAGS_NOTDEF_OUTLINE`; hb-subset drops it by default), so a
+  glyph the font lacks draws the font's own box in a subset as in a full bake. Without it the rich-text benchmark's
+  no-fallback case drew nothing for its eight missing Devanagari glyphs once full bakes were prepared.
 - Freshness: the up-to-date check compares the prepared bytes' fingerprint and the recorded dropped list; `--check`
   compares bytes.
 - A full runtime bake keeps the original source for later runtime rasters; the loader rebuilds the prepared bytes from
@@ -104,13 +107,14 @@ Final rule ([decision](../decisions/bake-layout-feature-selection.md)):
 
 | Committed `--unicodes` app asset (Bitmap 32 + MSDF + Slug) | `sil-green-67` | every feature (first fix) | final (common set) |
 | ---------------------------------------------------------- | -------------- | ------------------------- | ------------------ |
-| `apps/r3f-hello-world/assets/inter-latin.font.glb`         | 2,355,620 B    | 8,743,692 B               | 2,355,908 B        |
-| `apps/typegpu-hello-world/assets/inter-latin.font.glb`     | 2,355,620 B    | 8,743,692 B               | 2,355,908 B        |
-| `apps/r3f-hello-world/assets/font-awesome-world.font.glb`  | 184,508 B      | 184,508 B                 | 184,508 B          |
+| `apps/r3f-hello-world/assets/inter-latin.font.glb`         | 2,355,620 B    | 8,743,692 B               | 2,466,260 B        |
+| `apps/typegpu-hello-world/assets/inter-latin.font.glb`     | 2,355,620 B    | 8,743,692 B               | 2,466,260 B        |
+| `apps/r3f-hello-world/assets/font-awesome-world.font.glb`  | 184,508 B      | 184,508 B                 | 203,492 B          |
 
-The final Inter asset is 288 bytes larger than before the issue: the `layoutFeatures` record. Each was rebaked with its
-own `bake:*` script and its `bake:check` passes. The full-bake benchmark fixtures shrink where their fonts carry discretionary alternates (Amiri -10%, DotGothic16 -7%,
-Inter -1.5%; Source Serif 4, which the rich-text workload sets in small capitals, is baked with
+The final subsets are larger than before the issue by the `.notdef` glyph, which every preparation now keeps (a
+subset drew nothing for a missing glyph before; Inter +110,640 B across its three rasters, Font Awesome +18,984 B), plus
+the 288-byte `layoutFeatures` record. Each was rebaked with its own `bake:*` script and its `bake:check` passes. The full-bake benchmark fixtures shrink where their fonts carry discretionary alternates (Amiri -10%, DotGothic16 -7%,
+Inter -1.4%; Source Serif 4, which the rich-text workload sets in small capitals, is baked with
 `--layout-features smcp` and shrinks 7-9%) and are unchanged where they do not (the CJK and Devanagari showcase
 subsets, Font Awesome). The Noto Sans CJK conformance font, a full bake Skera cannot prepare, is byte-identical (kept as
 it is). The benchmark rich-text scene threw the new `GlyphInputError` for `smcp` until its fixture asked for it, which
