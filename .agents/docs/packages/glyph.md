@@ -1353,7 +1353,17 @@ them only for a handle created with `glyphFacts: true`; a TypeGPU config without
 before the facts existed. Three hands a glyph material context `glyphIndex` and
 `glyphOrigin` nodes (the origin in `paragraphPosition` space) through the same stage-selecting node as the positions,
 TypeGPU passes them to its callbacks in the pixels of `position`, and PixiJS 3D gives a recipe whose bits declare it
-the `aGlyphFacts` attribute. A decoration has neither. The index is a position that an edit shifts, never an identity;
+the `aGlyphFacts` attribute. A decoration rectangle says which glyphs it runs under through the same lane: every
+`DecorationRecord` carries the layout index of the glyph at its inline start and at its inline end (a line's glyphs
+are indexed in visual order, so the first is always the leftmost of a horizontal line, whatever the direction of the
+text) and the line's baseline, and decoration rows fill the three F32 lanes after the rectangle with them. A
+decoration program publishes them only when its host declares `glyphFacts`
+(`createDecorationCodecProgram({ system: { glyphFacts } })`): the record is the first glyph's pen origin, its index,
+and the last glyph's index in the lane a glyph row leaves unused. Three declares it for a `glyphFacts: true` handle and
+hands a decoration material context `glyphIndex` as a float mixed along the rectangle (exactly each end glyph's index
+at its end) and `glyphOrigin` as the first glyph's origin; PixiJS 3D decorations still draw with their own flat
+material and take no recipe bits, and TypeGPU draws no decorations. A decoration row has no identity but its ordinal,
+so its content revision is the revision the update commits, which no earlier gather used. The index is a position that an edit shifts, never an identity;
 on a detached `Glyphs` both are what `split()` captured. A codec that publishes the index makes the gather visit a
 whole paragraph whenever a retained line's first layout index moved, since no other input of its records changed.
 Built-in Three material contexts expose two stage-safe position nodes: `paragraphPosition` is the unanchored, +Y-up

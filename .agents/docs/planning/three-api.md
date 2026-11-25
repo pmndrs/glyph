@@ -639,7 +639,8 @@ the Three executor decides which GPU resources can be shared safely.
 
 A handle created with `defineThreeConfig({ glyphFacts: true })` also tells a glyph material which glyph it is drawing.
 The facts are off by default: they are 16 more bytes per glyph instance for every text of the handle, and a material of
-a handle without them throws when it reads one. A decoration context has neither.
+a handle without them throws when it reads one. A decoration context carries the same two names for the glyphs its
+rectangle runs under (below).
 
 | Node          | Value                                                                                                                                                                                                                                                                                   |
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -674,6 +675,37 @@ const wave = defineTextMaterial(
 `position`. The two spaces agree in direct transform mode, and in indexed mode while the `Text` and its ancestors only
 translate; indexed mode folds their rotation and scale into `position`, so a rotated or scaled text needs direct mode
 for an exact per-glyph turn.
+
+#### Decorations
+
+An underline, overline or line-through is one rectangle per decorated run on a line (cut at every line break and font
+change). With `glyphFacts: true` its material context has the same two names, so an expression written for glyphs is
+defined on the rectangle under them:
+
+| Node          | Value on a `kind: 'decoration'` context                                                                                                                                                                                                                                            |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `glyphIndex`  | `Node<'float'>`: exactly the first decorated glyph's index at the rectangle's inline start, exactly the last one's at its inline end, linear between. Indices follow drawn order, so the value grows left to right through right-to-left text too, and counts the blanks under it. |
+| `glyphOrigin` | `Node<'vec3'>`: the `glyphOrigin` of the first decorated glyph (the rectangle's inline start, on the line's baseline). Constant across the rectangle.                                                                                                                              |
+
+The type differs on purpose: a rectangle spans many glyphs, so its index is a float where a glyph's is a `uint`.
+`float(context.glyphIndex)` reads both; `uint(...)` truncates and, in the vertex stage, gives each end its own glyph's
+index. A rectangle has four corners: it translates and shears with its two end glyphs and stays straight between them,
+so a wave shorter than the rectangle is followed at its ends only. A displacement taken from `glyphOrigin` alone moves
+the whole rectangle as its first glyph moves. The record is 16 bytes per rectangle and one more vertex storage buffer
+on a decoration draw (2 in direct mode, 4 in indexed mode).
+
+```ts
+const wave = defineTextMaterial(
+  (context) => {
+    const material = context.createDefaultMaterial();
+    // One expression, with no branch on what is drawn: glyphs rise and fall, and so do the ends of their underline.
+    const lift = float(context.glyphIndex).mul(0.4).add(time).sin().mul(3);
+    material.positionNode = context.position.add(vec3(0, lift, 0));
+    return material;
+  },
+  { boundsPadding: 3 },
+);
+```
 
 ### MSDF distance fields
 

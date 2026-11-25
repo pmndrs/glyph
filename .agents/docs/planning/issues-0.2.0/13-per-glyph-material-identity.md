@@ -65,5 +65,14 @@ browser lane comparing a `glyphIndex`-driven wave against the same wave through 
   keeps the bearing on the CPU only). Both therefore travel in one new lane of four floats, 16 bytes per instance.
 - They are opt-in per handle (`glyphFacts: true` in Three, TypeGPU and PixiJS 3D), because the codec that decides what the engine gathers is fixed when a handle is created. A handle that
   does not ask publishes the same codec bytes as before.
+- Decorations follow (2026-11-24, same branch). Each decoration rectangle carries the layout index of the glyph at
+  its inline start and at its inline end and the pen origin of the first, published under the same opt-in through the
+  same lane. Three hands a decoration context `glyphIndex` as a float mixed along the rectangle and `glyphOrigin`;
+  one expression of the two compiles for glyph and decoration draws on both backends and both shader sets, and the
+  parity lane reads the interpolated index back out of an underline's pixels on a real device. A rectangle follows
+  its two end glyphs and stays straight between them. PixiJS 3D is not done: its decorations draw with a flat
+  material that takes no recipe bits, and routing them through a text material needs a public change (a
+  `'decoration'` member of `Pixi3DTextMaterialFormat`, or an opt-in on the recipe), which waits for a decision.
+  TypeGPU draws no decorations.
 - No text-level glyph count reaches a shader: Three batches many texts into one draw. Normalise with a uniform set
   from `text.measure().glyphCount`.
