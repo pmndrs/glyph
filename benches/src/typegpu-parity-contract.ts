@@ -52,6 +52,8 @@ export interface FontCost {
 
 export interface GlyphFactsProof {
   readonly glyphs: number;
+  /** Underline pixels whose colour is the interpolated index and first-glyph origin `glyphs()` gives. */
+  readonly decorationPixels: number;
   readonly failures: readonly string[];
 }
 

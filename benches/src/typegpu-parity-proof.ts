@@ -1,6 +1,7 @@
 // Real-device proof for the direct TypeGPU renderer: the same scenes through `@pmndrs/glyph/typegpu` and through the
 // Three MSDF path at the same camera, read back as pixels, plus draw/bind-group/upload counters and frame timings.
 import { bitmap, glyph, msdf, slug, type FontFace } from '@pmndrs/glyph';
+import { decorationSchema } from '@pmndrs/glyph/core';
 import { defineTextMaterial, defineThreeConfig, type Text as ThreeText } from '@pmndrs/glyph/three';
 import {
   defineTypeGpuConfig,
@@ -861,6 +862,69 @@ async function start(): Promise<ParityProof> {
   }
 
   /**
+   * Holds every underline under `world` to the pixels its material wrote along its middle row: the origin of the
+   * line's first glyph everywhere, and an index that runs from that glyph's at the left end to the line's last glyph's
+   * at the right end. The rectangles are the ones the draws hold; the indices and origins are `glyphs()` alone.
+   * Glyphs draw over an underline, so a pixel a dropped glyph covers is skipped by its colour, not counted.
+   */
+  function readDecorationFacts(
+    world: THREE.Object3D,
+    layout: ReturnType<ThreeText['glyphs']>,
+    left: number,
+    top: number,
+    pixels: Uint8Array,
+    failures: string[],
+  ): number {
+    const rects: [number, number, number, number][] = [];
+    world.traverse((object) => {
+      if (!(object instanceof THREE.Mesh) || object.userData.pmndrsGlyphPrimitiveKind !== 'decoration') return;
+      const geometry = object.geometry as THREE.InstancedBufferGeometry;
+      const rect = geometry.getAttribute(`_pmndrsGlyph_${String(decorationSchema.buffers.rect.id)}`).array;
+      const runStart = (object.userData.pmndrsGlyphRunStart as number | undefined) ?? 0;
+      for (let record = runStart; record < runStart + geometry.instanceCount; record += 1) {
+        rects.push([rect[record * 4]!, rect[record * 4 + 1]!, rect[record * 4 + 2]!, rect[record * 4 + 3]!]);
+      }
+    });
+    rects.sort((a, b) => a[1] - b[1]);
+    if (rects.length !== layout.lineCount) {
+      failures.push(`three decoration: ${String(rects.length)} underlines for ${String(layout.lineCount)} lines`);
+      return 0;
+    }
+    let read = 0;
+    for (const [line, [rectLeft, rectTop, width, height]] of rects.entries()) {
+      const first = layout.lineGlyphStarts[line]!;
+      const last = first + layout.lineGlyphCounts[line]! - 1;
+      const origin = [((left + layout.x[first]!) / WIDTH) * 255, ((top + layout.y[first]!) / HEIGHT) * 255] as const;
+      const y = Math.floor(top + rectTop + height / 2);
+      let matching = 0;
+      let lowest = Infinity;
+      let highest = -Infinity;
+      for (let x = Math.ceil(left + rectLeft); x < Math.floor(left + rectLeft + width); x += 1) {
+        const offset = (y * WIDTH + x) * 4;
+        const along = (x + 0.5 - (left + rectLeft)) / width;
+        const expected = first + along * (last - first) + 1;
+        if (
+          Math.abs(pixels[offset]! - expected) <= 1 &&
+          Math.abs(pixels[offset + 1]! - origin[0]) <= 1 &&
+          Math.abs(pixels[offset + 2]! - origin[1]) <= 1
+        ) {
+          matching += 1;
+          lowest = Math.min(lowest, pixels[offset]!);
+          highest = Math.max(highest, pixels[offset]!);
+        }
+      }
+      read += matching;
+      // Most of the row is the underline itself, and what was read spans both of its ends.
+      if (matching < width * 0.6 || lowest > first + 2 || highest < last) {
+        failures.push(
+          `three decoration line ${String(line)}: ${String(matching)} of ${width.toFixed(0)} pixels on row ${String(y)} carry an index from ${String(first + 1)} to ${String(last + 1)} (read ${String(lowest)} to ${String(highest)}) and origin (${origin[0].toFixed(1)}, ${origin[1].toFixed(1)})`,
+        );
+      }
+    }
+    return read;
+  }
+
+  /**
    * One text per raster format through the TypeGPU glyph-fact callbacks, then the same specimen through Three's MSDF
    * path in indexed transform mode with a material that reads both facts in both stages. Each drawn glyph must put
    * enough pixels carrying its own index and origin inside the box its ink was scaled and dropped to; the expectation
@@ -883,6 +947,7 @@ async function start(): Promise<ParityProof> {
     );
     const failures: string[] = [];
     let glyphs = 0;
+    let decorationPixels = 0;
     try {
       glyph.shape();
       const pixels = await readPixels(facts);
@@ -900,12 +965,21 @@ async function start(): Promise<ParityProof> {
     const label = threeFacts.createText({
       font: fonts.inter as FontFace<typeof msdf>,
       text: specimen,
-      style: { fontSize: 56, color: '#ffffff' },
+      style: { fontSize: 56, color: '#ffffff', decoration: { underline: true, color: '#ffffff' } },
       layout: { wrap: 'none' },
       material: defineTextMaterial(
         (context) => {
           const material = context.createDefaultMaterial();
-          if (context.kind !== 'glyph' || context.format !== 'pmndrs.msdf') return material;
+          if (context.kind === 'decoration') {
+            // An underline stays where it is and is painted with the facts of the glyphs it runs under.
+            material.colorNode = TSL.vec3(
+              TSL.float(context.glyphIndex).add(1).div(255),
+              context.glyphOrigin.x.add(left).div(WIDTH),
+              context.glyphOrigin.y.negate().add(top).div(HEIGHT),
+            );
+            return material;
+          }
+          if (context.format !== 'pmndrs.msdf') return material;
           const { glyphIndex, glyphOrigin, paragraphPosition, position } = context;
           // The same shrink about the origin and drop of odd glyphs, in +Y-up paragraph units.
           const fromOrigin = paragraphPosition.sub(glyphOrigin);
@@ -929,13 +1003,14 @@ async function start(): Promise<ParityProof> {
       const read = await renderer.readRenderTargetPixelsAsync(threeTarget, 0, 0, WIDTH, HEIGHT);
       const pixels = new Uint8Array(read.buffer, read.byteOffset, read.byteLength);
       glyphs += readGlyphFacts('three msdf indexed', label.glyphs(), left, top, pixels, failures);
+      decorationPixels = readDecorationFacts(world, label.glyphs(), left, top, pixels, failures);
     } finally {
       label.removeFromParent();
       label.dispose();
       glyph.shape();
     }
     if (errors.length !== 0) throw new Error(errors.splice(0).join('\n'));
-    return { glyphs, failures };
+    return { glyphs, decorationPixels, failures };
   }
 
   return {

@@ -880,12 +880,14 @@ function withoutGlyphFacts<Context extends object>(
 /**
  * A decoration rectangle's facts. Its record names the first and last glyph it runs under, and a line's glyphs are
  * indexed in the order they are drawn, so the index at a point of the rectangle is the mix of the two along its inline
- * axis: each end takes exactly its glyph's index. `positionLocal.x` spans the rectangle from 0 to 1.
+ * axis: each end takes exactly its glyph's index. The unit quad's own `x` spans the rectangle from 0 to 1; it is read
+ * from the geometry because Three reassigns `positionLocal` to the material's `positionNode` before it evaluates the
+ * varying a fragment read goes through.
  */
 function decorationFacts(lanes: GlyphFactLanes | undefined, instance: THREE.Node<'uint'>): RawMaterialNodes['glyph'] {
   if (lanes === undefined) return undefined;
   const record = storageVec4(lanes.facts, instance);
-  return { span: TSL.mix(record.z, record.w, TSL.positionLocal.x), origin: record.xy };
+  return { span: TSL.mix(record.z, record.w, TSL.positionGeometry.x), origin: record.xy };
 }
 
 function glyphFacts(

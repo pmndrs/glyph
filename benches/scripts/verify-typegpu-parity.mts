@@ -234,7 +234,13 @@ try {
     process.stdout.write(
       `\nglyph facts: ${String(facts.glyphs)} glyphs read back through TypeGPU's callbacks and a Three MSDF material in indexed mode, ${String(facts.failures.length)} disagree with glyphs()\n`,
     );
+    process.stdout.write(
+      `decoration facts: ${String(facts.decorationPixels)} underline pixels of the Three text carry the interpolated index and the origin of their line's first glyph\n`,
+    );
     if (facts.glyphs < 55) failures.push(`glyph facts: only ${String(facts.glyphs)} glyphs were drawn`);
+    if (facts.decorationPixels < 300) {
+      failures.push(`decoration facts: only ${String(facts.decorationPixels)} underline pixels were read`);
+    }
     failures.push(...facts.failures.map((failure) => `glyph facts: ${failure}`));
   }
 
